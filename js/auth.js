@@ -1,34 +1,16 @@
 import { supabase } from './supabase.js';
 
-const MESSAGES = {
-  invalid: 'البريد الإلكتروني أو كلمة المرور غير صحيحة',
-  exists: 'هذا البريد مسجل بالفعل، سجّل الدخول بدلاً من ذلك',
-  generic: 'حدث خطأ، حاول مرة أخرى',
-  created: 'تم إنشاء الحساب بنجاح',
-};
-
 const $ = (id) => document.getElementById(id);
 const status = $('auth-status');
 const msg = $('auth-msg');
 const form = $('auth-form');
 
 function say(text, isError = true) {
+  if(!msg) return;
   msg.textContent = text;
-  msg.style.color = isError ? 'var(--rd)' : 'var(--pr)';
-}
-
-function errorText(error) {
-  const m = (error?.message || '').toLowerCase();
-  if (m.includes('invalid login')) return MESSAGES.invalid;
-  if (m.includes('already registered')) return MESSAGES.exists;
-  return MESSAGES.generic;
-}
-
-function showSession(session) {
-  const signedIn = Boolean(session);
-  form.hidden = signedIn;
-  $('auth-session').hidden = !signedIn;
-  $('auth-user').textContent = session?.user?.email || '';
+  msg.style.color = isError ? 'red' : 'green';
+  msg.style.display = 'block';
+  alert(text); // عشان تشوفي الرسالة حتى لو الـ CSS مخفيها
 }
 
 function credentials() {
@@ -38,61 +20,52 @@ function credentials() {
   };
 }
 
-function start() {
-  if (!supabase) {
-    status.textContent = 'غير متصل';
-    status.style.color = 'var(--rd)';
-    form.querySelectorAll('input, button').forEach((el) => (el.disabled = true));
-    return;
-  }
-  status.textContent = 'متصل بـ Supabase';
-  status.style.color = 'var(--pr)';
-  init(supabase);
+function showSession(session) {
+  const signedIn = Boolean(session);
+  if(form) form.hidden = signedIn;
+  const s = $('auth-session');
+  if(s) s.hidden = !signedIn;
+  const u = $('auth-user');
+  if(u) u.textContent = session?.user?.email || '';
 }
 
-async function init(client) {
-  const { data, error } = await client.auth.getSession();
-  if (error) say(MESSAGES.generic);
-  showSession(data?.session ?? null);
+if (!supabase) {
+  if(status) status.textContent = 'غير متصل - حط الـ URL والـ Key في supabase.js';
+  say('غير متصل - حط الـ URL والـ Key في supabase.js');
+} else {
+  if(status) status.textContent = 'متصل بـ Supabase ✅';
 
-  client.auth.onAuthStateChange((_event, session) => {
-    showSession(session);
+  supabase.auth.getSession().then(({ data }) => {
+    showSession(data?.session ?? null);
   });
+
+  supabase.auth.onAuthStateChange((_e, session) => showSession(session));
 
   $('auth-login').addEventListener('click', async (e) => {
     e.preventDefault();
     const { email, password } = credentials();
     if (!email || !password) return say('أدخل البريد الإلكتروني وكلمة المرور');
-    say('');
-    try {
-      const { error } = await client.auth.signInWithPassword({ email, password });
-      if (error) say(errorText(error));
-    } catch {
-      say(MESSAGES.generic);
-    }
+    say('جاري تسجيل الدخول...', false);
+    const { error } = await supabase.auth.signInWithPassword({ email, password });
+    if (error) return say('خطأ دخول: ' + error.message);
+    say('تم الدخول بنجاح ✅', false);
+    setTimeout(()=> location.href='index.html', 800);
   });
 
- $('auth-signup').addEventListener('click', async (e) => {
+  $('auth-signup').addEventListener('click', async (e) => {
     e.preventDefault();
-    e.stopPropagation();
     const { email, password } = credentials();
     if (!email || !password) return say('أدخل البريد الإلكتروني وكلمة المرور');
     if (password.length < 6) return say('كلمة المرور يجب ألا تقل عن 6 أحرف');
     say('جاري إنشاء الحساب...', false);
-    try {
-      const { data, error } = await client.auth.signUp({ email, password });
-      if (error) {
-        alert('خطأ: ' + error.message);
-        return say(errorText(error));
-      }
-      alert('تم إنشاء الحساب بنجاح ✅');
-      if (!data.session) say(MESSAGES.created, false);
-    } catch (err) {
-      alert('حدث خطأ: ' + err.message);
-      say(MESSAGES.generic);
-    }
-    return false;
+    const { data, error } = await supabase.auth.signUp({ email, password });
+    if (error) return say('خطأ تسجيل: ' + error.message);
+    say('تم إنشاء الحساب بنجاح ✅', false);
+    if (data.session) setTimeout(()=> location.href='index.html', 800);
+  });
+
+  $('auth-logout').addEventListener('click', async () => {
+    await supabase.auth.signOut();
+    location.reload();
   });
 }
-
-start();
