@@ -19,16 +19,16 @@
     <h1>مدير المصنع</h1>
     <p id="auth-msg" class="mu" role="status"></p>
 
-    <form id="auth-form" class="auth-form">
+    <div id="auth-form" class="auth-form">
       <label for="auth-email">البريد الإلكتروني</label>
       <input id="auth-email" type="email" dir="ltr" autocomplete="email" required>
       <label for="auth-password">كلمة المرور</label>
       <input id="auth-password" type="password" dir="ltr" autocomplete="current-password" minlength="6" required>
       <div class="row">
-        <button type="submit" id="auth-login">تسجيل الدخول</button>
+        <button type="button" id="auth-login">تسجيل الدخول</button>
         <button type="button" id="auth-signup" class="g">حساب جديد</button>
       </div>
-    </form>
+    </div>
 
     <div id="auth-session" class="auth-session" hidden>
       <p>مسجل الدخول باسم: <b id="auth-user"></b></p>
