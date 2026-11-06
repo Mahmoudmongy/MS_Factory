@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<title>اختبار قاعدة البيانات</title>
+<style>
+  body{font-family:Tahoma;padding:20px;background:#0f172a;color:#fff;text-align:center}
+  button{padding:12px 20px;font-size:16px;border:none;border-radius:10px;cursor:pointer;background:#22c55e;color:#fff;margin:10px}
+  #result{margin-top:20px;padding:15px;background:#1e293b;border-radius:10px;text-align:right;white-space:pre-wrap}
+</style>
+</head>
+<body>
+<h1>🧪 اختبار Supabase</h1>
+<p id="status">جاري الفحص...</p>
+<button id="testBtn">جرب إضافة عميل تجريبي</button>
+<button id="showBtn" style="background:#3b82f6">اعرض كل العملاء</button>
+<div id="result"></div>
+
+<script type="module">
+  import { supabase } from './js/supabase.js';
+  import { addCustomer, getCustomers } from './js/db.js';
+
+  const status = document.getElementById('status');
+  const result = document.getElementById('result');
+
+  const { data } = await supabase.auth.getSession();
+  if (!data.session) {
+    status.textContent = 'مش مسجل دخول - روح لصفحة auth.html الأول';
+    location.href = 'auth.html';
+  } else {
+    status.textContent = 'مسجل الدخول باسم: ' + data.session.user.email + ' ✅';
+  }
+
+  document.getElementById('testBtn').addEventListener('click', async () => {
+    result.textContent = 'جاري الإضافة...';
+    const c = await addCustomer('عميل تجريبي ' + new Date().toLocaleTimeString(), '01000000000', 'retail');
+    if (c) {
+      result.textContent = 'تم ✅\n' + JSON.stringify(c, null, 2);
+    } else {
+      result.textContent = 'فشل ❌ افتح الـ Console بـ F12 وشوف الخطأ، أو اتأكد إنك نفذت الـ SQL في Supabase';
+    }
+  });
+
+  document.getElementById('showBtn').addEventListener('click', async () => {
+    const list = await getCustomers();
+    result.textContent = 'عدد العملاء: ' + list.length + '\n' + JSON.stringify(list, null, 2);
+  });
+</script>
+</body>
+</html>
