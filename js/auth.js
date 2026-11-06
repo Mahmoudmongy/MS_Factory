@@ -1,12 +1,14 @@
+import { supabase } from './supabase.js';
+
 const MESSAGES = {
   invalid: 'البريد الإلكتروني أو كلمة المرور غير صحيحة',
   exists: 'هذا البريد مسجل بالفعل، سجّل الدخول بدلاً من ذلك',
   generic: 'حدث خطأ، حاول مرة أخرى',
-  notConfigured: 'الربط بـ Supabase غير مكتمل. أضف الرابط والمفتاح في ملف الإعدادات ثم أعد تحميل الصفحة',
   created: 'تم إنشاء الحساب بنجاح',
 };
 
 const $ = (id) => document.getElementById(id);
+const status = $('auth-status');
 const msg = $('auth-msg');
 const form = $('auth-form');
 
@@ -36,21 +38,24 @@ function credentials() {
   };
 }
 
-async function init() {
-  let supabase;
-  try {
-    ({ supabase } = await import('./supabase.js'));
-  } catch {
-    say(MESSAGES.notConfigured);
+function start() {
+  if (!supabase) {
+    status.textContent = 'غير متصل';
+    status.style.color = 'var(--rd)';
     form.querySelectorAll('input, button').forEach((el) => (el.disabled = true));
     return;
   }
+  status.textContent = 'متصل بـ Supabase';
+  status.style.color = 'var(--pr)';
+  init(supabase);
+}
 
-  const { data, error } = await supabase.auth.getSession();
+async function init(client) {
+  const { data, error } = await client.auth.getSession();
   if (error) say(MESSAGES.generic);
   showSession(data?.session ?? null);
 
-  supabase.auth.onAuthStateChange((_event, session) => {
+  client.auth.onAuthStateChange((_event, session) => {
     showSession(session);
   });
 
@@ -60,7 +65,7 @@ async function init() {
     if (!email || !password) return say('أدخل البريد الإلكتروني وكلمة المرور');
     say('');
     try {
-      const { error } = await supabase.auth.signInWithPassword({ email, password });
+      const { error } = await client.auth.signInWithPassword({ email, password });
       if (error) say(errorText(error));
     } catch {
       say(MESSAGES.generic);
@@ -73,7 +78,7 @@ async function init() {
     if (password.length < 6) return say('كلمة المرور يجب ألا تقل عن 6 أحرف');
     say('');
     try {
-      const { data, error } = await supabase.auth.signUp({ email, password });
+      const { data, error } = await client.auth.signUp({ email, password });
       if (error) return say(errorText(error));
       if (!data.session) say(MESSAGES.created, false);
     } catch {
@@ -83,7 +88,7 @@ async function init() {
 
   $('auth-logout').addEventListener('click', async () => {
     try {
-      const { error } = await supabase.auth.signOut();
+      const { error } = await client.auth.signOut();
       if (error) say(MESSAGES.generic);
     } catch {
       say(MESSAGES.generic);
@@ -91,4 +96,4 @@ async function init() {
   });
 }
 
-init();
+start();
