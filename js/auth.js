@@ -10,7 +10,7 @@ function say(text, isError = true) {
   msg.textContent = text;
   msg.style.color = isError ? 'red' : 'green';
   msg.style.display = 'block';
-  alert(text); // عشان تشوفي الرسالة حتى لو الـ CSS مخفيها
+  //alert(text); // عشان تشوفي الرسالة حتى لو الـ CSS مخفيها
 }
 
 function credentials() {
