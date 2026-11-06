@@ -1,42 +1,117 @@
 <!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>تسجيل الدخول - مدير المصنع</title>
-<link rel="stylesheet" href="./css/style.css">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <style>
-  .auth-page{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:16px}
-  .auth-card{width:100%;max-width:380px;padding:24px}
-  .auth-card h1{margin:0 0 8px;font-size:22px}
-  .auth-form{display:flex;flex-direction:column}
-  .auth-session{display:flex;flex-direction:column;gap:12px}
+  *{box-sizing:border-box;font-family:'Segoe UI',Tahoma,Arial,sans-serif}
+  body{margin:0;background:#0f172a;color:#fff;min-height:100vh;display:flex;align-items:center;justify-content:center;padding:16px}
+  .card{background:#1e293b;width:100%;max-width:420px;padding:28px;border-radius:16px;box-shadow:0 10px 40px rgba(0,0,0,.4)}
+  h1{margin:0 0 6px;font-size:24px;text-align:center}
+  p.sub{text-align:center;color:#94a3b8;margin:0 0 20px;font-size:14px}
+  label{display:block;margin:14px 0 6px;font-size:14px;font-weight:600}
+  input{width:100%;padding:13px 14px;border:1px solid #334155;background:#0f172a;color:#fff;border-radius:10px;font-size:16px;outline:none;pointer-events:auto}
+  input:focus{border-color:#3b82f6;box-shadow:0 0 0 3px rgba(59,130,246,.25)}
+  .btn{width:100%;padding:13px;border:none;border-radius:10px;font-size:16px;font-weight:700;cursor:pointer;margin-top:14px;pointer-events:auto}
+  .btn-login{background:#3b82f6;color:#fff}
+  .btn-signup{background:#22c55e;color:#fff}
+  .btn-logout{background:#ef4444;color:#fff;display:none}
+  .msg{margin-top:14px;padding:10px;border-radius:10px;font-size:14px;text-align:center;display:none}
+  .msg.error{background:#450a0a;color:#fca5a5;display:block}
+  .msg.success{background:#052e16;color:#86efac;display:block}
+  .msg.info{background:#082f49;color:#7dd3fc;display:block}
+  .status{text-align:center;margin-bottom:12px;font-size:13px}
+  .status b{color:#facc15}
+  .back{display:block;text-align:center;margin-top:16px;color:#94a3b8;font-size:13px;text-decoration:none}
 </style>
 </head>
 <body>
-<main class="auth-page">
-  <section class="card auth-card">
-    <h1>مدير المصنع</h1>
-    <p id="auth-status" class="mu"></p>
-    <p id="auth-msg" class="mu" role="status"></p>
+<div class="card">
+  <h1>🏭 مدير المصنع</h1>
+  <p class="sub">سجل دخول عشان تكمل شغلك</p>
+  <div class="status" id="status">الحالة: <b id="statusText">جاري الفحص...</b></div>
 
-    <form id="auth-form" class="auth-form">
-      <label for="auth-email">البريد الإلكتروني</label>
-      <input id="auth-email" type="email" dir="ltr" autocomplete="email" required>
-      <label for="auth-password">كلمة المرور</label>
-      <input id="auth-password" type="password" dir="ltr" autocomplete="current-password" minlength="6" required>
-      <div class="row">
-        <button type="submit" id="auth-login">تسجيل الدخول</button>
-        <button type="button" id="auth-signup" class="g">حساب جديد</button>
-      </div>
-    </form>
+  <div id="formBox">
+    <label>البريد الإلكتروني</label>
+    <input id="email" type="email" placeholder="example@gmail.com" autocomplete="email">
 
-    <div id="auth-session" class="auth-session" hidden>
-      <p>مسجل الدخول باسم: <b id="auth-user"></b></p>
-      <button type="button" id="auth-logout" class="g">تسجيل الخروج</button>
-    </div>
-  </section>
-</main>
-<script type="module" src="./js/auth.js"></script>
+    <label>كلمة المرور</label>
+    <input id="password" type="password" placeholder="6 حروف على الأقل" autocomplete="current-password">
+
+    <button class="btn btn-login" id="loginBtn" type="button">تسجيل دخول</button>
+    <button class="btn btn-signup" id="signupBtn" type="button">حساب جديد</button>
+  </div>
+
+  <button class="btn btn-logout" id="logoutBtn" type="button">تسجيل خروج</button>
+  <div class="msg" id="msg"></div>
+  <a class="back" href="index.html">← الرجوع للتطبيق الرئيسي</a>
+</div>
+
+<script>
+  // ===== حطي بيانات Supabase بتاعك هنا =====
+  const SUPABASE_URL = https://yvrislcbbhtruwdnuooz.supabase.co;
+  const SUPABASE_ANON_KEY = sb_publishable_7y8sqUPYv4mCfmpjin3xRQ_1_X5QJfG;
+  // =========================================
+
+  const msgEl = document.getElementById('msg');
+  const statusText = document.getElementById('statusText');
+  const formBox = document.getElementById('formBox');
+  const logoutBtn = document.getElementById('logoutBtn');
+
+  function showMsg(text, type){
+    msgEl.textContent = text;
+    msgEl.className = 'msg ' + type;
+  }
+
+  if(!SUPABASE_URL.startsWith('https://') || SUPABASE_ANON_KEY.length < 20){
+    statusText.textContent = 'غير متصل - حط الـ URL والـ Key في الكود';
+    showMsg('لسه محطتيش الـ URL والـ Publishable Key في أول ملف auth.html', 'error');
+  } else {
+    const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+    statusText.textContent = 'متصل بـ Supabase ✅';
+    showMsg('تم الاتصال بـ Supabase، جربي تعملي حساب جديد', 'info');
+
+    async function checkSession(){
+      const { data } = await supabaseClient.auth.getSession();
+      if(data.session){
+        statusText.textContent = 'مسجل الدخول ✅';
+        formBox.style.display = 'none';
+        logoutBtn.style.display = 'block';
+        showMsg('مسجل الدخول باسم: ' + data.session.user.email, 'success');
+      } else {
+        formBox.style.display = 'block';
+        logoutBtn.style.display = 'none';
+      }
+    }
+    checkSession();
+
+    document.getElementById('loginBtn').addEventListener('click', async () => {
+      const email = document.getElementById('email').value.trim();
+      const password = document.getElementById('password').value;
+      if(!email || !password){ showMsg('اكتبي الإيميل والباسورد الأول', 'error'); return; }
+      showMsg('جاري تسجيل الدخول...', 'info');
+      const { data, error } = await supabaseClient.auth.signInWithPassword({ email, password });
+      if(error){ showMsg('خطأ: ' + error.message, 'error'); }
+      else { showMsg('تم الدخول بنجاح ✅', 'success'); setTimeout(()=> location.href='index.html', 800); }
+    });
+
+    document.getElementById('signupBtn').addEventListener('click', async () => {
+      const email = document.getElementById('email').value.trim();
+      const password = document.getElementById('password').value;
+      if(!email || password.length < 6){ showMsg('الباسورد لازم يكون 6 حروف على الأقل', 'error'); return; }
+      showMsg('جاري إنشاء الحساب...', 'info');
+      const { data, error } = await supabaseClient.auth.signUp({ email, password });
+      if(error){ showMsg('خطأ: ' + error.message, 'error'); }
+      else { showMsg('تم إنشاء الحساب ✅ لو طلب تأكيد إيميل، اقفليه من Supabase', 'success'); checkSession(); }
+    });
+
+    logoutBtn.addEventListener('click', async () => {
+      await supabaseClient.auth.signOut();
+      location.reload();
+    });
+  }
+</script>
 </body>
 </html>
