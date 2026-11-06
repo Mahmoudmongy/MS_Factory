@@ -1,10 +1,18 @@
-import { createClient } from '@supabase/supabase-js'
+// js/supabase.js - نسخة مصلحة من غير .env
+import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm';
 
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL
-const supabaseKey = import.meta.env.VITE_SUPABASE_ANON_KEY
+// ===== حطي بياناتك هنا =====
+const SUPABASE_URL = "https://yvrislcbbhtruwdnuooz.supabase.co";
+const SUPABASE_ANON_KEY = "sb_publishable_7y8sqUPYv4mCfmpjin3xRQ_1_X5QJfG";
+// ===========================
 
-if (!supabaseUrl || !supabaseKey) {
-  console.error('ENV MISSING: VITE_SUPABASE_URL or VITE_SUPABASE_ANON_KEY is not set')
+let supabase = null;
+
+if (SUPABASE_URL.startsWith('https://') && SUPABASE_ANON_KEY.length > 20) {
+  supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+} else {
+  console.log('Supabase غير متصل - حط الـ URL والـ Key');
 }
 
-export const supabase = supabaseUrl && supabaseKey ? createClient(supabaseUrl, supabaseKey) : null
+export { supabase };
+export const supabaseClient = supabase;
