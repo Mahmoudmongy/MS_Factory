@@ -65,7 +65,13 @@ if (!supabase) {
   });
 
   $('auth-logout').addEventListener('click', async () => {
-    await supabase.auth.signOut();
-    location.reload();
-  });
+  await supabase.auth.signOut();
+  // امسح الخانات
+  $('auth-email').value = '';
+  $('auth-password').value = '';
+  // امسح اللي المتصفح حافظه
+  $('auth-email').setAttribute('autocomplete', 'off');
+  $('auth-password').setAttribute('autocomplete', 'off');
+  location.reload();
+});
 }
