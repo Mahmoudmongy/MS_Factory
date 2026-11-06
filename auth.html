@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>تسجيل الدخول - مدير المصنع</title>
+<link rel="stylesheet" href="./css/style.css">
+<style>
+  .auth-page{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:16px}
+  .auth-card{width:100%;max-width:380px;padding:24px}
+  .auth-card h1{margin:0 0 8px;font-size:22px}
+  .auth-form{display:flex;flex-direction:column}
+  .auth-session{display:flex;flex-direction:column;gap:12px}
+</style>
+</head>
+<body>
+<main class="auth-page">
+  <section class="card auth-card">
+    <h1>مدير المصنع</h1>
+    <p id="auth-msg" class="mu" role="status"></p>
+
+    <form id="auth-form" class="auth-form">
+      <label for="auth-email">البريد الإلكتروني</label>
+      <input id="auth-email" type="email" dir="ltr" autocomplete="email" required>
+      <label for="auth-password">كلمة المرور</label>
+      <input id="auth-password" type="password" dir="ltr" autocomplete="current-password" minlength="6" required>
+      <div class="row">
+        <button type="submit" id="auth-login">تسجيل الدخول</button>
+        <button type="button" id="auth-signup" class="g">حساب جديد</button>
+      </div>
+    </form>
+
+    <div id="auth-session" class="auth-session" hidden>
+      <p>مسجل الدخول باسم: <b id="auth-user"></b></p>
+      <button type="button" id="auth-logout" class="g">تسجيل الخروج</button>
+    </div>
+  </section>
+</main>
+<script type="module" src="./js/auth.js"></script>
+</body>
+</html>
