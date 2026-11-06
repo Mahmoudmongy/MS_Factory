@@ -72,27 +72,26 @@ async function init(client) {
     }
   });
 
-  $('auth-signup').addEventListener('click', async () => {
+ $('auth-signup').addEventListener('click', async (e) => {
+    e.preventDefault();
+    e.stopPropagation();
     const { email, password } = credentials();
     if (!email || !password) return say('أدخل البريد الإلكتروني وكلمة المرور');
     if (password.length < 6) return say('كلمة المرور يجب ألا تقل عن 6 أحرف');
-    say('');
+    say('جاري إنشاء الحساب...', false);
     try {
       const { data, error } = await client.auth.signUp({ email, password });
-      if (error) return say(errorText(error));
+      if (error) {
+        alert('خطأ: ' + error.message);
+        return say(errorText(error));
+      }
+      alert('تم إنشاء الحساب بنجاح ✅');
       if (!data.session) say(MESSAGES.created, false);
-    } catch {
+    } catch (err) {
+      alert('حدث خطأ: ' + err.message);
       say(MESSAGES.generic);
     }
-  });
-
-  $('auth-logout').addEventListener('click', async () => {
-    try {
-      const { error } = await client.auth.signOut();
-      if (error) say(MESSAGES.generic);
-    } catch {
-      say(MESSAGES.generic);
-    }
+    return false;
   });
 }
 
