@@ -14,6 +14,28 @@
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:image" content="https://bolt.new/static/og_default.png">
 </head>
+  <script type="module">
+  import { supabase } from './js/supabase.js';
+  const { data } = await supabase.auth.getSession();
+  if (!data.session) {
+    location.href = 'auth.html';
+  } else {
+    console.log('مسجل الدخول باسم:', data.session.user.email);
+    // اعرض الإيميل في الهيدر لو فيه مكان
+    setTimeout(() => {
+      const header = document.querySelector('header') || document.body;
+      const div = document.createElement('div');
+      div.style.cssText = 'text-align:center;padding:6px;background:#052e16;color:#86efac;font-size:13px';
+      div.textContent = 'مسجل الدخول باسم: ' + data.session.user.email + ' | ';
+      const btn = document.createElement('button');
+      btn.textContent = 'تسجيل خروج';
+      btn.style.cssText = 'background:#ef4444;color:#fff;border:none;padding:4px 10px;border-radius:6px;cursor:pointer;margin-right:8px';
+      btn.onclick = async () => { await supabase.auth.signOut(); location.href='auth.html'; };
+      div.appendChild(btn);
+      document.body.prepend(div);
+    }, 500);
+  }
+</script>
 <body>
 <div id="app">
   <div id="sb-overlay" onclick="closeSB()"></div>
