@@ -59,7 +59,7 @@ async function init(client) {
     showSession(session);
   });
 
-  form.addEventListener('submit', async (e) => {
+  $('auth-login').addEventListener('click', async (e) => {
     e.preventDefault();
     const { email, password } = credentials();
     if (!email || !password) return say('أدخل البريد الإلكتروني وكلمة المرور');
