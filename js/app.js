@@ -48,7 +48,20 @@ function enh(){(ACT||document).querySelectorAll("td").forEach(c=>{if(/^\d{4}-\d{
  const inp=bar.querySelector("input");inp.oninput=()=>{const q=inp.value.trim().toLowerCase();rows.forEach(r=>r.style.display=!q||r.textContent.toLowerCase().includes(q)?"":"none")};bar.querySelector("button").onclick=()=>xl(t,rows);
  [...hd.children].forEach((th,ci)=>{if(th.colSpan>1||!th.textContent.trim())return;th.style.cursor="pointer";th.title="اضغط للترتيب";th.onclick=()=>{const dir=th.dataset.d=="1"?-1:1;th.dataset.d=dir==1?"1":"-1";const body=rows[0].parentNode,foot=all.filter(r=>r!==hd&&!r.querySelector("td"));[...rows].sort((a,b)=>{const x=key(a.children[ci]||a),y=key(b.children[ci]||b);return(typeof x=="number"&&typeof y=="number"?x-y:String(x).localeCompare(String(y),"ar"))*dir}).forEach(r=>body.appendChild(r));foot.forEach(r=>body.appendChild(r))}})})}
 async function saveFile(name,data){const dl=window.claude&&claude.use?await claude.use("downloads"):null;if(dl){await dl.save({filename:name,data});return}const blob=data instanceof Blob?data:new Blob([data],{type:"text/csv;charset=utf-8"}),url=URL.createObjectURL(blob),el=document.createElement("a");el.href=url;el.download=name;document.body.appendChild(el);el.click();el.remove();setTimeout(()=>URL.revokeObjectURL(url),5000)}
-async function xl(t,rows){const ce=c=>`"${c.textContent.trim().replace(/"/g,'""')}"`,csv=[[...t.querySelector("tr").children].map(ce).join(","),...rows.filter(r=>r.style.display!="none").map(r=>[...r.children].map(ce).join(","))].join("\n");try{await saveFile((N[tab]||"export")+".csv","\uFEFF"+csv);toast("تم التصدير (يفتح في Excel)")}catch(e){toast("تم إلغاء التصدير")}}
+function exportCurrencyCell(value){
+ const text=String(value||"").replace(/\s+/g," ").trim(),m=text.match(/\s+(ج\.?\s*م|EGP|USD|EUR|دولار|ريال)\s*$/i);
+ if(m){const amount=text.slice(0,m.index).replace(/,/g,"").replace(/[−–]/g,"-").trim();if(/^-?\d+(?:\.\d+)?$/.test(amount))return {value:amount,currency:m[1]};}
+ const numeric=text.replace(/,/g,"");if(/^-?\d+(?:\.\d+)?$/.test(numeric))return {value:numeric,currency:""};
+ return {value:text,currency:""};
+}
+async function xl(t,rows){
+ const headers=[...t.querySelector("tr").children].map(c=>c.textContent.trim()),visible=rows.filter(r=>r.style.display!=="none");
+ const split=headers.map((_,i)=>visible.some(r=>exportCurrencyCell(r.children[i]?.textContent).currency));
+ const outHead=headers.flatMap((h,i)=>split[i]?[h+" (قيمة)","العملة"]:[h]);
+ const data=visible.map(r=>headers.flatMap((_,i)=>{const x=exportCurrencyCell(r.children[i]?.textContent);return split[i]?[x.value,x.currency]:[x.value]}));
+ const ce=v=>'"'+String(v??"").replace(/"/g,'""')+'"',csv=[outHead,...data].map(row=>row.map(ce).join(",")).join("\n");
+ try{await saveFile((N[tab]||"export")+".csv","\uFEFF"+csv);toast("تم التصدير — المبلغ والعملة في خليتين منفصلتين")}catch(e){toast("تم إلغاء التصدير")}
+}
 /* ===== barcode ===== */
 const PT="212222,222122,222221,121223,121322,131222,122213,122312,132212,221213,221312,231212,112232,122132,122231,113222,123122,123221,223211,221132,221231,213212,223112,312131,311222,321122,321221,312212,322112,322211,212123,212321,232121,111323,131123,131321,112313,132113,132311,211313,231113,231311,112133,112331,132131,113123,113321,133121,313121,211331,231131,213113,213311,213131,311123,311321,331121,312113,312311,332111,314111,221411,431111,111224,111422,121124,121421,141122,141221,112214,112412,122114,122411,142112,142211,241211,221114,413111,241112,134111,111242,121142,121241,114212,124112,124211,411212,421112,421211,212141,214121,412121,111143,111341,131141,114113,114311,411113,411311,113141,114131,311141,411131,211412,211214,211232,2331112".split(",");
 function bc(t){const c=[104];for(let i=0;i<t.length;i++)c.push(t.charCodeAt(i)-32);let s=104;for(let i=1;i<c.length;i++)s+=c[i]*i;c.push(s%103,106);let x=10,r="";c.forEach(v=>{const p=PT[v];for(let i=0;i<p.length;i++){const w=+p[i];if(i%2==0)r+=`<rect x="${x}" y="0" width="${w}" height="50"/>`;x+=w}});x+=10;return `<svg viewBox="0 0 ${x} 50" preserveAspectRatio="none">${r}</svg>`}
@@ -209,7 +222,7 @@ const bk=`<button class="g" onclick="tryClose()">رجوع / إلغاء</button>`
 const SCR={home:()=>vHome(),bank:()=>vBank(),rc:()=>vVch("in"),py:()=>vVch("out"),cust:()=>vParty(1),supp:()=>vParty(0),sale:()=>vDocs("sale"),sret:()=>vDocs("sret"),pur:()=>vDocs("pur"),pret:()=>vDocs("pret"),stock:()=>vStock(),prod:()=>vProd(),coa:()=>vCoa(),je:()=>vJe(),tl:()=>vTl(),emp:()=>vEmp(),rep:()=>vRep(),ai:()=>vAi(),set:()=>vSet()};
 /* ---- preferences: theme + language ---- */
 function savePref(){try{localStorage.setItem("mgr6pref",JSON.stringify(PRF))}catch(e){}}
-function applyPref(){const r=document.documentElement;if(PRF.theme)r.setAttribute("data-theme",PRF.theme);else r.removeAttribute("data-theme");LANGEN=PRF.lang=="en";r.lang=LANGEN?"en":"ar";r.dir=LANGEN?"ltr":"rtl";$g("#lgb").textContent=LANGEN?"ع":"EN";trTree(document.body)}
+function applyPref(){const r=document.documentElement;if(PRF.theme)r.setAttribute("data-theme",PRF.theme);else r.removeAttribute("data-theme");LANGEN=PRF.lang=="en";r.lang=LANGEN?"en":"ar";r.dir=LANGEN?"ltr":"rtl";const dark=PRF.theme?PRF.theme==="dark":matchMedia("(prefers-color-scheme:dark)").matches,thb=$g("#thb");if(thb){thb.textContent=dark?"☀️":"🌙";thb.title=dark?"التبديل إلى الوضع الفاتح":"التبديل إلى الوضع الداكن";thb.setAttribute("aria-label",thb.title)}trTree(document.body)}
 function togTheme(){const dark=PRF.theme?PRF.theme=="dark":matchMedia("(prefers-color-scheme:dark)").matches;PRF.theme=dark?"light":"dark";savePref();applyPref();toast(PRF.theme=="dark"?"الوضع الليلي":"الوضع النهاري")}
 function togLang(){PRF.lang=LANGEN?"ar":"en";savePref();applyPref();nav();drawTabs()}
 /* ---- language engine (display translation only; stored data never changes) ---- */
@@ -279,8 +292,8 @@ function go(t,np,forceNew){
     }
   }
   // middle-click or no current tab -> create/find tab (new tab mode)
-  let x=null;
-  if(!forceNew) x=TB.find(y=>y.kind=="screen"&&y.sid==t);
+  // Reuse an existing screen tab instead of creating a duplicate.
+  let x=TB.find(y=>y.kind=="screen"&&y.sid==t);
   if(!x) x=newTab("screen",t,N[t]);
   actTab(x,np);
   closeSB();
@@ -294,7 +307,7 @@ const cl=()=>{if(CUR&&CUR.kind=="page")closeTab(CUR,1);else render()};
 function askClose(t){const d=document.createElement("div");d.id="cfm";d.innerHTML=`<div class="cb"><p>هذه الصفحة بها تغييرات غير محفوظة. هل تريد إغلاقها؟</p><div class="row"><button class="rd" id="cf1">إغلاق بدون حفظ</button><button class="g" id="cf2">متابعة التعديل</button></div></div>`;document.body.appendChild(d);d.querySelector("#cf1").onclick=()=>{d.remove();closeTab(t,1)};d.querySelector("#cf2").onclick=()=>{d.remove();actTab(t,1)}}
 function drawTabs(){$g("#tabs").innerHTML=U(TB,t=>`<span class="tb ${t===CUR?"on":""}" onclick="actTab(TB.find(x=>x.id==${t.id}))">${t.dirty?"● ":""}${t.title}<b onclick="event.stopPropagation();closeTab(TB.find(x=>x.id==${t.id}))">✕</b></span>`)}
 function bkw(d){let n=hi+d;while(n>=0&&n<hs.length&&!TB.some(x=>x.id===hs[n]))n+=d;if(n<0||n>=hs.length)return;hi=n;actTab(TB.find(x=>x.id===hs[n]),1)}
-function nav(){document.title=S.name;const cp=cloudProfile();if(cp&&!cp.is_admin){$g("#who").innerHTML='<option value="0">حساب الموظف</option>';$g("#who").disabled=true;}else{$g("#who").disabled=false;$g("#who").innerHTML=`<option value="0">المالك / الأدمن (كل الصلاحيات)</option>`+U(S.emp,e=>`<option value="${e.id}" ${who==e.id?"selected":""}>${e.name}</option>`);}const cs=CUR&&CUR.kind=="screen"?CUR.sid:tab;$g("#sb").innerHTML=`<span class="br">${S.logo?`<img src="${S.logo}">`:"🧵 "}${S.name}</span>`+U(allowed(),t=>`<a class="${t[0]==cs?"on":""}" 
+function nav(){document.title=S.name;const cp=cloudProfile();if(cp&&!cp.is_admin){$g("#who").innerHTML='<option value="0">حساب الموظف</option>';$g("#who").disabled=true;}else{$g("#who").disabled=false;$g("#who").innerHTML=`<option value="0">الأدمن / Admin</option>`+U(S.emp,e=>`<option value="${e.id}" ${who==e.id?"selected":""}>${e.name}</option>`);}const cs=CUR&&CUR.kind=="screen"?CUR.sid:tab;$g("#sb").innerHTML=`<span class="br">${S.logo?`<img src="${S.logo}">`:"🧵 "}${S.name}</span>`+U(allowed(),t=>`<a class="${t[0]==cs?"on":""}" 
   onclick="handleNavClick(event, '${t[0]}')" 
   ondblclick="event.preventDefault(); go('${t[0]}',0,true);"
   onauxclick="if(event.button==1){event.preventDefault(); go('${t[0]}',0,true);}" 
@@ -368,7 +381,21 @@ function docLb(id){const d=S.docs.find(x=>x.id==id);labels(d.lines.filter(l=>l.i
 /* ================= V2 PATCH 2: filters, vouchers, production, item movement ================= */
 const fv=(k,i)=>(FL[k]||{})[i]||"",ci=(s,q)=>!q||String(s||"").toLowerCase().includes(String(q).toLowerCase()),fin=(k,d)=>(!fv(k,"from")||d>=fv(k,"from"))&&(!fv(k,"to")||d<=fv(k,"to"));
 function fpr(k,x){FL[k]=FL[k]||{};[FL[k].from,FL[k].to]=rng(x);render()}
-function fbar(k,cfg){FL[k]=FL[k]||{};const hasD=cfg.some(c=>c[0]=="from");return `<div class="card"><div class="row">${U(cfg,c=>{const[id,ty,lb,op]=c,v=FL[k][id]||"";return ty=="sel"?`<div><label>${lb}</label><select onchange="FL['${k}'].${id}=this.value;render()">${U(op,o=>{const[ov,ol]=Array.isArray(o)?o:[o,o||"الكل"];return `<option value="${ov}" ${String(v)==String(ov)?"selected":""}>${ol}</option>`})}</select></div>`:`<div><label>${lb}</label><input type="${ty=="date"?"date":"text"}" value="${v}" placeholder="${ty=="text"?lb:""}" onchange="FL['${k}'].${id}=this.value;render()"></div>`})}</div><div class="row">${hasD?U([["d","اليوم"],["w","هذا الأسبوع"],["m","هذا الشهر"]],x=>`<button class="g" onclick="fpr('${k}','${x[0]}')">${x[1]}</button>`):""}<button class="g" onclick="FL['${k}']={};render()">مسح الفلاتر</button></div></div>`}
+function fbar(k,cfg){
+ FL[k]=FL[k]||{};const hasD=cfg.some(c=>c[0]==="from");
+ const fields=cfg.map(c=>{const id=c[0],ty=c[1],lb=c[2],op=c[3],v=FL[k][id]||"";
+  if(ty==="sel")return '<div><label>'+lb+'</label><select data-filter-key="'+k+'" data-filter-id="'+id+'" onchange="FL[\''+k+'\'].'+id+'=this.value;render()">'+op.map(o=>{const z=Array.isArray(o)?o:[o,o||"الكل"];return '<option value="'+z[0]+'" '+(String(v)==String(z[0])?"selected":"")+'>'+z[1]+'</option>'}).join("")+'</select></div>';
+  const typ=ty==="date"?"date":"search",handler=ty==="date"?'onchange="FL[\''+k+'\'].'+id+'=this.value;render()"':'oninput="fbarType(\''+k+'\',\''+id+'\',this)"';
+  return '<div><label>'+lb+'</label><input data-filter-key="'+k+'" data-filter-id="'+id+'" type="'+typ+'" inputmode="'+(ty==="text"?"search":"none")+'" autocomplete="off" autocapitalize="off" spellcheck="false" value="'+String(v).replace(/&/g,"&amp;").replace(/"/g,"&quot;")+'" placeholder="'+(ty==="text"?lb:"")+'" '+handler+'></div>';
+ }).join("");
+ const periods=hasD?[["d","اليوم"],["w","هذا الأسبوع"],["m","هذا الشهر"]].map(x=>'<button class="g" onclick="fpr(\''+k+'\',\''+x[0]+'\')">'+x[1]+'</button>').join(""):"";
+ return '<div class="card filter-card"><div class="row">'+fields+'</div><div class="row">'+periods+'<button class="g" onclick="FL[\''+k+'\']={};render()">مسح الفلاتر</button></div></div>';
+}
+function fbarType(k,id,el){
+ FL[k]=FL[k]||{};FL[k][id]=el.value;const key=k+":"+id;window.__fbarTimers=window.__fbarTimers||{};clearTimeout(window.__fbarTimers[key]);
+ const start=el.selectionStart,end=el.selectionEnd;
+ window.__fbarTimers[key]=setTimeout(()=>{if(!CUR||CUR.kind!=="screen")return;render();const next=ACT&&ACT.querySelector('[data-filter-key="'+k+'"][data-filter-id="'+id+'"]');if(next){next.focus({preventScroll:true});try{next.setSelectionRange(start,end)}catch(e){}}},100);
+}
 /* ---- invoices: payment status from linked vouchers ---- */
 const paidOf=(d,ex)=>S.vch.filter(v=>v.id!=ex).reduce((a,v)=>a+((v.alloc||{})[d.id]||0),0),remOf=(d,ex)=>d.total-paidOf(d,ex),stOf=d=>{if(d.t!="sale"&&d.t!="pur")return "—";return remOf(d)<=.005?"مسددة":paidOf(d)>.005?"مسددة جزئيًا":"غير مسددة"};
 function vDocs(t){const k="d"+t,s=t=="sale"||t=="sret",pay=t=="sale"||t=="pur",l=S.docs.filter(d=>d.t==t&&(dc=="all"||d.cat==dc)&&ci(d.no,fv(k,"no"))&&ci(pn(d.pid),fv(k,"pt"))&&(!fv(k,"it")||d.lines.some(x=>ci(x.name,fv(k,"it"))||ci(codeOf(x),fv(k,"it"))))&&fin(k,d.date)&&(!fv(k,"st")||stOf(d)==fv(k,"st"))).reverse();
