@@ -31,6 +31,7 @@ export default defineConfig({
       input: {
         main: resolve(root, 'index.html'),
         auth: resolve(root, 'auth.html'),
+        password: resolve(root, 'change-password.html'),
       },
     },
   },
