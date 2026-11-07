@@ -880,10 +880,10 @@ function drawAll() {
   lastMode = isMobile() ? 'mobile' : 'desktop';
 }
 setInterval(() => {
-  const top = document.getElementById("ms-topbar");
+  const logout = document.getElementById("ms-logout-btn");
   const cur = isEN() ? "en" : "ar";
   const mode = isMobile() ? "mobile" : "desktop";
-  if (!top || cur !== lastLang || mode !== lastMode) drawAll();
+  if (!logout || cur !== lastLang || mode !== lastMode) drawAll();
   else purgeLoggedInText();
 }, 500);
 window.addEventListener("resize", () => drawAll());
