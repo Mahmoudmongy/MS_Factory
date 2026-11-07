@@ -32,6 +32,10 @@ import { supabase } from './js/supabase.js';
             try { cachedProfile = JSON.parse(localStorage.getItem('factory-profile:' + data.session.user.id) || 'null'); } catch (_) {}
           }
           if (cachedProfile && cachedProfile.id === data.session.user.id) {
+            if (cachedProfile.must_change_password === true && cachedProfile.is_admin !== true) {
+              location.replace('change-password.html');
+              return;
+            }
             window.__factoryAuthProfile = cachedProfile;
             window.__factoryAuthEmail = data.session.user.email || '';
             window.__factoryOfflineMode = true;
@@ -46,6 +50,12 @@ import { supabase } from './js/supabase.js';
             location.replace('auth.html');
           }
         } else {
+          if (profile.must_change_password === true && profile.is_admin !== true) {
+            window.__factoryAuthProfile = profile;
+            try { localStorage.setItem('factory-profile:' + data.session.user.id, JSON.stringify(profile)); } catch (_) {}
+            location.replace('change-password.html');
+            return;
+          }
           window.__factoryAuthProfile = profile;
           window.__factoryAuthEmail = data.session.user.email || '';
           window.__factoryOfflineMode = false;
