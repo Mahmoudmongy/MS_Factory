@@ -59,6 +59,11 @@ ok('inventory sync stores the full local item in products.raw for lossless resto
 ok('inventory download restores records into S.items, the real inventory source used by the app',/if \(!Array\.isArray\(S\.items\)\) S\.items = \[\]/.test(cloud)&&/S\.items = m\.arr/.test(cloud));
 ok('employee detail-only sync remains marked partial in the background',/admin \? "synced" : "partial"/.test(cloud)&&/مزامنة القيود والحركات المحاسبية الكاملة لحساب الموظف لم تكتمل بعد/.test(cloud));
 ok('production-only employees can upload and pull their production orders',/if \(!admin && !\["customers", "suppliers", "invoices", "inventory", "production"\]\.some\(canWrite\)\)/.test(cloud)&&/if \(canWrite\("production"\)\)/.test(cloud)&&/if \(!\["customers","suppliers","invoices","inventory","production","reports"\]\.some\(canRead\)\)/.test(cloud));
+const detailSyncMigration=fs.readFileSync(path.join(ROOT,'supabase/migrations/20261108000100_atomic_versioned_factory_detail_sync.sql'),'utf8');
+ok('returns, vouchers and production orders use the atomic versioned detail RPC',/rpc\(["']sync_factory_detail["']/.test(cloud)&&/p_expected_version/.test(cloud)&&/sync_version/.test(cloud));
+ok('detail sync reads server versions and preserves stale-cloud copies as explicit conflicts',/remoteVersion > localVersion/.test(cloud)&&/serverCopy: remote/.test(cloud)&&/d\._cloudVersion = Number\(result\.row\.sync_version\)/.test(cloud)&&/v\._cloudVersion = Number\(result\.row\.sync_version\)/.test(cloud)&&/o\._cloudVersion = Number\(result\.row\.sync_version\)/.test(cloud));
+ok('detail sync SQL enforces compare-and-swap and module-specific permissions',/SECURITY INVOKER/.test(detailSyncMigration)&&/FOR UPDATE/.test(detailSyncMigration)&&/40001/.test(detailSyncMigration)&&/private\.can_access_factory_owner\(v_owner_id, v_permission, true\)/.test(detailSyncMigration));
+
 ok('invoice sync does not delete invoice items through separate client requests',!/from\(["']invoice_items["']\)\.delete/.test(cloud));
 ok('returns are not misclassified as sale/purchase invoices',/\["sale", "pur"\]\.includes\(d\.t\)/.test(cloud));
 ok('cloud invoice merge preserves newer remote copies as explicit conflicts',/mergeCloudInvoices/.test(cloud)&&/serverCopy: remote/.test(cloud));
