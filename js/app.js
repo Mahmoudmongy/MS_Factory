@@ -253,7 +253,7 @@ function syncPage(){
   ${snapshotConflict&&cp?.is_admin===true?`<div class="card"><b>⚠️ تعارض في نسخة المصنع الكاملة</b><p>توجد تغييرات أحدث على السحابة وتغييرات محلية على هذا الجهاز. لم يتم استبدال أي نسخة أو رفع بيانات قديمة فوق الأحدث.</p><p>يمكنك استعادة النسخة السحابية بعد حفظ نسخة محلية احتياطية.</p><button class="rd" onclick="resolveCloudSnapshotConflict()">حفظ نسخة الجهاز ثم استعادة النسخة السحابية</button></div>`:""}
   <table class="l"><tr><th>البيانات</th><th>العدد على هذا الجهاز</th></tr>${U(c,x=>`<tr><td>${x[0]}</td><td>${x[1]}</td></tr>`)}</table>
   <p class="mu">${detail}</p>
-  <p class="mu">البيانات المحلية تظل محفوظة على الجهاز. عند عودة الإنترنت يحاول النظام تحميل التغييرات السحابية ودمجها ثم رفع ما تسمح به الصلاحيات. راجع شارة المزامنة أعلى الشاشة لمعرفة الحالة الحالية.</p>`)
+  <p class="mu">البيانات المحلية تظل محفوظة على الجهاز. عند عودة الإنترنت يحاول النظام تحميل التغييرات السحابية ودمجها ثم رفع ما تسمح به الصلاحيات. اضغط على مؤشر الاتصال أعلى الشاشة لعرض التفاصيل أو معالجة أي تعارض مزامنة.</p>`)
 }
 /* ---- tabbed workspace ---- */
 function newTab(kind,sid,title){const el=document.createElement("div");el.style.display="none";$g("#m").appendChild(el);const t={id:uid(),kind,sid,title,el,dirty:0,form:0,st:null};const mark=()=>{if(t.form&&!t.dirty){t.dirty=1;drawTabs()}};el.addEventListener("input",mark);el.addEventListener("change",mark);TB.push(t);return t}
