@@ -35,7 +35,29 @@ const cloudCan=(key)=>{const p=cloudProfile();if(!p)return null;if(p.is_admin===
 const can=p=>{const cp=cloudProfile();if(cp&&!cp.is_admin){const key=CLOUD_SCREEN_PERMISSIONS[tab];return !!key&&key!=="reports"&&cloudCan(key)===true;}return who=="0"||((S.emp.find(e=>e.id==who)||{}).perm||[]).includes(p);};
 /* ===== state + shell ===== */
 let tab="home",who="0",D,PS,V,J,IM="",idImg="",pe=0,dc="all",hs=[],hi=-1,TL={from:"",to:"",k:""},SF={wh:"",nm:"",b1:"",b2:"",q1:"",q2:""},R={rep:"",from:"",to:"",cat:"all",item:0,acct:0,pt:0,ds:"sale",gb:"الصنف",gc:"",ms:"amt",pa:-1,pc:-1};
-const T=[["home","🏠","الملخص"],["bank","🏦","الحسابات النقدية والبنوك"],["rc","⬇️","المقبوضات"],["py","⬆️","المدفوعات"],["cust","👤","العملاء"],["supp","🏭","الموردون"],["sale","🧾","فواتير البيع"],["sret","↩️","إشعارات دائنة (مرتجع بيع)"],["pur","🛒","فواتير الشراء"],["pret","↪️","إشعارات مدينة (مرتجع شراء)"],["stock","📦","أصناف المخزون"],["prod","⚙️","أوامر الإنتاج"],["coa","🌳","شجرة الحسابات"],["je","📒","قيود اليومية"],["tl","🕘","السجل الزمني"],["emp","🧑‍🏭","الموظفون"],["rep","📊","التقارير"],["ai","🤖","المساعد الذكي"],["set","🛠️","الإعدادات"]];
+const APP_ICONS={
+ home:'<path d="m3 10 9-7 9 7v10a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/>',
+ bank:'<path d="m3 9 9-6 9 6M4 10h16M5 10v9m4-9v9m6-9v9m4-9v9M3 21h18"/>',
+ receipt:'<path d="M5 3h14v18l-3-2-4 2-4-2-3 2zM8 8h8M8 12h8M8 16h4"/>',
+ payment:'<path d="M4 6h16v13H4zM4 10h16M8 15h4M12 3l-3 3 3 3"/>',
+ customer:'<circle cx="9" cy="8" r="3"/><path d="M3 20v-2a6 6 0 0 1 12 0v2M16 5a3 3 0 0 1 0 6m2 3a5 5 0 0 1 3 5v1"/>',
+ supplier:'<path d="M3 20V8l9-5 9 5v12zM7 20v-7h10v7M8 9h2m4 0h2"/>',
+ sale:'<path d="M5 3h14v18l-3-2-4 2-4-2-3 2zM8 8h8M8 12h8M8 16h4"/>',
+ return:'<path d="M9 14 4 9l5-5M4 9h10a6 6 0 0 1 0 12h-2"/>',
+ purchase:'<path d="M3 4h2l2 12h11l3-8H6M9 20h.01M17 20h.01"/>',
+ returnPurchase:'<path d="M15 14 20 9l-5-5M20 9H10a6 6 0 0 0 0 12h2"/>',
+ inventory:'<path d="m3 7 9-4 9 4-9 4zM3 7v10l9 4 9-4V7M12 11v10"/>',
+ production:'<path d="M12 2v4m0 12v4M4.9 4.9l2.8 2.8m8.6 8.6 2.8 2.8M2 12h4m12 0h4M4.9 19.1l2.8-2.8m8.6-8.6 2.8-2.8"/><circle cx="12" cy="12" r="4"/>',
+ coa:'<path d="M12 3v5M12 8H6v5m6-5h6v5M6 13v3m12-3v3M3 16h6v5H3zm12 0h6v5h-6zM9 8h6v5H9z"/>',
+ journal:'<path d="M5 3h14v18H5zM8 8h8M8 12h8M8 16h5"/>',
+ timeline:'<path d="M4 5h16M4 12h16M4 19h16"/><circle cx="8" cy="5" r="2"/><circle cx="15" cy="12" r="2"/><circle cx="10" cy="19" r="2"/>',
+ employee:'<circle cx="12" cy="7" r="4"/><path d="M4 21v-2a8 8 0 0 1 16 0v2"/>',
+ report:'<path d="M4 20V4m0 16h17M8 16v-4m5 4V7m5 9v-7"/>',
+ ai:'<path d="M12 3v3m0 12v3M3 12h3m12 0h3M5.6 5.6l2.1 2.1m8.6 8.6 2.1 2.1m0-12.8-2.1 2.1m-8.6 8.6-2.1 2.1"/><circle cx="12" cy="12" r="4"/>',
+ settings:'<path d="M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8z"/><path d="m19 13 2 1-2 3-2-1-2 1v2h-4v-2l-2-1-2 1-2-3 2-1v-2l-2-1 2-3 2 1 2-1V5h4v2l2 1 2-1 2 3-2 1z"/>'
+};
+const ico=k=>'<svg class="nav-ico" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">'+(APP_ICONS[k]||APP_ICONS.settings)+'</svg>';
+const T=[["home",ico("home"),"الملخص"],["bank",ico("bank"),"الحسابات النقدية والبنوك"],["rc",ico("receipt"),"المقبوضات"],["py",ico("payment"),"المدفوعات"],["cust",ico("customer"),"العملاء"],["supp",ico("supplier"),"الموردون"],["sale",ico("sale"),"فواتير البيع"],["sret",ico("return"),"إشعارات دائنة (مرتجع بيع)"],["pur",ico("purchase"),"فواتير الشراء"],["pret",ico("returnPurchase"),"إشعارات مدينة (مرتجع شراء)"],["stock",ico("inventory"),"أصناف المخزون"],["prod",ico("production"),"أوامر الإنتاج"],["coa",ico("coa"),"شجرة الحسابات"],["je",ico("journal"),"قيود اليومية"],["tl",ico("timeline"),"السجل الزمني"],["emp",ico("employee"),"الموظفون"],["rep",ico("report"),"التقارير"],["ai",ico("ai"),"المساعد الذكي"],["set",ico("settings"),"الإعدادات"]];
 const N=Object.fromEntries(T.map(t=>[t[0],t[2]])),ph=(t,b)=>`<div class="ph"><h2>${t}</h2><div class="row">${b||""}</div></div>`;
 function allowed(){const cp=cloudProfile();if(cp&&!cp.is_admin){return T.filter(t=>{if(t[0]==="home")return true;const key=CLOUD_SCREEN_PERMISSIONS[t[0]];return !!key&&cloudCan(key)===true;});}const e=S.emp.find(x=>x.id==who);return T.filter(t=>(t[0]=="home"||t[0]=="set"||!S.hide.includes(t[0]))&&(!e||t[0]=="home"||e.perm.includes(t[0])));}
 function swho(v){if(cloudProfile()&&!cloudProfile().is_admin)return;who=v;go(allowed()[0][0])}
@@ -516,7 +538,7 @@ function importGo(){const ok=WZ.out.filter(x=>x.st=="جديد");if(!ok.length){t
  else ok.forEach(x=>{const o=x.o,r=String(o.role||""),both=r.includes("كلاهما"),c=both||r.includes("عميل")||!r,s=both||r.includes("مورد");S.partners.push({id:uid(),name:String(o.name),phone:String(o.phone||""),c:c?1:0,s:s?1:0,type:String(o.kind).includes("جملة")?"w":"r",gov:String(o.gov||""),city:String(o.city||""),adr:String(o.adr||"")});n++});
  sv();toast("تم استيراد "+n+" صف");cl()}
 /* ---- settings ---- */
-function vSet(){return ph(N.set)+`<div class="tiles">${U([["🌳 شجرة الحسابات","go('coa')"],["ℹ️ بيانات العمل التجاري (الاسم + اللوجو)","bizForm()"],["🖨️ قوالب الطباعة","tplForm()"],["📥 استيراد من Excel","impForm()"],["💹 هامش الربح المقترح","pctForm()"],["🏬 مخازن فرعية","wForm()"],["🧩 تخصيص التبويبات","cust()"],["👥 الموظفون والصلاحيات","go('emp')"],["🌓 الوضع الليلي / النهاري","togTheme()"],["🌐 اللغة: عربي / English","togLang()"],["♻️ إعادة ضبط الديمو","resetAsk()"],...(canInstall()&&!isStandalone()?[["📲 تثبيت التطبيق","promptInstall()"]]:[])],t=>`<div class="tile" onclick="${t[1]}">${t[0]}</div>`)}</div>`}
+function vSet(){return ph(N.set)+`<div class="tiles">${U([["🌳 شجرة الحسابات","go('coa')"],["ℹ️ بيانات العمل التجاري (الاسم + اللوجو)","bizForm()"],["🖨️ قوالب الطباعة","tplForm()"],["📥 استيراد من Excel","impForm()"],["💹 هامش الربح المقترح","pctForm()"],["🏬 مخازن فرعية","wForm()"],["🧩 تخصيص التبويبات","cust()"],["👥 الموظفون والصلاحيات","go('emp')"],["🌐 اللغة: عربي / English","togLang()"],["♻️ إعادة ضبط الديمو","resetAsk()"],...(canInstall()&&!isStandalone()?[["📲 تثبيت التطبيق","promptInstall()"]]:[])],t=>`<div class="tile" onclick="${t[1]}">${t[0]}</div>`)}</div>`}
 function resetAsk(){sh(`<h3>تأكيد إعادة الضبط</h3><p>سيتم حذف كل البيانات المسجلة في هذا الـ Demo والعودة للبيانات الافتراضية.</p><div class="row"><button class="rd" onclick="resetAll()">نعم، أعد الضبط</button>${bk}</div>`)}
 function resetAll(){try{localStorage.removeItem("mgr6")}catch(e){}S=seed();migrate();TB.filter(t=>t.kind=="page").forEach(t=>closeTab(t,1));go("home")}
 function bizForm(){IM="";sh(`<h3>بيانات العمل التجاري</h3><label>اسم البرنامج / النشاط</label><input id="bz" placeholder="اسم المصنع" value="${S.name}"><label>اللوجو (يظهر على كل المستندات الرسمية)</label><input type="file" accept="image/*" onchange="pick(this,v=>IM=v)">${S.logo?`<img src="${S.logo}" width="80">`:""}<div class="row"><button onclick="saveBiz()">حفظ</button>${bk}</div>`)}
