@@ -14,7 +14,7 @@ partners:[{id:1,name:"عميل قطاعي (نقدي)",phone:"",c:1,s:0,type:"r",
 docs:[],po:[],vch:[],wo:[],codes:[],je:[{no:"JE-0001",date:d0,ts:n0,desc:"رصيد افتتاحي"}],emp:[],mv:[],L:[op(1,50000,0),op(2,150000,0),op(5,14200,0),op(8,0,214200)]};
 s.items.forEach(i=>Object.entries(i.st).forEach(([v,q])=>s.mv.push({d:d0,ts:n0,iid:i.id,v,q,val:q*i.buy,ref:"رصيد افتتاحي",pid:0})));return s}
 let S;try{S=JSON.parse(localStorage.getItem("mgr6"))}catch(e){}if(!S)S=seed();
-const sv=()=>{try{S.pend=(S.pend||0)+1;localStorage.setItem("mgr6",JSON.stringify(S))}catch(e){}};
+const sv=()=>{try{S.pend=(S.pend||0)+1;localStorage.setItem("mgr6",JSON.stringify(S));localStorage.setItem("mgr6-sync-pending",JSON.stringify({at:Date.now(),pend:S.pend}))}catch(e){}};
 const TN={sale:"فاتورة بيع",pur:"فاتورة شراء",sret:"إشعار دائن (مرتجع بيع)",pret:"إشعار مدين (مرتجع شراء)"},PF={sale:"SA",pur:"PU",sret:"SR",pret:"RP"},CT={mfg:"تصنيع",sup:"مشتريات"},TT={A:"الأصول",L:"الالتزامات",Q:"حقوق الملكية",I:"الإيرادات",X:"المصروفات"};
 /* ===== ledger + stock core ===== */
 const ak=k=>S.accts.find(a=>a.k==k).id,ac_=id=>S.accts.find(a=>a.id==id)||{},an=id=>ac_(id).name||"",nat=a=>"AX".includes(a.t)?1:-1;
@@ -255,7 +255,7 @@ function trNode(n){if(n.nodeType==3){const v=n.nodeValue;if(LANGEN){if(AR.test(v
 function trTree(r){if(!r||(!LANGEN&&!TRON))return;const w=document.createTreeWalker(r,NodeFilter.SHOW_TEXT|NodeFilter.SHOW_ELEMENT);let n=w.currentNode;do{trNode(n)}while((n=w.nextNode()))}
 new MutationObserver(ms=>{if(!LANGEN)return;ms.forEach(m=>m.addedNodes.forEach(n=>trTree(n)))}).observe(document.body,{childList:true,subtree:true});
 /* ---- connection / sync indicator ---- */
-function netUp(){const e=$g("#net");e.textContent=navigator.onLine?"🟢 متصل":"🔴 غير متصل";e.title="حالة الاتصال والمزامنة"}
+function netUp(){const e=$g("#net"),status=$g("#net-status");if(status)status.textContent=navigator.onLine?"🟢 متصل":"🔴 غير متصل";else if(e)e.textContent=navigator.onLine?"🟢 متصل":"🔴 غير متصل";if(e)e.title="حالة الاتصال والمزامنة"}
 addEventListener("online",netUp);addEventListener("offline",netUp);
 function syncPage(){
   const cp=cloudProfile();
