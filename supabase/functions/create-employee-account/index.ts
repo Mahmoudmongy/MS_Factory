@@ -34,7 +34,9 @@ Deno.serve(async (req: Request) => {
   const username = String(body.username ?? "").trim().toLowerCase();
   const fullName = String(body.full_name ?? "").trim().slice(0, 120);
   const password = String(body.password ?? "");
-  const permissions = body.permissions && typeof body.permissions === "object" && !Array.isArray(body.permissions) ? body.permissions : {};
+  const requested = body.permissions && typeof body.permissions === "object" && !Array.isArray(body.permissions) ? body.permissions as Record<string, unknown> : {};
+  const permissions: Record<string, boolean> = {};
+  for (const key of ALLOWED_PERMISSIONS) permissions[key] = requested[key] === true;
   if (!/^[a-z0-9._-]{3,40}$/.test(username)) return json(400, { error: "اسم المستخدم يجب أن يكون من 3 إلى 40 حرفاً إنجليزياً أو رقماً أو . _ -" });
   if (password.length < 10) return json(400, { error: "كلمة المرور يجب ألا تقل عن 10 أحرف" });
 
