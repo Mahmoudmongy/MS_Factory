@@ -1,5 +1,6 @@
 // js/cloud-sync.js - V28 - إصلاح الشاشة البيضا + إخفاء شريط مسجل الدخول صح + تحميل تلقائي آمن
 import { supabase } from './supabase.js';
+import { buildPartnerUpserts, mergePartnerRows } from './partner-sync.mjs';
 
 let saveTimer = null;
 let lastSyncTime = "";
@@ -219,31 +220,13 @@ async function uploadToTables(showAlert = false) {
       }
     }
 
-    const partnerArrays = [];
-    if (Array.isArray(S.partners)) partnerArrays.push({ key: "partners", arr: S.partners });
-    if (Array.isArray(S.customers)) partnerArrays.push({ key: "customers", arr: S.customers });
-    if (Array.isArray(S.suppliers)) partnerArrays.push({ key: "suppliers", arr: S.suppliers });
-    if (Array.isArray(S.clients)) partnerArrays.push({ key: "clients", arr: S.clients });
-    for (const { key, arr } of partnerArrays) {
-      for (const p of arr) {
-        const name = String(getField(p, ["name", "nm", "title"]) || "");
-        if (!name || isAccountName(name)) continue;
-        const typeStr = String(getField(p, ["type", "kind", "cat", "category"]) || "").toLowerCase();
-        if (typeStr.includes("account") || typeStr.includes("coa") || typeStr.includes("chart") || typeStr.includes("حساب")) continue;
-        const isSup = typeStr.includes("supp") || typeStr.includes("مورد") || p.isSupplier === true || key === "suppliers";
-        if (!canWrite(isSup ? "suppliers" : "customers")) continue;
-        const table = isSup ? "suppliers" : "customers";
-        const row = {
-          user_id: owner,
-          external_id: String(getField(p, ["id", "no", "code"]) || name),
-          name,
-          phone: String(getField(p, ["phone", "tel", "mobile", "ph"]) || "") || null,
-          email: String(getField(p, ["email", "mail"]) || "") || null,
-          address: String(getField(p, ["addr", "address", "add"]) || "") || null
-        };
-        const { error } = await supabase.from(table).upsert(row, { onConflict: "user_id,external_id" });
-        if (error) errors.push(table + ": " + error.message);
-      }
+    // Preserve the app's actual S.partners shape (c/s role flags, r/w customer type).
+    // A dual-role partner is written to both master tables with the same stable external ID.
+    const partnerRows = buildPartnerUpserts(S, owner);
+    for (const [table, rows] of Object.entries(partnerRows)) {
+      if (!canWrite(table) || !rows.length) continue;
+      const { error } = await supabase.from(table).upsert(rows, { onConflict: "user_id,external_id" });
+      if (error) errors.push(table + ": " + error.message);
     }
 
     const docs = S.docs || S.invoices || [];
@@ -544,12 +527,18 @@ async function loadFromTablesMerge(isAuto = false) {
     const S = getCachedState();
     if (!S || typeof S !== "object" || Array.isArray(S)) return "bad local";
     let totalAdded = 0;
-    const cloudPartners = [
-      ...(custs || []).map(c => ({ id: c.external_id, name: c.name, phone: c.phone, email: c.email, addr: c.address, type: "customer" })),
-      ...(supps || []).map(s => ({ id: s.external_id, name: s.name, phone: s.phone, email: s.email, addr: s.address, type: "supplier" })),
-    ];
-    if (cloudPartners.length) {
-      const m = mergeByKey(S.partners || [], cloudPartners, x => x.id || x.name);
+    const cloudCustomers = (custs || []).map(c => ({
+      id: c.external_id || c.id, name: c.name, phone: c.phone, email: c.email,
+      gov: c.governorate || "", city: c.city || "", addr: c.address || "",
+      customer_type: c.customer_type || "retail", partner_role: "customer"
+    }));
+    const cloudSuppliers = (supps || []).map(s => ({
+      id: s.external_id || s.id, name: s.name, phone: s.phone, email: s.email,
+      gov: s.governorate || "", city: s.city || "", addr: s.address || "",
+      partner_role: "supplier"
+    }));
+    if (cloudCustomers.length || cloudSuppliers.length) {
+      const m = mergePartnerRows(S.partners || [], cloudCustomers, cloudSuppliers);
       S.partners = m.arr; totalAdded += m.added;
     }
     let recordConflicts = 0;
