@@ -1,21 +1,13 @@
-/* Service Worker v7 - offline application shell.
+/* Service Worker v8 - offline application shell.
  * Business data stays in localStorage. Authenticated Supabase/API responses are never cached.
- * Only the explicit static app-shell files are precached; same-origin app assets use network-first fallback.
+ * Only stable shell files are precached; built Vite assets are cached on first successful request.
  */
-const VERSION = 'factory-v7';
+const VERSION = 'factory-v8';
 const CORE = [
   './',
   './index.html',
   './auth.html',
-  './manifest.json',
-  './css/style.css',
-  './js/app.js',
-  './js/auth.js',
-  './js/supabase.js',
-  './js/cloud-sync.js',
-  './assets/icon.svg',
-  './assets/icon-192.png',
-  './assets/icon-512.png'
+  './js/app.js'
 ];
 
 self.addEventListener('install', event => {
