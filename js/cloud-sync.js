@@ -1,16 +1,19 @@
-// js/cloud-sync.js - V4 - ثنائي اللغة AR / EN
+// js/cloud-sync.js - V5 - فوق + ثنائي اللغة بجد
 import { supabase } from './supabase.js';
 
 let saveTimer = null;
 let lastSaved = "";
 let lastSyncTime = "";
+let lastLang = "";
 
-// ===== دي اللي بتحدد اللغة الحالية من البرنامج نفسه =====
 function isEN() {
-  // البرنامج بيحط lang="en" على <html> لما تختار إنجليزي
+  // البرنامج بيخزن اللغة هنا
+  try {
+    const pref = JSON.parse(localStorage.getItem("mgr6pref") || "{}");
+    if (pref.lang) return pref.lang === "en";
+  } catch(e){}
   return document.documentElement.lang === "en" || document.documentElement.dir === "ltr";
 }
-// دالة ترجمة صغيرة - عربي / إنجليزي
 function T(ar, en) { return isEN() ? en : ar; }
 
 async function backupNow(showAlert = false) {
@@ -25,12 +28,12 @@ async function backupNow(showAlert = false) {
       state: JSON.parse(raw),
       updated_at: new Date().toISOString()
     }, { onConflict: 'user_id' });
-    if (error) { console.error(error); if(showAlert) alert(T("فشل الحفظ", "Save failed")); }
+    if (error) { if(showAlert) alert(T("فشل الحفظ", "Save failed")); }
     else {
       lastSaved = raw;
       lastSyncTime = new Date().toLocaleTimeString(isEN() ? 'en-US' : 'ar-EG');
       console.log('✅ Saved to cloud');
-      updateBadge();
+      drawBadge();
       if(showAlert) alert(T("تم الحفظ في السحابة ✅", "Saved to cloud ✅"));
     }
   } catch(e){ console.error(e); }
@@ -42,8 +45,10 @@ localStorage.setItem = function(key, value) {
   if (key === "mgr6") {
     clearTimeout(saveTimer);
     saveTimer = setTimeout(() => backupNow(false), 1500);
-    updateBadge(T("جارٍ الحفظ...", "Saving..."));
+    drawBadge(T("جارٍ الحفظ...", "Saving..."));
   }
+  // لو اللغة اتغيرت في الإعدادات، ارسم الزرار تاني فوراً
+  if (key === "mgr6pref") setTimeout(drawBadge, 100);
 };
 
 window.restoreCloud = async function() {
@@ -60,43 +65,46 @@ window.restoreCloud = async function() {
 };
 window.backupNowManual = function() { backupNow(true); };
 
-// ===== الزرار - تحت على الشمال زي ما انت شايفه، بس ثنائي اللغة =====
-function updateBadge(text) {
+// ===== رسم الزرار - المكان بيتغير حسب اللغة =====
+function drawBadge(text) {
   let b = document.getElementById("cloud-badge");
   if (!b) {
     b = document.createElement("div");
     b.id = "cloud-badge";
-    // تحت على الشمال، ومش بيغطي على الجداول
-    b.style.cssText = "position:fixed;bottom:12px;left:12px;z-index:99999;background:#0f766e;color:#fff;padding:8px 12px;border-radius:20px;font-size:13px;font-weight:bold;box-shadow:0 4px 15px rgba(0,0,0,.4);display:flex;gap:8px;align-items:center;direction:ltr;";
     document.body.appendChild(b);
   }
-  // بنرسم الزرار كل مرة حسب اللغة الحالية
+  const en = isEN();
+
+  // عربي = فوق شمال | إنجليزي = فوق يمين
+  // top: 58px عشان يبقى تحت الهيدر الأخضر ومش فوق القايمة
+  if (en) {
+    b.style.cssText = "position:fixed;top:58px;right:12px;left:auto;z-index:99999;background:#0f766e;color:#fff;padding:8px 12px;border-radius:20px;font-size:13px;font-weight:bold;box-shadow:0 4px 15px rgba(0,0,0,.4);display:flex;gap:8px;align-items:center;direction:ltr;";
+  } else {
+    b.style.cssText = "position:fixed;top:58px;left:12px;right:auto;z-index:99999;background:#0f766e;color:#fff;padding:8px 12px;border-radius:20px;font-size:13px;font-weight:bold;box-shadow:0 4px 15px rgba(0,0,0,.4);display:flex;gap:8px;align-items:center;direction:rtl;";
+  }
+
   const label = text || (lastSyncTime ? `${T("☁️ متزامن", "☁️ Synced")} ${lastSyncTime}` : T("☁️ متزامن", "☁️ Synced"));
-  b.innerHTML = `<span id="cloud-txt">${label}</span><span style="background:#fff;color:#0f766e;padding:3px 10px;border-radius:12px;cursor:pointer;" onclick="event.stopPropagation();backupNowManual()">${T("حفظ الآن", "Save Now")}</span><span style="background:#fff;color:#0f766e;padding:3px 10px;border-radius:12px;cursor:pointer;" onclick="event.stopPropagation();restoreCloud()">${T("استرجاع", "Restore")}</span>`;
-  // منع محرك الترجمة بتاع البرنامج إنه يترجم الزرار غلط
-  b.setAttribute("data-no-translate", "1");
+  // بنستخدم innerHTML جديد كل مرة عشان محرك الترجمة بتاع البرنامج ميبوظوش
+  b.innerHTML = "";
+  const s1 = document.createElement("span");
+  s1.textContent = label;
+  const s2 = document.createElement("span");
+  s2.textContent = T("حفظ الآن", "Save Now");
+  s2.style.cssText = "background:#fff;color:#0f766e;padding:3px 10px;border-radius:12px;cursor:pointer;";
+  s2.onclick = (e) => { e.stopPropagation(); backupNowManual(); };
+  const s3 = document.createElement("span");
+  s3.textContent = T("استرجاع", "Restore");
+  s3.style.cssText = "background:#fff;color:#0f766e;padding:3px 10px;border-radius:12px;cursor:pointer;";
+  s3.onclick = (e) => { e.stopPropagation(); restoreCloud(); };
+  b.appendChild(s1); b.appendChild(s2); b.appendChild(s3);
+  lastLang = en ? "en" : "ar";
 }
 
-// أول ما اللغة تتغير في البرنامج، الزرار يتغير معاها
-const langObserver = new MutationObserver(() => updateBadge());
-langObserver.observe(document.documentElement, { attributes: true, attributeFilter: ['lang', 'dir'] });
+// راقب اللغة كل 500ms - لو اتغيرت ارسم الزرار تاني في مكانه الجديد
+setInterval(() => {
+  const cur = isEN() ? "en" : "ar";
+  if (cur !== lastLang) drawBadge();
+}, 500);
 
-// صلّح كلام صفحة المزامنة القديم - عربي وإنجليزي
-function fixSyncPage() {
-  if (document.body.innerHTML.includes("محلي على هذا الجهاز فقط")) {
-    document.body.innerHTML = document.body.innerHTML
-      .replace("محلي على هذا الجهاز فقط (Demo)", "محلي + سحابة Supabase ✅")
-      .replace("غير مفعّلة — تحتاج Backend فعلي (Supabase)", "مفعّلة ✅ - بيتحفظ في جدول factory_state")
-      .replaceAll("عند ربط Supabase", "متزامن ✅");
-  }
-  if (document.body.innerHTML.includes("Local on this device only")) {
-    document.body.innerHTML = document.body.innerHTML
-      .replace("Local on this device only (Demo)", "Local + Supabase Cloud ✅")
-      .replace("Not enabled — needs a real backend (Supabase)", "Enabled ✅ - saved in factory_state")
-      .replaceAll("When Supabase is connected", "Synced ✅");
-  }
-}
-setInterval(fixSyncPage, 2000);
-
-updateBadge();
-console.log("☁️ Cloud Sync V4 AR/EN شغال");
+drawBadge();
+console.log("☁️ Cloud Sync V5 شغال - فوق + AR/EN");
