@@ -515,7 +515,7 @@ async function loadFromTablesMerge(isAuto = false) {
       }
     }
 
-    if (!["customers","suppliers","invoices","inventory","reports"].some(canRead)) {
+    if (!["customers","suppliers","invoices","inventory","production","reports"].some(canRead)) {
       return T("لا توجد صلاحيات لقراءة بيانات السحابة", "No permission to read cloud data");
     }
     // Preserve a rollback copy, then merge remote records without replacing local master data.
