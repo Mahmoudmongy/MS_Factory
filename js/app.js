@@ -222,7 +222,37 @@ new MutationObserver(ms=>{if(!LANGEN)return;ms.forEach(m=>m.addedNodes.forEach(n
 /* ---- connection / sync indicator (UI only; real sync needs Supabase) ---- */
 function netUp(){const e=$g("#net");e.textContent=navigator.onLine?"🟢 متصل":"🔴 غير متصل";e.title="حالة الاتصال والمزامنة"}
 addEventListener("online",netUp);addEventListener("offline",netUp);
-function syncPage(){const c=[["فواتير ومرتجعات",S.docs.length],["سندات قبض ودفع",S.vch.length],["أوامر إنتاج",S.po.length],["قيود يومية",S.je.length],["أصناف",S.items.length],["عملاء وموردون",S.partners.length],["هالك مخزون",S.wo.length]];sh(`<div class="ph"><h3>حالة الاتصال والمزامنة</h3>${bk}</div><div class="card"><p>الاتصال: <b>${navigator.onLine?"🟢 متصل":"🔴 غير متصل"}</b></p><p>وضع التخزين: <b>محلي على هذا الجهاز فقط (Demo)</b></p><p>المزامنة مع الخادم: <b>غير مفعّلة — تحتاج Backend فعلي (Supabase)</b></p><p>تغييرات محلية محفوظة منذ بداية الاستخدام: <b>${S.pend||0}</b></p></div><table class="l"><tr><th>العملية</th><th>العدد المحلي</th><th>تحتاج مزامنة</th></tr>${U(c,x=>`<tr><td>${x[0]}</td><td>${x[1]}</td><td>عند ربط Supabase</td></tr>`)}</table><p class="mu">عند الربط: العمل بدون إنترنت يحفظ العمليات في طابور محلي ثم يرفعها تلقائيًا عند عودة الاتصال مع حل التعارضات. هذه الصفحة تعرض المؤشرات وتجربة الاستخدام فقط ولا تنفذ مزامنة فعلية.</p>`)}
+function syncPage(){
+  const cp=cloudProfile();
+  const offline=!navigator.onLine||window.__factoryOfflineMode===true;
+  const badge=document.getElementById("cloud-badge");
+  const cloudStatus=offline?"💾 محفوظ محليًا - انتظار عودة الإنترنت":(badge?.innerText||"🟡 تم التحقق من الحساب - في انتظار المزامنة").trim();
+  const role=!cp?"غير محدد":cp.is_admin===true?"مدير النظام":"حساب موظف";
+  const detail=cp?.is_admin===true
+    ?"حساب المدير يرفع النسخة الكاملة للمصنع، بالإضافة إلى الجداول التفصيلية المدعومة."
+    :"حساب الموظف يزامن الجداول التي تسمح بها صلاحياته فقط؛ بعض القيود والحركات المحاسبية لا تملك مزامنة تفصيلية كاملة حتى الآن.";
+  const c=[
+    ["فواتير ومرتجعات",S.docs.length],
+    ["سندات قبض ودفع",S.vch.length],
+    ["أوامر إنتاج",S.po.length],
+    ["قيود يومية",S.je.filter(j=>j&&j.id).length],
+    ["حركات المخزون",S.mv.length],
+    ["أصناف",S.items.length],
+    ["عملاء وموردون",S.partners.length],
+    ["هالك مخزون",S.wo.length]
+  ];
+  sh(`<div class="ph"><h3>حالة الاتصال والمزامنة</h3>${bk}</div>
+  <div class="card">
+    <p>الاتصال: <b>${navigator.onLine?"🟢 متصل بالإنترنت":"🔴 غير متصل"}</b></p>
+    <p>حالة حساب السحابة: <b>${cp?"تم التحقق من الحساب":"لم يتم التحقق من الحساب"}</b></p>
+    <p>نوع الحساب: <b>${role}</b></p>
+    <p>حالة المزامنة: <b>${cloudStatus}</b></p>
+    <p>التغييرات المحلية المحفوظة: <b>${S.pend||0}</b></p>
+  </div>
+  <table class="l"><tr><th>البيانات</th><th>العدد على هذا الجهاز</th></tr>${U(c,x=>`<tr><td>${x[0]}</td><td>${x[1]}</td></tr>`)}</table>
+  <p class="mu">${detail}</p>
+  <p class="mu">البيانات المحلية تظل محفوظة على الجهاز. عند عودة الإنترنت يحاول النظام تحميل التغييرات السحابية ودمجها ثم رفع ما تسمح به الصلاحيات. راجع شارة المزامنة أعلى الشاشة لمعرفة الحالة الحالية.</p>`)
+}
 /* ---- tabbed workspace ---- */
 function newTab(kind,sid,title){const el=document.createElement("div");el.style.display="none";$g("#m").appendChild(el);const t={id:uid(),kind,sid,title,el,dirty:0,form:0,st:null};const mark=()=>{if(t.form&&!t.dirty){t.dirty=1;drawTabs()}};el.addEventListener("input",mark);el.addEventListener("change",mark);TB.push(t);return t}
 const gst=()=>({D,PS,V,J,IM,idImg,LB,WZ}),sst=o=>{({D,PS,V,J,IM,idImg,LB,WZ}=o)};
