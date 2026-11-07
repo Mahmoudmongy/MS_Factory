@@ -95,3 +95,23 @@ input[type="file"]{min-height:48px;padding:10px}
   /* سكرول جداول ناعم فقط */
   table.l{-webkit-overflow-scrolling:touch}
 }
+
+/* تحسينات استخدام عامة للشاشات الصغيرة والكبيرة */
+button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible,a:focus-visible{outline:3px solid #f59e0b;outline-offset:2px}
+button:disabled{opacity:.55;cursor:not-allowed}
+#net{min-height:32px;display:inline-flex;align-items:center}
+@media(min-width:861px){
+  #sb{position:sticky;inset-inline-start:0}
+  #top{min-height:56px}
+  main{padding:18px}
+  .card{padding:16px}
+}
+@media(max-width:860px){
+  body{overscroll-behavior-y:contain}
+  #top{padding-top:max(10px,env(safe-area-inset-top));}
+  #sb{padding-bottom:calc(16px + env(safe-area-inset-bottom))}
+  #cn{overflow-x:hidden}
+  .card{max-width:100%}
+  button,a,select,input[type=checkbox]{touch-action:manipulation}
+  #toast{bottom:calc(80px + env(safe-area-inset-bottom))}
+}

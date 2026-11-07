@@ -3,26 +3,89 @@
  * Run: npm test   (requires: npm install  -> playwright)                                         */
 const http=require('http'),fs=require('fs'),path=require('path');let pw;try{pw=require('playwright')}catch(e){console.error('playwright is not installed. Run: npm install && npx playwright install chromium');process.exit(2)}
 const ROOT=path.join(__dirname,'..'),MIME={'.html':'text/html','.js':'text/javascript','.css':'text/css','.json':'application/json','.png':'image/png','.svg':'image/svg+xml','.md':'text/plain'};
-const server=http.createServer((q,r)=>{let u=decodeURIComponent(q.url.split('?')[0]);if(u.endsWith('/'))u+='index.html';const f=path.join(ROOT,u);if(!f.startsWith(ROOT)||!fs.existsSync(f)||fs.statSync(f).isDirectory()){r.writeHead(404);r.end('nf');return}r.writeHead(200,{'Content-Type':MIME[path.extname(f)]||'application/octet-stream'});fs.createReadStream(f).pipe(r)});
+const server=http.createServer((q,r)=>{let u=decodeURIComponent(q.url.split('?')[0]);if(u.endsWith('/'))u+='index.html';if(u==='/index.html'){let html=fs.readFileSync(path.join(ROOT,'index.html'),'utf8');html=html.replace('<style>html{visibility:hidden}</style>','');html=html.replace(/<script type="module">[\s\S]*?<\/script>/,'');html=html.replace('<script type="module" src="./js/cloud-sync.js"></script>','');r.writeHead(200,{'Content-Type':'text/html'});r.end(html);return}const f=path.join(ROOT,u);if(!f.startsWith(ROOT)||!fs.existsSync(f)||fs.statSync(f).isDirectory()){r.writeHead(404);r.end('nf');return}r.writeHead(200,{'Content-Type':MIME[path.extname(f)]||'application/octet-stream'});fs.createReadStream(f).pipe(r)});
 const R=[];let fails=0;const ok=(n,c,x)=>{R.push(`${c?'PASS':'FAIL'}  ${n}${x!==undefined?'  => '+(typeof x=='object'?JSON.stringify(x):x):''}`);if(!c)fails++};
 (async()=>{
 await new Promise(r=>server.listen(0,r));const BASE='http://localhost:'+server.address().port+'/';
 const browser=await pw.chromium.launch();
 /* ---------- A. static checks on the real files ---------- */
-const app=fs.readFileSync(path.join(ROOT,'js/app.js'),'utf8'),idx=fs.readFileSync(path.join(ROOT,'index.html'),'utf8');
+const app=fs.readFileSync(path.join(ROOT,'js/app.js'),'utf8'),idx=fs.readFileSync(path.join(ROOT,'index.html'),'utf8'),cloud=fs.readFileSync(path.join(ROOT,'js/cloud-sync.js'),'utf8'),css=fs.readFileSync(path.join(ROOT,'css/style.css'),'utf8');
 const names=[...app.matchAll(/^(?:async )?function ([A-Za-z0-9_$]+)\(/gm)].map(m=>m[1]),dup=[...new Set(names.filter((n,i)=>names.indexOf(n)!==i))];
 ok('app.js has no duplicate top-level function definitions',dup.length==0,dup);
+ok('customer/supplier rows expose permission-gated edit actions',app.includes('pForm(${c},${p.id})')&&app.includes('can("edit")'));
+ok('partner edit preserves the stable record ID and updates the existing object',app.includes('function saveP(id)')&&app.includes('if(old)Object.assign(old,data)'));
+ok('employee edit preserves the existing employee record',app.includes('function saveE(id)')&&app.includes('if(old)Object.assign(old,data)'));
+ok('warehouse names can be edited without replacing warehouse IDs',app.includes('function saveWh(id)')&&app.includes('w.name=n'));
+ok('chart-of-account names can be edited while preserving their account IDs',app.includes('function saveAccName(id)')&&app.includes('a.name=n'));
+ok('master-data edit handlers enforce edit permission when called directly',[
+  'function saveP(id){if(id&&!can("edit"))return;',
+  'function saveItem(id){if(id&&!can("edit"))return;',
+  'function saveE(id){if(id&&!can("edit"))return;',
+  'function saveWh(id){if(!can("edit"))return;',
+  'function saveAccName(id){if(!can("edit"))return;'
+].every(x=>app.includes(x)));
+ok('cash and bank accounts expose the same permission-gated rename action as chart accounts',app.includes('function vBank()')&&app.includes('editAcc(${a.id})'));
 for(const id of ['pgst','toast','tabs','sb','m','sb-overlay','top','ttl'])ok(`index.html contains #${id}`,new RegExp(`id="${id}"`).test(idx));
 const man=JSON.parse(fs.readFileSync(path.join(ROOT,'manifest.json'),'utf8'));
 for(const ic of man.icons){const f=path.join(ROOT,ic.src),b=fs.existsSync(f)?fs.readFileSync(f):Buffer.alloc(0),w=b.length>24&&b.readUInt32BE(16),h=b.length>24&&b.readUInt32BE(20);ok(`manifest icon ${ic.src} exists and is a PNG of ${ic.sizes}`,b.slice(1,4).toString()=='PNG'&&`${w}x${h}`==ic.sizes,`${w}x${h}`)}
 ok('manifest has start_url/scope/display standalone/rtl',man.start_url&&man.scope&&man.display=='standalone'&&man.dir=='rtl');
-const sw=fs.readFileSync(path.join(ROOT,'sw.js'),'utf8');ok('service worker is versioned, GET-only and same-origin only',/VERSION=/.test(sw)&&/method!=='GET'/.test(sw)&&/origin!==location\.origin/.test(sw)&&/caches\.delete/.test(sw));
+const sw=fs.readFileSync(path.join(ROOT,'sw.js'),'utf8'),builtSw=fs.readFileSync(path.join(ROOT,'public/sw.js'),'utf8');ok('Vite production build receives the service worker from public/',builtSw===sw);ok('service worker is versioned, GET-only and same-origin only',/const VERSION\s*=/.test(sw)&&/request\.method !== 'GET'/.test(sw)&&/url\.origin !== self\.location\.origin/.test(sw)&&/caches\.delete/.test(sw));
 ok('no secrets / service role keys in shipped files',!/service_role|eyJ[A-Za-z0-9_-]{20,}|sk_live|SUPABASE_SERVICE/i.test(app+idx+sw));
+ok('login screen does not expose public self-registration',!/auth-signup|signUp\(/.test(fs.readFileSync(path.join(ROOT,'auth.html'),'utf8')+fs.readFileSync(path.join(ROOT,'js/auth.js'),'utf8')));
+const createEmployeeFn=fs.readFileSync(path.join(ROOT,'supabase/functions/create-employee-account/index.ts'),'utf8');
+const changePasswordFn=fs.readFileSync(path.join(ROOT,'supabase/functions/change-initial-password/index.ts'),'utf8');
+const changePasswordPage=fs.readFileSync(path.join(ROOT,'change-password.html'),'utf8')+fs.readFileSync(path.join(ROOT,'js/change-password.js'),'utf8');
+ok('new employee accounts require a first-login password change',/must_change_password:\s*true/.test(createEmployeeFn));
+ok('online and cached profile gates redirect flagged employees before opening the app',/profile\.must_change_password === true/.test(idx)&&/cachedProfile\.must_change_password === true/.test(idx)&&/change-password\.html/.test(idx));
+ok('first-login password endpoint verifies the signed-in user before privileged password update',/caller\.auth\.getUser\(\)/.test(changePasswordFn)&&/admin\.auth\.admin\.updateUserById\(\s*authData\.user\.id,\s*\{\s*password\s*\}\s*,\s*\)/.test(changePasswordFn));
+ok('first-login password endpoint only clears the flag for the authenticated employee',/profile\.must_change_password !== true/.test(changePasswordFn)&&/\.eq\("id", authData\.user\.id\)/.test(changePasswordFn)&&/must_change_password: false/.test(changePasswordFn));
+ok('first-login page validates the new password and invokes the protected Supabase function',/password\.length < 10/.test(changePasswordPage)&&/functions\.invoke\(['"]change-initial-password['"]/.test(changePasswordPage));
+ok('Vite production build includes the first-login password page',/password: resolve\(root, 'change-password.html'\)/.test(fs.readFileSync(path.join(ROOT,'vite.config.js'),'utf8')));
+
+ok('index auth gate validates the Supabase profile before revealing the app',/html\{visibility:hidden\}/.test(idx)&&/\.from\(['"]profiles['"]\)/.test(idx)&&/is_admin,permissions/.test(idx));
+ok('employee screen access is tied to the cloud profile permissions',/CLOUD_SCREEN_PERMISSIONS/.test(app)&&/setFactoryAuthProfile/.test(app));
+ok('full factory snapshot is restricted to administrator accounts',/if \(admin\)/.test(cloud)&&/factory_state/.test(cloud)&&/factory_state_admin_only/.test(fs.readFileSync(path.join(ROOT,'supabase/migrations/20261107081648_enforce_employee_permissions_20261107.sql'),'utf8')));
+const syncPageStart=app.indexOf('function syncPage(){'),syncPageEnd=app.indexOf('/* ---- tabbed workspace ---- */',syncPageStart),syncPageSource=syncPageStart>=0&&syncPageEnd>syncPageStart?app.slice(syncPageStart,syncPageEnd):'';
+ok('sync status screen reports the live Supabase account and sync state instead of the old Demo-only message',/const cloudStatus=snapshotConflict\?/.test(syncPageSource)&&/window\.__factoryOfflineMode/.test(syncPageSource)&&!/محلي على هذا الجهاز فقط \(Demo\)/.test(syncPageSource)&&!/غير مفعّلة — تحتاج Backend فعلي/.test(syncPageSource));
+ok('sync status screen warns employee accounts when detailed accounting synchronization is incomplete',/حساب الموظف يزامن الجداول المسموح بها حسب صلاحياته/.test(app)&&/دفتر الأستاذ والحركات التفصيلية الكاملة/.test(app));
+
+ok('invoice cloud sync uses the atomic versioned RPC',/rpc\(["']sync_invoice["']/.test(cloud)&&/p_expected_version/.test(cloud)&&/sync_version/.test(cloud));
+ok('inventory sync uploads the actual S.items array used by the stock screens',/for \(const arr of \[S\.items, S\.products, S\.prods\]\)/.test(cloud));
+ok('inventory sync totals all colour/size variants instead of reading a missing qty field',/Object\.values\(variants\)\.reduce/.test(cloud)&&/const variants = pr\.st/.test(cloud));
+ok('inventory sync stores the full local item in products.raw for lossless restoration',/image_url:[\s\S]{0,500}raw: pr/.test(cloud));
+ok('inventory download restores records into S.items, the real inventory source used by the app',/if \(!Array\.isArray\(S\.items\)\) S\.items = \[\]/.test(cloud)&&/S\.items = m\.arr/.test(cloud));
+ok('employee detail-only sync is not shown as fully synchronized',/syncState = admin \? "synced" : "partial"/.test(cloud)&&/syncState === "partial"/.test(cloud));
+ok('invoice sync does not delete invoice items through separate client requests',!/from\(["']invoice_items["']\)\.delete/.test(cloud));
+ok('returns are not misclassified as sale/purchase invoices',/\["sale", "pur"\]\.includes\(d\.t\)/.test(cloud));
+ok('cloud invoice merge preserves newer remote copies as explicit conflicts',/mergeCloudInvoices/.test(cloud)&&/serverCopy: remote/.test(cloud));
+ok('online reconnect pulls remote changes before uploading local cache',/const pulled = await loadFromTablesMerge\(true\)/.test(cloud)&&cloud.indexOf('const pulled = await loadFromTablesMerge(true)')<cloud.indexOf('const pushed = await uploadToTables(false)'));
+ok('online startup sync runs even when local cache already has data',/if \(navigator\.onLine\) \{\s*\/\/ On every launch/.test(cloud));
+ok('offline boot permits only a previously verified cached profile for the same user',/factory-profile:/.test(idx)&&/cachedProfile\.id === data\.session\.user\.id/.test(idx)&&/if \(!navigator\.onLine\)/.test(idx));
+ok('reconnect refreshes the profile before using permissions for cloud sync',/myProfile = null; ownerIdCache = null; window\.__factoryAuthProfile = null;/.test(cloud)&&/const freshProfile = await getMyProfile\(\)/.test(cloud));
+
+ok('offline shell precaches the stable production app and first-login password page',/auth\.html/.test(sw)&&/change-password\.html/.test(sw)&&/js\/change-password\.js/.test(sw)&&/js\/app\.js/.test(sw)&&/factory-v9/.test(sw));
+ok('mobile and desktop usability includes visible keyboard focus and safe-area spacing',/focus-visible/.test(css)&&/safe-area-inset-bottom/.test(css));
+
+
+ok('invoice sync migration uses optimistic version checks and invoker security',/sync_version/.test(fs.readFileSync(path.join(ROOT,'supabase/migrations/20261107090901_20261107111000_atomic_invoice_sync.sql'),'utf8'))&&/SECURITY INVOKER/.test(fs.readFileSync(path.join(ROOT,'supabase/migrations/20261107090901_20261107111000_atomic_invoice_sync.sql'),'utf8'))&&/40001/.test(fs.readFileSync(path.join(ROOT,'supabase/migrations/20261107090901_20261107111000_atomic_invoice_sync.sql'),'utf8')));
+ok('full factory snapshots use optimistic versioned RPC writes instead of blind upserts',/rpc\(["']sync_factory_state["']/.test(cloud)&&/p_expected_version/.test(cloud)&&/40001/.test(fs.readFileSync(path.join(ROOT,'supabase/migrations/20261107155417_version_factory_state_snapshot.sql'),'utf8')));
+ok('cross-device snapshot conflicts preserve local data and offer an explicit backed-up cloud restore',/mgr6-cloud-snapshot-conflict/.test(cloud)&&/window\.resolveCloudSnapshotConflict/.test(cloud)&&/resolveCloudSnapshotConflict\(\)/.test(app));
+ok('return invoices are uploaded and restored with stable IDs and conflict timestamps',/from\(["']returns["']\)[\s\S]{0,500}onConflict: "user_id,external_id"/.test(cloud)&&/cloudReturns/.test(cloud)&&/mergeCloudRecords/.test(cloud));
+ok('cash receipt/payment vouchers are uploaded and restored with full raw details',/from\(["']vouchers["']\)[\s\S]{0,500}onConflict: "user_id,external_id"/.test(cloud)&&/cloudVouchers/.test(cloud));
+ok('production orders are uploaded and restored with breakdown, cost and status',/from\(["']production_orders["']\)[\s\S]{0,600}onConflict: "user_id,external_id"/.test(cloud)&&/cloudOrders/.test(cloud));
+ok('return, voucher and production cloud records preserve update timestamps for conflict detection',/function mergeCloudRecords/.test(cloud)&&/serverCopy: remote/.test(cloud)&&/data\?\.updated_at/.test(cloud));
+ok('stale local returns, vouchers and production orders cannot overwrite newer cloud records',/d\._cloudConflict[\s\S]{0,180}resolve before uploading/.test(cloud)&&/v\._cloudConflict[\s\S]{0,180}resolve before uploading/.test(cloud)&&/o\._cloudConflict[\s\S]{0,180}resolve before uploading/.test(cloud));
+ok('transaction-detail migration adds raw JSON, stable IDs and unique per-factory keys',/ADD COLUMN IF NOT EXISTS external_id text/.test(fs.readFileSync(path.join(ROOT,'supabase/migrations/20261107155152_sync_transaction_detail_records.sql'),'utf8'))&&/production_orders_user_external_id_uidx/.test(fs.readFileSync(path.join(ROOT,'supabase/migrations/20261107155152_sync_transaction_detail_records.sql'),'utf8')));
+ok('invoice sync fix qualifies child-row deletion columns',/DELETE FROM public\.invoice_items AS ii/.test(fs.readFileSync(path.join(ROOT,'supabase/migrations/20261107090923_sync_invoice_delete_alias_fix.sql'),'utf8')));
 /* ---------- B. app in a desktop context ---------- */
 const ctx=await browser.newContext({viewport:{width:1280,height:900},acceptDownloads:true}),p=await ctx.newPage(),errs=[];p.on('pageerror',e=>errs.push(e.message));
 await p.goto(BASE);await p.waitForTimeout(500);
 const ev=(f,a)=>p.evaluate(()=>{SAVING=0}).then(()=>p.evaluate(f,a)),bal=()=>ev(()=>Math.abs(S.L.reduce((a,l)=>a+l.dr-l.cr,0))<.01);
 const scr=await ev(()=>allowed().map(t=>t[0]));for(const s of scr){await ev(x=>go(x),s)}ok(`all ${scr.length} screens render without errors`,errs.length==0,errs.slice(0,2));
+/* master data edit: same partner ID, no duplicate row */
+await ev(()=>{const p=S.partners.find(x=>x.c);const id=p.id; pForm(1,id); $("#b1").value="اختبار تعديل العميل"; saveP(id); return {id,rows:S.partners.filter(x=>x.id==id).length,name:S.partners.find(x=>x.id==id).name}});
+const partnerEdit=await ev(()=>{const p=S.partners.find(x=>x.name=="اختبار تعديل العميل");return p&&{id:p.id,count:S.partners.filter(x=>x.id==p.id).length}});
+ok('editing a customer updates the existing row without creating a duplicate',!!partnerEdit&&partnerEdit.count==1,partnerEdit);
 /* regression: printing / purchase save used to crash (missing #pgst) */
 await ev(()=>{go('pur');docForm('pur');$("#ty").value=String(S.wh[0].id);fillIt();$("#in").value="قماش اختبار";unitSet();$("#un").value="متر";$("#cl").value="أحمر";$("#q").value="10";$("#pc").value="100";saveDoc()});
 ok('saving a purchase invoice opens the barcode print page (no crash)',await ev(()=>CUR.title.includes("باركود")||!!ACT.querySelector('#pr')),errs.slice(-1));await ev(()=>closeTab(CUR,1));
@@ -45,7 +108,7 @@ await ev(id=>retFrom(id),sale.id);ok('return opens with blank quantities',await 
 await ev(()=>{SAVING=0;saveDoc()});ok('return with all-empty quantities is rejected (nothing saved)',await ev(()=>!S.docs.some(d=>d.t=="sret")));
 await ev(()=>{D.lines[0].qty=1;saveDoc()});ok('return of 1 piece saved at the invoice price (250) and stock +1',await ev(()=>{const r=S.docs.find(d=>d.t=="sret");return r&&r.total==250&&tq(it_(3))==19}));ok('ledger balanced after return',await bal());
 /* edit / delete */
-await ev(id=>editDoc(id),sale.id);await ev(()=>{D.lines[0].qty=3;saveDoc()});ok('edit sale (qty 3): total 740 (3x250-10), stock 17 and ledger balanced',await ev(()=>{const d=S.docs.find(x=>x.t=="sale");return d.total==740&&tq(it_(3))==17-1+1-1+1-0&&true})||true,await ev(()=>[S.docs.find(x=>x.t=="sale").total,tq(it_(3))]));
+await ev(id=>editDoc(id),sale.id);await ev(()=>{D.lines[0].qty=3;saveDoc()});ok('edit sale (qty 3): total 740 (3x250-10), stock 18 after reversing the old sale and applying the new quantity, ledger balanced',await ev(()=>{const d=S.docs.find(x=>x.t=="sale");return !!d&&d.total==740&&tq(it_(3))==18&&Math.abs(S.L.reduce((a,l)=>a+l.dr-l.cr,0))<.01}),await ev(()=>[S.docs.find(x=>x.t=="sale").total,tq(it_(3)),S.L.reduce((a,l)=>a+l.dr-l.cr,0)]));
 ok('after edit ledger is balanced',await bal());
 /* ---------- voucher linked to invoice ---------- */
 const invId=await ev(()=>S.docs.find(d=>d.t=="sale").id),tot=await ev(()=>S.docs.find(d=>d.t=="sale").total);
@@ -84,6 +147,14 @@ await ev(()=>{S.emp.push({id:77,name:"موظف اختبار",p1:"1",p2:"2",img:"
 const pm=await ev(()=>{const d=S.docs.length,pg=TB.length;const first=S.docs[0];editRef('doc',first.id);delRef('doc',first.id);delGo('doc',first.id);return{can:[can("edit"),can("del")],docsSame:S.docs.length==d,noNewTab:TB.length==pg,tabs:allowed().map(t=>t[0]).join()}});
 ok('employee without permissions cannot edit/delete (even by calling the functions directly)',pm.can[0]===false&&pm.can[1]===false&&pm.docsSame&&pm.noNewTab,pm);ok('employee sees only permitted screens',pm.tabs.split(',').every(x=>['home','sale','set'].includes(x)),pm.tabs);
 await ev(()=>{who="0";S.emp=[];nav()});
+/* ---------- Supabase employee permissions ---------- */
+await ev(()=>{window.setFactoryAuthProfile({id:"cloud-test",is_admin:false,permissions:{invoices:true}});tab="sale";nav();render()});
+const cloudInvoicePerm=await ev(()=>({screens:allowed().map(t=>t[0]),edit:can("edit")}));
+ok('Supabase employee sees only the assigned invoice screens and can edit within that module',cloudInvoicePerm.screens.includes("sale")&&!cloudInvoicePerm.screens.includes("stock")&&cloudInvoicePerm.edit,cloudInvoicePerm);
+await ev(()=>{window.setFactoryAuthProfile({id:"cloud-test",is_admin:false,permissions:{reports:true}});tab="rep";nav();render()});
+const cloudReportPerm=await ev(()=>({screens:allowed().map(t=>t[0]),edit:can("edit"),del:can("del")}));
+ok('reports-only Supabase employee is read-only',cloudReportPerm.screens.includes("rep")&&!cloudReportPerm.screens.includes("sale")&&!cloudReportPerm.edit&&!cloudReportPerm.del,cloudReportPerm);
+await ev(()=>{window.setFactoryAuthProfile(null);who="0";tab="home";nav();render()});
 /* ---------- duplicate click ---------- */
 const v0=await ev(()=>S.vch.length);await ev(()=>{go('rc');vForm('in');$("#va").value="1";$("#vm").value="100";vAc();$("#la").value=String(ak("sales"));$("#lm").value="100";vLn()});await p.evaluate(()=>{const b=[...ACT.querySelectorAll("button")].find(x=>x.textContent.trim()=="حفظ");b.click();b.click()});
 ok('double click on Save registers the voucher once',await ev(()=>S.vch.length)==v0+1);
@@ -108,10 +179,11 @@ ok('English mode: no untranslated UI text on the 19 main screens',left.length==0
 ok('no JavaScript errors during the whole desktop session',errs.length==0,errs.slice(0,3));
 await ctx.close();
 /* ---------- C. PWA: service worker + offline shell ---------- */
-const c2=await browser.newContext({viewport:{width:1280,height:800}}),q=await c2.newPage();await q.goto(BASE);await q.evaluate(()=>navigator.serviceWorker.ready);await q.reload();await q.waitForTimeout(600);
+const c2=await browser.newContext({viewport:{width:1280,height:800}}),q=await c2.newPage(),swConsole=[];q.on('console',m=>swConsole.push(m.type()+': '+m.text()));q.on('pageerror',e=>swConsole.push('pageerror: '+e.message));await q.goto(BASE);const swReg=await q.evaluate(async()=>{try{const reg=await navigator.serviceWorker.register('./sw.js');return {ok:true,scope:reg.scope,installing:reg.installing?.state,waiting:reg.waiting?.state,active:reg.active?.state}}catch(e){return {ok:false,error:e.message}}});const swReady=await q.evaluate(()=>Promise.race([navigator.serviceWorker.ready.then(()=>true),new Promise(resolve=>setTimeout(()=>resolve(false),15000))]));if(!swReady){const diag=await q.evaluate(async()=>{const r=await navigator.serviceWorker.getRegistration();return r?{installing:r.installing?.state,waiting:r.waiting?.state,active:r.active?.state,scope:r.scope}:null});await c2.close();throw new Error('Service Worker did not become ready: '+JSON.stringify({swReg,diag,console:swConsole.slice(-20)}))}await q.reload();await q.waitForTimeout(600);
 const swi=await q.evaluate(async()=>({ctl:!!navigator.serviceWorker.controller,keys:await caches.keys(),cached:(await (await caches.open((await caches.keys())[0])).keys()).map(r=>new URL(r.url).pathname)}));
-ok('service worker installed and controlling the page; single versioned cache',swi.ctl&&swi.keys.length==1&&/^factory-v5$/.test(swi.keys[0]),swi.keys);
-ok('app shell files are precached (index, css, js, manifest, icons)',['/index.html','/css/style.css','/js/app.js','/manifest.json','/assets/icon-192.png','/assets/icon-512.png'].every(f=>swi.cached.includes(f)),swi.cached);
+ok('service worker installed and controlling the page; single versioned cache',swi.ctl&&swi.keys.length==1&&/^factory-v9$/.test(swi.keys[0]),swi.keys);
+ok('stable app shell files are precached; linked CSS and scripts are cached on first request',['/index.html','/auth.html','/change-password.html','/js/change-password.js','/','/js/app.js','/css/style.css'].every(f=>swi.cached.includes(f)),swi.cached);
+ok('offline cache does not include authenticated API responses or user records',swi.cached.every(f=>!f.includes('/rest/v1/')&&!f.includes('/auth/v1/')&&!f.includes('/storage/v1/')));
 await q.evaluate(()=>{const s=JSON.parse(localStorage.getItem('mgr6')||'null');localStorage.setItem('mgr6',JSON.stringify(s))});
 await c2.setOffline(true);await q.reload();await q.waitForTimeout(500);const off=await q.evaluate(()=>({ok:!!document.querySelector('#sb a'),tabs:document.querySelectorAll('#sb a').length}));
 ok('app loads and works with the network switched off (from the service-worker cache)',off.ok&&off.tabs>=15,off);

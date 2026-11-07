@@ -54,19 +54,6 @@ if (!supabase) {
     setTimeout(()=> location.href='index.html', 800);
   });
 
-  $('auth-signup').addEventListener('click', async (e) => {
-    e.preventDefault();
-    const { email, password } = credentials();
-    if (!email || !password) return say('أدخل البريد الإلكتروني وكلمة المرور');
-    if (password.length < 6) return say('كلمة المرور يجب ألا تقل عن 6 أحرف');
-    if (!$('auth-email').value.includes('@')) return say('أدخل بريداً إلكترونياً صالحاً');
-    say('جاري إنشاء الحساب...', false);
-    const { data, error } = await supabase.auth.signUp({ email, password });
-    if (error) return say('خطأ تسجيل: ' + error.message);
-    say('تم إنشاء الحساب بنجاح ✅', false);
-    if (data.session) setTimeout(()=> location.href='index.html', 800);
-  });
-
   $('auth-logout').addEventListener('click', async () => {
   await supabase.auth.signOut();
   // امسح الخانات
