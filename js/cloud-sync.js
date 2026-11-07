@@ -1,4 +1,4 @@
-// js/cloud-sync.js - V11 - شيل الإيميل + ✕ مربع في أقصى الطرف
+// js/cloud-sync.js - V12 - FINAL - Dynamic + AR/EN + PC/Mobile - الملف الوحيد اللي هتعدله
 import { supabase } from './supabase.js';
 
 let saveTimer = null;
@@ -6,6 +6,7 @@ let lastSyncTime = "";
 let lastLang = "";
 let lastMode = "";
 
+// ===== القاعدة 1: اللغة Dynamic - من إعدادات البرنامج نفسه =====
 function isEN() {
   try {
     const pref = JSON.parse(localStorage.getItem("mgr6pref") || "{}");
@@ -14,6 +15,8 @@ function isEN() {
   return document.documentElement.lang === "en";
 }
 function T(ar, en) { return isEN() ? en : ar; }
+
+// ===== القاعدة 2: الموبايل والكمبيوتر Dynamic - بيتحدد لوحده =====
 function isMobile() { return window.innerWidth <= 640; }
 
 async function backupNow(showAlert = false) {
@@ -68,21 +71,15 @@ function findLogoutBtn() {
   });
 }
 
-// ===== شيل كلمة "مسجل الدخول" والإيميل نهائياً =====
+// ===== شيل "مسجل الدخول" والإيميل نهائياً - Dynamic =====
 function cleanUserBar() {
   const logout = findLogoutBtn();
   if (!logout) return;
-
-  // 1. امسح أي نص فيه "مسجل" أو "@" من السطر اللي فيه زرار الخروج
   const bar = logout.parentElement;
   if (bar) {
-    // امسح الـ Text Nodes اللي فيها الإيميل
     Array.from(bar.childNodes).forEach(n => {
-      if (n.nodeType === 3 && (n.textContent.includes("مسجل") || n.textContent.includes("@") || n.textContent.includes("m.mongy"))) {
-        n.textContent = "";
-      }
+      if (n.nodeType === 3 && (n.textContent.includes("مسجل") || n.textContent.includes("@") || n.textContent.includes("m.mongy"))) n.textContent = "";
     });
-    // اخفي أي span/div جواه الإيميل، وسيب زرار الخروج والزرار بتاعنا بس
     Array.from(bar.children).forEach(ch => {
       if (ch === logout || ch.id === "cloud-badge") return;
       const txt = ch.textContent || "";
@@ -91,30 +88,20 @@ function cleanUserBar() {
         ch.textContent = "";
       }
     });
-    // امسح أي "|" زيادة
     bar.innerHTML = bar.innerHTML.replace(/\|/g, "");
   }
-
-  // 2. خلي الـ ✕ مربع في أقصى الطرف
+  // ✕ مربع في أقصى الطرف - عربي = شمال خالص | إنجليزي = يمين خالص
   const en = isEN();
   logout.textContent = "✕";
   logout.title = en ? "Logout" : "تسجيل الخروج";
-  // مربع 36x36، فوق خالص، شمال خالص في العربي / يمين خالص في الإنجليزي
-  if (en) {
-    logout.style.cssText = "position:fixed;top:0;right:0;left:auto;z-index:100000;background:#ef4444;color:#fff;border:none;width:36px;height:36px;border-radius:0;font-size:18px;font-weight:bold;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;";
-  } else {
-    logout.style.cssText = "position:fixed;top:0;left:0;right:auto;z-index:100000;background:#ef4444;color:#fff;border:none;width:36px;height:36px;border-radius:0;font-size:18px;font-weight:bold;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;";
-  }
+  if (en) logout.style.cssText = "position:fixed;top:0;right:0;left:auto;z-index:100000;background:#ef4444;color:#fff;border:none;width:36px;height:36px;border-radius:0;font-size:18px;font-weight:bold;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;";
+  else logout.style.cssText = "position:fixed;top:0;left:0;right:auto;z-index:100000;background:#ef4444;color:#fff;border:none;width:36px;height:36px;border-radius:0;font-size:18px;font-weight:bold;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;";
 }
 
 function drawBadge(text) {
   cleanUserBar();
   let b = document.getElementById("cloud-badge");
-  if (!b) {
-    b = document.createElement("div");
-    b.id = "cloud-badge";
-    document.body.appendChild(b);
-  }
+  if (!b) { b = document.createElement("div"); b.id = "cloud-badge"; document.body.appendChild(b); }
   const en = isEN();
   const mobile = isMobile();
   const label = text || (lastSyncTime ? `${T("☁️ متزامن", "☁️ Synced")} ${lastSyncTime}` : T("☁️ متزامن", "☁️ Synced"));
@@ -129,17 +116,14 @@ function drawBadge(text) {
   s3.onclick = (e) => { e.stopPropagation(); restoreCloud(); };
   b.appendChild(s1); b.appendChild(s2); b.appendChild(s3);
 
-  // ===== الشريط فوق خالص، وسيب مكان 36px للمربع بتاع ✕ =====
   if (mobile) {
     if (b.parentElement !== document.body) document.body.appendChild(b);
-    // لو عربي: سيب 36px شمال للـ ✕ | لو إنجليزي: سيب 36px يمين للـ ✕
     const pad = en ? "padding:5px 40px 5px 8px;" : "padding:5px 8px 5px 40px;";
     b.style.cssText = "position:fixed;top:0;left:0;right:0;width:100%;z-index:99999;background:#0f766e;color:#fff;font-size:11px;font-weight:bold;display:flex;gap:6px;align-items:center;justify-content:center;flex-wrap:wrap;direction:" + (en ? "ltr" : "rtl") + ";border-radius:0;box-shadow:0 2px 8px rgba(0,0,0,.3);" + pad;
     document.body.style.paddingTop = "28px";
   } else {
     document.body.style.paddingTop = "";
     if (b.parentElement !== document.body) document.body.appendChild(b);
-    // كمبيوتر: شريط فوق، وسيب مكان المربع
     if (en) b.style.cssText = "position:fixed;top:0;left:0;right:36px;z-index:99999;background:#0f766e;color:#fff;padding:6px 12px;font-size:13px;font-weight:bold;display:flex;gap:8px;align-items:center;justify-content:center;direction:ltr;border-radius:0;";
     else b.style.cssText = "position:fixed;top:0;left:36px;right:0;z-index:99999;background:#0f766e;color:#fff;padding:6px 12px;font-size:13px;font-weight:bold;display:flex;gap:8px;align-items:center;justify-content:center;direction:rtl;border-radius:0;";
   }
@@ -158,4 +142,4 @@ setInterval(() => {
 
 window.addEventListener("resize", () => drawBadge());
 drawBadge();
-console.log("☁️ Cloud Sync V11 شغال - ✕ مربع في الطرف");
+console.log("☁️ Cloud Sync V12 شغال - Dynamic + AR/EN + PC/Mobile");
