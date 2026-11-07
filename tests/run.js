@@ -68,6 +68,8 @@ ok('mobile and desktop usability includes visible keyboard focus and safe-area s
 
 
 ok('invoice sync migration uses optimistic version checks and invoker security',/sync_version/.test(fs.readFileSync(path.join(ROOT,'supabase/migrations/20261107090901_20261107111000_atomic_invoice_sync.sql'),'utf8'))&&/SECURITY INVOKER/.test(fs.readFileSync(path.join(ROOT,'supabase/migrations/20261107090901_20261107111000_atomic_invoice_sync.sql'),'utf8'))&&/40001/.test(fs.readFileSync(path.join(ROOT,'supabase/migrations/20261107090901_20261107111000_atomic_invoice_sync.sql'),'utf8')));
+ok('full factory snapshots use optimistic versioned RPC writes instead of blind upserts',/rpc\(["']sync_factory_state["']/.test(cloud)&&/p_expected_version/.test(cloud)&&/40001/.test(fs.readFileSync(path.join(ROOT,'supabase/migrations/20261107180000_version_factory_state_snapshot.sql'),'utf8')));
+ok('cross-device snapshot conflicts preserve local data and offer an explicit backed-up cloud restore',/mgr6-cloud-snapshot-conflict/.test(cloud)&&/window\.resolveCloudSnapshotConflict/.test(cloud)&&/resolveCloudSnapshotConflict\(\)/.test(app));
 ok('return invoices are uploaded and restored with stable IDs and conflict timestamps',/from\(["']returns["']\)[\s\S]{0,500}onConflict: "user_id,external_id"/.test(cloud)&&/cloudReturns/.test(cloud)&&/mergeCloudRecords/.test(cloud));
 ok('cash receipt/payment vouchers are uploaded and restored with full raw details',/from\(["']vouchers["']\)[\s\S]{0,500}onConflict: "user_id,external_id"/.test(cloud)&&/cloudVouchers/.test(cloud));
 ok('production orders are uploaded and restored with breakdown, cost and status',/from\(["']production_orders["']\)[\s\S]{0,600}onConflict: "user_id,external_id"/.test(cloud)&&/cloudOrders/.test(cloud));
