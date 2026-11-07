@@ -1,4 +1,4 @@
-// js/cloud-sync.js - V14 - شريط واحد فوق خالص فيه السحابة + ✕ - Dynamic + AR/EN + PC/Mobile
+// js/cloud-sync.js - V15 - بيمسح "مسجل الدخول" أول ما يظهر - Dynamic + AR/EN + PC/Mobile
 import { supabase } from './supabase.js';
 
 let saveTimer = null;
@@ -65,26 +65,56 @@ async function doLogout() {
   location.href = "auth.html";
 }
 
-function hideOldUserBar() {
-  document.querySelectorAll("button, a, span, div, p, small").forEach(el => {
+// ===== ده اللي بيمسح "مسجل الدخول" والإيميل - شغال طول الوقت =====
+function purgeLoggedInText() {
+  // 1. امسح أي Text Node في الـ body فيه "مسجل" أو الإيميل، ما عدا الشريط بتاعنا
+  const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT, null);
+  const toRemove = [];
+  let node;
+  while (node = walker.nextNode()) {
+    if (node.parentElement && node.parentElement.closest("#ms-topbar")) continue;
+    const t = node.textContent || "";
+    if (t.includes("مسجل الدخول") || t.includes("Logged in as") || t.includes("m.mongy") || t.includes("@gmail")) {
+      toRemove.push(node);
+    }
+  }
+  toRemove.forEach(n => { n.textContent = ""; });
+
+  // 2. اخفي أي عنصر فيه الجملة دي، حتى لو كان div كبير على الموبايل
+  document.querySelectorAll("div, span, p, small, header, section").forEach(el => {
     if (el.id === "ms-topbar" || el.closest("#ms-topbar")) return;
-    const txt = (el.textContent || "");
-    if ((txt.includes("مسجل الدخول") || txt.includes("Logged in as")) && el.children.length === 0) el.style.display = "none";
+    const txt = el.textContent || "";
+    // لو العنصر ده هو اللي فيه الجملة، وكان صغير (شريط مش الصفحة كلها)، اخفيه
+    if ((txt.includes("مسجل الدخول") || txt.includes("Logged in as")) && el.children.length <= 3) {
+      // متخفيش الصفحة كلها، اخفي الشريط الصغير بس
+      const h = el.getBoundingClientRect ? el.getBoundingClientRect().height : 999;
+      if (h < 120) {
+        el.style.display = "none";
+        el.style.visibility = "hidden";
+        el.style.height = "0px";
+        el.style.padding = "0px";
+        el.style.margin = "0px";
+        el.style.overflow = "hidden";
+      }
+    }
+    // اخفي زرار الخروج القديم، احنا عندنا واحد جديد
     const id = (el.id || "").toLowerCase();
-    const t = txt.trim();
-    if ((id.includes("logout") || t === "تسجيل خروج" || t === "Logout") && el.id !== "ms-logout-btn") el.style.display = "none";
-  });
-  Array.from(document.body.childNodes).forEach(n => {
-    if (n.nodeType === 3 && (n.textContent.includes("مسجل") || n.textContent.includes("@"))) n.textContent = "";
+    const tt = txt.trim();
+    if ((id.includes("logout") || tt === "تسجيل خروج" || tt === "Logout") && el.id !== "ms-logout-btn" && !el.closest("#ms-topbar")) {
+      el.style.display = "none";
+    }
   });
 }
 
+// راقب أي حاجة جديدة بتتضاف للصفحة - أول ما شريط "مسجل الدخول" يظهر على الموبايل، امسحه فوراً
+const observer = new MutationObserver(() => { purgeLoggedInText(); });
+observer.observe(document.body, { childList: true, subtree: true, characterData: true });
+
 function drawAll(text) {
-  hideOldUserBar();
+  purgeLoggedInText();
   const en = isEN();
   const mobile = isMobile();
 
-  // ===== شريط واحد فوق خالص، فيه السحابة + ✕، نفس الارتفاع =====
   let top = document.getElementById("ms-topbar");
   if (!top) {
     top = document.createElement("div");
@@ -92,14 +122,9 @@ function drawAll(text) {
     document.body.prepend(top);
   }
 
-  // عربي: ✕ شمال خالص | إنجليزي: ✕ يمين خالص
-  // بنرتبهم بـ flex-direction عشان الـ ✕ يفضل في الطرف
   top.style.cssText = "position:fixed;top:0;left:0;right:0;width:100%;height:36px;z-index:100000;background:#0f766e;color:#fff;display:flex;align-items:center;direction:" + (en ? "ltr" : "rtl") + ";box-shadow:0 2px 8px rgba(0,0,0,.3);";
-
-  // ننضف الشريط ونرسمه من جديد
   top.innerHTML = "";
 
-  // 1. زرار ✕ - مربع 36x36، نفس ارتفاع الشريط بالظبط
   const x = document.createElement("button");
   x.id = "ms-logout-btn";
   x.textContent = "✕";
@@ -107,11 +132,8 @@ function drawAll(text) {
   x.onclick = doLogout;
   x.style.cssText = "background:#ef4444;color:#fff;border:none;width:36px;height:36px;min-width:36px;border-radius:0;font-size:18px;font-weight:bold;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;";
 
-  // 2. السحابة - في النص، بتاخد باقي المساحة
   const b = document.createElement("div");
   b.id = "cloud-badge";
-  // على الموبايل: من غير وقت عشان مفيش مكان، وخط أصغر، وممنوع يلف لسطر تاني
-  // على الكمبيوتر: بالوقت عادي
   const label = mobile
     ? T("☁️ متزامن", "☁️ Synced")
     : (text || (lastSyncTime ? `${T("☁️ متزامن", "☁️ Synced")} ${lastSyncTime}` : T("☁️ متزامن", "☁️ Synced")));
@@ -124,17 +146,12 @@ function drawAll(text) {
   s3.onclick = (e) => { e.stopPropagation(); restoreCloud(); };
 
   b.appendChild(s1); b.appendChild(s2); b.appendChild(s3);
-  // موبايل: خط 11px وممنوع يلف | كمبيوتر: خط 13px
   b.style.cssText = "flex:1;display:flex;gap:" + (mobile ? "6px" : "8px") + ";align-items:center;justify-content:center;flex-wrap:nowrap;overflow:hidden;white-space:nowrap;font-size:" + (mobile ? "11px" : "13px") + ";font-weight:bold;direction:" + (en ? "ltr" : "rtl") + ";";
 
-  // الترتيب: عربي = ✕ شمال، السحابة بعده | إنجليزي = ✕ يمين، السحابة قبله
-  // عشان الشريط direction rtl/ltr، هنحط ✕ الأول دايماً وهو هيروح للطرف الصح
   if (en) { top.appendChild(b); top.appendChild(x); }
   else { top.appendChild(x); top.appendChild(b); }
 
-  // ننزل محتوى البرنامج 36px تحت، عشان الشريط ميغطيش على حاجة - كمبيوتر وموبايل
   document.body.style.paddingTop = "36px";
-
   lastLang = en ? "en" : "ar";
   lastMode = mobile ? "mobile" : "desktop";
 }
@@ -144,9 +161,9 @@ setInterval(() => {
   const cur = isEN() ? "en" : "ar";
   const mode = isMobile() ? "mobile" : "desktop";
   if (!top || cur !== lastLang || mode !== lastMode) drawAll();
-  else hideOldUserBar();
+  else purgeLoggedInText();
 }, 500);
 
 window.addEventListener("resize", () => drawAll());
 drawAll();
-console.log("☁️ Cloud Sync V14 شغال - شريط واحد + موبايل صح");
+console.log("☁️ Cloud Sync V15 شغال - بيمسح مسجل الدخول على الموبايل");
