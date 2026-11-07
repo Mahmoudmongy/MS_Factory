@@ -41,3 +41,43 @@ export async function getInvoices() { return getAll('invoices'); }
 export async function addInvoice(invoice_no, invoice_type='sale', total=0, customer_id=null) {
   return addOne('invoices', { invoice_no, invoice_type, total, customer_id });
 }
+// js/db.js - طبقة المزامنة
+import { supabase } from './supabase.js';
+
+// 1. حفظ نسخة كاملة كـ backup
+export async function backupToCloud(S) {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return false;
+
+  const { error } = await supabase
+    .from('factory_state')
+    .upsert({
+      user_id: user.id,
+      state: S,
+      updated_at: new Date().toISOString()
+    }, { onConflict: 'user_id' });
+
+  if (error) { console.error('Backup failed:', error); return false; }
+  return true;
+}
+
+// 2. استعادة النسخة
+export async function restoreFromCloud() {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return null;
+
+  const { data, error } = await supabase
+    .from('factory_state')
+    .select('state')
+    .eq('user_id', user.id)
+    .single();
+
+  if (error || !data) return null;
+  return data.state;
+}
+
+// 3. تعديل sv() في app.js - هنضيف سطر واحد بس
+// في app.js، بعد السطر:
+// const sv=()=>{try{S.pend=(S.pend||0)+1;localStorage.setItem("mgr6",JSON.stringify(S))}catch(e){}};
+// هنخليه:
+// const sv=async()=>{try{S.pend=(S.pend||0)+1;localStorage.setItem("mgr6",JSON.stringify(S))}catch(e){}; if(navigator.onLine) backupToCloud(S).catch(()=>{}) };
