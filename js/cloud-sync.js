@@ -87,6 +87,27 @@ function mergeByKey(existing, incoming, keyFn) {
   (incoming || []).forEach(it => { try { const k = keyFn(it); if (k && !map.has(String(k))) { map.set(String(k), it); added++; } } catch(e){} });
   return { arr: [...map.values()], added };
 }
+function mergeCloudInvoices(existing, incoming) {
+  const map = new Map();
+  (existing || []).forEach(it => { const k = it && (it.id || it.no); if (k) map.set(String(k), it); });
+  let added = 0, conflicts = 0;
+  (incoming || []).forEach(remote => {
+    const k = remote && (remote.id || remote.no);
+    if (!k) return;
+    const local = map.get(String(k));
+    if (!local) { map.set(String(k), remote); added++; return; }
+    const localVersion = Number(local._cloudVersion || 0);
+    const remoteVersion = Number(remote._cloudVersion || 0);
+    if (remoteVersion > localVersion) {
+      local._cloudConflict = { serverVersion: remoteVersion, serverUpdatedAt: remote._cloudUpdatedAt || null, serverCopy: remote };
+      conflicts++;
+    } else if (remoteVersion && localVersion === remoteVersion) {
+      delete local._cloudConflict;
+    }
+  });
+  return { arr: [...map.values()], added, conflicts };
+}
+
 
 // ===== الرفع مرة واحدة على الجداول - الكاش هو الأساس =====
 async function uploadToTables(showAlert = false) {
@@ -151,34 +172,60 @@ async function uploadToTables(showAlert = false) {
     }
 
     const docs = S.docs || S.invoices || [];
+    let invoiceVersionsChanged = false;
     if (canWrite("invoices") && Array.isArray(docs)) {
       for (const d of docs) {
-        if (!d) continue;
+        if (!d || !["sale", "pur"].includes(d.t)) continue;
         const extId = String(getField(d, ["id", "no", "num", "code", "invNo"]) || "");
         if (!extId) { errors.push("invoice skipped: missing stable ID"); continue; }
         const custName = String(getField(d, ["customer", "cust", "partner", "client", "name"]) || "");
         if (custName && isAccountName(custName)) continue;
         const total = Number(getField(d, ["total", "tot", "grandTotal", "amount", "sum"]) || 0) || 0;
-        if (!(d.items || d.lines || d.details || total > 0 || custName)) continue;
-        const { data: invRow, error: invoiceError } = await supabase.from("invoices").upsert({
-          user_id: owner, external_id: extId, customer_name: custName || null, total, raw: d
-        }, { onConflict: "user_id,external_id" }).select("id").single();
-        if (invoiceError || !invRow) { errors.push("invoices: " + (invoiceError?.message || "invoice row missing")); continue; }
-        const { error: deleteItemsError } = await supabase.from("invoice_items").delete().eq("invoice_id", invRow.id);
-        if (deleteItemsError) { errors.push("invoice_items delete: " + deleteItemsError.message); continue; }
-        const its = d.items || d.lines || d.details || [];
-        if (Array.isArray(its) && its.length) {
-          const toInsert = its.map(it => ({
-            user_id: owner, invoice_id: invRow.id,
-            product_name: String(getField(it, ["name", "product", "item", "title"]) || ""),
-            qty: Number(getField(it, ["qty", "q", "quantity"]) || 1) || 1,
-            price: Number(getField(it, ["price", "pr", "unit"]) || 0) || 0,
-            total: Number(getField(it, ["total", "tot", "amount"]) || 0) || 0
-          }));
-          const { error } = await supabase.from("invoice_items").insert(toInsert);
-          if (error) errors.push("invoice_items insert: " + error.message);
+        const rawDoc = { ...d };
+        delete rawDoc._cloudVersion;
+        delete rawDoc._cloudUpdatedAt;
+        delete rawDoc._cloudConflict;
+        rawDoc.customer_name = custName || null;
+        const invoiceItems = Array.isArray(d.lines) ? d.lines : (Array.isArray(d.items) ? d.items : []);
+        const payloadItems = invoiceItems.map(it => ({
+          name: String(getField(it, ["name", "product", "item", "title"]) || "بند بدون اسم"),
+          variant: String(getField(it, ["v", "variant"]) || "-"),
+          qty: Number(getField(it, ["qty", "q", "quantity"]) || 1) || 1,
+          price: Number(getField(it, ["price", "pr", "unit"]) || 0) || 0,
+          total: Number(getField(it, ["total", "tot", "amount"]) || ((Number(it.qty || it.q || it.quantity || 1) || 1) * (Number(it.price || it.pr || it.unit || 0) || 0))),
+          note: String(getField(it, ["note", "desc"]) || "") || null
+        }));
+        const { data, error } = await supabase.rpc("sync_invoice", {
+          p_external_id: extId,
+          p_invoice_no: String(d.no || extId),
+          p_invoice_type: d.t === "sale" ? "sale" : "purchase",
+          p_invoice_date: d.date || null,
+          p_total: total,
+          p_discount: Number(d.disc || 0),
+          p_note: d.note || null,
+          p_raw: rawDoc,
+          p_expected_version: d._cloudVersion === undefined ? 0 : Number(d._cloudVersion),
+          p_items: payloadItems
+        });
+        if (error) {
+          errors.push("invoice " + extId + ": " + (error.code === "40001"
+            ? "تعارض تعديل: توجد نسخة أحدث على السحابة؛ لم يتم استبدالها"
+            : error.message));
+          continue;
         }
+        const syncRow = Array.isArray(data) ? data[0] : data;
+        if (!syncRow?.sync_version) {
+          errors.push("invoice " + extId + ": server returned no synchronization version");
+          continue;
+        }
+        d._cloudVersion = Number(syncRow.sync_version);
+        d._cloudUpdatedAt = syncRow.updated_at || null;
+        invoiceVersionsChanged = true;
       }
+    }
+    if (invoiceVersionsChanged) {
+      // Persist server versions without triggering another autosave/upload cycle.
+      Object.getPrototypeOf(localStorage).setItem.call(localStorage, "mgr6", JSON.stringify(S));
     }
 
     const prodArrays = [];
@@ -236,23 +283,22 @@ async function loadFromTablesMerge(isAuto = false) {
     const admin = profile.is_admin === true;
     const canRead = key => admin || profile.permissions?.[key] === true || profile.permissions?.reports === true;
 
+    let restoredSnapshot = false;
     if (admin) {
       const { data: snapshot, error } = await supabase.from("factory_state")
         .select("state,updated_at").eq("user_id", owner).maybeSingle();
       if (error) throw error;
-      if (snapshot?.state && typeof snapshot.state === "object" && !Array.isArray(snapshot.state)) {
-        if (!isLocalEmpty()) return T("فيه بيانات محلية بالفعل؛ لم يتم استبدالها. خذ نسخة احتياطية قبل الاستعادة.", "Local data already exists; it was not overwritten. Back up local data before restoring.");
+      if (snapshot?.state && typeof snapshot.state === "object" && !Array.isArray(snapshot.state) && isLocalEmpty()) {
         try { localStorage.setItem("mgr6-backup-before-cloud-restore", localStorage.getItem("mgr6") || ""); } catch(e){}
         Object.getPrototypeOf(localStorage).setItem.call(localStorage, "mgr6", JSON.stringify(snapshot.state));
-        if (isAuto) setTimeout(() => location.reload(), 500);
-        return T("تمت استعادة نسخة المصنع الكاملة من السحابة", "Full factory backup restored from cloud");
+        restoredSnapshot = true;
       }
     }
 
     if (!["customers","suppliers","invoices","inventory","reports"].some(canRead)) {
       return T("لا توجد صلاحيات لقراءة بيانات السحابة", "No permission to read cloud data");
     }
-    if (!isLocalEmpty()) return T("فيه بيانات محلية بالفعل؛ لم يتم استبدالها. خذ نسخة احتياطية قبل الاستعادة.", "Local data already exists; it was not overwritten. Back up local data before restoring.");
+    if (!isLocalEmpty() && !admin) return T("فيه بيانات محلية بالفعل؛ لم يتم استبدالها. خذ نسخة احتياطية قبل الاستعادة.", "Local data already exists; it was not overwritten. Back up local data before restoring.");
     try { localStorage.setItem("mgr6-backup-before-cloud-restore", localStorage.getItem("mgr6") || ""); } catch(e){}
 
     const emptyResult = { data: [], error: null };
@@ -266,7 +312,10 @@ async function loadFromTablesMerge(isAuto = false) {
     if (failed) return isAuto ? "cloud read failed" : T("تعذر قراءة البيانات من السحابة: " + failed.error.message, "Cloud read failed: " + failed.error.message);
     const [{ data: custs }, { data: supps }, { data: invs }, { data: prods }] = results;
     if (!custs?.length && !supps?.length && !invs?.length && !prods?.length) {
-      return isAuto ? "cloud empty - keep local" : T("مفيش بيانات في السحابة", "No data in cloud");
+      if (restoredSnapshot && isAuto) setTimeout(() => location.reload(), 500);
+      return restoredSnapshot
+        ? T("تمت استعادة نسخة المصنع الكاملة من السحابة", "Full factory backup restored from cloud")
+        : (isAuto ? "cloud empty - keep local" : T("مفيش بيانات في السحابة", "No data in cloud"));
     }
 
     const S = getCachedState();
@@ -280,11 +329,14 @@ async function loadFromTablesMerge(isAuto = false) {
       const m = mergeByKey(S.partners || [], cloudPartners, x => x.id || x.name);
       S.partners = m.arr; totalAdded += m.added;
     }
+    let invoiceConflicts = 0;
     if (invs?.length) {
-      const cloudDocs = invs.map(inv => inv.raw || { id: inv.external_id, customer: inv.customer_name, total: inv.total, items: [] });
+      const cloudDocs = invs
+        .filter(inv => inv.raw && ["sale", "pur"].includes(inv.raw.t))
+        .map(inv => ({ ...inv.raw, _cloudVersion: Number(inv.sync_version || 1), _cloudUpdatedAt: inv.updated_at || null }));
       if (!Array.isArray(S.docs)) S.docs = [];
-      const m = mergeByKey(S.docs, cloudDocs, x => x.id || x.no);
-      S.docs = m.arr; totalAdded += m.added;
+      const m = mergeCloudInvoices(S.docs, cloudDocs);
+      S.docs = m.arr; totalAdded += m.added; invoiceConflicts += m.conflicts;
     }
     if (prods?.length) {
       const cloudProds = prods.map(p => p.raw || { id: p.external_id, name: p.name, qty: p.qty, price: p.price });
@@ -293,6 +345,10 @@ async function loadFromTablesMerge(isAuto = false) {
       S.products = m.arr; totalAdded += m.added;
     }
     Object.getPrototypeOf(localStorage).setItem.call(localStorage, "mgr6", JSON.stringify(S));
+    if (restoredSnapshot && isAuto) setTimeout(() => location.reload(), 500);
+    if (invoiceConflicts) {
+      return T("تم تحميل " + totalAdded + " سجل جديد. يوجد " + invoiceConflicts + " فاتورة بتعارض إصدار؛ احتفظنا بالنسختين ولم نستبدل بياناتك المحلية.", "Loaded " + totalAdded + " new records. " + invoiceConflicts + " invoice version conflict(s) were preserved without overwriting local data.");
+    }
     if (isAuto) return "auto merged " + totalAdded;
     return T("تم التحميل - اتضاف " + totalAdded + " جديد", "Loaded - " + totalAdded + " new records");
   } catch(e) { console.error(e); return e.message; }

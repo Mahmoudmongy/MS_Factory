@@ -22,6 +22,14 @@ ok('login screen does not expose public self-registration',!/auth-signup|signUp\
 ok('index auth gate validates the Supabase profile before revealing the app',/html\{visibility:hidden\}/.test(idx)&&/\.from\(['"]profiles['"]\)/.test(idx)&&/is_admin,permissions/.test(idx));
 ok('employee screen access is tied to the cloud profile permissions',/CLOUD_SCREEN_PERMISSIONS/.test(app)&&/setFactoryAuthProfile/.test(app));
 ok('full factory snapshot is restricted to administrator accounts',/if \(admin\)/.test(cloud)&&/factory_state/.test(cloud)&&/factory_state_admin_only/.test(fs.readFileSync(path.join(ROOT,'supabase/migrations/20261107081648_enforce_employee_permissions_20261107.sql'),'utf8')));
+
+ok('invoice cloud sync uses the atomic versioned RPC',/rpc\(["']sync_invoice["']/.test(cloud)&&/p_expected_version/.test(cloud)&&/sync_version/.test(cloud));
+ok('invoice sync does not delete invoice items through separate client requests',!/from\(["']invoice_items["']\)\.delete/.test(cloud));
+ok('returns are not misclassified as sale/purchase invoices',/\["sale", "pur"\]\.includes\(d\.t\)/.test(cloud));
+ok('cloud invoice merge preserves newer remote copies as explicit conflicts',/mergeCloudInvoices/.test(cloud)&&/serverCopy: remote/.test(cloud));
+
+ok('invoice sync migration uses optimistic version checks and invoker security',/sync_version/.test(fs.readFileSync(path.join(ROOT,'supabase/migrations/20261107090901_20261107111000_atomic_invoice_sync.sql'),'utf8'))&&/SECURITY INVOKER/.test(fs.readFileSync(path.join(ROOT,'supabase/migrations/20261107090901_20261107111000_atomic_invoice_sync.sql'),'utf8'))&&/40001/.test(fs.readFileSync(path.join(ROOT,'supabase/migrations/20261107090901_20261107111000_atomic_invoice_sync.sql'),'utf8')));
+ok('invoice sync fix qualifies child-row deletion columns',/DELETE FROM public\.invoice_items AS ii/.test(fs.readFileSync(path.join(ROOT,'supabase/migrations/20261107090923_sync_invoice_delete_alias_fix.sql'),'utf8')));
 /* ---------- B. app in a desktop context ---------- */
 const ctx=await browser.newContext({viewport:{width:1280,height:900},acceptDownloads:true}),p=await ctx.newPage(),errs=[];p.on('pageerror',e=>errs.push(e.message));
 await p.goto(BASE);await p.waitForTimeout(500);
