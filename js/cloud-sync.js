@@ -298,7 +298,7 @@ async function loadFromTablesMerge(isAuto = false) {
     if (!["customers","suppliers","invoices","inventory","reports"].some(canRead)) {
       return T("لا توجد صلاحيات لقراءة بيانات السحابة", "No permission to read cloud data");
     }
-    if (!isLocalEmpty() && !admin) return T("فيه بيانات محلية بالفعل؛ لم يتم استبدالها. خذ نسخة احتياطية قبل الاستعادة.", "Local data already exists; it was not overwritten. Back up local data before restoring.");
+    // Preserve a rollback copy, then merge remote records without replacing local master data.
     try { localStorage.setItem("mgr6-backup-before-cloud-restore", localStorage.getItem("mgr6") || ""); } catch(e){}
 
     const emptyResult = { data: [], error: null };
@@ -357,13 +357,20 @@ async function loadFromTablesMerge(isAuto = false) {
 
 // ===== التحميل التلقائي أول ما النت يرجع - زي ما اتفقنا =====
 async function onInternetBack() {
-  if (isLocalEmpty()) {
-    syncState = "saving"; drawAll();
-    await loadFromTablesMerge(true);
-    syncState = "synced"; drawAll();
-  } else {
-    await uploadToTables(false);
+  if (autoLoadRunning || syncState === "saving") return;
+  syncState = "saving"; drawAll();
+  // Always pull first: localStorage is the offline workspace, not proof it is newer.
+  // The merge is append-only for master data and version-aware for invoices.
+  const pulled = await loadFromTablesMerge(true);
+  if (pulled === "cloud read failed" || String(pulled).startsWith("تعذر قراءة")) {
+    syncState = "idle"; drawAll(); return pulled;
   }
+  // Then upload the merged local state so offline-created records reach the cloud.
+  const pushed = await uploadToTables(false);
+  if (String(pushed).startsWith("خطأ:") || String(pushed).includes("فشلت")) {
+    syncState = "idle"; drawAll(); return pushed;
+  }
+  return pushed;
 }
 const _origSetItem = localStorage.setItem.bind(localStorage);
 localStorage.setItem = function(key, value) {
@@ -376,7 +383,8 @@ localStorage.setItem = function(key, value) {
 };
 window.addEventListener("online", () => onInternetBack());
 window.addEventListener("offline", () => { syncState = "offline"; drawAll(); });
-if (navigator.onLine && isLocalEmpty()) {
+if (navigator.onLine) {
+  // On every launch, fetch the latest remote records before pushing the device cache.
   setTimeout(() => onInternetBack(), 1200);
 }
 window.restoreCloud = async function() {

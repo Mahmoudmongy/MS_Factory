@@ -1,11 +1,9 @@
-/* Service Worker v5 - app shell only.
- * - versioned cache, old caches deleted on activate (no stale app forever)
- * - network-first for same-origin GET so updates are picked up; cache is the offline fallback
- * - never touches non-GET, cross-origin (CDN libs / APIs) or /api/* requests => user data is never cached here
- * - user data lives in the page storage (per device/browser profile), not in this cache */
-const VERSION='factory-v5';
-const CORE=['./','./index.html','./manifest.json','./css/style.css','./js/app.js','./assets/icon.svg','./assets/icon-192.png','./assets/icon-512.png'];
-self.addEventListener('install',e=>{e.waitUntil(caches.open(VERSION).then(c=>c.addAll(CORE)).then(()=>self.skipWaiting()))});
+/* Service Worker v6 - offline application shell.
+ * Business data remains in localStorage; authenticated Supabase/API requests are never cached.
+ * Same-origin app assets are network-first and cached for offline fallback. */
+const VERSION='factory-v6';
+const CORE=['./','./index.html','./auth.html','./manifest.json','./css/style.css','./js/app.js','./js/auth.js','./js/supabase.js','./js/cloud-sync.js','./assets/icon.svg','./assets/icon-192.png','./assets/icon-512.png'];
+self.addEventListener('install',e=>{e.waitUntil(caches.open(VERSION).then(async c=>{await Promise.all(CORE.map(async path=>{try{const response=await fetch(path,{cache:'reload'});if(response.ok)await c.put(path,response)}catch(error){console.warn('Offline asset not precached:',path)}})})).then(()=>self.skipWaiting()))});
 self.addEventListener('activate',e=>{e.waitUntil(caches.keys().then(ks=>Promise.all(ks.filter(k=>k!==VERSION).map(k=>caches.delete(k)))).then(()=>self.clients.claim()))});
 self.addEventListener('fetch',e=>{const r=e.request;if(r.method!=='GET')return;const u=new URL(r.url);if(u.origin!==location.origin||u.pathname.startsWith('/api/'))return;
  e.respondWith(fetch(r).then(res=>{if(res.ok&&res.type==='basic'){const cp=res.clone();caches.open(VERSION).then(c=>c.put(r,cp))}return res}).catch(()=>caches.match(r).then(m=>m||caches.match('./index.html'))))});
