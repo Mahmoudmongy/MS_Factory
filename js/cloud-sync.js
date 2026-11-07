@@ -10,6 +10,27 @@ let ownerIdCache = null;
 let syncState = "idle";
 let autoLoadRunning = false;
 let uploadRunning = false;
+const PENDING_SYNC_KEY = 'mgr6-sync-pending';
+let retryTimer = null;
+let retryCount = 0;
+
+
+function markPendingSync() {
+  try { const state = getCachedState(); localStorage.setItem(PENDING_SYNC_KEY, JSON.stringify({ at: Date.now(), pend: Number(state.pend || 0) })); } catch(e) {}
+}
+function scheduleAutoSync(delay = 1000) {
+  if (!navigator.onLine || localStorage.getItem("mgr6-cloud-snapshot-conflict")) return;
+  clearTimeout(retryTimer);
+  retryTimer = setTimeout(async () => {
+    if (!navigator.onLine) return;
+    if (autoLoadRunning || uploadRunning) { scheduleAutoSync(1200); return; }
+    await onInternetBack();
+    if (localStorage.getItem(PENDING_SYNC_KEY) && !localStorage.getItem("mgr6-cloud-snapshot-conflict")) {
+      retryCount = Math.min(retryCount + 1, 5);
+      scheduleAutoSync(Math.min(30000, 1500 * Math.pow(2, retryCount)));
+    } else retryCount = 0;
+  }, delay);
+}
 
 function isEN() {
   try {
@@ -171,27 +192,21 @@ async function uploadToTables(showAlert = false) {
     if (!S || typeof S !== "object" || Array.isArray(S)) throw new Error("بيانات المصنع المحلية غير صالحة؛ لم يتم رفع أي شيء");
     const errors = [];
     let snapshotError = null;
+    let snapshotConflict = !!localStorage.getItem("mgr6-cloud-snapshot-conflict");
 
-    // Only the administrator may upload the complete factory snapshot.
-    // Optimistic locking prevents a stale device from replacing a newer device snapshot.
-    if (admin) {
-      if (localStorage.getItem("mgr6-cloud-snapshot-conflict")) {
-        syncState = "conflict"; drawAll();
-        return T("توجد نسخة سحابية أحدث. لم يتم رفع بيانات هذا الجهاز حتى لا نفقد أي تغييرات.", "A newer cloud snapshot exists. This device was not uploaded to avoid data loss.");
-      }
+    // Snapshot conflicts must not block independent, idempotent detail-table writes.
+    if (admin && !snapshotConflict) {
       const expectedVersion = Number(localStorage.getItem("mgr6-cloud-snapshot-version") || 0);
       const result = await supabase.rpc("sync_factory_state", {
         p_expected_version: expectedVersion,
         p_state: S
       });
       snapshotError = result.error;
-      if (snapshotError) {
-        if (snapshotError.code === "40001") {
-          localStorage.setItem("mgr6-cloud-snapshot-conflict", JSON.stringify({ reason: "stale_snapshot", at: new Date().toISOString() }));
-        }
-        errors.push("factory_state: " + (snapshotError.code === "40001"
-          ? "تعارض نسخة: توجد نسخة أحدث على السحابة؛ لم يتم استبدالها"
-          : snapshotError.message));
+      if (snapshotError?.code === "40001") {
+        snapshotConflict = true;
+        localStorage.setItem("mgr6-cloud-snapshot-conflict", JSON.stringify({ reason: "stale_snapshot", at: new Date().toISOString() }));
+      } else if (snapshotError) {
+        errors.push("factory_state: " + snapshotError.message);
       } else {
         const snapshotRow = Array.isArray(result.data) ? result.data[0] : result.data;
         if (!snapshotRow?.sync_version) errors.push("factory_state: server returned no snapshot version");
@@ -199,6 +214,7 @@ async function uploadToTables(showAlert = false) {
           localStorage.setItem("mgr6-cloud-snapshot-version", String(snapshotRow.sync_version));
           localStorage.setItem("mgr6-cloud-snapshot-pend", String(Number(S.pend || 0)));
           localStorage.removeItem("mgr6-cloud-snapshot-conflict");
+          snapshotConflict = false;
         }
       }
     }
