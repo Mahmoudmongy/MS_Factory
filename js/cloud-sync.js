@@ -249,7 +249,7 @@ async function loadFromTablesMerge(isAuto = false) {
       }
     }
 
-    if (!["customers","suppliers","invoices","inventory"].some(canRead)) {
+    if (!["customers","suppliers","invoices","inventory","reports"].some(canRead)) {
       return T("لا توجد صلاحيات لقراءة بيانات السحابة", "No permission to read cloud data");
     }
     if (!isLocalEmpty()) return T("فيه بيانات محلية بالفعل؛ لم يتم استبدالها. خذ نسخة احتياطية قبل الاستعادة.", "Local data already exists; it was not overwritten. Back up local data before restoring.");
