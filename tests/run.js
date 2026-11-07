@@ -16,7 +16,7 @@ for(const id of ['pgst','toast','tabs','sb','m','sb-overlay','top','ttl'])ok(`in
 const man=JSON.parse(fs.readFileSync(path.join(ROOT,'manifest.json'),'utf8'));
 for(const ic of man.icons){const f=path.join(ROOT,ic.src),b=fs.existsSync(f)?fs.readFileSync(f):Buffer.alloc(0),w=b.length>24&&b.readUInt32BE(16),h=b.length>24&&b.readUInt32BE(20);ok(`manifest icon ${ic.src} exists and is a PNG of ${ic.sizes}`,b.slice(1,4).toString()=='PNG'&&`${w}x${h}`==ic.sizes,`${w}x${h}`)}
 ok('manifest has start_url/scope/display standalone/rtl',man.start_url&&man.scope&&man.display=='standalone'&&man.dir=='rtl');
-const sw=fs.readFileSync(path.join(ROOT,'sw.js'),'utf8');ok('service worker is versioned, GET-only and same-origin only',/VERSION=/.test(sw)&&/method!=='GET'/.test(sw)&&/origin!==location\.origin/.test(sw)&&/caches\.delete/.test(sw));
+const sw=fs.readFileSync(path.join(ROOT,'sw.js'),'utf8'),builtSw=fs.readFileSync(path.join(ROOT,'public/sw.js'),'utf8');ok('Vite production build receives the service worker from public/',builtSw===sw);ok('service worker is versioned, GET-only and same-origin only',/VERSION=/.test(sw)&&/method!=='GET'/.test(sw)&&/origin!==location\.origin/.test(sw)&&/caches\.delete/.test(sw));
 ok('no secrets / service role keys in shipped files',!/service_role|eyJ[A-Za-z0-9_-]{20,}|sk_live|SUPABASE_SERVICE/i.test(app+idx+sw));
 ok('login screen does not expose public self-registration',!/auth-signup|signUp\(/.test(fs.readFileSync(path.join(ROOT,'auth.html'),'utf8')+fs.readFileSync(path.join(ROOT,'js/auth.js'),'utf8')));
 ok('index auth gate validates the Supabase profile before revealing the app',/html\{visibility:hidden\}/.test(idx)&&/\.from\(['"]profiles['"]\)/.test(idx)&&/is_admin,permissions/.test(idx));
