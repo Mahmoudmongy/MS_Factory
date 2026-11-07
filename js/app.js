@@ -237,7 +237,7 @@ sale:()=>tb2(DH,dlines("sale")),sret:()=>tb2(DH,dlines("sret")),pur:()=>tb2(DH,d
 function vchRep(dir){return tb2(["وقت التسجيل","المرجع","العنوان","الجهة","البيان","الحسابات","المبلغ"],S.vch.filter(v=>v.dir==dir&&inR(v.date)).map(v=>[sd(v),v.no,v.title,v.who||"—",v.desc||"",v.ac.map(x=>an(x.a)).join("، "),f(v.total)]))}
 /* ================= V2 PATCH 1: infrastructure ================= */
 let ACT=null,CUR=null,TB=[],SAVING=0,LANGEN=false,TRON=false,PRF={theme:"",lang:"ar"},FL={},WZ={};
-try{PRF=Object.assign(PRF,JSON.parse(localStorage.getItem("mgr6pref")||"{}"))}catch(e){}
+try{PRF=Object.assign(PRF,JSON.parse(localStorage.getItem("mgr6pref")||"{}"));if(PRF.theme==="auto")PRF.theme=""}catch(e){}
 const guard=()=>{if(SAVING)return false;SAVING=1;setTimeout(()=>SAVING=0,700);return true};
 const toast=m=>{const e=$g("#toast");e.textContent=m;e.style.display="block";if(LANGEN)e.textContent=trs(m);clearTimeout(toast.t);toast.t=setTimeout(()=>e.style.display="none",2800)};
 const bk=`<button class="g" onclick="tryClose()">رجوع / إلغاء</button>`;
