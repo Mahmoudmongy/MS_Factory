@@ -25,11 +25,30 @@
           .select('id,created_by,is_admin,permissions,must_change_password,username,full_name')
           .eq('id', data.session.user.id).maybeSingle();
         if (profileError || !profile) {
-          await supabase.auth.signOut();
-          location.replace('auth.html');
+          // Offline use is allowed only for a profile previously verified online on this device.
+          let cachedProfile = null;
+          if (!navigator.onLine) {
+            try { cachedProfile = JSON.parse(localStorage.getItem('factory-profile:' + data.session.user.id) || 'null'); } catch (_) {}
+          }
+          if (cachedProfile && cachedProfile.id === data.session.user.id) {
+            window.__factoryAuthProfile = cachedProfile;
+            window.__factoryAuthEmail = data.session.user.email || '';
+            window.__factoryOfflineMode = true;
+            document.documentElement.style.visibility = 'visible';
+            if (typeof window.setFactoryAuthProfile === 'function') window.setFactoryAuthProfile(cachedProfile);
+          } else if (navigator.onLine) {
+            await supabase.auth.signOut();
+            location.replace('auth.html');
+          } else {
+            document.documentElement.style.visibility = 'visible';
+            document.body?.insertAdjacentHTML?.('afterbegin', '<div role="alert" style="padding:12px;background:#fee2e2;color:#991b1b;text-align:center">لا يوجد ملف حساب محفوظ على هذا الجهاز. اتصل بالإنترنت وسجّل الدخول مرة واحدة لتفعيل العمل دون اتصال.</div>');
+            location.replace('auth.html');
+          }
         } else {
           window.__factoryAuthProfile = profile;
           window.__factoryAuthEmail = data.session.user.email || '';
+          window.__factoryOfflineMode = false;
+          try { localStorage.setItem('factory-profile:' + data.session.user.id, JSON.stringify(profile)); } catch (_) {}
           document.documentElement.style.visibility = 'visible';
           if (typeof window.setFactoryAuthProfile === 'function') window.setFactoryAuthProfile(profile);
         }

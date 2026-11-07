@@ -364,6 +364,11 @@ async function loadFromTablesMerge(isAuto = false) {
 // ===== التحميل التلقائي أول ما النت يرجع - زي ما اتفقنا =====
 async function onInternetBack() {
   if (autoLoadRunning || syncState === "saving") return;
+  // Revalidate the session profile before using cached offline permissions for cloud writes.
+  myProfile = null; ownerIdCache = null; window.__factoryAuthProfile = null;
+  const freshProfile = await getMyProfile();
+  if (!freshProfile) { syncState = "idle"; drawAll(); return "profile revalidation failed"; }
+  window.__factoryOfflineMode = false;
   syncState = "saving"; drawAll();
   // Always pull first: localStorage is the offline workspace, not proof it is newer.
   // The merge is append-only for master data and version-aware for invoices.
