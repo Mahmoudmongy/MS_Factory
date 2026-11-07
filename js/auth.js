@@ -43,8 +43,9 @@ if (!supabase) {
 
   $('auth-login').addEventListener('click', async (e) => {
     e.preventDefault();
-    const { email, password } = credentials();
-    if (!email || !password) return say('أدخل البريد الإلكتروني وكلمة المرور');
+    const { email: login, password } = credentials();
+    if (!login || !password) return say('أدخل البريد الإلكتروني أو اسم المستخدم وكلمة المرور');
+    const email = login.includes('@') ? login : login.trim().toLowerCase() + '@ms-factory.local';
     say('جاري تسجيل الدخول...', false);
     const { error } = await supabase.auth.signInWithPassword({ email, password });
     if (error) return say('خطأ دخول: ' + error.message);
