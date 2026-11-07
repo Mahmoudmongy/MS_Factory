@@ -9,6 +9,7 @@ let myProfile = null;
 let ownerIdCache = null;
 let syncState = "idle";
 let autoLoadRunning = false;
+let uploadRunning = false;
 
 function isEN() {
   try {
@@ -111,9 +112,12 @@ function mergeCloudInvoices(existing, incoming) {
 
 // ===== الرفع مرة واحدة على الجداول - الكاش هو الأساس =====
 async function uploadToTables(showAlert = false) {
+  if (uploadRunning) return "upload already running";
+  uploadRunning = true;
   if (!navigator.onLine) {
     syncState = "offline"; drawAll();
     if (showAlert) alert(T("مفيش إنترنت - محفوظ في الجهاز، وهيترفع أول ما النت يرجع 💾", "No internet - saved on device, will upload when online 💾"));
+    uploadRunning = false;
     return "offline";
   }
   syncState = "saving"; drawAll();
@@ -268,6 +272,8 @@ async function uploadToTables(showAlert = false) {
     console.error(e); syncState = "idle"; drawAll();
     if (showAlert) alert(e.message);
     return "خطأ: " + e.message;
+  } finally {
+    uploadRunning = false;
   }
 }
 
@@ -599,7 +605,7 @@ function drawAll() {
   if (!navigator.onLine || syncState === "offline") { label = T("💾 محفوظ في الجهاز - مفيش نت", "💾 Saved on device - offline"); bg = "#f59e0b"; }
   else if (syncState === "saving") { label = T("⏳ جاري الرفع...", "⏳ Uploading..."); bg = "#3b82f6"; }
   else if (syncState === "synced") { label = mobile ? T("☁️ متزامن", "☁️ Synced") : `${T("☁️ متزامن", "☁️ Synced")} ${lastSyncTime}`; bg = "#0f766e"; }
-  else { label = T("☁️ متزامن", "☁️ Synced"); bg = "#0f766e"; }
+  else { label = T("☁️ متصل - في انتظار المزامنة", "☁️ Online - waiting to sync"); bg = "#64748b"; }
   const s1 = document.createElement("span"); s1.textContent = label; s1.style.whiteSpace = "nowrap";
   const s2 = document.createElement("span"); s2.textContent = T("رفع الآن", "Upload Now");
   s2.style.cssText = "background:#fff;color:#0f766e;padding:2px 10px;border-radius:12px;cursor:pointer;white-space:nowrap;" + (mobile ? "font-size:11px;" : "");
