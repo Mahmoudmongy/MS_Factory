@@ -1,4 +1,4 @@
-// js/cloud-sync.js - V20 - الشريط زي ما هو + إضافة الموظف من تابة الموظفين - Dynamic + AR/EN + PC/Mobile
+// js/cloud-sync.js - V21 - صلاحيات + بيانات مشتركة - Dynamic + AR/EN + PC/Mobile
 import { supabase } from './supabase.js';
 import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm';
 
@@ -6,6 +6,8 @@ let saveTimer = null;
 let lastSyncTime = "";
 let lastLang = "";
 let lastMode = "";
+let myProfile = null;
+let ownerIdCache = null;
 
 function isEN() {
   try {
@@ -18,20 +20,59 @@ function T(ar, en) { return isEN() ? en : ar; }
 function isMobile() { return window.innerWidth <= 640; }
 function usernameToEmail(u) { return u.trim().toLowerCase().replace(/\s+/g, ".") + "@ms-factory.local"; }
 
+// ===== مين صاحب البيانات؟ =====
+// المدير = نفسه، الموظف = المدير اللي عيّنه
+async function getMyProfile() {
+  if (myProfile) return myProfile;
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return null;
+  const { data } = await supabase.from('profiles').select('*').eq('id', user.id).single();
+  myProfile = data || { id: user.id, is_admin: true };
+  return myProfile;
+}
+async function getOwnerId() {
+  if (ownerIdCache) return ownerIdCache;
+  const p = await getMyProfile();
+  ownerIdCache = (p && p.created_by) ? p.created_by : p?.id;
+  return ownerIdCache;
+}
+function isAdmin() { return !myProfile || myProfile.is_admin === true || !myProfile.created_by; }
+
+// ===== أول ما الموظف يدخل، حمّل بيانات المدير =====
+async function loadSharedStateOnce() {
+  try {
+    if (sessionStorage.getItem("ms-shared-loaded")) return;
+    sessionStorage.setItem("ms-shared-loaded", "1");
+    const p = await getMyProfile();
+    if (!p || !p.created_by) return; // أنا المدير، بياناتي عندي
+    const owner = p.created_by;
+    const { data } = await supabase.from('factory_state').select('state, updated_at').eq('user_id', owner).single();
+    if (data && data.state) {
+      const local = localStorage.getItem("mgr6");
+      // لو عندي بيانات قديمة أو فاضية، خد بيانات المدير
+      if (!local || local === "{}" || local.length < 50) {
+        localStorage.setItem("mgr6", JSON.stringify(data.state));
+        location.reload();
+      }
+    }
+  } catch(e){ console.error(e); }
+}
+loadSharedStateOnce();
+
 async function backupNow(showAlert = false) {
   try {
     if (!navigator.onLine) { if(showAlert) alert(T("مفيش إنترنت", "No internet")); return; }
     const raw = localStorage.getItem("mgr6");
     if (!raw) return;
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return;
+    const owner = await getOwnerId();
+    if (!owner) return;
     const state = JSON.parse(raw);
-    const { error } = await supabase.from('factory_state').upsert({ user_id: user.id, state, updated_at: new Date().toISOString() }, { onConflict: 'user_id' });
+    const { error } = await supabase.from('factory_state').upsert({ user_id: owner, state, updated_at: new Date().toISOString() }, { onConflict: 'user_id' });
     if (error) { if(showAlert) alert(T("فشل الحفظ", "Save failed")); }
     else {
       lastSyncTime = new Date().toLocaleTimeString(isEN() ? 'en-US' : 'ar-EG');
       drawAll();
-      syncRealTables(user.id, state);
+      syncRealTables(owner, state);
       if(showAlert) alert(T("تم الحفظ في السحابة ✅", "Saved to cloud ✅"));
     }
   } catch(e){ console.error(e); }
@@ -60,7 +101,48 @@ async function syncRealTables(userId, S) {
   } catch(e){ console.error(e); }
 }
 
-// ===== إضافة حساب دخول من جوه تابة الموظفين =====
+// ===== تطبيق الصلاحيات بجد =====
+const TAB_PERMS = [
+  { key: "invoices", ar: ["فواتير", "فاتورة"], en: ["invoice"] },
+  { key: "inventory", ar: ["مخزون", "مخزن"], en: ["inventory", "stock"] },
+  { key: "customers", ar: ["عملاء", "عميل"], en: ["customer"] },
+  { key: "suppliers", ar: ["موردين", "مورد"], en: ["supplier"] },
+  { key: "production", ar: ["إنتاج", "تصنيع"], en: ["production"] },
+  { key: "reports", ar: ["تقارير", "تقرير"], en: ["report"] },
+  { key: "settings", ar: ["إعدادات", "اعدادات"], en: ["setting"] },
+  { key: "employees", ar: ["موظفين", "موظف"], en: ["employee", "staff"] },
+];
+
+async function enforcePermissions() {
+  const p = await getMyProfile();
+  if (!p) return;
+  if (isAdmin()) return; // المدير يشوف كل حاجة
+  const perms = p.permissions || {};
+  // الموظفين تابة مقفولة دايماً للموظف العادي
+  document.querySelectorAll("button, a, [data-tab], [data-view], .nav-item, .tab-btn, .sidebar button, nav button, aside button").forEach(el => {
+    const txt = (el.textContent || "").trim().toLowerCase();
+    if (!txt || txt.length > 30) return;
+    for (const tp of TAB_PERMS) {
+      const words = isEN() ? tp.en : tp.ar;
+      const match = words.some(w => txt.includes(w.toLowerCase()));
+      if (match) {
+        // لو ماعندوش الصلاحية دي، اخفي الزرار
+        if (!perms[tp.key]) el.style.display = "none";
+        else el.style.display = "";
+      }
+    }
+  });
+  // لو هو في تابة ممنوعة، رجعه للوحة الرئيسية
+  const m = document.getElementById("m");
+  if (m) {
+    const txt = (m.textContent || "").toLowerCase();
+    // لو فتح تابة موظفين وهو مش مدير، شيل الكارت
+    const card = document.getElementById("ms-emp-in-tab");
+    if (card) card.remove();
+  }
+}
+
+// ===== إضافة حساب دخول من جوه تابة الموظفين - للمدير بس =====
 const PERMS = [
   { key: "invoices", ar: "الفواتير", en: "Invoices" },
   { key: "inventory", ar: "المخزون", en: "Inventory" },
@@ -75,19 +157,18 @@ function isEmployeesTabOpen() {
   const m = document.getElementById("m");
   if (!m) return false;
   const txt = m.textContent || "";
-  // تابة الموظفين فيها كلمة موظفين أو Employees أو emp
-  // بنتأكد إنها هي اللي مفتوحة مش تابة تانية
   const activeTab = document.querySelector('[data-tab="emp"], [data-tab="employees"], .tab.active');
   if (activeTab && (activeTab.textContent.includes("موظف") || activeTab.textContent.includes("Employee"))) return true;
-  // طريقة تانية: لو المحتوى فيه جدول موظفين
   return txt.includes("الموظفين") || txt.includes("Employees") || txt.includes("إضافة موظف") || txt.includes("Add Employee");
 }
 
-function injectEmployeeAccountForm() {
+async function injectEmployeeAccountForm() {
   if (!isEmployeesTabOpen()) return;
+  const p = await getMyProfile();
+  if (!p || !isAdmin()) return; // الموظف ميشوفش الكارت ده خالص
   const m = document.getElementById("m");
   if (!m) return;
-  if (document.getElementById("ms-emp-in-tab")) return; // موجودة خلاص
+  if (document.getElementById("ms-emp-in-tab")) return;
 
   const box = document.createElement("div");
   box.id = "ms-emp-in-tab";
@@ -106,9 +187,7 @@ function injectEmployeeAccountForm() {
     <button id="ms-emp-create" style="margin-top:12px;background:#0f766e;color:#fff;border:none;padding:12px 20px;border-radius:12px;font-weight:bold;cursor:pointer;width:${isMobile() ? "100%" : "auto"};">${T("إنشاء حساب دخول ✅", "Create Login Account ✅")}</button>
     <p id="ms-emp-msg" style="margin:8px 0 0;color:#0f766e;font-weight:bold;font-size:13px;"></p>
   `;
-  // حطها أول حاجة في تابة الموظفين، فوق الجدول بتاع البرنامج
   m.prepend(box);
-
   document.getElementById("ms-emp-create").onclick = async () => {
     const username = document.getElementById("ms-emp-user").value.trim().toLowerCase();
     const fullName = document.getElementById("ms-emp-full").value.trim();
@@ -119,7 +198,6 @@ function injectEmployeeAccountForm() {
     const perms = {};
     box.querySelectorAll("input[type=checkbox]:checked").forEach(c => perms[c.value] = true);
     msg.textContent = T("جارٍ الإنشاء...", "Creating...");
-
     try {
       const { data: { user } } = await supabase.auth.getUser();
       const SUPA_URL = supabase.supabaseUrl;
@@ -130,11 +208,7 @@ function injectEmployeeAccountForm() {
       if (signupErr) throw signupErr;
       const newId = signup.user?.id;
       if (!newId) throw new Error(T("فشل إنشاء الحساب", "Failed to create account"));
-      const { error: profErr } = await supabase.from('profiles').upsert({
-        id: newId, username, full_name: fullName || username,
-        must_change_password: true, permissions: perms,
-        created_by: user?.id, is_admin: false
-      });
+      const { error: profErr } = await supabase.from('profiles').upsert({ id: newId, username, full_name: fullName || username, must_change_password: true, permissions: perms, created_by: user?.id, is_admin: false });
       if (profErr) console.error(profErr);
       msg.textContent = T(`تم ✅ - يدخل بالاسم: ${username} والباسورد: ${pass}`, `Done ✅ - Login with: ${username} / ${pass}`);
       alert(T(`تم إضافة ${username} ✅\nخليه يدخل بالاسم والباسورد الافتراضي، وهيطلب منه باسورد جديد`, `Added ${username} ✅\nAsk him to login with default password, he will be asked for a new one`));
@@ -142,17 +216,16 @@ function injectEmployeeAccountForm() {
   };
 }
 
-// راقب تابة الموظفين - أول ما تتفتح، حط الكارت بتاعنا فيها
 setInterval(() => {
   if (isEmployeesTabOpen()) injectEmployeeAccountForm();
   else {
-    // لو خرج من التابة، شيل الكارت عشان ميظهرش في تابة تانية
     const old = document.getElementById("ms-emp-in-tab");
     if (old) old.remove();
   }
+  enforcePermissions();
 }, 1000);
 
-// ===== باقي الكود - الشريط زي ما هو، من غير زرار موظفين =====
+// ===== الشريط زي ما هو - حباية + ✕ بس =====
 const originalSetItem = localStorage.setItem.bind(localStorage);
 localStorage.setItem = function(key, value) {
   originalSetItem(key, value);
@@ -162,9 +235,8 @@ localStorage.setItem = function(key, value) {
 
 window.restoreCloud = async function() {
   if (!confirm(T("هتستبدل البيانات الحالية بنسخة السحابة؟", "Replace current data with cloud copy?"))) return;
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return alert(T("سجل دخول الأول", "Please login first"));
-  const { data, error } = await supabase.from('factory_state').select('state').eq('user_id', user.id).single();
+  const owner = await getOwnerId();
+  const { data, error } = await supabase.from('factory_state').select('state').eq('user_id', owner).single();
   if (error || !data) return alert(T("مفيش نسخة في السحابة", "No cloud copy found"));
   localStorage.setItem("mgr6", JSON.stringify(data.state));
   alert(T("تمت الاستعادة ✅", "Restored ✅"));
@@ -175,6 +247,7 @@ window.backupNowManual = function() { backupNow(true); };
 async function doLogout() {
   if (!confirm(T("متأكد عايز تسجل خروج؟", "Are you sure you want to logout?"))) return;
   try { await supabase.auth.signOut(); } catch(e){}
+  sessionStorage.removeItem("ms-shared-loaded");
   location.href = "auth.html";
 }
 
@@ -200,7 +273,6 @@ function purgeLoggedInText() {
     if ((id.includes("logout") || tt === "تسجيل خروج" || tt === "Logout") && el.id !== "ms-logout-btn" && !el.closest("#ms-topbar")) el.style.display = "none";
   });
 }
-
 const observer = new MutationObserver(() => { purgeLoggedInText(); });
 observer.observe(document.body, { childList: true, subtree: true, characterData: true });
 
@@ -234,7 +306,6 @@ function drawAll(text) {
   lastLang = en ? "en" : "ar";
   lastMode = mobile ? "mobile" : "desktop";
 }
-
 setInterval(() => {
   const top = document.getElementById("ms-topbar");
   const cur = isEN() ? "en" : "ar";
@@ -242,7 +313,6 @@ setInterval(() => {
   if (!top || cur !== lastLang || mode !== lastMode) drawAll();
   else purgeLoggedInText();
 }, 500);
-
 window.addEventListener("resize", () => drawAll());
 drawAll();
-console.log("☁️ Cloud Sync V20 شغال - موظفين من التابة");
+console.log("☁️ Cloud Sync V21 شغال - صلاحيات + بيانات مشتركة");
