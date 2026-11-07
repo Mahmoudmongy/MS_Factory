@@ -13,6 +13,8 @@
 - `supabase/schema.sql`: مخطط الأساس الذي تم تطبيقه على المشروع قبل ربط سجل migrations.
 - `supabase/migrations/20261107080100_harden_auth_rls_20261107.sql`: تشديد تسجيل الدخول وRLS.
 - `supabase/migrations/20261107081648_enforce_employee_permissions_20261107.sql`: صلاحيات الموظفين على مستوى قاعدة البيانات.
+- `supabase/migrations/20261107090901_20261107111000_atomic_invoice_sync.sql`: مزامنة الفواتير وبنودها داخل معاملة واحدة مع كشف تعارض الإصدارات.
+- `supabase/migrations/20261107090923_sync_invoice_delete_alias_fix.sql`: تصحيح مرجع حذف البنود داخل دالة المزامنة.
 - `supabase/legacy/`: نسخة تاريخية من migration الأساس؛ ليست ضمن مسار migrations النشط.
 - `supabase/functions/create-employee-account/index.ts`: إنشاء حسابات الفريق.
 
