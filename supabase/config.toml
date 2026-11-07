@@ -1,5 +1,3 @@
-[functions.create-employee]
-verify_jwt = true
 
 [functions.create-employee-account]
 verify_jwt = true
