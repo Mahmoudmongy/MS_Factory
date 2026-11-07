@@ -459,14 +459,14 @@ async function loadFromTablesMerge(isAuto = false) {
       const m = mergeByKey(S.partners || [], cloudPartners, x => x.id || x.name);
       S.partners = m.arr; totalAdded += m.added;
     }
-    let invoiceConflicts = 0;
+    let recordConflicts = 0;
     if (invs?.length) {
       const cloudDocs = invs
         .filter(inv => inv.raw && ["sale", "pur"].includes(inv.raw.t))
         .map(inv => ({ ...inv.raw, _cloudVersion: Number(inv.sync_version || 1), _cloudUpdatedAt: inv.updated_at || null }));
       if (!Array.isArray(S.docs)) S.docs = [];
       const m = mergeCloudInvoices(S.docs, cloudDocs);
-      S.docs = m.arr; totalAdded += m.added; invoiceConflicts += m.conflicts;
+      S.docs = m.arr; totalAdded += m.added; recordConflicts += m.conflicts;
     }
     if (returns?.length) {
       const cloudReturns = returns.map(row => row.raw && typeof row.raw === "object" ? ({ ...row.raw, _cloudUpdatedAt: row.updated_at }) : ({
@@ -475,7 +475,7 @@ async function loadFromTablesMerge(isAuto = false) {
         date: row.return_date, total: Number(row.total || 0), note: row.note || ""
       }));
       const merged = mergeCloudRecords(S.docs || [], cloudReturns);
-      S.docs = merged.arr; totalAdded += merged.added; invoiceConflicts += merged.conflicts;
+      S.docs = merged.arr; totalAdded += merged.added; recordConflicts += merged.conflicts;
     }
     if (vouchers?.length) {
       const cloudVouchers = vouchers.map(row => row.raw && typeof row.raw === "object" ? ({ ...row.raw, _cloudUpdatedAt: row.updated_at }) : ({
@@ -483,7 +483,7 @@ async function loadFromTablesMerge(isAuto = false) {
         date: row.voucher_date, title: row.account, desc: row.note || "", total: Number(row.amount || 0), ac: [], ln: []
       }));
       const merged = mergeCloudRecords(S.vch || [], cloudVouchers);
-      S.vch = merged.arr; totalAdded += merged.added; invoiceConflicts += merged.conflicts;
+      S.vch = merged.arr; totalAdded += merged.added; recordConflicts += merged.conflicts;
     }
     if (productionOrders?.length) {
       const cloudOrders = productionOrders.map(row => {
@@ -499,7 +499,7 @@ async function loadFromTablesMerge(isAuto = false) {
         };
       });
       const merged = mergeCloudRecords(S.po || [], cloudOrders);
-      S.po = merged.arr; totalAdded += merged.added; invoiceConflicts += merged.conflicts;
+      S.po = merged.arr; totalAdded += merged.added; recordConflicts += merged.conflicts;
     }
     if (prods?.length) {
       const cloudProducts = prods.map(p => {
@@ -524,8 +524,8 @@ async function loadFromTablesMerge(isAuto = false) {
     }
     Object.getPrototypeOf(localStorage).setItem.call(localStorage, "mgr6", JSON.stringify(S));
     if (restoredSnapshot && isAuto) setTimeout(() => location.reload(), 500);
-    if (invoiceConflicts) {
-      return T("تم تحميل " + totalAdded + " سجل جديد. يوجد " + invoiceConflicts + " فاتورة بتعارض إصدار؛ احتفظنا بالنسختين ولم نستبدل بياناتك المحلية.", "Loaded " + totalAdded + " new records. " + invoiceConflicts + " invoice version conflict(s) were preserved without overwriting local data.");
+    if (recordConflicts) {
+      return T("تم تحميل " + totalAdded + " سجل جديد. يوجد " + recordConflicts + " سجل بتعارض إصدار؛ احتفظنا بالنسختين ولم نستبدل بياناتك المحلية.", "Loaded " + totalAdded + " new records. " + recordConflicts + " cloud record conflict(s) were preserved without overwriting local data.");
     }
     if (isAuto) return "auto merged " + totalAdded;
     return T("تم التحميل - اتضاف " + totalAdded + " جديد", "Loaded - " + totalAdded + " new records");
