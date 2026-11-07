@@ -219,18 +219,19 @@ function trNode(n){if(n.nodeType==3){const v=n.nodeValue;if(LANGEN){if(AR.test(v
  else if(n.nodeType==1){["placeholder","title"].forEach(a=>{const v=n.getAttribute(a),k="data-ar-"+a,o=n.getAttribute(k);if(LANGEN){if(v&&(AR.test(v)||o!==null)){const src=AR.test(v)?v:o;n.setAttribute(k,src);n.setAttribute(a,trs(src));TRON=true}}else if(o!==null){n.setAttribute(a,o);n.removeAttribute(k)}})}}
 function trTree(r){if(!r||(!LANGEN&&!TRON))return;const w=document.createTreeWalker(r,NodeFilter.SHOW_TEXT|NodeFilter.SHOW_ELEMENT);let n=w.currentNode;do{trNode(n)}while((n=w.nextNode()))}
 new MutationObserver(ms=>{if(!LANGEN)return;ms.forEach(m=>m.addedNodes.forEach(n=>trTree(n)))}).observe(document.body,{childList:true,subtree:true});
-/* ---- connection / sync indicator (UI only; real sync needs Supabase) ---- */
+/* ---- connection / sync indicator ---- */
 function netUp(){const e=$g("#net");e.textContent=navigator.onLine?"🟢 متصل":"🔴 غير متصل";e.title="حالة الاتصال والمزامنة"}
 addEventListener("online",netUp);addEventListener("offline",netUp);
 function syncPage(){
   const cp=cloudProfile();
   const offline=!navigator.onLine||window.__factoryOfflineMode===true;
   const badge=document.getElementById("cloud-badge");
-  const cloudStatus=offline?"💾 محفوظ محليًا - انتظار عودة الإنترنت":(badge?.innerText||"🟡 تم التحقق من الحساب - في انتظار المزامنة").trim();
+  const snapshotConflict=localStorage.getItem("mgr6-cloud-snapshot-conflict");
+  const cloudStatus=snapshotConflict?"⚠️ تعارض بين النسخة المحلية والسحابية":offline?"💾 محفوظ محليًا - انتظار عودة الإنترنت":(badge?.innerText||"🟡 تم التحقق من الحساب - في انتظار المزامنة").trim();
   const role=!cp?"غير محدد":cp.is_admin===true?"مدير النظام":"حساب موظف";
   const detail=cp?.is_admin===true
     ?"حساب المدير يرفع النسخة الكاملة للمصنع، بالإضافة إلى الجداول التفصيلية المدعومة."
-    :"حساب الموظف يزامن الجداول التي تسمح بها صلاحياته فقط؛ بعض القيود والحركات المحاسبية لا تملك مزامنة تفصيلية كاملة حتى الآن.";
+    :"حساب الموظف يزامن الجداول المسموح بها حسب صلاحياته. دفتر الأستاذ والحركات التفصيلية الكاملة ما زالت مرتبطة بنسخة المدير الكاملة.";
   const c=[
     ["فواتير ومرتجعات",S.docs.length],
     ["سندات قبض ودفع",S.vch.length],
@@ -249,6 +250,7 @@ function syncPage(){
     <p>حالة المزامنة: <b>${cloudStatus}</b></p>
     <p>التغييرات المحلية المحفوظة: <b>${S.pend||0}</b></p>
   </div>
+  ${snapshotConflict&&cp?.is_admin===true?`<div class="card"><b>⚠️ تعارض في نسخة المصنع الكاملة</b><p>توجد تغييرات أحدث على السحابة وتغييرات محلية على هذا الجهاز. لم يتم استبدال أي نسخة أو رفع بيانات قديمة فوق الأحدث.</p><p>يمكنك استعادة النسخة السحابية بعد حفظ نسخة محلية احتياطية.</p><button class="rd" onclick="resolveCloudSnapshotConflict()">حفظ نسخة الجهاز ثم استعادة النسخة السحابية</button></div>`:""}
   <table class="l"><tr><th>البيانات</th><th>العدد على هذا الجهاز</th></tr>${U(c,x=>`<tr><td>${x[0]}</td><td>${x[1]}</td></tr>`)}</table>
   <p class="mu">${detail}</p>
   <p class="mu">البيانات المحلية تظل محفوظة على الجهاز. عند عودة الإنترنت يحاول النظام تحميل التغييرات السحابية ودمجها ثم رفع ما تسمح به الصلاحيات. راجع شارة المزامنة أعلى الشاشة لمعرفة الحالة الحالية.</p>`)
