@@ -1,4 +1,4 @@
-// js/cloud-sync.js - V25 - كاش + رفع مرة واحدة - عملاء حقيقيين بس مش حسابات - Dynamic + AR/EN + PC/Mobile
+// js/cloud-sync.js - V27 - تحميل تلقائي آمن أول ما النت يرجع - Dynamic + AR/EN + PC/Mobile
 import { supabase } from './supabase.js';
 import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm';
 
@@ -9,6 +9,7 @@ let lastMode = "";
 let myProfile = null;
 let ownerIdCache = null;
 let syncState = "idle";
+let autoLoadRunning = false;
 
 function isEN() {
   try {
@@ -23,10 +24,12 @@ function usernameToEmail(u) { return u.trim().toLowerCase().replace(/\s+/g, ".")
 
 async function getMyProfile() {
   if (myProfile) return myProfile;
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return null;
-  const { data } = await supabase.from('profiles').select('*').eq('id', user.id).single();
-  myProfile = data || { id: user.id, is_admin: true };
+  try {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return null;
+    const { data } = await supabase.from('profiles').select('*').eq('id', user.id).single();
+    myProfile = data || { id: user.id, is_admin: true };
+  } catch(e){ myProfile = { is_admin: true }; }
   return myProfile;
 }
 async function getOwnerId() {
@@ -42,14 +45,35 @@ function getField(obj, names) {
   for (const n of names) if (obj[n] !== undefined && obj[n] !== null && obj[n] !== "") return obj[n];
   return "";
 }
-// دي حسابات مش عملاء - عديها
 function isAccountName(name) {
   if (!name) return true;
   const n = String(name).trim();
   const bad = ["مصروف", "خصوم", "تكلفة", "رأس المال", "راس المال", "المخزون", "الموردون", "تحت التصنيع", "هالك", "عمال", "قطاعة", "إيراد", "ايراد", "أرباح", "خسائر", "ضرائب", "أصول", "خصوم"];
   return bad.some(b => n.includes(b));
 }
+function isLocalEmpty() {
+  try {
+    const raw = localStorage.getItem("mgr6");
+    if (!raw || raw.length < 10) return true;
+    const S = JSON.parse(raw);
+    if (!S || typeof S !== "object") return true;
+    const hasPartners = (Array.isArray(S.partners) && S.partners.length > 0) || (Array.isArray(S.customers) && S.customers.length > 0);
+    const hasDocs = Array.isArray(S.docs) && S.docs.length > 0;
+    const hasProds = (Array.isArray(S.products) && S.products.length > 0) || (Array.isArray(S.prods) && S.prods.length > 0);
+    const hasItems = Array.isArray(S.items) && S.items.length > 0;
+    return !(hasPartners || hasDocs || hasProds || hasItems);
+  } catch(e){ return true; }
+}
+// دمج آمن - بنزود الناقص بس، مش بنمسح الموجود
+function mergeByKey(existing, incoming, keyFn) {
+  const map = new Map();
+  (existing || []).forEach(it => { try { const k = keyFn(it); if (k) map.set(String(k), it); } catch(e){} });
+  let added = 0;
+  (incoming || []).forEach(it => { try { const k = keyFn(it); if (k && !map.has(String(k))) { map.set(String(k), it); added++; } } catch(e){} });
+  return { arr: [...map.values()], added };
+}
 
+// ===== الرفع مرة واحدة على الجداول - الكاش هو الأساس =====
 async function uploadToTables(showAlert = false) {
   if (!navigator.onLine) {
     syncState = "offline"; drawAll();
@@ -64,7 +88,6 @@ async function uploadToTables(showAlert = false) {
     let c = 0, s = 0, inv = 0, items = 0, prod = 0;
     let errors = [];
 
-    // ===== عملاء وموردين - من partners / customers / suppliers بس =====
     const partnerArrays = [];
     if (Array.isArray(S.partners)) partnerArrays.push({ key: "partners", arr: S.partners });
     if (Array.isArray(S.customers)) partnerArrays.push({ key: "customers", arr: S.customers });
@@ -74,15 +97,11 @@ async function uploadToTables(showAlert = false) {
     for (const { key, arr } of partnerArrays) {
       for (const p of arr) {
         const name = String(getField(p, ["name", "nm", "title"]) || "");
-        if (!name || isAccountName(name)) continue; // عدي الحسابات
-        // لو ده حساب محاسبي (ليه نوع account / coa) عديه
+        if (!name || isAccountName(name)) continue;
         const typeStr = (getField(p, ["type", "kind", "cat", "category"]) || "").toString().toLowerCase();
         if (typeStr.includes("account") || typeStr.includes("coa") || typeStr.includes("chart") || typeStr.includes("حساب")) continue;
         const isSup = typeStr.includes("supp") || typeStr.includes("مورد") || p.isSupplier === true || key === "suppliers";
-        const phone = String(getField(p, ["phone", "tel", "mobile", "ph"]) || "");
-        const email = String(getField(p, ["email", "mail"]) || "");
-        const addr = String(getField(p, ["addr", "address", "add"]) || "");
-        const row = { user_id: owner, external_id: String(getField(p, ["id", "no", "code"]) || name), name, phone: phone || null, email: email || null, address: addr || null };
+        const row = { user_id: owner, external_id: String(getField(p, ["id", "no", "code"]) || name), name, phone: String(getField(p, ["phone", "tel", "mobile", "ph"]) || "") || null, email: String(getField(p, ["email", "mail"]) || "") || null, address: String(getField(p, ["addr", "address", "add"]) || "") || null };
         const table = isSup ? "suppliers" : "customers";
         const { error } = await supabase.from(table).upsert(row, { onConflict: 'user_id,external_id' });
         if (error) errors.push(table + ": " + error.message);
@@ -90,7 +109,6 @@ async function uploadToTables(showAlert = false) {
       }
     }
 
-    // ===== فواتير - من docs بس =====
     const docs = S.docs || S.invoices || [];
     if (Array.isArray(docs)) {
       for (const d of docs) {
@@ -118,7 +136,6 @@ async function uploadToTables(showAlert = false) {
       }
     }
 
-    // ===== منتجات - من products / prods بس =====
     const prodArrays = [];
     if (Array.isArray(S.products)) prodArrays.push(S.products);
     if (Array.isArray(S.prods)) prodArrays.push(S.prods);
@@ -135,65 +152,115 @@ async function uploadToTables(showAlert = false) {
     if (errors.length) { syncState = "idle"; drawAll(); if (showAlert) alert(T("اترفع بس فيه أخطاء:\n" + errors.join("\n"), "Uploaded with errors")); return "errors"; }
     syncState = "synced";
     lastSyncTime = new Date().toLocaleTimeString(isEN() ? 'en-US' : 'ar-EG');
-    localStorage.removeItem("mgr6_pending");
     drawAll();
     const msg = `تم ✅ - ${c} عميل + ${s} مورد + ${inv} فاتورة + ${items} صنف + ${prod} منتج`;
-    console.log(msg);
     if (showAlert) alert(msg);
     return msg;
   } catch(e) { console.error(e); syncState = "idle"; drawAll(); if (showAlert) alert(e.message); return "خطأ: " + e.message; }
 }
 
-async function loadFromTables() {
+// ===== التحميل - دمج آمن، مش مسح =====
+async function loadFromTablesMerge(isAuto = false) {
+  if (autoLoadRunning) return "already running";
+  autoLoadRunning = true;
   try {
-    if (!navigator.onLine) return;
-    if (sessionStorage.getItem("ms-loaded-from-tables")) return;
-    sessionStorage.setItem("ms-loaded-from-tables", "1");
     const owner = await getOwnerId();
-    if (!owner) return;
-    const local = getCachedState();
-    if (local && Object.keys(local).length > 2 && JSON.stringify(local).length > 500) return;
+    if (!owner) return "no user";
     const [{ data: custs }, { data: supps }, { data: invs }, { data: prods }] = await Promise.all([
       supabase.from('customers').select('*').eq('user_id', owner),
       supabase.from('suppliers').select('*').eq('user_id', owner),
       supabase.from('invoices').select('*').eq('user_id', owner),
       supabase.from('products').select('*').eq('user_id', owner),
     ]);
-    if (!custs?.length && !invs?.length && !prods?.length) return;
-    const S = { ...local };
-    S.partners = [
+    // لو السحابة فاضية خالص - متعملش حاجة، متمسحش اللي في الجهاز
+    if ((!custs?.length && !supps?.length && !invs?.length && !prods?.length)) {
+      return isAuto ? "cloud empty - keep local" : T("مفيش بيانات في السحابة", "No data in cloud");
+    }
+    const S = getCachedState();
+    if (!S || typeof S !== "object") return "bad local";
+    let totalAdded = 0;
+
+    // عملاء + موردين - دمج
+    const cloudPartners = [
       ...(custs || []).map(c => ({ id: c.external_id, name: c.name, phone: c.phone, email: c.email, addr: c.address, type: "customer" })),
       ...(supps || []).map(s => ({ id: s.external_id, name: s.name, phone: s.phone, email: s.email, addr: s.address, type: "supplier" })),
     ];
-    S.docs = (invs || []).map(inv => inv.raw || { id: inv.external_id, customer: inv.customer_name, total: inv.total, items: [] });
-    S.products = (prods || []).map(p => p.raw || { id: p.external_id, name: p.name, qty: p.qty, price: p.price });
-    localStorage.setItem("mgr6", JSON.stringify(S));
-  } catch(e){ console.error(e); }
-}
-loadFromTables();
+    if (cloudPartners.length) {
+      const m = mergeByKey(S.partners || [], cloudPartners, x => x.id || x.name);
+      S.partners = m.arr; totalAdded += m.added;
+    }
+    // فواتير - دمج
+    if (invs?.length) {
+      const cloudDocs = invs.map(inv => inv.raw || { id: inv.external_id, customer: inv.customer_name, total: inv.total, items: [] });
+      if (!Array.isArray(S.docs)) S.docs = [];
+      const m = mergeByKey(S.docs, cloudDocs, x => x.id || x.no);
+      S.docs = m.arr; totalAdded += m.added;
+    }
+    // منتجات - دمج
+    if (prods?.length) {
+      const cloudProds = prods.map(p => p.raw || { id: p.external_id, name: p.name, qty: p.qty, price: p.price });
+      if (!Array.isArray(S.products)) S.products = [];
+      const m = mergeByKey(S.products, cloudProds, x => x.id || x.name);
+      S.products = m.arr; totalAdded += m.added;
+    }
 
-const originalSetItem = localStorage.setItem.bind(localStorage);
+    // اكتب بالطريقة الأصلية عشان مندخلش في Loop رفع
+    Object.getPrototypeOf(localStorage).setItem.call(localStorage, "mgr6", JSON.stringify(S));
+
+    if (isAuto) {
+      // تلقائي: لو الجهاز كان فاضي وضفنا حاجة، اعمل ريلود مرة واحدة بس عشان تظهر
+      if (totalAdded > 0) {
+        console.log("☁️ Auto-load added", totalAdded);
+        // استنى ثانية وخلي البرنامج يرسم من نفسه، ولو لسه فاضي اعمل ريلود
+        setTimeout(() => { if (isLocalEmpty()) location.reload(); }, 800);
+      }
+      return "auto merged " + totalAdded;
+    }
+    return T(`تم التحميل - اتضاف ${totalAdded} جديد`, `Loaded - ${totalAdded} new added`);
+  } catch(e){ console.error(e); return e.message; }
+  finally { autoLoadRunning = false; }
+}
+
+// ===== التحميل التلقائي أول ما النت يرجع - زي ما اتفقنا =====
+async function onInternetBack() {
+  // لو الجهاز فيه داتا -> ارفع اللي في الجهاز، متحملش فوقه
+  // لو الجهاز فاضي -> حمّل تلقائي من السحابة
+  if (isLocalEmpty()) {
+    syncState = "saving"; drawAll();
+    await loadFromTablesMerge(true);
+    syncState = "synced"; drawAll();
+  } else {
+    await uploadToTables(false);
+  }
+}
+
+// الكاش هو الأساس - أي حفظ يتخزن في الجهاز، ولو فيه نت يرفع بعد 1.5 ثانية
+const _origSetItem = localStorage.setItem.bind(localStorage);
 localStorage.setItem = function(key, value) {
-  originalSetItem(key, value);
+  _origSetItem(key, value);
   if (key === "mgr6") {
-    if (!navigator.onLine) { syncState = "offline"; localStorage.setItem("mgr6_pending", "1"); drawAll(); }
+    if (!navigator.onLine) { syncState = "offline"; drawAll(); }
     else { clearTimeout(saveTimer); saveTimer = setTimeout(() => uploadToTables(false), 1500); }
   }
   if (key === "mgr6pref") setTimeout(drawAll, 100);
 };
-window.addEventListener("online", () => uploadToTables(false));
+window.addEventListener("online", () => onInternetBack());
 window.addEventListener("offline", () => { syncState = "offline"; drawAll(); });
+// أول ما الصفحة تفتح ولو النت موجود والجهاز فاضي، حمّل تلقائي
+if (navigator.onLine && isLocalEmpty()) {
+  setTimeout(() => onInternetBack(), 1200);
+}
 
 window.restoreCloud = async function() {
-  if (!confirm(T("هتحمّل البيانات من الجداول؟", "Load data from tables?"))) return;
-  sessionStorage.removeItem("ms-loaded-from-tables");
-  localStorage.removeItem("mgr6");
-  await loadFromTables();
+  if (!confirm(T("هتحمّل البيانات من الجداول؟ هيتضاف الناقص بس، مش هيمسح حاجة", "Load from tables? Only missing will be added, nothing will be deleted"))) return;
+  const r = await loadFromTablesMerge(false);
+  alert(r);
   location.reload();
 };
 window.backupNowManual = function() { uploadToTables(true); };
 window.testSync = async function() { const r = await uploadToTables(true); alert(r); return r; };
 
+// ===== صلاحيات - خفيفة ومش بتخفي الشاشة =====
 const TAB_PERMS = [
   { key: "invoices", ar: ["فواتير", "فاتورة"], en: ["invoice"] },
   { key: "inventory", ar: ["مخزون", "مخزن"], en: ["inventory", "stock"] },
@@ -205,24 +272,26 @@ const TAB_PERMS = [
   { key: "employees", ar: ["موظفين", "موظف"], en: ["employee", "staff"] },
 ];
 async function enforcePermissions() {
-  const p = await getMyProfile();
-  if (!p) return;
-  if (isAdmin()) return;
-  const perms = p.permissions || {};
-  document.querySelectorAll("button, a, [data-tab], [data-view], .nav-item, .tab-btn, .sidebar button, nav button, aside button").forEach(el => {
-    const txt = (el.textContent || "").trim().toLowerCase();
-    if (!txt || txt.length > 30) return;
-    for (const tp of TAB_PERMS) {
-      const words = isEN() ? tp.en : tp.ar;
-      if (words.some(w => txt.includes(w.toLowerCase()))) {
-        if (!perms[tp.key]) el.style.display = "none";
-        else el.style.display = "";
+  try {
+    const p = await getMyProfile();
+    if (!p || isAdmin()) return;
+    const perms = p.permissions || {};
+    document.querySelectorAll("nav button, aside button, .sidebar button, [data-tab]").forEach(el => {
+      const txt = (el.textContent || "").trim().toLowerCase();
+      if (!txt || txt.length > 30) return;
+      for (const tp of TAB_PERMS) {
+        const words = isEN() ? tp.en : tp.ar;
+        if (words.some(w => txt.includes(w.toLowerCase()))) {
+          if (!perms[tp.key]) el.style.display = "none";
+        }
       }
-    }
-  });
-  const card = document.getElementById("ms-emp-in-tab");
-  if (card) card.remove();
+    });
+    const card = document.getElementById("ms-emp-in-tab");
+    if (card) card.remove();
+  } catch(e){}
 }
+
+// ===== الموظفين من تابة الموظفين - للمدير بس =====
 const PERMS = [
   { key: "invoices", ar: "الفواتير", en: "Invoices" },
   { key: "inventory", ar: "المخزون", en: "Inventory" },
@@ -296,39 +365,29 @@ setInterval(() => {
   if (isEmployeesTabOpen()) injectEmployeeAccountForm();
   else { const old = document.getElementById("ms-emp-in-tab"); if (old) old.remove(); }
   enforcePermissions();
-}, 1000);
+}, 2000);
 
+// ===== الشريط زي ما هو - حباية + ✕ بس =====
 async function doLogout() {
   if (!confirm(T("متأكد عايز تسجل خروج؟", "Are you sure you want to logout?"))) return;
   try { await supabase.auth.signOut(); } catch(e){}
   sessionStorage.removeItem("ms-loaded-from-tables");
-  sessionStorage.removeItem("ms-shared-loaded");
   location.href = "auth.html";
 }
 function purgeLoggedInText() {
-  const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT, null);
-  const toRemove = [];
-  let node;
-  while (node = walker.nextNode()) {
-    if (node.parentElement && node.parentElement.closest("#ms-topbar")) continue;
-    const t = node.textContent || "";
-    if (t.includes("مسجل الدخول") || t.includes("Logged in as") || t.includes("m.mongy") || t.includes("@gmail")) toRemove.push(node);
-  }
-  toRemove.forEach(n => { n.textContent = ""; });
-  document.querySelectorAll("div, span, p, small, header, section").forEach(el => {
-    if (el.id === "ms-topbar" || el.closest("#ms-topbar")) return;
-    const txt = el.textContent || "";
-    if ((txt.includes("مسجل الدخول") || txt.includes("Logged in as")) && el.children.length <= 3) {
-      const h = el.getBoundingClientRect ? el.getBoundingClientRect().height : 999;
-      if (h < 120) { el.style.display = "none"; el.style.height = "0px"; el.style.padding = "0px"; el.style.margin = "0px"; el.style.overflow = "hidden"; }
-    }
-    const id = (el.id || "").toLowerCase();
-    const tt = txt.trim();
-    if ((id.includes("logout") || tt === "تسجيل خروج" || tt === "Logout") && el.id !== "ms-logout-btn" && !el.closest("#ms-topbar")) el.style.display = "none";
-  });
+  try {
+    document.querySelectorAll("div, span, p, small").forEach(el => {
+      if (el.id === "ms-topbar" || el.closest("#ms-topbar")) return;
+      const txt = (el.textContent || "").trim();
+      if ((txt === "مسجل الدخول باسم: m.mongy.hr@gmail.com" || txt.startsWith("مسجل الدخول باسم")) && el.children.length === 0) {
+        el.style.display = "none";
+      }
+    });
+  } catch(e){}
 }
 const observer = new MutationObserver(() => { purgeLoggedInText(); });
-observer.observe(document.body, { childList: true, subtree: true, characterData: true });
+try { observer.observe(document.body, { childList: true, subtree: true, characterData: true }); } catch(e){}
+
 function drawAll() {
   purgeLoggedInText();
   const en = isEN();
@@ -373,4 +432,4 @@ setInterval(() => {
 }, 500);
 window.addEventListener("resize", () => drawAll());
 drawAll();
-console.log("☁️ Cloud Sync V25 شغال - عملاء حقيقيين بس");
+console.log("☁️ Cloud Sync V27 شغال - تحميل تلقائي آمن");
