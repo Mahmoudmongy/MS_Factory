@@ -22,6 +22,7 @@ function isMobile() { return window.innerWidth <= 640; }
 
 async function getMyProfile() {
   if (myProfile) return myProfile;
+  if (window.__factoryAuthProfile) { myProfile = window.__factoryAuthProfile; return myProfile; }
   if (!supabase) return null;
   try {
     const { data: { user }, error: userError } = await supabase.auth.getUser();
@@ -31,6 +32,8 @@ async function getMyProfile() {
       .eq('id', user.id).maybeSingle();
     if (error) { console.error('Profile lookup failed:', error); return null; }
     myProfile = data || null;
+    window.__factoryAuthProfile = myProfile;
+    if (myProfile && typeof window.setFactoryAuthProfile === "function") window.setFactoryAuthProfile(myProfile);
     return myProfile;
   } catch(e) { console.error('Profile lookup failed:', e); return null; }
 }
@@ -96,15 +99,30 @@ async function uploadToTables(showAlert = false) {
   try {
     const owner = await getOwnerId();
     if (!owner) { syncState = "idle"; drawAll(); return "no user"; }
+    const profile = await getMyProfile();
+    if (!profile) throw new Error("تعذر تحديد صلاحيات الحساب");
+    const admin = profile.is_admin === true;
+    const canWrite = key => admin || profile.permissions?.[key] === true;
+    if (!admin && !["customers", "suppliers", "invoices", "inventory"].some(canWrite)) {
+      syncState = "idle"; drawAll();
+      const msg = T("حسابك للعرض فقط أو لا توجد صلاحية مزامنة متاحة.", "This account is read-only or has no supported sync permission.");
+      if (showAlert) alert(msg);
+      return msg;
+    }
     const S = getCachedState();
     if (!S || typeof S !== "object" || Array.isArray(S)) throw new Error("بيانات المصنع المحلية غير صالحة؛ لم يتم رفع أي شيء");
-    let c = 0, s = 0, inv = 0, items = 0, prod = 0;
-    let errors = [];
-    // Full snapshot preserves accounting, returns, vouchers, production and all app data.
-    const { error: snapshotError } = await supabase.from('factory_state').upsert({
-      user_id: owner, state: S, updated_at: new Date().toISOString()
-    }, { onConflict: 'user_id' });
-    if (snapshotError) errors.push("factory_state: " + snapshotError.message);
+    const errors = [];
+    let snapshotError = null;
+
+    // Only the administrator may upload the full state because it contains every module.
+    if (admin) {
+      const result = await supabase.from("factory_state").upsert({
+        user_id: owner, state: S, updated_at: new Date().toISOString()
+      }, { onConflict: "user_id" });
+      snapshotError = result.error;
+      if (snapshotError) errors.push("factory_state: " + snapshotError.message);
+    }
+
     const partnerArrays = [];
     if (Array.isArray(S.partners)) partnerArrays.push({ key: "partners", arr: S.partners });
     if (Array.isArray(S.customers)) partnerArrays.push({ key: "customers", arr: S.customers });
@@ -114,72 +132,96 @@ async function uploadToTables(showAlert = false) {
       for (const p of arr) {
         const name = String(getField(p, ["name", "nm", "title"]) || "");
         if (!name || isAccountName(name)) continue;
-        const typeStr = (getField(p, ["type", "kind", "cat", "category"]) || "").toString().toLowerCase();
+        const typeStr = String(getField(p, ["type", "kind", "cat", "category"]) || "").toLowerCase();
         if (typeStr.includes("account") || typeStr.includes("coa") || typeStr.includes("chart") || typeStr.includes("حساب")) continue;
         const isSup = typeStr.includes("supp") || typeStr.includes("مورد") || p.isSupplier === true || key === "suppliers";
-        const row = { user_id: owner, external_id: String(getField(p, ["id", "no", "code"]) || name), name, phone: String(getField(p, ["phone", "tel", "mobile", "ph"]) || "") || null, email: String(getField(p, ["email", "mail"]) || "") || null, address: String(getField(p, ["addr", "address", "add"]) || "") || null };
+        if (!canWrite(isSup ? "suppliers" : "customers")) continue;
         const table = isSup ? "suppliers" : "customers";
-        const { error } = await supabase.from(table).upsert(row, { onConflict: 'user_id,external_id' });
+        const row = {
+          user_id: owner,
+          external_id: String(getField(p, ["id", "no", "code"]) || name),
+          name,
+          phone: String(getField(p, ["phone", "tel", "mobile", "ph"]) || "") || null,
+          email: String(getField(p, ["email", "mail"]) || "") || null,
+          address: String(getField(p, ["addr", "address", "add"]) || "") || null
+        };
+        const { error } = await supabase.from(table).upsert(row, { onConflict: "user_id,external_id" });
         if (error) errors.push(table + ": " + error.message);
-        else { if (isSup) s++; else c++; }
       }
     }
+
     const docs = S.docs || S.invoices || [];
-    if (Array.isArray(docs)) {
+    if (canWrite("invoices") && Array.isArray(docs)) {
       for (const d of docs) {
         if (!d) continue;
-        const extId = String(getField(d, ["id", "no", "num", "code", "invNo"]) || Date.now());
+        const extId = String(getField(d, ["id", "no", "num", "code", "invNo"]) || "");
+        if (!extId) { errors.push("invoice skipped: missing stable ID"); continue; }
         const custName = String(getField(d, ["customer", "cust", "partner", "client", "name"]) || "");
         if (custName && isAccountName(custName)) continue;
         const total = Number(getField(d, ["total", "tot", "grandTotal", "amount", "sum"]) || 0) || 0;
-        if (d.items || d.lines || d.details || total > 0 || custName) {
-          const row = { user_id: owner, external_id: extId, customer_name: custName || null, total, raw: d };
-          const { error } = await supabase.from('invoices').upsert(row, { onConflict: 'user_id,external_id' });
-          if (error) errors.push("invoices: " + error.message);
-          else inv++;
-          const { data: invRow } = await supabase.from('invoices').select('id').eq('user_id', owner).eq('external_id', extId).maybeSingle();
-          if (invRow) {
-            const { error: deleteItemsError } = await supabase.from('invoice_items').delete().eq('invoice_id', invRow.id);
-            if (deleteItemsError) errors.push("invoice_items delete: " + deleteItemsError.message);
-            const its = d.items || d.lines || d.details || [];
-            if (!deleteItemsError && Array.isArray(its) && its.length) {
-              const toInsert = its.map(it => ({ user_id: owner, invoice_id: invRow.id, product_name: String(getField(it, ["name", "product", "item", "title"]) || ""), qty: Number(getField(it, ["qty", "q", "quantity"]) || 1) || 1, price: Number(getField(it, ["price", "pr", "unit"]) || 0) || 0, total: Number(getField(it, ["total", "tot", "amount"]) || 0) || 0 }));
-              const { error: ie } = await supabase.from('invoice_items').insert(toInsert);
-              if (ie) errors.push("invoice_items insert: " + ie.message);
-              else items += toInsert.length;
-            }
-          }
+        if (!(d.items || d.lines || d.details || total > 0 || custName)) continue;
+        const { data: invRow, error: invoiceError } = await supabase.from("invoices").upsert({
+          user_id: owner, external_id: extId, customer_name: custName || null, total, raw: d
+        }, { onConflict: "user_id,external_id" }).select("id").single();
+        if (invoiceError || !invRow) { errors.push("invoices: " + (invoiceError?.message || "invoice row missing")); continue; }
+        const { error: deleteItemsError } = await supabase.from("invoice_items").delete().eq("invoice_id", invRow.id);
+        if (deleteItemsError) { errors.push("invoice_items delete: " + deleteItemsError.message); continue; }
+        const its = d.items || d.lines || d.details || [];
+        if (Array.isArray(its) && its.length) {
+          const toInsert = its.map(it => ({
+            user_id: owner, invoice_id: invRow.id,
+            product_name: String(getField(it, ["name", "product", "item", "title"]) || ""),
+            qty: Number(getField(it, ["qty", "q", "quantity"]) || 1) || 1,
+            price: Number(getField(it, ["price", "pr", "unit"]) || 0) || 0,
+            total: Number(getField(it, ["total", "tot", "amount"]) || 0) || 0
+          }));
+          const { error } = await supabase.from("invoice_items").insert(toInsert);
+          if (error) errors.push("invoice_items insert: " + error.message);
         }
       }
     }
+
     const prodArrays = [];
-    if (Array.isArray(S.products)) prodArrays.push(S.products);
-    if (Array.isArray(S.prods)) prodArrays.push(S.prods);
+    if (canWrite("inventory") && Array.isArray(S.products)) prodArrays.push(S.products);
+    if (canWrite("inventory") && Array.isArray(S.prods)) prodArrays.push(S.prods);
     for (const arr of prodArrays) {
       for (const pr of arr) {
         const name = String(getField(pr, ["name", "title", "product"]) || "");
         if (!name || isAccountName(name)) continue;
-        const row = { user_id: owner, external_id: String(getField(pr, ["id", "code", "sku"]) || name), name, qty: Number(getField(pr, ["qty", "q", "stock", "balance"]) || 0) || 0, price: Number(getField(pr, ["price", "pr", "unit"]) || 0) || 0, raw: pr };
-        const { error } = await supabase.from('products').upsert(row, { onConflict: 'user_id,external_id' });
+        const row = {
+          user_id: owner,
+          external_id: String(getField(pr, ["id", "code", "sku"]) || name),
+          name,
+          qty: Number(getField(pr, ["qty", "q", "stock", "balance"]) || 0) || 0,
+          price: Number(getField(pr, ["price", "pr", "unit"]) || 0) || 0,
+          raw: pr
+        };
+        const { error } = await supabase.from("products").upsert(row, { onConflict: "user_id,external_id" });
         if (error) errors.push("products: " + error.message);
-        else prod++;
       }
     }
+
     if (errors.length) {
       syncState = "idle"; drawAll();
       const msg = snapshotError
-        ? T("فشل حفظ النسخة الكاملة وبعض الجداول؛ راجع الاتصال والصلاحيات.\n", "Full backup and some table writes failed.\n") + errors.join("\n")
-        : T("تم حفظ النسخة الكاملة، لكن تحديث بعض الجداول التفصيلية فشل:\n", "Full backup saved, but some detail tables could not be updated:\n") + errors.join("\n");
+        ? T("فشل حفظ النسخة الكاملة وبعض الجداول:\n", "Full backup and some table writes failed:\n") + errors.join("\n")
+        : T("بعض عمليات المزامنة فشلت:\n", "Some sync operations failed:\n") + errors.join("\n");
       if (showAlert) alert(msg);
       return msg;
     }
     syncState = "synced";
-    lastSyncTime = new Date().toLocaleTimeString(isEN() ? 'en-US' : 'ar-EG');
+    lastSyncTime = new Date().toLocaleTimeString(isEN() ? "en-US" : "ar-EG");
     drawAll();
-    const msg = T("تم حفظ نسخة المصنع الكاملة ومزامنة الجداول التفصيلية", "Full factory backup saved and detail tables synchronized");
+    const msg = admin
+      ? T("تم حفظ نسخة المصنع الكاملة ومزامنة الجداول التفصيلية", "Full factory backup saved and detail tables synchronized")
+      : T("تم رفع الجداول المسموح بها فقط. مزامنة القيود والحركات المحاسبية الكاملة لحساب الموظف لم تكتمل بعد.", "Only permitted detail tables were uploaded. Full accounting-ledger synchronization for employee accounts is not complete yet.");
     if (showAlert) alert(msg);
     return msg;
-  } catch(e) { console.error(e); syncState = "idle"; drawAll(); if (showAlert) alert(e.message); return "خطأ: " + e.message; }
+  } catch(e) {
+    console.error(e); syncState = "idle"; drawAll();
+    if (showAlert) alert(e.message);
+    return "خطأ: " + e.message;
+  }
 }
 
 // ===== التحميل - دمج آمن، مع نسخة احتياطية قبل أي كتابة =====
@@ -189,36 +231,46 @@ async function loadFromTablesMerge(isAuto = false) {
   try {
     const owner = await getOwnerId();
     if (!owner) return "no user";
-    const { data: snapshot, error: snapshotError } = await supabase.from('factory_state')
-      .select('state,updated_at').eq('user_id', owner).maybeSingle();
-    if (snapshotError) throw snapshotError;
-    if (snapshot?.state && typeof snapshot.state === "object" && !Array.isArray(snapshot.state)) {
-      if (!isLocalEmpty()) return T("فيه بيانات محلية بالفعل؛ لم يتم استبدالها. خذ نسخة احتياطية قبل الاستعادة.", "Local data already exists; it was not overwritten. Back up local data before restoring.");
-      try { localStorage.setItem("mgr6-backup-before-cloud-restore", localStorage.getItem("mgr6") || ""); } catch(e){}
-      Object.getPrototypeOf(localStorage).setItem.call(localStorage, "mgr6", JSON.stringify(snapshot.state));
-      if (isAuto) setTimeout(() => location.reload(), 500);
-      return T("تمت استعادة نسخة المصنع الكاملة من السحابة", "Full factory backup restored from cloud");
+    const profile = await getMyProfile();
+    if (!profile) throw new Error("تعذر تحديد صلاحيات الحساب");
+    const admin = profile.is_admin === true;
+    const canRead = key => admin || profile.permissions?.[key] === true || profile.permissions?.reports === true;
+
+    if (admin) {
+      const { data: snapshot, error } = await supabase.from("factory_state")
+        .select("state,updated_at").eq("user_id", owner).maybeSingle();
+      if (error) throw error;
+      if (snapshot?.state && typeof snapshot.state === "object" && !Array.isArray(snapshot.state)) {
+        if (!isLocalEmpty()) return T("فيه بيانات محلية بالفعل؛ لم يتم استبدالها. خذ نسخة احتياطية قبل الاستعادة.", "Local data already exists; it was not overwritten. Back up local data before restoring.");
+        try { localStorage.setItem("mgr6-backup-before-cloud-restore", localStorage.getItem("mgr6") || ""); } catch(e){}
+        Object.getPrototypeOf(localStorage).setItem.call(localStorage, "mgr6", JSON.stringify(snapshot.state));
+        if (isAuto) setTimeout(() => location.reload(), 500);
+        return T("تمت استعادة نسخة المصنع الكاملة من السحابة", "Full factory backup restored from cloud");
+      }
     }
-    // Legacy fallback only for accounts created before full-state snapshots existed.
-    // نسخة احتياطية قبل أي حاجة - عشان لو الكاش باظ نرجعه
-    try {
-      const cur = localStorage.getItem("mgr6");
-      if (cur) localStorage.setItem("mgr6-backup-v28", cur);
-    } catch(e){}
+
+    if (!["customers","suppliers","invoices","inventory"].some(canRead)) {
+      return T("لا توجد صلاحيات لقراءة بيانات السحابة", "No permission to read cloud data");
+    }
+    if (!isLocalEmpty()) return T("فيه بيانات محلية بالفعل؛ لم يتم استبدالها. خذ نسخة احتياطية قبل الاستعادة.", "Local data already exists; it was not overwritten. Back up local data before restoring.");
+    try { localStorage.setItem("mgr6-backup-before-cloud-restore", localStorage.getItem("mgr6") || ""); } catch(e){}
+
+    const emptyResult = { data: [], error: null };
     const results = await Promise.all([
-      supabase.from('customers').select('*').eq('user_id', owner),
-      supabase.from('suppliers').select('*').eq('user_id', owner),
-      supabase.from('invoices').select('*').eq('user_id', owner),
-      supabase.from('products').select('*').eq('user_id', owner),
+      canRead("customers") ? supabase.from("customers").select("*").eq("user_id", owner) : Promise.resolve(emptyResult),
+      canRead("suppliers") ? supabase.from("suppliers").select("*").eq("user_id", owner) : Promise.resolve(emptyResult),
+      canRead("invoices") ? supabase.from("invoices").select("*").eq("user_id", owner) : Promise.resolve(emptyResult),
+      canRead("inventory") ? supabase.from("products").select("*").eq("user_id", owner) : Promise.resolve(emptyResult),
     ]);
     const failed = results.find(r => r.error);
     if (failed) return isAuto ? "cloud read failed" : T("تعذر قراءة البيانات من السحابة: " + failed.error.message, "Cloud read failed: " + failed.error.message);
     const [{ data: custs }, { data: supps }, { data: invs }, { data: prods }] = results;
-    if ((!custs?.length && !supps?.length && !invs?.length && !prods?.length)) {
+    if (!custs?.length && !supps?.length && !invs?.length && !prods?.length) {
       return isAuto ? "cloud empty - keep local" : T("مفيش بيانات في السحابة", "No data in cloud");
     }
+
     const S = getCachedState();
-    if (!S || typeof S !== "object") return "bad local";
+    if (!S || typeof S !== "object" || Array.isArray(S)) return "bad local";
     let totalAdded = 0;
     const cloudPartners = [
       ...(custs || []).map(c => ({ id: c.external_id, name: c.name, phone: c.phone, email: c.email, addr: c.address, type: "customer" })),
@@ -241,15 +293,9 @@ async function loadFromTablesMerge(isAuto = false) {
       S.products = m.arr; totalAdded += m.added;
     }
     Object.getPrototypeOf(localStorage).setItem.call(localStorage, "mgr6", JSON.stringify(S));
-    if (isAuto) {
-      if (totalAdded > 0) {
-        console.log("☁️ Auto-load added", totalAdded);
-        setTimeout(() => { if (isLocalEmpty()) location.reload(); }, 800);
-      }
-      return "auto merged " + totalAdded;
-    }
-    return T(`تم التحميل - اتضاف ${totalAdded} جديد`, `Loaded - ${totalAdded} new added`);
-  } catch(e){ console.error(e); return e.message; }
+    if (isAuto) return "auto merged " + totalAdded;
+    return T("تم التحميل - اتضاف " + totalAdded + " جديد", "Loaded - " + totalAdded + " new records");
+  } catch(e) { console.error(e); return e.message; }
   finally { autoLoadRunning = false; }
 }
 
@@ -288,17 +334,12 @@ window.testSync = async function() { const r = await uploadToTables(true); alert
 
 // ===== صلاحيات - متوقفة مؤقتاً عشان ترجع القايمة - مش بتخفي حاجة دلوقتي =====
 async function enforcePermissions() {
-  // V28: وقفنا الإخفاء عشان القايمة كانت بتختفي والشاشة بتبيض
-  // بنرجع أي زرار اتخفى قبل كده
   try {
-    document.querySelectorAll("nav button, aside button, .sidebar button, [data-tab]").forEach(el => {
-      if (el.style.display === "none") el.style.display = "";
-    });
+    const profile = await getMyProfile();
+    if (profile && typeof window.setFactoryAuthProfile === "function") window.setFactoryAuthProfile(profile);
     const card = document.getElementById("ms-emp-in-tab");
-    // كارت الموظفين هنسيبه للمدير بس، مش هنمسحه من هنا
-    await getMyProfile();
     if (card && !isAdmin()) card.remove();
-  } catch(e){}
+  } catch(e) { console.error("Permission enforcement failed:", e); }
 }
 
 // ===== الموظفين من تابة الموظفين - للمدير بس =====

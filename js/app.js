@@ -29,13 +29,16 @@ const colors=()=>[...new Set(S.items.flatMap(i=>Object.keys(i.st).map(k=>k.split
 const sug=(i,k)=>Math.round((av(i)||i.buy)*(1+(S.pct[k]||0)/100)*100)/100;
 const FW=()=>(S.wh.find(w=>w.name.includes("منتج"))||S.wh[0]).id,pnm=o=>o.iname||(it_(o.iid)||{}).name||"";
 const poCost=o=>(o.matCost||0)+(o.wc||0)+o.x.reduce((a,x)=>a+x.amt,0)+S.docs.filter(d=>d.t=="pur"&&d.dest==o.id).reduce((a,d)=>a+d.total,0),poQty=o=>o.subs.reduce((a,s)=>a+s.qty,0);
-const can=p=>who=="0"||((S.emp.find(e=>e.id==who)||{}).perm||[]).includes(p);
+const CLOUD_SCREEN_PERMISSIONS={sale:"invoices",sret:"invoices",pur:"invoices",pret:"invoices",rc:"invoices",py:"invoices",bank:"settings",cust:"customers",supp:"suppliers",stock:"inventory",prod:"production",coa:"settings",je:"settings",tl:"reports",emp:null,rep:"reports",ai:"settings",set:"settings"};
+const cloudProfile=()=>window.__factoryAuthProfile||null;
+const cloudCan=(key)=>{const p=cloudProfile();if(!p)return null;if(p.is_admin===true)return true;return p.permissions?.[key]===true;};
+const can=p=>{const cp=cloudProfile();if(cp&&!cp.is_admin){const key=CLOUD_SCREEN_PERMISSIONS[tab];return !!key&&cloudCan(key)===true;}return who=="0"||((S.emp.find(e=>e.id==who)||{}).perm||[]).includes(p);};
 /* ===== state + shell ===== */
 let tab="home",who="0",D,PS,V,J,IM="",idImg="",pe=0,dc="all",hs=[],hi=-1,TL={from:"",to:"",k:""},SF={wh:"",nm:"",b1:"",b2:"",q1:"",q2:""},R={rep:"",from:"",to:"",cat:"all",item:0,acct:0,pt:0,ds:"sale",gb:"الصنف",gc:"",ms:"amt",pa:-1,pc:-1};
 const T=[["home","🏠","الملخص"],["bank","🏦","الحسابات النقدية والبنوك"],["rc","⬇️","المقبوضات"],["py","⬆️","المدفوعات"],["cust","👤","العملاء"],["supp","🏭","الموردون"],["sale","🧾","فواتير البيع"],["sret","↩️","إشعارات دائنة (مرتجع بيع)"],["pur","🛒","فواتير الشراء"],["pret","↪️","إشعارات مدينة (مرتجع شراء)"],["stock","📦","أصناف المخزون"],["prod","⚙️","أوامر الإنتاج"],["coa","🌳","شجرة الحسابات"],["je","📒","قيود اليومية"],["tl","🕘","السجل الزمني"],["emp","🧑‍🏭","الموظفون"],["rep","📊","التقارير"],["ai","🤖","المساعد الذكي"],["set","🛠️","الإعدادات"]];
 const N=Object.fromEntries(T.map(t=>[t[0],t[2]])),ph=(t,b)=>`<div class="ph"><h2>${t}</h2><div class="row">${b||""}</div></div>`;
-function allowed(){const e=S.emp.find(x=>x.id==who);return T.filter(t=>(t[0]=="home"||t[0]=="set"||!S.hide.includes(t[0]))&&(!e||t[0]=="home"||e.perm.includes(t[0])))}
-function swho(v){who=v;go(allowed()[0][0])}
+function allowed(){const cp=cloudProfile();if(cp&&!cp.is_admin){return T.filter(t=>{if(t[0]==="home")return true;const key=CLOUD_SCREEN_PERMISSIONS[t[0]];return !!key&&cloudCan(key)===true;});}const e=S.emp.find(x=>x.id==who);return T.filter(t=>(t[0]=="home"||t[0]=="set"||!S.hide.includes(t[0]))&&(!e||t[0]=="home"||e.perm.includes(t[0])));}
+function swho(v){if(cloudProfile()&&!cloudProfile().is_admin)return;who=v;go(allowed()[0][0])}
 function pick(inp,cb){const fl=inp.files[0];if(!fl)return;const r=new FileReader();r.onload=()=>{const im=new Image();im.onload=()=>{const c=document.createElement("canvas"),k=Math.min(1,420/im.width);c.width=im.width*k;c.height=im.height*k;c.getContext("2d").drawImage(im,0,0,c.width,c.height);const v=c.toDataURL("image/jpeg",.6);cb(v);const n=inp.nextElementSibling;if(n&&n.tagName=="IMG")n.remove();inp.insertAdjacentHTML("afterend",`<img src="${v}" width="60">`)};im.src=r.result};r.readAsDataURL(fl)}
 /* ===== global table tools: search (contains) + sort every header + Excel export + date format ===== */
 const key=c=>{const x=(c.dataset.v||c.textContent).trim(),m=x.match(/^(\d\d)-(\d\d)-(\d{4})(?: (\d\d):(\d\d) (AM|PM))?$/);if(m)return +`${m[3]}${m[2]}${m[1]}${p2((+(m[4]||0))%12+(m[6]=="PM"?12:0))}${m[5]||"00"}`;const n=parseFloat(x.replace(/,/g,""));return isNaN(n)?x:n};
@@ -258,12 +261,13 @@ const cl=()=>{if(CUR&&CUR.kind=="page")closeTab(CUR,1);else render()};
 function askClose(t){const d=document.createElement("div");d.id="cfm";d.innerHTML=`<div class="cb"><p>هذه الصفحة بها تغييرات غير محفوظة. هل تريد إغلاقها؟</p><div class="row"><button class="rd" id="cf1">إغلاق بدون حفظ</button><button class="g" id="cf2">متابعة التعديل</button></div></div>`;document.body.appendChild(d);d.querySelector("#cf1").onclick=()=>{d.remove();closeTab(t,1)};d.querySelector("#cf2").onclick=()=>{d.remove();actTab(t,1)}}
 function drawTabs(){$g("#tabs").innerHTML=U(TB,t=>`<span class="tb ${t===CUR?"on":""}" onclick="actTab(TB.find(x=>x.id==${t.id}))">${t.dirty?"● ":""}${t.title}<b onclick="event.stopPropagation();closeTab(TB.find(x=>x.id==${t.id}))">✕</b></span>`)}
 function bkw(d){let n=hi+d;while(n>=0&&n<hs.length&&!TB.some(x=>x.id===hs[n]))n+=d;if(n<0||n>=hs.length)return;hi=n;actTab(TB.find(x=>x.id===hs[n]),1)}
-function nav(){document.title=S.name;$g("#who").innerHTML=`<option value="0">المالك / الأدمن (كل الصلاحيات)</option>`+U(S.emp,e=>`<option value="${e.id}" ${who==e.id?"selected":""}>${e.name}</option>`);const cs=CUR&&CUR.kind=="screen"?CUR.sid:tab;$g("#sb").innerHTML=`<span class="br">${S.logo?`<img src="${S.logo}">`:"🧵 "}${S.name}</span>`+U(allowed(),t=>`<a class="${t[0]==cs?"on":""}" 
+function nav(){document.title=S.name;const cp=cloudProfile();if(cp&&!cp.is_admin){$g("#who").innerHTML='<option value="0">حساب الموظف</option>';$g("#who").disabled=true;}else{$g("#who").disabled=false;$g("#who").innerHTML=`<option value="0">المالك / الأدمن (كل الصلاحيات)</option>`+U(S.emp,e=>`<option value="${e.id}" ${who==e.id?"selected":""}>${e.name}</option>`);}const cs=CUR&&CUR.kind=="screen"?CUR.sid:tab;$g("#sb").innerHTML=`<span class="br">${S.logo?`<img src="${S.logo}">`:"🧵 "}${S.name}</span>`+U(allowed(),t=>`<a class="${t[0]==cs?"on":""}" 
   onclick="handleNavClick(event, '${t[0]}')" 
   ondblclick="event.preventDefault(); go('${t[0]}',0,true);"
   onauxclick="if(event.button==1){event.preventDefault(); go('${t[0]}',0,true);}" 
   onmousedown="if(event.button==1) event.preventDefault()"
 >${t[1]} ${t[2]}</a>`)}
+window.setFactoryAuthProfile=function(profile){window.__factoryAuthProfile=profile||null;if(profile&&!profile.is_admin){who="0";const tabs=allowed();if(!tabs.some(t=>t[0]===tab))tab=tabs[0]?.[0]||"home";}nav();render();};
 function migrate(){S.curs=S.curs||["EGP","USD","EUR"];S.codes=S.codes||[];S.accts.forEach(a=>{if(!a.cur)a.cur="EGP"});S.items.forEach(i=>{if(i.model===undefined)i.model="";Object.keys(i.st).forEach(v=>codeFor(i.id,v))});if(!S.tpl)S.tpl=TPL0();S.pend=S.pend||0}
 /* ---- unified balance display: positive = له علينا (plain), negative = عليه لنا (red) ---- */
 function pvh(v){const s=`${f(Math.abs(v))} ج.م`;return Math.abs(v)<.005?`${f(0)} ج.م`:v<0?`<span class="neg">-${s}</span>`:s}

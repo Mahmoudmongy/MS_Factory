@@ -48,7 +48,7 @@ Deno.serve(async (req: Request) => {
   if (createError || !created.user) return json(400, { error: createError?.message ?? "تعذر إنشاء الحساب" });
 
   const { error: profileUpdateError } = await admin.from("profiles").update({
-    username, full_name: fullName || username, must_change_password: true,
+    username, full_name: fullName || username, must_change_password: false,
     permissions, created_by: authData.user.id, is_admin: false,
   }).eq("id", created.user.id);
   if (profileUpdateError) {
