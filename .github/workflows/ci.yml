@@ -7,7 +7,7 @@ on:
     branches: [main]
 
 concurrency:
-  group: factory-ci-${{ github.event.pull_request.number || github.ref }}
+  group: factory-ci-v2-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
 jobs:
