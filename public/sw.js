@@ -2,12 +2,14 @@
  * Business data stays in localStorage. Authenticated Supabase/API responses are never cached.
  * Only stable shell files are precached; built Vite assets are cached on first successful request.
  */
-const VERSION = 'factory-v8';
+const VERSION = 'factory-v9';
 const CORE = [
   './',
   './index.html',
   './auth.html',
-  './js/app.js'
+  './change-password.html',
+  './js/app.js',
+  './js/change-password.js'
 ];
 
 self.addEventListener('install', event => {
