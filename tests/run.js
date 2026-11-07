@@ -18,6 +18,7 @@ for(const ic of man.icons){const f=path.join(ROOT,ic.src),b=fs.existsSync(f)?fs.
 ok('manifest has start_url/scope/display standalone/rtl',man.start_url&&man.scope&&man.display=='standalone'&&man.dir=='rtl');
 const sw=fs.readFileSync(path.join(ROOT,'sw.js'),'utf8');ok('service worker is versioned, GET-only and same-origin only',/VERSION=/.test(sw)&&/method!=='GET'/.test(sw)&&/origin!==location\.origin/.test(sw)&&/caches\.delete/.test(sw));
 ok('no secrets / service role keys in shipped files',!/service_role|eyJ[A-Za-z0-9_-]{20,}|sk_live|SUPABASE_SERVICE/i.test(app+idx+sw));
+ok('login screen does not expose public self-registration',!/auth-signup|signUp\(/.test(fs.readFileSync(path.join(ROOT,'auth.html'),'utf8')+fs.readFileSync(path.join(ROOT,'js/auth.js'),'utf8')));
 ok('index auth gate validates the Supabase profile before revealing the app',/html\{visibility:hidden\}/.test(idx)&&/\.from\(['"]profiles['"]\)/.test(idx)&&/is_admin,permissions/.test(idx));
 ok('employee screen access is tied to the cloud profile permissions',/CLOUD_SCREEN_PERMISSIONS/.test(app)&&/setFactoryAuthProfile/.test(app));
 ok('full factory snapshot is restricted to administrator accounts',/if \(admin\)/.test(cloud)&&/factory_state/.test(cloud)&&/factory_state_admin_only/.test(fs.readFileSync(path.join(ROOT,'supabase/migrations/20261107081648_enforce_employee_permissions_20261107.sql'),'utf8')));
