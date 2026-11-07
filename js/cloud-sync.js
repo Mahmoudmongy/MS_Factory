@@ -422,21 +422,26 @@ async function uploadToTables(showAlert = false) {
     }
 
     if (errors.length) {
-      syncState = "idle"; drawAll();
-      const msg = snapshotError
-        ? T("فشل حفظ النسخة الكاملة وبعض الجداول:\n", "Full backup and some table writes failed:\n") + errors.join("\n")
-        : T("بعض عمليات المزامنة فشلت:\n", "Some sync operations failed:\n") + errors.join("\n");
+      syncState = localStorage.getItem("mgr6-cloud-snapshot-conflict") ? "conflict" : "idle"; drawAll();
+      const msg = (snapshotError
+        ? T("فشل حفظ النسخة الكاملة وبعض الجداول:\n", "Full backup and some table writes failed:\n")
+        : T("بعض عمليات المزامنة فشلت:\n", "Some sync operations failed:\n")) + errors.join("\n");
       if (showAlert) alert(msg);
       return msg;
     }
-    // Non-admin accounts still lack cloud persistence for the complete accounting ledger and several modules.
-    // Never display the green "Synced" state for a detail-only employee sync.
-    syncState = admin ? "synced" : "partial";
+    const hasSnapshotConflict = snapshotConflict || !!localStorage.getItem("mgr6-cloud-snapshot-conflict");
+    const latestPend = Number(getCachedState().pend || 0);
+    if (!hasSnapshotConflict && latestPend === Number(S.pend || 0)) localStorage.removeItem(PENDING_SYNC_KEY);
+    else if (!hasSnapshotConflict) scheduleAutoSync(400);
+    // Employee detail-only sync is deliberately not labelled fully synchronized.
+    syncState = hasSnapshotConflict ? "conflict" : (admin ? "synced" : "partial");
     lastSyncTime = new Date().toLocaleTimeString(isEN() ? "en-US" : "ar-EG");
     drawAll();
-    const msg = admin
-      ? T("تم حفظ نسخة المصنع الكاملة ومزامنة الجداول التفصيلية", "Full factory backup saved and detail tables synchronized")
-      : T("تم رفع الجداول المسموح بها فقط. مزامنة القيود والحركات المحاسبية الكاملة لحساب الموظف لم تكتمل بعد.", "Only permitted detail tables were uploaded. Full accounting-ledger synchronization for employee accounts is not complete yet.");
+    const msg = hasSnapshotConflict
+      ? T("تمت مزامنة السجلات التفصيلية المتاحة، لكن النسخة الكاملة بها تعارض محفوظ ولم يتم استبدالها.", "Available detail records were synchronized; the full snapshot conflict was preserved without overwriting it.")
+      : admin
+        ? T("تم حفظ نسخة المصنع الكاملة ومزامنة الجداول التفصيلية", "Full factory backup saved and detail tables synchronized")
+        : T("تم رفع الجداول المسموح بها فقط. مزامنة القيود والحركات المحاسبية الكاملة لحساب الموظف لم تكتمل بعد.", "Only permitted detail tables were uploaded. Full accounting-ledger synchronization for employee accounts is not complete yet.");
     if (showAlert) alert(msg);
     return msg;
   } catch(e) {
