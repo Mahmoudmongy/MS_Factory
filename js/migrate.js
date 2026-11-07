@@ -1,23 +1,33 @@
 import { supabase } from './supabase.js';
 
+// Upload the complete local application state before marking migration complete.
+// This replaces the former key-counting placeholder; local data is never deleted.
 export async function migrateFromLocalStorage() {
   if (localStorage.getItem('ms_migrated') === 'yes') return 'already';
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return 'no-user';
+  if (!supabase) return 'no-supabase';
 
-  const keys = Object.keys(localStorage);
-  let moved = 0;
-  for (const key of keys) {
-    try {
-      const raw = localStorage.getItem(key);
-      if (!raw || raw.length < 3) continue;
-      const val = JSON.parse(raw);
-      // هنحفظ نسخة من البيانات القديمة في جدول customers كمثال، أو نتخطى لو مش جدول معروف
-      console.log('Found localStorage:', key, val);
-      moved++;
-    } catch {}
+  const { data: { user }, error: userError } = await supabase.auth.getUser();
+  if (userError || !user) return 'no-user';
+
+  const raw = localStorage.getItem('mgr6');
+  if (!raw) return 'no-data';
+
+  let state;
+  try { state = JSON.parse(raw); }
+  catch { return 'invalid-local-data'; }
+  if (!state || typeof state !== 'object' || Array.isArray(state)) return 'invalid-local-data';
+
+  const { error } = await supabase.from('factory_state').upsert({
+    user_id: user.id,
+    state,
+    updated_at: new Date().toISOString(),
+  }, { onConflict: 'user_id' });
+
+  if (error) {
+    console.error('Local data migration failed:', error);
+    return 'error:' + error.message;
   }
-  // علم إننا نقلنا، عشان منكررهاش
+
   localStorage.setItem('ms_migrated', 'yes');
-  return 'done:' + moved;
+  return 'done:1';
 }

@@ -38,8 +38,16 @@
 </script>
   <script type="module">
   import { migrateFromLocalStorage } from './js/migrate.js';
-  const res = await migrateFromLocalStorage();
-  if (res.startsWith('done')) alert('تم نقل بياناتك القديمة بنجاح ✅');
+  try {
+    const res = await migrateFromLocalStorage();
+    if (res.startsWith('done')) {
+      console.info('تم حفظ نسخة احتياطية من بيانات الجهاز في Supabase.');
+    } else if (!['already', 'no-user', 'no-data'].includes(res)) {
+      console.warn('لم تكتمل عملية نقل البيانات:', res);
+    }
+  } catch (error) {
+    console.error('تعذر حفظ نسخة البيانات المحلية:', error);
+  }
 </script>
 <body>
 <div id="app">
