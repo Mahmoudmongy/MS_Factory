@@ -22,12 +22,17 @@ function isMobile() { return window.innerWidth <= 640; }
 
 async function getMyProfile() {
   if (myProfile) return myProfile;
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return null;
-  const { data, error } = await supabase.from('profiles').select('*').eq('id', user.id).maybeSingle();
-  if (error || !data) return null;
-  myProfile = data;
-  return myProfile;
+  if (!supabase) return null;
+  try {
+    const { data: { user }, error: userError } = await supabase.auth.getUser();
+    if (userError || !user) return null;
+    const { data, error } = await supabase.from('profiles')
+      .select('id,created_by,is_admin,permissions,must_change_password,username,full_name')
+      .eq('id', user.id).maybeSingle();
+    if (error) { console.error('Profile lookup failed:', error); return null; }
+    myProfile = data || null;
+    return myProfile;
+  } catch(e) { console.error('Profile lookup failed:', e); return null; }
 }
 async function getOwnerId() {
   if (ownerIdCache) return ownerIdCache;
@@ -36,7 +41,7 @@ async function getOwnerId() {
   ownerIdCache = p.created_by || p.id;
   return ownerIdCache;
 }
-function isAdmin() { return !!myProfile && !myProfile.created_by; }
+function isAdmin() { return myProfile?.is_admin === true; }
 function getCachedState() { try { return JSON.parse(localStorage.getItem("mgr6") || "{}"); } catch(e){ return {}; } }
 function getField(obj, names) {
   if (!obj) return "";
@@ -54,12 +59,22 @@ function isLocalEmpty() {
     const raw = localStorage.getItem("mgr6");
     if (!raw || raw.length < 10) return true;
     const S = JSON.parse(raw);
-    if (!S || typeof S !== "object") return true;
-    const hasPartners = (Array.isArray(S.partners) && S.partners.length > 0) || (Array.isArray(S.customers) && S.customers.length > 0);
-    const hasDocs = Array.isArray(S.docs) && S.docs.length > 0;
-    const hasProds = (Array.isArray(S.products) && S.products.length > 0) || (Array.isArray(S.prods) && S.prods.length > 0);
-    const hasItems = Array.isArray(S.items) && S.items.length > 0;
-    return !(hasPartners || hasDocs || hasProds || hasItems);
+    if (!S || typeof S !== "object" || Array.isArray(S)) return true;
+    // app.js seeds demo customers/items and an opening journal on first launch.
+    // A pristine seed (no sv() counter and no user transactions) is not user data.
+    const hasSavedEdits = Number(S.pend || 0) > 0;
+    const hasTransactions = ["docs", "po", "vch", "wo"].some(k => Array.isArray(S[k]) && S[k].length > 0)
+      || (Array.isArray(S.je) && S.je.some(j => j && j.id))
+      || (Array.isArray(S.L) && S.L.length > 4)
+      || (Array.isArray(S.mv) && S.mv.length > 3)
+      || (Array.isArray(S.emp) && S.emp.length > 0);
+    const hasAddedMasterData = (Array.isArray(S.partners) && S.partners.length > 3)
+      || (Array.isArray(S.items) && S.items.length > 3)
+      || (Array.isArray(S.products) && S.products.length > 0)
+      || (Array.isArray(S.prods) && S.prods.length > 0)
+      || (Array.isArray(S.customers) && S.customers.length > 0)
+      || (Array.isArray(S.suppliers) && S.suppliers.length > 0);
+    return !(hasSavedEdits || hasTransactions || hasAddedMasterData);
   } catch(e){ return true; }
 }
 function mergeByKey(existing, incoming, keyFn) {
@@ -82,8 +97,14 @@ async function uploadToTables(showAlert = false) {
     const owner = await getOwnerId();
     if (!owner) { syncState = "idle"; drawAll(); return "no user"; }
     const S = getCachedState();
+    if (!S || typeof S !== "object" || Array.isArray(S)) throw new Error("بيانات المصنع المحلية غير صالحة؛ لم يتم رفع أي شيء");
     let c = 0, s = 0, inv = 0, items = 0, prod = 0;
     let errors = [];
+    // Full snapshot preserves accounting, returns, vouchers, production and all app data.
+    const { error: snapshotError } = await supabase.from('factory_state').upsert({
+      user_id: owner, state: S, updated_at: new Date().toISOString()
+    }, { onConflict: 'user_id' });
+    if (snapshotError) errors.push("factory_state: " + snapshotError.message);
     const partnerArrays = [];
     if (Array.isArray(S.partners)) partnerArrays.push({ key: "partners", arr: S.partners });
     if (Array.isArray(S.customers)) partnerArrays.push({ key: "customers", arr: S.customers });
@@ -118,12 +139,14 @@ async function uploadToTables(showAlert = false) {
           else inv++;
           const { data: invRow } = await supabase.from('invoices').select('id').eq('user_id', owner).eq('external_id', extId).maybeSingle();
           if (invRow) {
-            await supabase.from('invoice_items').delete().eq('invoice_id', invRow.id);
+            const { error: deleteItemsError } = await supabase.from('invoice_items').delete().eq('invoice_id', invRow.id);
+            if (deleteItemsError) errors.push("invoice_items delete: " + deleteItemsError.message);
             const its = d.items || d.lines || d.details || [];
-            if (Array.isArray(its) && its.length) {
+            if (!deleteItemsError && Array.isArray(its) && its.length) {
               const toInsert = its.map(it => ({ user_id: owner, invoice_id: invRow.id, product_name: String(getField(it, ["name", "product", "item", "title"]) || ""), qty: Number(getField(it, ["qty", "q", "quantity"]) || 1) || 1, price: Number(getField(it, ["price", "pr", "unit"]) || 0) || 0, total: Number(getField(it, ["total", "tot", "amount"]) || 0) || 0 }));
               const { error: ie } = await supabase.from('invoice_items').insert(toInsert);
-              if (!ie) items += toInsert.length;
+              if (ie) errors.push("invoice_items insert: " + ie.message);
+              else items += toInsert.length;
             }
           }
         }
@@ -138,14 +161,22 @@ async function uploadToTables(showAlert = false) {
         if (!name || isAccountName(name)) continue;
         const row = { user_id: owner, external_id: String(getField(pr, ["id", "code", "sku"]) || name), name, qty: Number(getField(pr, ["qty", "q", "stock", "balance"]) || 0) || 0, price: Number(getField(pr, ["price", "pr", "unit"]) || 0) || 0, raw: pr };
         const { error } = await supabase.from('products').upsert(row, { onConflict: 'user_id,external_id' });
-        if (!error) prod++;
+        if (error) errors.push("products: " + error.message);
+        else prod++;
       }
     }
-    if (errors.length) { syncState = "idle"; drawAll(); if (showAlert) alert(T("اترفع بس فيه أخطاء:\n" + errors.join("\n"), "Uploaded with errors")); return "errors"; }
+    if (errors.length) {
+      syncState = "idle"; drawAll();
+      const msg = snapshotError
+        ? T("فشل حفظ النسخة الكاملة وبعض الجداول؛ راجع الاتصال والصلاحيات.\n", "Full backup and some table writes failed.\n") + errors.join("\n")
+        : T("تم حفظ النسخة الكاملة، لكن تحديث بعض الجداول التفصيلية فشل:\n", "Full backup saved, but some detail tables could not be updated:\n") + errors.join("\n");
+      if (showAlert) alert(msg);
+      return msg;
+    }
     syncState = "synced";
     lastSyncTime = new Date().toLocaleTimeString(isEN() ? 'en-US' : 'ar-EG');
     drawAll();
-    const msg = `تم ✅ - ${c} عميل + ${s} مورد + ${inv} فاتورة + ${items} صنف + ${prod} منتج`;
+    const msg = T("تم حفظ نسخة المصنع الكاملة ومزامنة الجداول التفصيلية", "Full factory backup saved and detail tables synchronized");
     if (showAlert) alert(msg);
     return msg;
   } catch(e) { console.error(e); syncState = "idle"; drawAll(); if (showAlert) alert(e.message); return "خطأ: " + e.message; }
@@ -158,6 +189,17 @@ async function loadFromTablesMerge(isAuto = false) {
   try {
     const owner = await getOwnerId();
     if (!owner) return "no user";
+    const { data: snapshot, error: snapshotError } = await supabase.from('factory_state')
+      .select('state,updated_at').eq('user_id', owner).maybeSingle();
+    if (snapshotError) throw snapshotError;
+    if (snapshot?.state && typeof snapshot.state === "object" && !Array.isArray(snapshot.state)) {
+      if (!isLocalEmpty()) return T("فيه بيانات محلية بالفعل؛ لم يتم استبدالها. خذ نسخة احتياطية قبل الاستعادة.", "Local data already exists; it was not overwritten. Back up local data before restoring.");
+      try { localStorage.setItem("mgr6-backup-before-cloud-restore", localStorage.getItem("mgr6") || ""); } catch(e){}
+      Object.getPrototypeOf(localStorage).setItem.call(localStorage, "mgr6", JSON.stringify(snapshot.state));
+      if (isAuto) setTimeout(() => location.reload(), 500);
+      return T("تمت استعادة نسخة المصنع الكاملة من السحابة", "Full factory backup restored from cloud");
+    }
+    // Legacy fallback only for accounts created before full-state snapshots existed.
     // نسخة احتياطية قبل أي حاجة - عشان لو الكاش باظ نرجعه
     try {
       const cur = localStorage.getItem("mgr6");
@@ -300,7 +342,7 @@ async function injectEmployeeAccountForm() {
     <div style="display:grid;gap:10px;grid-template-columns:${isMobile() ? "1fr" : "1fr 1fr"};">
       <input id="ms-emp-user" placeholder="${T("اسم المستخدم - مثال: ahmed.ali", "Username - e.g. ahmed.ali")}" style="padding:10px;border:1px solid #ddd;border-radius:10px;width:100%;box-sizing:border-box;" />
       <input id="ms-emp-full" placeholder="${T("الاسم الكامل - أحمد علي", "Full Name - Ahmed Ali")}" style="padding:10px;border:1px solid #ddd;border-radius:10px;width:100%;box-sizing:border-box;" />
-      <input id="ms-emp-pass" value="123456" style="padding:10px;border:1px solid #ddd;border-radius:10px;width:100%;box-sizing:border-box;" />
+      <input id="ms-emp-pass" type="password" autocomplete="new-password" placeholder="${T("كلمة مرور مؤقتة (10 أحرف على الأقل)", "Temporary password (10+ characters)")}" style="padding:10px;border:1px solid #ddd;border-radius:10px;width:100%;box-sizing:border-box;" />
       <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
         ${PERMS.map(p => `<label style="background:#fff;padding:5px 10px;border-radius:20px;cursor:pointer;font-size:12px;border:1px solid #ddd;"><input type="checkbox" value="${p.key}" checked style="margin-inline-end:5px;">${isEN() ? p.en : p.ar}</label>`).join("")}
       </div>
@@ -312,18 +354,22 @@ async function injectEmployeeAccountForm() {
   document.getElementById("ms-emp-create").onclick = async () => {
     const username = document.getElementById("ms-emp-user").value.trim().toLowerCase();
     const fullName = document.getElementById("ms-emp-full").value.trim();
-    const pass = document.getElementById("ms-emp-pass").value || "123456";
+    const pass = document.getElementById("ms-emp-pass").value;
     const msg = document.getElementById("ms-emp-msg");
     if (!username) return msg.textContent = T("اكتب اسم المستخدم", "Enter username");
-    if (!/^[a-z0-9._-]+$/.test(username)) return msg.textContent = T("الاسم لازم حروف إنجليزي وأرقام ونقطة بس", "Username must be english letters, numbers and dots only");
+    if (!/^[a-z0-9._-]{3,40}$/.test(username)) return msg.textContent = T("اسم المستخدم يجب أن يكون من 3 إلى 40 حرفاً إنجليزياً أو رقماً أو . _ -", "Username must be 3-40 characters: a-z, 0-9, dot, underscore or hyphen");
+    if (pass.length < 10) return msg.textContent = T("كلمة المرور يجب ألا تقل عن 10 أحرف", "Password must contain at least 10 characters");
     const perms = {};
     box.querySelectorAll("input[type=checkbox]:checked").forEach(c => perms[c.value] = true);
     msg.textContent = T("جارٍ الإنشاء...", "Creating...");
     try {
-      const { error } = await supabase.functions.invoke('create-employee', { body: { username, full_name: fullName, password: pass, permissions: perms } });
+      const { data, error } = await supabase.functions.invoke("create-employee-account", {
+        body: { username, full_name: fullName, password: pass, permissions: perms }
+      });
       if (error) throw new Error(await employeeErrorText(error));
-      msg.textContent = T(`تم ✅ - يدخل بالاسم: ${username} والباسورد: ${pass}`, `Done ✅ - Login with: ${username} / ${pass}`);
-      alert(T(`تم إضافة ${username} ✅`, `Added ${username} ✅`));
+      if (!data?.success) throw new Error(data?.error || T("تعذر إنشاء الحساب", "Could not create account"));
+      msg.textContent = T("تم إنشاء الحساب " + username + " بنجاح. سلّم كلمة المرور له بشكل منفصل.", "Account " + username + " created. Share the password securely and separately.");
+      document.getElementById("ms-emp-pass").value = "";
     } catch(e) { msg.textContent = e.message; console.error(e); }
   };
 }

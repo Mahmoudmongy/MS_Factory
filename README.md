@@ -1,28 +1,36 @@
-# Factory Manager — مدير المصنع (2.0.1)
+# Factory Manager — مدير المصنع
 
-تطبيق ويب ثابت (PWA) عربي RTL لإدارة المصنع: فواتير ومرتجعات، سندات، مخزون وباركود، أوامر إنتاج، تقارير، قوالب طباعة، استيراد وتصدير.
+تطبيق ويب عربي RTL لإدارة المصنع، يعمل كتطبيق PWA. يشمل الحسابات، العملاء والموردين، الفواتير والمرتجعات، السندات، المخزون، أوامر الإنتاج، التقارير والطباعة.
 
-> **الحالة:** واجهة فقط. البيانات تُحفظ في المتصفح (`localStorage`) على الجهاز نفسه. **لا يوجد في هذا المشروع** خادم ولا Supabase ولا مزامنة ولا صلاحيات حقيقية. التفاصيل في `docs/AUDIT_AND_FIX_REPORT.md`.
+## البنية
+- الواجهة: `index.html`, `css/style.css`, `js/app.js`.
+- تسجيل الدخول: Supabase Auth في `auth.html`, `js/auth.js`.
+- مزامنة البيانات: `js/cloud-sync.js`.
+- جداول Supabase التفصيلية تحفظ العملاء والموردين والفواتير والمنتجات.
+- النسخة الكاملة لحالة التطبيق تحفظ في `public.factory_state` حتى لا تضيع القيود والسندات والمرتجعات والإنتاج والإعدادات التي لم تُفرد بعد في جداول مستقلة.
+- حماية البيانات: RLS في قاعدة البيانات، مع ملكية للمصنع وإتاحة مشاركة بيانات المصنع مع حسابات الفريق التابعة له.
+- إنشاء حسابات الموظفين يتم من Edge Function محمية بـ JWT وتتحقق من `profiles.is_admin`.
 
-## الهيكل
+## ملفات Supabase
 ```
-index.html  css/style.css  js/app.js     # التطبيق (نسخة التشغيل الوحيدة)
-sw.js  manifest.json  assets/            # PWA (غلاف التطبيق offline)
-tests/run.js                             # اختبارات حقيقية على الكود نفسه
-docs/                                    # تقرير المراجعة + التقارير السابقة
-_archive_duplicates/                     # الملفات المكررة/القديمة (لم يُحذف شيء) + ARCHIVE_MANIFEST.md
+supabase/schema.sql
+supabase/migrations/20261107073709_create_app_tables_with_owner_sharing.sql
+supabase/migrations/20261107080100_harden_auth_rls_20261107.sql
+supabase/functions/create-employee-account/index.ts
+supabase/config.toml
 ```
 
 ## التشغيل والاختبار
 ```bash
 npm install
 npx playwright install chromium
-npm test          # 68 فحصًا (حسابات، مخزون، إنتاج، صلاحيات، تكرار، استيراد، PWA offline، موبايل)
-npm run serve     # http://localhost:8080
-```
-الـ Service Worker يعمل على `localhost` أو HTTPS فقط. لإنشاء `package-lock.json` شغّل `npm install` مرة واحدة.
+npm test
+npm run serve
+``
 
 ## ملاحظات
-- لا تضع أسرارًا في المستودع؛ `.env.example` قيم فارغة فقط والتطبيق الحالي لا يقرؤه.
-- توليد PDF وقراءة ملفات xlsx يحمّلان مكتبات من cdnjs (يحتاجان إنترنت أول مرة).
-- الصلاحيات الحالية تخفي الشاشات والأزرار فقط وليست حماية فعلية.
+- مفتاح `sb_publishable_...` أو `anon` مفتاح عام للمتصفح؛ لا تضع مفتاح `service_role` أو أي Secret في ملفات الواجهة أو المستودع.
+- وظيفة إنشاء الموظفين تستخدم متغيرات الخادم المدمجة في Supabase Edge Functions.
+- حماية كلمات المرور المسربة ما زالت تحتاج تفعيلها من إعدادات Supabase Auth.
+- مزامنة الجداول التفصيلية ليست بديلاً عن اختبار كل عملية محاسبية على قاعدة البيانات؛ النسخة الكاملة في `factory_state` تحفظ حالة التطبيق كاملة.
+- غلاف PWA يعمل offline، لكن المزامنة تحتاج اتصالاً بالإنترنت.
