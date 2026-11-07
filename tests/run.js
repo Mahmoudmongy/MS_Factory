@@ -46,8 +46,8 @@ ok('index auth gate validates the Supabase profile before revealing the app',/ht
 ok('employee screen access is tied to the cloud profile permissions',/CLOUD_SCREEN_PERMISSIONS/.test(app)&&/setFactoryAuthProfile/.test(app));
 ok('full factory snapshot is restricted to administrator accounts',/if \(admin\)/.test(cloud)&&/factory_state/.test(cloud)&&/factory_state_admin_only/.test(fs.readFileSync(path.join(ROOT,'supabase/migrations/20261107081648_enforce_employee_permissions_20261107.sql'),'utf8')));
 const syncPageStart=app.indexOf('function syncPage(){'),syncPageEnd=app.indexOf('/* ---- tabbed workspace ---- */',syncPageStart),syncPageSource=syncPageStart>=0&&syncPageEnd>syncPageStart?app.slice(syncPageStart,syncPageEnd):'';
-ok('sync status screen reports the live Supabase account and sync state instead of the old Demo-only message',/const cloudStatus=offline\?/.test(syncPageSource)&&/window\.__factoryOfflineMode/.test(syncPageSource)&&!/محلي على هذا الجهاز فقط \(Demo\)/.test(syncPageSource)&&!/غير مفعّلة — تحتاج Backend فعلي/.test(syncPageSource));
-ok('sync status screen warns employee accounts when detailed accounting synchronization is incomplete',/حساب الموظف يزامن الجداول التي تسمح بها صلاحياته فقط/.test(app)&&/لا تملك مزامنة تفصيلية كاملة/.test(app));
+ok('sync status screen reports the live Supabase account and sync state instead of the old Demo-only message',/const cloudStatus=snapshotConflict\?/.test(syncPageSource)&&/window\.__factoryOfflineMode/.test(syncPageSource)&&!/محلي على هذا الجهاز فقط \(Demo\)/.test(syncPageSource)&&!/غير مفعّلة — تحتاج Backend فعلي/.test(syncPageSource));
+ok('sync status screen warns employee accounts when detailed accounting synchronization is incomplete',/حساب الموظف يزامن الجداول المسموح بها حسب صلاحياته/.test(app)&&/دفتر الأستاذ والحركات التفصيلية الكاملة/.test(app));
 
 ok('invoice cloud sync uses the atomic versioned RPC',/rpc\(["']sync_invoice["']/.test(cloud)&&/p_expected_version/.test(cloud)&&/sync_version/.test(cloud));
 ok('inventory sync uploads the actual S.items array used by the stock screens',/for \(const arr of \[S\.items, S\.products, S\.prods\]\)/.test(cloud));
