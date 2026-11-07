@@ -136,7 +136,7 @@ ok('English mode: no untranslated UI text on the 19 main screens',left.length==0
 ok('no JavaScript errors during the whole desktop session',errs.length==0,errs.slice(0,3));
 await ctx.close();
 /* ---------- C. PWA: service worker + offline shell ---------- */
-const c2=await browser.newContext({viewport:{width:1280,height:800}}),q=await c2.newPage();await q.goto(BASE);await q.evaluate(()=>navigator.serviceWorker.ready);await q.reload();await q.waitForTimeout(600);
+const c2=await browser.newContext({viewport:{width:1280,height:800}}),q=await c2.newPage();await q.goto(BASE);const swReady=await q.evaluate(()=>Promise.race([navigator.serviceWorker.ready.then(()=>true),new Promise(resolve=>setTimeout(()=>resolve(false),15000))]));if(!swReady){await c2.close();throw new Error('Service Worker did not become ready within 15 seconds')}await q.reload();await q.waitForTimeout(600);
 const swi=await q.evaluate(async()=>({ctl:!!navigator.serviceWorker.controller,keys:await caches.keys(),cached:(await (await caches.open((await caches.keys())[0])).keys()).map(r=>new URL(r.url).pathname)}));
 ok('service worker installed and controlling the page; single versioned cache',swi.ctl&&swi.keys.length==1&&/^factory-v6$/.test(swi.keys[0]),swi.keys);
 ok('app shell files are precached (index, css, js, manifest, icons)',['/index.html','/css/style.css','/js/app.js','/manifest.json','/assets/icon-192.png','/assets/icon-512.png','/auth.html','/js/auth.js','/js/supabase.js','/js/cloud-sync.js'].every(f=>swi.cached.includes(f)),swi.cached);
