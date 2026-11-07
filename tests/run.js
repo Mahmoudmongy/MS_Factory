@@ -9,7 +9,7 @@ const R=[];let fails=0;const ok=(n,c,x)=>{R.push(`${c?'PASS':'FAIL'}  ${n}${x!==
 await new Promise(r=>server.listen(0,r));const BASE='http://localhost:'+server.address().port+'/';
 const browser=await pw.chromium.launch();
 /* ---------- A. static checks on the real files ---------- */
-const app=fs.readFileSync(path.join(ROOT,'js/app.js'),'utf8'),idx=fs.readFileSync(path.join(ROOT,'index.html'),'utf8'),cloud=fs.readFileSync(path.join(ROOT,'js/cloud-sync.js'),'utf8');
+const app=fs.readFileSync(path.join(ROOT,'js/app.js'),'utf8'),idx=fs.readFileSync(path.join(ROOT,'index.html'),'utf8'),cloud=fs.readFileSync(path.join(ROOT,'js/cloud-sync.js'),'utf8'),css=fs.readFileSync(path.join(ROOT,'css/style.css'),'utf8');
 const names=[...app.matchAll(/^(?:async )?function ([A-Za-z0-9_$]+)\(/gm)].map(m=>m[1]),dup=[...new Set(names.filter((n,i)=>names.indexOf(n)!==i))];
 ok('app.js has no duplicate top-level function definitions',dup.length==0,dup);
 for(const id of ['pgst','toast','tabs','sb','m','sb-overlay','top','ttl'])ok(`index.html contains #${id}`,new RegExp(`id="${id}"`).test(idx));
