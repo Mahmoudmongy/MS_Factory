@@ -175,7 +175,7 @@ async function syncVersionedDetail(table, owner, externalId, expectedVersion, pa
       ? { row }
       : { error: new Error("The server returned no detail synchronization version") };
   }
-  if (error.code === "40001") {
+  if (error.code === "40001" || error.code === "23505") {
     const { data: remote, error: readError } = await supabase.from(table)
       .select("*").eq("user_id", owner).eq("external_id", externalId).maybeSingle();
     if (readError) return { error: readError };
