@@ -19,7 +19,7 @@
     import { supabase } from './js/supabase.js';
     try {
       const { data, error } = supabase ? await supabase.auth.getSession() : { data: { session: null }, error: new Error('Supabase unavailable') };
-      if (error || !data?.session) location.replace('auth.html');
+      if (!data?.session || (error && navigator.onLine)) location.replace('auth.html');
       else {
         const { data: profile, error: profileError } = await supabase.from('profiles')
           .select('id,created_by,is_admin,permissions,must_change_password,username,full_name')
