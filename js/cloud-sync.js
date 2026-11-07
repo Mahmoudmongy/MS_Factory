@@ -1,4 +1,4 @@
-// js/cloud-sync.js - V27 - تحميل تلقائي آمن أول ما النت يرجع - Dynamic + AR/EN + PC/Mobile
+// js/cloud-sync.js - V28 - إصلاح الشاشة البيضا + إخفاء شريط مسجل الدخول صح + تحميل تلقائي آمن
 import { supabase } from './supabase.js';
 import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm';
 
@@ -64,7 +64,6 @@ function isLocalEmpty() {
     return !(hasPartners || hasDocs || hasProds || hasItems);
   } catch(e){ return true; }
 }
-// دمج آمن - بنزود الناقص بس، مش بنمسح الموجود
 function mergeByKey(existing, incoming, keyFn) {
   const map = new Map();
   (existing || []).forEach(it => { try { const k = keyFn(it); if (k) map.set(String(k), it); } catch(e){} });
@@ -87,13 +86,11 @@ async function uploadToTables(showAlert = false) {
     const S = getCachedState();
     let c = 0, s = 0, inv = 0, items = 0, prod = 0;
     let errors = [];
-
     const partnerArrays = [];
     if (Array.isArray(S.partners)) partnerArrays.push({ key: "partners", arr: S.partners });
     if (Array.isArray(S.customers)) partnerArrays.push({ key: "customers", arr: S.customers });
     if (Array.isArray(S.suppliers)) partnerArrays.push({ key: "suppliers", arr: S.suppliers });
     if (Array.isArray(S.clients)) partnerArrays.push({ key: "clients", arr: S.clients });
-
     for (const { key, arr } of partnerArrays) {
       for (const p of arr) {
         const name = String(getField(p, ["name", "nm", "title"]) || "");
@@ -108,7 +105,6 @@ async function uploadToTables(showAlert = false) {
         else { if (isSup) s++; else c++; }
       }
     }
-
     const docs = S.docs || S.invoices || [];
     if (Array.isArray(docs)) {
       for (const d of docs) {
@@ -135,7 +131,6 @@ async function uploadToTables(showAlert = false) {
         }
       }
     }
-
     const prodArrays = [];
     if (Array.isArray(S.products)) prodArrays.push(S.products);
     if (Array.isArray(S.prods)) prodArrays.push(S.prods);
@@ -148,7 +143,6 @@ async function uploadToTables(showAlert = false) {
         if (!error) prod++;
       }
     }
-
     if (errors.length) { syncState = "idle"; drawAll(); if (showAlert) alert(T("اترفع بس فيه أخطاء:\n" + errors.join("\n"), "Uploaded with errors")); return "errors"; }
     syncState = "synced";
     lastSyncTime = new Date().toLocaleTimeString(isEN() ? 'en-US' : 'ar-EG');
@@ -159,28 +153,30 @@ async function uploadToTables(showAlert = false) {
   } catch(e) { console.error(e); syncState = "idle"; drawAll(); if (showAlert) alert(e.message); return "خطأ: " + e.message; }
 }
 
-// ===== التحميل - دمج آمن، مش مسح =====
+// ===== التحميل - دمج آمن، مع نسخة احتياطية قبل أي كتابة =====
 async function loadFromTablesMerge(isAuto = false) {
   if (autoLoadRunning) return "already running";
   autoLoadRunning = true;
   try {
     const owner = await getOwnerId();
     if (!owner) return "no user";
+    // نسخة احتياطية قبل أي حاجة - عشان لو الكاش باظ نرجعه
+    try {
+      const cur = localStorage.getItem("mgr6");
+      if (cur) localStorage.setItem("mgr6-backup-v28", cur);
+    } catch(e){}
     const [{ data: custs }, { data: supps }, { data: invs }, { data: prods }] = await Promise.all([
       supabase.from('customers').select('*').eq('user_id', owner),
       supabase.from('suppliers').select('*').eq('user_id', owner),
       supabase.from('invoices').select('*').eq('user_id', owner),
       supabase.from('products').select('*').eq('user_id', owner),
     ]);
-    // لو السحابة فاضية خالص - متعملش حاجة، متمسحش اللي في الجهاز
     if ((!custs?.length && !supps?.length && !invs?.length && !prods?.length)) {
       return isAuto ? "cloud empty - keep local" : T("مفيش بيانات في السحابة", "No data in cloud");
     }
     const S = getCachedState();
     if (!S || typeof S !== "object") return "bad local";
     let totalAdded = 0;
-
-    // عملاء + موردين - دمج
     const cloudPartners = [
       ...(custs || []).map(c => ({ id: c.external_id, name: c.name, phone: c.phone, email: c.email, addr: c.address, type: "customer" })),
       ...(supps || []).map(s => ({ id: s.external_id, name: s.name, phone: s.phone, email: s.email, addr: s.address, type: "supplier" })),
@@ -189,29 +185,22 @@ async function loadFromTablesMerge(isAuto = false) {
       const m = mergeByKey(S.partners || [], cloudPartners, x => x.id || x.name);
       S.partners = m.arr; totalAdded += m.added;
     }
-    // فواتير - دمج
     if (invs?.length) {
       const cloudDocs = invs.map(inv => inv.raw || { id: inv.external_id, customer: inv.customer_name, total: inv.total, items: [] });
       if (!Array.isArray(S.docs)) S.docs = [];
       const m = mergeByKey(S.docs, cloudDocs, x => x.id || x.no);
       S.docs = m.arr; totalAdded += m.added;
     }
-    // منتجات - دمج
     if (prods?.length) {
       const cloudProds = prods.map(p => p.raw || { id: p.external_id, name: p.name, qty: p.qty, price: p.price });
       if (!Array.isArray(S.products)) S.products = [];
       const m = mergeByKey(S.products, cloudProds, x => x.id || x.name);
       S.products = m.arr; totalAdded += m.added;
     }
-
-    // اكتب بالطريقة الأصلية عشان مندخلش في Loop رفع
     Object.getPrototypeOf(localStorage).setItem.call(localStorage, "mgr6", JSON.stringify(S));
-
     if (isAuto) {
-      // تلقائي: لو الجهاز كان فاضي وضفنا حاجة، اعمل ريلود مرة واحدة بس عشان تظهر
       if (totalAdded > 0) {
         console.log("☁️ Auto-load added", totalAdded);
-        // استنى ثانية وخلي البرنامج يرسم من نفسه، ولو لسه فاضي اعمل ريلود
         setTimeout(() => { if (isLocalEmpty()) location.reload(); }, 800);
       }
       return "auto merged " + totalAdded;
@@ -223,8 +212,6 @@ async function loadFromTablesMerge(isAuto = false) {
 
 // ===== التحميل التلقائي أول ما النت يرجع - زي ما اتفقنا =====
 async function onInternetBack() {
-  // لو الجهاز فيه داتا -> ارفع اللي في الجهاز، متحملش فوقه
-  // لو الجهاز فاضي -> حمّل تلقائي من السحابة
   if (isLocalEmpty()) {
     syncState = "saving"; drawAll();
     await loadFromTablesMerge(true);
@@ -233,8 +220,6 @@ async function onInternetBack() {
     await uploadToTables(false);
   }
 }
-
-// الكاش هو الأساس - أي حفظ يتخزن في الجهاز، ولو فيه نت يرفع بعد 1.5 ثانية
 const _origSetItem = localStorage.setItem.bind(localStorage);
 localStorage.setItem = function(key, value) {
   _origSetItem(key, value);
@@ -246,11 +231,9 @@ localStorage.setItem = function(key, value) {
 };
 window.addEventListener("online", () => onInternetBack());
 window.addEventListener("offline", () => { syncState = "offline"; drawAll(); });
-// أول ما الصفحة تفتح ولو النت موجود والجهاز فاضي، حمّل تلقائي
 if (navigator.onLine && isLocalEmpty()) {
   setTimeout(() => onInternetBack(), 1200);
 }
-
 window.restoreCloud = async function() {
   if (!confirm(T("هتحمّل البيانات من الجداول؟ هيتضاف الناقص بس، مش هيمسح حاجة", "Load from tables? Only missing will be added, nothing will be deleted"))) return;
   const r = await loadFromTablesMerge(false);
@@ -260,34 +243,17 @@ window.restoreCloud = async function() {
 window.backupNowManual = function() { uploadToTables(true); };
 window.testSync = async function() { const r = await uploadToTables(true); alert(r); return r; };
 
-// ===== صلاحيات - خفيفة ومش بتخفي الشاشة =====
-const TAB_PERMS = [
-  { key: "invoices", ar: ["فواتير", "فاتورة"], en: ["invoice"] },
-  { key: "inventory", ar: ["مخزون", "مخزن"], en: ["inventory", "stock"] },
-  { key: "customers", ar: ["عملاء", "عميل"], en: ["customer"] },
-  { key: "suppliers", ar: ["موردين", "مورد"], en: ["supplier"] },
-  { key: "production", ar: ["إنتاج", "تصنيع"], en: ["production"] },
-  { key: "reports", ar: ["تقارير", "تقرير"], en: ["report"] },
-  { key: "settings", ar: ["إعدادات", "اعدادات"], en: ["setting"] },
-  { key: "employees", ar: ["موظفين", "موظف"], en: ["employee", "staff"] },
-];
+// ===== صلاحيات - متوقفة مؤقتاً عشان ترجع القايمة - مش بتخفي حاجة دلوقتي =====
 async function enforcePermissions() {
+  // V28: وقفنا الإخفاء عشان القايمة كانت بتختفي والشاشة بتبيض
+  // بنرجع أي زرار اتخفى قبل كده
   try {
-    const p = await getMyProfile();
-    if (!p || isAdmin()) return;
-    const perms = p.permissions || {};
     document.querySelectorAll("nav button, aside button, .sidebar button, [data-tab]").forEach(el => {
-      const txt = (el.textContent || "").trim().toLowerCase();
-      if (!txt || txt.length > 30) return;
-      for (const tp of TAB_PERMS) {
-        const words = isEN() ? tp.en : tp.ar;
-        if (words.some(w => txt.includes(w.toLowerCase()))) {
-          if (!perms[tp.key]) el.style.display = "none";
-        }
-      }
+      if (el.style.display === "none") el.style.display = "";
     });
     const card = document.getElementById("ms-emp-in-tab");
-    if (card) card.remove();
+    // كارت الموظفين هنسيبه للمدير بس، مش هنمسحه من هنا
+    if (card && !(await getMyProfile())?.is_admin) card.remove();
   } catch(e){}
 }
 
@@ -374,19 +340,90 @@ async function doLogout() {
   sessionStorage.removeItem("ms-loaded-from-tables");
   location.href = "auth.html";
 }
+// إخفاء شريط مسجل الدخول - النسخة الصح: بنخفي الشريط كله مش السطر بس
 function purgeLoggedInText() {
   try {
-    document.querySelectorAll("div, span, p, small").forEach(el => {
-      if (el.id === "ms-topbar" || el.closest("#ms-topbar")) return;
-      const txt = (el.textContent || "").trim();
-      if ((txt === "مسجل الدخول باسم: m.mongy.hr@gmail.com" || txt.startsWith("مسجل الدخول باسم")) && el.children.length === 0) {
-        el.style.display = "none";
+    const all = document.querySelectorAll("body *");
+    for (const el of all) {
+      if (el.id === "ms-topbar" || el.closest("#ms-topbar") || el.id === "ms-recovery") continue;
+      const txt = el.textContent || "";
+      if (txt.includes("مسجل الدخول باسم")) {
+        // اطلع لفوق لحد ما نلاقي الشريط - الشريط ارتفاعه صغير وعرضه كبير
+        let bar = el;
+        let guard = 0;
+        while (bar.parentElement && bar.parentElement !== document.body && guard < 6) {
+          const parent = bar.parentElement;
+          const parentTxt = parent.textContent || "";
+          if (!parentTxt.includes("مسجل الدخول باسم")) break;
+          // لو الأب هو body أو #m أو كبير جداً، وقف
+          if (parent.id === "m" || parent.id === "app" || parent.tagName === "MAIN") break;
+          bar = parent;
+          guard++;
+          try {
+            const h = bar.getBoundingClientRect().height;
+            if (h > 100) break;
+          } catch(e){}
+        }
+        try {
+          const rect = bar.getBoundingClientRect();
+          // متخفيش حاجة كبيرة - الشريط بس اللي ارتفاعه أقل من 100
+          if (rect.height < 100 && rect.width > 200) {
+            bar.style.display = "none";
+            bar.style.visibility = "hidden";
+            bar.style.height = "0px";
+            bar.style.padding = "0";
+            bar.style.margin = "0";
+            bar.style.overflow = "hidden";
+          }
+        } catch(e){}
       }
-    });
+      // زرار تسجيل خروج اللي جوه الشريط ده - اخفيه برضه
+      if ((el.textContent || "").trim() === "تسجيل خروج" && el.closest("div")) {
+        const p = el.closest("div");
+        if (p && (p.textContent || "").includes("مسجل الدخول باسم")) {
+          p.style.display = "none";
+        }
+      }
+    }
   } catch(e){}
 }
 const observer = new MutationObserver(() => { purgeLoggedInText(); });
 try { observer.observe(document.body, { childList: true, subtree: true, characterData: true }); } catch(e){}
+
+// ===== زرار إصلاح لو الشاشة فضلت بيضا =====
+function checkWhiteScreen() {
+  try {
+    const m = document.getElementById("m");
+    if (!m) return;
+    const isEmpty = (m.innerText || "").trim().length < 20 && m.children.length <= 1;
+    if (!isEmpty) {
+      const old = document.getElementById("ms-recovery");
+      if (old) old.remove();
+      return;
+    }
+    if (document.getElementById("ms-recovery")) return;
+    const box = document.createElement("div");
+    box.id = "ms-recovery";
+    box.style.cssText = "position:fixed;bottom:20px;left:50%;transform:translateX(-50%);z-index:999999;background:#fff;border:2px solid #ef4444;border-radius:16px;padding:16px;box-shadow:0 10px 30px rgba(0,0,0,.3);text-align:center;max-width:92%;direction:" + (isEN() ? "ltr" : "rtl");
+    box.innerHTML = `
+      <div style="font-weight:bold;color:#ef4444;margin-bottom:8px;">${T("⚠️ الشاشة فاضية - الكاش بايظ", "⚠️ Blank screen - cache is broken")}</div>
+      <div style="font-size:13px;color:#555;margin-bottom:12px;">${T("دوس هنا هنرجع الداتا من السحابة، ومش هنمسح حاجة", "Click here to restore from cloud, nothing will be deleted")}</div>
+      <button id="ms-recovery-btn" style="background:#0f766e;color:#fff;border:none;padding:12px 20px;border-radius:12px;font-weight:bold;cursor:pointer;width:100%;">${T("🔧 إصلاح واستعادة من السحابة", "🔧 Fix & Restore from Cloud")}</button>
+    `;
+    document.body.appendChild(box);
+    document.getElementById("ms-recovery-btn").onclick = async () => {
+      const btn = document.getElementById("ms-recovery-btn");
+      btn.textContent = T("جارٍ الاستعادة...", "Restoring...");
+      // امسح الكاش البايظ وخلي التلقائي يحمل من السحابة
+      try { localStorage.removeItem("mgr6"); } catch(e){}
+      const r = await loadFromTablesMerge(false);
+      alert(r);
+      location.reload();
+    };
+  } catch(e){}
+}
+setInterval(checkWhiteScreen, 3000);
+setTimeout(checkWhiteScreen, 4000);
 
 function drawAll() {
   purgeLoggedInText();
@@ -432,4 +469,4 @@ setInterval(() => {
 }, 500);
 window.addEventListener("resize", () => drawAll());
 drawAll();
-console.log("☁️ Cloud Sync V27 شغال - تحميل تلقائي آمن");
+console.log("☁️ Cloud Sync V28 شغال - إصلاح الشاشة البيضا");
