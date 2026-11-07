@@ -46,7 +46,7 @@ ok('index auth gate validates the Supabase profile before revealing the app',/ht
 ok('employee screen access is tied to the cloud profile permissions',/CLOUD_SCREEN_PERMISSIONS/.test(app)&&/setFactoryAuthProfile/.test(app));
 ok('full factory snapshot is restricted to administrator accounts',/if \(admin\)/.test(cloud)&&/factory_state/.test(cloud)&&/factory_state_admin_only/.test(fs.readFileSync(path.join(ROOT,'supabase/migrations/20261107081648_enforce_employee_permissions_20261107.sql'),'utf8')));
 const syncPageStart=app.indexOf('function syncPage(){'),syncPageEnd=app.indexOf('/* ---- tabbed workspace ---- */',syncPageStart),syncPageSource=syncPageStart>=0&&syncPageEnd>syncPageStart?app.slice(syncPageStart,syncPageEnd):'';
-ok('automatic sync is silent and runs after local saves and on startup/reconnect',/setTimeout\(\(\) => uploadToTables\(false\), 1500\)/.test(cloud)&&/setTimeout\(\(\) => onInternetBack\(\), 1200\)/.test(cloud)&&/addEventListener\("online", \(\) => onInternetBack\(\)\)/.test(cloud)&&!/رفع الآن|Upload Now|تحميل/.test(cloud.slice(cloud.indexOf('function drawAll()'))));
+ok('offline saves are durably queued and retried on reconnect, focus and visibility',/mgr6-sync-pending/.test(cloud)&&/function markPendingSync/.test(cloud)&&/function scheduleAutoSync/.test(cloud)&&/addEventListener\("online", \(\) => \{ retryCount = 0; scheduleAutoSync\(500\); \}\)/.test(cloud)&&/addEventListener\("focus"/.test(cloud)&&/visibilitychange/.test(cloud)&&/scheduleAutoSync\(1500\)/.test(cloud));
 ok('sync toolbar is removed but conflict recovery remains reachable from the connection indicator',!app.includes('["🔄 حالة الاتصال والمزامنة","syncPage()"]')&&/id="net" onclick="syncPage\(\)"/.test(idx)&&/ms-logout-btn/.test(cloud)&&!/cloud-badge|رفع الآن|Upload Now|تحميل/.test(cloud.slice(cloud.indexOf('function drawAll()'))));
 
 ok('invoice cloud sync uses the atomic versioned RPC',/rpc\(["']sync_invoice["']/.test(cloud)&&/p_expected_version/.test(cloud)&&/sync_version/.test(cloud));
@@ -54,17 +54,28 @@ ok('inventory sync uploads the actual S.items array used by the stock screens',/
 ok('inventory sync totals all colour/size variants instead of reading a missing qty field',/Object\.values\(variants\)\.reduce/.test(cloud)&&/const variants = pr\.st/.test(cloud));
 ok('inventory sync stores the full local item in products.raw for lossless restoration',/image_url:[\s\S]{0,500}raw: pr/.test(cloud));
 ok('inventory download restores records into S.items, the real inventory source used by the app',/if \(!Array\.isArray\(S\.items\)\) S\.items = \[\]/.test(cloud)&&/S\.items = m\.arr/.test(cloud));
-ok('employee detail-only sync remains marked partial in the background',/syncState = admin \? "synced" : "partial"/.test(cloud)&&/مزامنة القيود والحركات المحاسبية الكاملة لحساب الموظف لم تكتمل بعد/.test(cloud));
+ok('employee detail-only sync remains marked partial in the background',/admin \? "synced" : "partial"/.test(cloud)&&/مزامنة القيود والحركات المحاسبية الكاملة لحساب الموظف لم تكتمل بعد/.test(cloud));
 ok('invoice sync does not delete invoice items through separate client requests',!/from\(["']invoice_items["']\)\.delete/.test(cloud));
 ok('returns are not misclassified as sale/purchase invoices',/\["sale", "pur"\]\.includes\(d\.t\)/.test(cloud));
 ok('cloud invoice merge preserves newer remote copies as explicit conflicts',/mergeCloudInvoices/.test(cloud)&&/serverCopy: remote/.test(cloud));
 ok('online reconnect pulls remote changes before uploading local cache',/const pulled = await loadFromTablesMerge\(true\)/.test(cloud)&&cloud.indexOf('const pulled = await loadFromTablesMerge(true)')<cloud.indexOf('const pushed = await uploadToTables(false)'));
-ok('online startup sync runs even when local cache already has data',/if \(navigator\.onLine\) \{\s*\/\/ On every launch/.test(cloud));
+ok('online startup sync runs even when local cache already has data',/if \(navigator\.onLine\) \{\s*\/\/ Always refresh remote data on launch/.test(cloud)&&/scheduleAutoSync\(1200\)/.test(cloud));
 ok('offline boot permits only a previously verified cached profile for the same user',/factory-profile:/.test(idx)&&/cachedProfile\.id === data\.session\.user\.id/.test(idx)&&/if \(!navigator\.onLine\)/.test(idx));
 ok('reconnect refreshes the profile before using permissions for cloud sync',/myProfile = null; ownerIdCache = null; window\.__factoryAuthProfile = null;/.test(cloud)&&/const freshProfile = await getMyProfile\(\)/.test(cloud));
 
-ok('offline shell precaches the stable production app and first-login password page',/auth\.html/.test(sw)&&/change-password\.html/.test(sw)&&/js\/change-password\.js/.test(sw)&&/js\/app\.js/.test(sw)&&/factory-v9/.test(sw));
+ok('offline shell precaches the stable production app and first-login password page',/auth\.html/.test(sw)&&/change-password\.html/.test(sw)&&/js\/change-password\.js/.test(sw)&&/js\/app\.js/.test(sw)&&/factory-v10/.test(sw));
 ok('mobile and desktop usability includes visible keyboard focus and safe-area spacing',/focus-visible/.test(css)&&/safe-area-inset-bottom/.test(css));
+ok('offline-created detail records are uploaded even when the full snapshot has a preserved conflict',/if \(admin && !snapshotConflict\)/.test(cloud)&&/for \(const \{ key, arr \} of partnerArrays\)/.test(cloud)&&/hasSnapshotConflict/.test(cloud));
+ok('local save writes a durable pending-sync marker before network recovery',/mgr6-sync-pending/.test(app)&&/localStorage\.setItem\("mgr6-sync-pending"/.test(app));
+ok('sync indicator is a separate small icon and turns blue while syncing',/id="sync-icon"/.test(idx)&&/syncIcon\.classList\.toggle\('syncing', syncState === 'saving'\)/.test(cloud)&&/#sync-icon\.syncing\{color:#38bdf8/.test(css));
+ok('header uses an icon-only light/dark toggle and language stays out of the header',/<button id="thb"/.test(idx)&&!idx.includes('id="lgb"')&&/togLang\(\)/.test(app)&&/التبديل إلى الوضع الداكن/.test(app));
+ok('admin selector is labelled Admin in Arabic and English',/الأدمن \/ Admin/.test(app));
+ok('search filters update while typing and restore cursor focus after filtering',/function fbarType\(/.test(app)&&/oninput="fbarType\(/.test(app)&&/setSelectionRange\(start,end\)/.test(app));
+ok('opening an existing screen in a separate tab activates it instead of duplicating it',/let x=TB\.find\(y=>y\.kind=="screen"&&y\.sid==t\)/.test(app));
+ok('Excel export splits currency labels into a separate adjacent cell and keeps amounts numeric',/function exportCurrencyCell/.test(app)&&/\[h\+" \(قيمة\)","العملة"\]/.test(app));
+ok('legacy Excel importer supports multiple named sheets for customers, suppliers and inventory',/function impSheet\(/.test(app)&&/function templateExcel\(/.test(app)&&/customers:\[/.test(app)&&/suppliers:\[/.test(app)&&/WZ\.sheetNames/.test(app));
+ok('module navigation uses consistent purpose-specific SVG icons',/const APP_ICONS=/.test(app)&&/ico\("customer"\)/.test(app)&&/ico\("inventory"\)/.test(app));
+ok('offline service worker pre-caches Vite module assets discovered from the HTML shell',/matchAll\(\/\(\?:src\|href\)/.test(sw)&&/modulepreload/.test(idx+sw)&&/factory-v10/.test(sw));
 
 
 ok('invoice sync migration uses optimistic version checks and invoker security',/sync_version/.test(fs.readFileSync(path.join(ROOT,'supabase/migrations/20261107090901_20261107111000_atomic_invoice_sync.sql'),'utf8'))&&/SECURITY INVOKER/.test(fs.readFileSync(path.join(ROOT,'supabase/migrations/20261107090901_20261107111000_atomic_invoice_sync.sql'),'utf8'))&&/40001/.test(fs.readFileSync(path.join(ROOT,'supabase/migrations/20261107090901_20261107111000_atomic_invoice_sync.sql'),'utf8')));
@@ -83,6 +94,29 @@ const ctx=await browser.newContext({viewport:{width:1280,height:900},acceptDownl
 await p.goto(BASE);await p.waitForTimeout(500);
 const ev=(f,a)=>p.evaluate(()=>{SAVING=0}).then(()=>p.evaluate(f,a)),bal=()=>ev(()=>Math.abs(S.L.reduce((a,l)=>a+l.dr-l.cr,0))<.01);
 const scr=await ev(()=>allowed().map(t=>t[0]));for(const s of scr){await ev(x=>go(x),s)}ok(`all ${scr.length} screens render without errors`,errs.length==0,errs.slice(0,2));
+
+/* Search typing and duplicate screen-tab regression, including a narrow mobile viewport. */
+await ev(()=>go('cust'));
+let searchBox=p.locator('#m input[data-filter-key="cust"][data-filter-id="q"]');
+await searchBox.fill("محلات");await p.waitForTimeout(180);
+let searchState=await p.evaluate(()=>({value:document.querySelector('#m input[data-filter-key="cust"][data-filter-id="q"]')?.value,focused:document.activeElement?.matches('input[data-filter-key="cust"][data-filter-id="q"]'),rows:[...document.querySelectorAll('#m table.l tr')].filter(r=>r.querySelector('td')&&getComputedStyle(r).display!=='none').map(r=>r.textContent)}));
+ok('customer search filters results without dropping the typed text or focus',searchState.value==="محلات"&&searchState.focused&&searchState.rows.some(x=>x.includes("محلات الأمل")),searchState);
+await p.keyboard.type(" XYZ");await p.waitForTimeout(180);
+const continuedSearch=await p.locator('#m input[data-filter-key="cust"][data-filter-id="q"]').inputValue();
+ok('customer search accepts continued typing after live filtering',continuedSearch==="محلات XYZ",continuedSearch);
+await p.setViewportSize({width:390,height:844});await ev(()=>{FL.cust={};go('cust')});
+searchBox=p.locator('#m input[data-filter-key="cust"][data-filter-id="q"]');
+await searchBox.fill("محلات");await p.waitForTimeout(180);
+const mobileSearch=await p.evaluate(()=>({value:document.querySelector('#m input[data-filter-key="cust"][data-filter-id="q"]')?.value,focused:document.activeElement?.matches('input[data-filter-key="cust"][data-filter-id="q"]'),width:document.querySelector('#top')?.getBoundingClientRect().width}));
+ok('mobile customer search remains focused and usable at 390px width',mobileSearch.value==="محلات"&&mobileSearch.focused&&mobileSearch.width<=390,mobileSearch);
+const duplicateTabs=await ev(()=>{go('cust',0,true);go('cust',0,true);return TB.filter(t=>t.kind==='screen'&&t.sid==='cust').length});
+ok('opening an already-open module twice reuses its existing tab',duplicateTabs===1,duplicateTabs);
+const headerState=await ev(()=>({languageButton:!!document.getElementById('lgb'),themeTag:document.getElementById('thb')?.tagName,admin:document.querySelector('#who option[value="0"]')?.textContent}));
+ok('header has no language button, has an icon-only theme button and shows Admin',!headerState.languageButton&&headerState.themeTag==="BUTTON"&&headerState.admin==="الأدمن / Admin",headerState);
+const exportCell=await ev(()=>exportCurrencyCell("1,250.50 ج.م"));
+ok('currency export parser returns a numeric value and a separate currency cell',exportCell.value==="1250.50"&&exportCell.currency==="ج.م",exportCell);
+await p.setViewportSize({width:1280,height:900});await ev(()=>{FL.cust={};go('home')});
+
 /* master data edit: same partner ID, no duplicate row */
 await ev(()=>{const p=S.partners.find(x=>x.c);const id=p.id; pForm(1,id); $("#b1").value="اختبار تعديل العميل"; saveP(id); return {id,rows:S.partners.filter(x=>x.id==id).length,name:S.partners.find(x=>x.id==id).name}});
 const partnerEdit=await ev(()=>{const p=S.partners.find(x=>x.name=="اختبار تعديل العميل");return p&&{id:p.id,count:S.partners.filter(x=>x.id==p.id).length}});
@@ -182,7 +216,7 @@ await ctx.close();
 /* ---------- C. PWA: service worker + offline shell ---------- */
 const c2=await browser.newContext({viewport:{width:1280,height:800}}),q=await c2.newPage(),swConsole=[];q.on('console',m=>swConsole.push(m.type()+': '+m.text()));q.on('pageerror',e=>swConsole.push('pageerror: '+e.message));await q.goto(BASE);const swReg=await q.evaluate(async()=>{try{const reg=await navigator.serviceWorker.register('./sw.js');return {ok:true,scope:reg.scope,installing:reg.installing?.state,waiting:reg.waiting?.state,active:reg.active?.state}}catch(e){return {ok:false,error:e.message}}});const swReady=await q.evaluate(()=>Promise.race([navigator.serviceWorker.ready.then(()=>true),new Promise(resolve=>setTimeout(()=>resolve(false),15000))]));if(!swReady){const diag=await q.evaluate(async()=>{const r=await navigator.serviceWorker.getRegistration();return r?{installing:r.installing?.state,waiting:r.waiting?.state,active:r.active?.state,scope:r.scope}:null});await c2.close();throw new Error('Service Worker did not become ready: '+JSON.stringify({swReg,diag,console:swConsole.slice(-20)}))}await q.reload();await q.waitForTimeout(600);
 const swi=await q.evaluate(async()=>({ctl:!!navigator.serviceWorker.controller,keys:await caches.keys(),cached:(await (await caches.open((await caches.keys())[0])).keys()).map(r=>new URL(r.url).pathname)}));
-ok('service worker installed and controlling the page; single versioned cache',swi.ctl&&swi.keys.length==1&&/^factory-v9$/.test(swi.keys[0]),swi.keys);
+ok('service worker installed and controlling the page; single versioned cache',swi.ctl&&swi.keys.length==1&&/^factory-v10$/.test(swi.keys[0]),swi.keys);
 ok('stable app shell files are precached; linked CSS and scripts are cached on first request',['/index.html','/auth.html','/change-password.html','/js/change-password.js','/','/js/app.js','/css/style.css'].every(f=>swi.cached.includes(f)),swi.cached);
 ok('offline cache does not include authenticated API responses or user records',swi.cached.every(f=>!f.includes('/rest/v1/')&&!f.includes('/auth/v1/')&&!f.includes('/storage/v1/')));
 await q.evaluate(()=>{const s=JSON.parse(localStorage.getItem('mgr6')||'null');localStorage.setItem('mgr6',JSON.stringify(s))});
