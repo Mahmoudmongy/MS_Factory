@@ -256,6 +256,7 @@ async function uploadToTables(showAlert = false) {
     if (canWrite("invoices")) {
       for (const d of (Array.isArray(S.docs) ? S.docs : [])) {
         if (!d || !["sret", "pret"].includes(d.t)) continue;
+        if (d._cloudConflict) { errors.push("return " + String(d.no || d.id) + ": conflict with a newer cloud copy; resolve before uploading"); continue; }
         const externalId = String(getField(d, ["id", "no"]) || "");
         if (!externalId) { errors.push("return skipped: missing stable ID"); continue; }
         const raw = { ...d }; delete raw._cloudUpdatedAt; delete raw._cloudConflict;
@@ -275,6 +276,7 @@ async function uploadToTables(showAlert = false) {
 
       for (const v of (Array.isArray(S.vch) ? S.vch : [])) {
         if (!v) continue;
+        if (v._cloudConflict) { errors.push("voucher " + String(v.no || v.id) + ": conflict with a newer cloud copy; resolve before uploading"); continue; }
         const externalId = String(getField(v, ["id", "no"]) || "");
         if (!externalId) { errors.push("voucher skipped: missing stable ID"); continue; }
         const raw = { ...v }; delete raw._cloudUpdatedAt; delete raw._cloudConflict;
@@ -297,6 +299,7 @@ async function uploadToTables(showAlert = false) {
     if (canWrite("production")) {
       for (const o of (Array.isArray(S.po) ? S.po : [])) {
         if (!o) continue;
+        if (o._cloudConflict) { errors.push("production order " + String(o.no || o.id) + ": conflict with a newer cloud copy; resolve before uploading"); continue; }
         const externalId = String(getField(o, ["id", "no"]) || "");
         if (!externalId) { errors.push("production order skipped: missing stable ID"); continue; }
         const raw = { ...o }; delete raw._cloudUpdatedAt; delete raw._cloudConflict;
