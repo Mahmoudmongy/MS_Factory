@@ -1,4 +1,4 @@
-// js/cloud-sync.js - V21 - صلاحيات + بيانات مشتركة - Dynamic + AR/EN + PC/Mobile
+// js/cloud-sync.js - V22 - الشريط زي ما هو + المرحلة 3 كاملة + موظفين من التابة - Dynamic + AR/EN + PC/Mobile
 import { supabase } from './supabase.js';
 import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm';
 
@@ -20,8 +20,6 @@ function T(ar, en) { return isEN() ? en : ar; }
 function isMobile() { return window.innerWidth <= 640; }
 function usernameToEmail(u) { return u.trim().toLowerCase().replace(/\s+/g, ".") + "@ms-factory.local"; }
 
-// ===== مين صاحب البيانات؟ =====
-// المدير = نفسه، الموظف = المدير اللي عيّنه
 async function getMyProfile() {
   if (myProfile) return myProfile;
   const { data: { user } } = await supabase.auth.getUser();
@@ -38,18 +36,15 @@ async function getOwnerId() {
 }
 function isAdmin() { return !myProfile || myProfile.is_admin === true || !myProfile.created_by; }
 
-// ===== أول ما الموظف يدخل، حمّل بيانات المدير =====
 async function loadSharedStateOnce() {
   try {
     if (sessionStorage.getItem("ms-shared-loaded")) return;
     sessionStorage.setItem("ms-shared-loaded", "1");
     const p = await getMyProfile();
-    if (!p || !p.created_by) return; // أنا المدير، بياناتي عندي
-    const owner = p.created_by;
-    const { data } = await supabase.from('factory_state').select('state, updated_at').eq('user_id', owner).single();
+    if (!p || !p.created_by) return;
+    const { data } = await supabase.from('factory_state').select('state').eq('user_id', p.created_by).single();
     if (data && data.state) {
       const local = localStorage.getItem("mgr6");
-      // لو عندي بيانات قديمة أو فاضية، خد بيانات المدير
       if (!local || local === "{}" || local.length < 50) {
         localStorage.setItem("mgr6", JSON.stringify(data.state));
         location.reload();
@@ -72,36 +67,77 @@ async function backupNow(showAlert = false) {
     else {
       lastSyncTime = new Date().toLocaleTimeString(isEN() ? 'en-US' : 'ar-EG');
       drawAll();
-      syncRealTables(owner, state);
+      await syncRealTables(owner, state);
       if(showAlert) alert(T("تم الحفظ في السحابة ✅", "Saved to cloud ✅"));
     }
   } catch(e){ console.error(e); }
 }
 
-async function syncRealTables(userId, S) {
+// ===== المرحلة 3 - الجداول الحقيقية =====
+async function syncRealTables(owner, S) {
   try {
-    if (S.partners && Array.isArray(S.partners)) {
-      for (const p of S.partners) {
+    // 1. العملاء والموردين - S.partners
+    const partners = S.partners || S.customers || [];
+    if (Array.isArray(partners)) {
+      for (const p of partners) {
         if (!p || !p.name) continue;
-        const isSupplier = (p.type || "").toString().toLowerCase().includes("supp") || (p.type || "").includes("مورد");
-        const row = { user_id: userId, external_id: String(p.id || p.name), name: p.name, phone: p.phone || "", email: p.email || "", address: p.addr || p.address || "" };
+        const t = (p.type || p.kind || "").toString().toLowerCase();
+        const isSupplier = t.includes("supp") || t.includes("مورد") || p.isSupplier === true;
+        const row = { user_id: owner, external_id: String(p.id || p.name), name: p.name, phone: p.phone || p.tel || "", email: p.email || "", address: p.addr || p.address || "" };
         const table = isSupplier ? "suppliers" : "customers";
         const { error } = await supabase.from(table).upsert(row, { onConflict: 'user_id,external_id' });
         if (error) await supabase.from(table).insert(row).catch(()=>{});
       }
     }
-    if (S.docs && Array.isArray(S.docs)) {
-      for (const d of S.docs) {
-        if (!d) continue;
-        const row = { user_id: userId, external_id: String(d.id || d.no || Date.now()), customer_name: d.customer || d.partner || "", total: Number(d.total || d.tot || 0) || 0, raw: d };
-        const { error } = await supabase.from('invoices').upsert(row, { onConflict: 'user_id,external_id' });
-        if (error) await supabase.from('invoices').insert(row).catch(()=>{});
+    // موردين لوحدهم في S.suppliers
+    if (Array.isArray(S.suppliers)) {
+      for (const p of S.suppliers) {
+        if (!p || !p.name) continue;
+        const row = { user_id: owner, external_id: String(p.id || p.name), name: p.name, phone: p.phone || "", email: p.email || "", address: p.addr || p.address || "" };
+        await supabase.from('suppliers').upsert(row, { onConflict: 'user_id,external_id' }).catch(()=>{});
       }
     }
-  } catch(e){ console.error(e); }
+    // 2. المنتجات - S.products / S.prods / S.inv
+    const prods = S.products || S.prods || S.inv || S.inventory || [];
+    if (Array.isArray(prods)) {
+      for (const pr of prods) {
+        if (!pr || !pr.name) continue;
+        const row = { user_id: owner, external_id: String(pr.id || pr.name), name: pr.name, qty: Number(pr.qty || pr.q || pr.stock || 0) || 0, price: Number(pr.price || pr.pr || 0) || 0, raw: pr };
+        await supabase.from('products').upsert(row, { onConflict: 'user_id,external_id' }).catch(()=>{});
+      }
+    }
+    // 3. الفواتير + أصنافها - S.docs
+    const docs = S.docs || S.invoices || [];
+    if (Array.isArray(docs)) {
+      for (const d of docs) {
+        if (!d) continue;
+        const extId = String(d.id || d.no || d.num || Date.now());
+        const custName = d.customer || d.partner || d.cust || d.client || "";
+        const total = Number(d.total || d.tot || d.grandTotal || 0) || 0;
+        const row = { user_id: owner, external_id: extId, customer_name: custName, total, raw: d };
+        const { error } = await supabase.from('invoices').upsert(row, { onConflict: 'user_id,external_id' });
+        if (error) await supabase.from('invoices').insert(row).catch(()=>{});
+        // هات id الفاتورة عشان نربط الأصناف
+        const { data: invRow } = await supabase.from('invoices').select('id').eq('user_id', owner).eq('external_id', extId).single();
+        if (invRow) {
+          await supabase.from('invoice_items').delete().eq('invoice_id', invRow.id);
+          const items = d.items || d.lines || d.details || [];
+          if (Array.isArray(items) && items.length) {
+            const toInsert = items.map(it => ({
+              user_id: owner, invoice_id: invRow.id,
+              product_name: it.name || it.product || it.item || "",
+              qty: Number(it.qty || it.q || 1) || 1,
+              price: Number(it.price || it.pr || 0) || 0,
+              total: Number(it.total || it.tot || (Number(it.qty||1) * Number(it.price||0))) || 0
+            }));
+            await supabase.from('invoice_items').insert(toInsert).catch(()=>{});
+          }
+        }
+      }
+    }
+  } catch(e){ console.error("syncRealTables", e); }
 }
 
-// ===== تطبيق الصلاحيات بجد =====
 const TAB_PERMS = [
   { key: "invoices", ar: ["فواتير", "فاتورة"], en: ["invoice"] },
   { key: "inventory", ar: ["مخزون", "مخزن"], en: ["inventory", "stock"] },
@@ -116,33 +152,23 @@ const TAB_PERMS = [
 async function enforcePermissions() {
   const p = await getMyProfile();
   if (!p) return;
-  if (isAdmin()) return; // المدير يشوف كل حاجة
+  if (isAdmin()) return;
   const perms = p.permissions || {};
-  // الموظفين تابة مقفولة دايماً للموظف العادي
   document.querySelectorAll("button, a, [data-tab], [data-view], .nav-item, .tab-btn, .sidebar button, nav button, aside button").forEach(el => {
     const txt = (el.textContent || "").trim().toLowerCase();
     if (!txt || txt.length > 30) return;
     for (const tp of TAB_PERMS) {
       const words = isEN() ? tp.en : tp.ar;
-      const match = words.some(w => txt.includes(w.toLowerCase()));
-      if (match) {
-        // لو ماعندوش الصلاحية دي، اخفي الزرار
+      if (words.some(w => txt.includes(w.toLowerCase()))) {
         if (!perms[tp.key]) el.style.display = "none";
         else el.style.display = "";
       }
     }
   });
-  // لو هو في تابة ممنوعة، رجعه للوحة الرئيسية
-  const m = document.getElementById("m");
-  if (m) {
-    const txt = (m.textContent || "").toLowerCase();
-    // لو فتح تابة موظفين وهو مش مدير، شيل الكارت
-    const card = document.getElementById("ms-emp-in-tab");
-    if (card) card.remove();
-  }
+  const card = document.getElementById("ms-emp-in-tab");
+  if (card) card.remove();
 }
 
-// ===== إضافة حساب دخول من جوه تابة الموظفين - للمدير بس =====
 const PERMS = [
   { key: "invoices", ar: "الفواتير", en: "Invoices" },
   { key: "inventory", ar: "المخزون", en: "Inventory" },
@@ -165,11 +191,10 @@ function isEmployeesTabOpen() {
 async function injectEmployeeAccountForm() {
   if (!isEmployeesTabOpen()) return;
   const p = await getMyProfile();
-  if (!p || !isAdmin()) return; // الموظف ميشوفش الكارت ده خالص
+  if (!p || !isAdmin()) return;
   const m = document.getElementById("m");
   if (!m) return;
   if (document.getElementById("ms-emp-in-tab")) return;
-
   const box = document.createElement("div");
   box.id = "ms-emp-in-tab";
   box.style.cssText = "background:#f0fdfa;border:2px solid #0f766e;border-radius:16px;padding:16px;margin:0 0 16px 0;direction:" + (isEN() ? "ltr" : "rtl") + ";";
@@ -225,7 +250,6 @@ setInterval(() => {
   enforcePermissions();
 }, 1000);
 
-// ===== الشريط زي ما هو - حباية + ✕ بس =====
 const originalSetItem = localStorage.setItem.bind(localStorage);
 localStorage.setItem = function(key, value) {
   originalSetItem(key, value);
@@ -315,4 +339,4 @@ setInterval(() => {
 }, 500);
 window.addEventListener("resize", () => drawAll());
 drawAll();
-console.log("☁️ Cloud Sync V21 شغال - صلاحيات + بيانات مشتركة");
+console.log("☁️ Cloud Sync V22 شغال - المرحلة 3 كاملة");
