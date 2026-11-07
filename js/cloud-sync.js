@@ -1,4 +1,4 @@
-// js/cloud-sync.js - V13 - FINAL - ✕ بتاعنا احنا، مش بتاع index - Dynamic + AR/EN + PC/Mobile
+// js/cloud-sync.js - V14 - شريط واحد فوق خالص فيه السحابة + ✕ - Dynamic + AR/EN + PC/Mobile
 import { supabase } from './supabase.js';
 
 let saveTimer = null;
@@ -59,93 +59,94 @@ window.restoreCloud = async function() {
 };
 window.backupNowManual = function() { backupNow(true); };
 
-// ===== زرار الخروج بتاعنا - مش بنستخدم بتاع index خالص =====
 async function doLogout() {
   if (!confirm(T("متأكد عايز تسجل خروج؟", "Are you sure you want to logout?"))) return;
   try { await supabase.auth.signOut(); } catch(e){}
-  try { localStorage.removeItem("mgr6"); } catch(e){}
   location.href = "auth.html";
 }
 
-// ===== اخفي أي حاجة قديمة فيها "مسجل الدخول" أو الإيميل أو زرار خروج قديم =====
 function hideOldUserBar() {
   document.querySelectorAll("button, a, span, div, p, small").forEach(el => {
-    if (el.id === "cloud-badge" || el.id === "ms-logout-btn" || el.closest("#cloud-badge") || el.closest("#ms-logout-btn")) return;
+    if (el.id === "ms-topbar" || el.closest("#ms-topbar")) return;
     const txt = (el.textContent || "");
-    // لو العنصر ده فيه "مسجل الدخول" أو إيميل، وكان صغير (مش الصفحة كلها)، اخفيه
-    if ((txt.includes("مسجل الدخول") || txt.includes("Logged in as")) && el.children.length === 0) {
-      el.style.display = "none";
-    }
-    // اخفي زرار الخروج القديم نفسه، عشان احنا عندنا واحد جديد
+    if ((txt.includes("مسجل الدخول") || txt.includes("Logged in as")) && el.children.length === 0) el.style.display = "none";
     const id = (el.id || "").toLowerCase();
     const t = txt.trim();
-    if ((id.includes("logout") || t === "تسجيل خروج" || t === "Logout") && el.id !== "ms-logout-btn") {
-      el.style.display = "none";
-    }
+    if ((id.includes("logout") || t === "تسجيل خروج" || t === "Logout") && el.id !== "ms-logout-btn") el.style.display = "none";
   });
-  // امسح أي Text Node فيها إيميل من الـ body مباشرة
   Array.from(document.body.childNodes).forEach(n => {
     if (n.nodeType === 3 && (n.textContent.includes("مسجل") || n.textContent.includes("@"))) n.textContent = "";
   });
 }
 
-// ===== ارسم الشريط + مربع ✕ =====
 function drawAll(text) {
   hideOldUserBar();
   const en = isEN();
   const mobile = isMobile();
 
-  // 1. مربع ✕ - بتاعنا، في أقصى الطرف، فوق خالص
-  let x = document.getElementById("ms-logout-btn");
-  if (!x) {
-    x = document.createElement("button");
-    x.id = "ms-logout-btn";
-    x.onclick = doLogout;
-    document.body.appendChild(x);
+  // ===== شريط واحد فوق خالص، فيه السحابة + ✕، نفس الارتفاع =====
+  let top = document.getElementById("ms-topbar");
+  if (!top) {
+    top = document.createElement("div");
+    top.id = "ms-topbar";
+    document.body.prepend(top);
   }
+
+  // عربي: ✕ شمال خالص | إنجليزي: ✕ يمين خالص
+  // بنرتبهم بـ flex-direction عشان الـ ✕ يفضل في الطرف
+  top.style.cssText = "position:fixed;top:0;left:0;right:0;width:100%;height:36px;z-index:100000;background:#0f766e;color:#fff;display:flex;align-items:center;direction:" + (en ? "ltr" : "rtl") + ";box-shadow:0 2px 8px rgba(0,0,0,.3);";
+
+  // ننضف الشريط ونرسمه من جديد
+  top.innerHTML = "";
+
+  // 1. زرار ✕ - مربع 36x36، نفس ارتفاع الشريط بالظبط
+  const x = document.createElement("button");
+  x.id = "ms-logout-btn";
   x.textContent = "✕";
   x.title = en ? "Logout" : "تسجيل الخروج";
-  if (en) x.style.cssText = "position:fixed;top:0;right:0;left:auto;z-index:100001;background:#ef4444;color:#fff;border:none;width:36px;height:36px;border-radius:0;font-size:18px;font-weight:bold;cursor:pointer;display:flex;align-items:center;justify-content:center;";
-  else x.style.cssText = "position:fixed;top:0;left:0;right:auto;z-index:100001;background:#ef4444;color:#fff;border:none;width:36px;height:36px;border-radius:0;font-size:18px;font-weight:bold;cursor:pointer;display:flex;align-items:center;justify-content:center;";
+  x.onclick = doLogout;
+  x.style.cssText = "background:#ef4444;color:#fff;border:none;width:36px;height:36px;min-width:36px;border-radius:0;font-size:18px;font-weight:bold;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;";
 
-  // 2. شريط السحابة
-  let b = document.getElementById("cloud-badge");
-  if (!b) { b = document.createElement("div"); b.id = "cloud-badge"; document.body.appendChild(b); }
-  const label = text || (lastSyncTime ? `${T("☁️ متزامن", "☁️ Synced")} ${lastSyncTime}` : T("☁️ متزامن", "☁️ Synced"));
-  b.innerHTML = "";
-  const s1 = document.createElement("span"); s1.textContent = label;
+  // 2. السحابة - في النص، بتاخد باقي المساحة
+  const b = document.createElement("div");
+  b.id = "cloud-badge";
+  // على الموبايل: من غير وقت عشان مفيش مكان، وخط أصغر، وممنوع يلف لسطر تاني
+  // على الكمبيوتر: بالوقت عادي
+  const label = mobile
+    ? T("☁️ متزامن", "☁️ Synced")
+    : (text || (lastSyncTime ? `${T("☁️ متزامن", "☁️ Synced")} ${lastSyncTime}` : T("☁️ متزامن", "☁️ Synced")));
+  const s1 = document.createElement("span"); s1.textContent = label; s1.style.whiteSpace = "nowrap";
   const s2 = document.createElement("span"); s2.textContent = T("حفظ الآن", "Save Now");
-  s2.style.cssText = "background:#fff;color:#0f766e;padding:2px 10px;border-radius:12px;cursor:pointer;white-space:nowrap;";
+  s2.style.cssText = "background:#fff;color:#0f766e;padding:2px 8px;border-radius:12px;cursor:pointer;white-space:nowrap;" + (mobile ? "font-size:11px;" : "");
   s2.onclick = (e) => { e.stopPropagation(); backupNowManual(); };
   const s3 = document.createElement("span"); s3.textContent = T("استرجاع", "Restore");
-  s3.style.cssText = "background:#fff;color:#0f766e;padding:2px 10px;border-radius:12px;cursor:pointer;white-space:nowrap;";
+  s3.style.cssText = "background:#fff;color:#0f766e;padding:2px 8px;border-radius:12px;cursor:pointer;white-space:nowrap;" + (mobile ? "font-size:11px;" : "");
   s3.onclick = (e) => { e.stopPropagation(); restoreCloud(); };
-  b.appendChild(s1); b.appendChild(s2); b.appendChild(s3);
 
-  if (mobile) {
-    const pad = en ? "padding:5px 40px 5px 8px;" : "padding:5px 8px 5px 40px;";
-    b.style.cssText = "position:fixed;top:0;left:0;right:0;width:100%;z-index:99999;background:#0f766e;color:#fff;font-size:11px;font-weight:bold;display:flex;gap:6px;align-items:center;justify-content:center;flex-wrap:wrap;direction:" + (en ? "ltr" : "rtl") + ";border-radius:0;box-shadow:0 2px 8px rgba(0,0,0,.3);" + pad;
-    document.body.style.paddingTop = "28px";
-  } else {
-    document.body.style.paddingTop = "";
-    if (en) b.style.cssText = "position:fixed;top:0;left:0;right:36px;z-index:99999;background:#0f766e;color:#fff;padding:6px 12px;font-size:13px;font-weight:bold;display:flex;gap:8px;align-items:center;justify-content:center;direction:ltr;border-radius:0;";
-    else b.style.cssText = "position:fixed;top:0;left:36px;right:0;z-index:99999;background:#0f766e;color:#fff;padding:6px 12px;font-size:13px;font-weight:bold;display:flex;gap:8px;align-items:center;justify-content:center;direction:rtl;border-radius:0;";
-  }
+  b.appendChild(s1); b.appendChild(s2); b.appendChild(s3);
+  // موبايل: خط 11px وممنوع يلف | كمبيوتر: خط 13px
+  b.style.cssText = "flex:1;display:flex;gap:" + (mobile ? "6px" : "8px") + ";align-items:center;justify-content:center;flex-wrap:nowrap;overflow:hidden;white-space:nowrap;font-size:" + (mobile ? "11px" : "13px") + ";font-weight:bold;direction:" + (en ? "ltr" : "rtl") + ";";
+
+  // الترتيب: عربي = ✕ شمال، السحابة بعده | إنجليزي = ✕ يمين، السحابة قبله
+  // عشان الشريط direction rtl/ltr، هنحط ✕ الأول دايماً وهو هيروح للطرف الصح
+  if (en) { top.appendChild(b); top.appendChild(x); }
+  else { top.appendChild(x); top.appendChild(b); }
+
+  // ننزل محتوى البرنامج 36px تحت، عشان الشريط ميغطيش على حاجة - كمبيوتر وموبايل
+  document.body.style.paddingTop = "36px";
 
   lastLang = en ? "en" : "ar";
   lastMode = mobile ? "mobile" : "desktop";
-  return b;
 }
 
 setInterval(() => {
-  const b = document.getElementById("cloud-badge");
-  const x = document.getElementById("ms-logout-btn");
+  const top = document.getElementById("ms-topbar");
   const cur = isEN() ? "en" : "ar";
   const mode = isMobile() ? "mobile" : "desktop";
-  if (!b || !x || cur !== lastLang || mode !== lastMode) drawAll();
+  if (!top || cur !== lastLang || mode !== lastMode) drawAll();
   else hideOldUserBar();
 }, 500);
 
 window.addEventListener("resize", () => drawAll());
 drawAll();
-console.log("☁️ Cloud Sync V13 شغال - ✕ بتاعنا");
+console.log("☁️ Cloud Sync V14 شغال - شريط واحد + موبايل صح");
