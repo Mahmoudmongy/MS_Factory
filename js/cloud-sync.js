@@ -232,23 +232,47 @@ async function uploadToTables(showAlert = false) {
       Object.getPrototypeOf(localStorage).setItem.call(localStorage, "mgr6", JSON.stringify(S));
     }
 
-    const prodArrays = [];
-    if (canWrite("inventory") && Array.isArray(S.products)) prodArrays.push(S.products);
-    if (canWrite("inventory") && Array.isArray(S.prods)) prodArrays.push(S.prods);
-    for (const arr of prodArrays) {
-      for (const pr of arr) {
+    // The live app's inventory master array is S.items (each item carries stock by variant in item.st).
+    // Keep the older S.products / S.prods shapes as compatibility sources for earlier builds.
+    if (canWrite("inventory")) {
+      const productMap = new Map();
+      for (const arr of [S.items, S.products, S.prods]) {
+        if (!Array.isArray(arr)) continue;
+        for (const pr of arr) {
+          if (!pr || typeof pr !== "object") continue;
+          const name = String(getField(pr, ["name", "title", "product"]) || "");
+          if (!name || isAccountName(name)) continue;
+          const externalId = String(getField(pr, ["id", "code", "sku"]) || name);
+          if (!productMap.has(externalId)) productMap.set(externalId, pr);
+        }
+      }
+      for (const [externalId, pr] of productMap) {
         const name = String(getField(pr, ["name", "title", "product"]) || "");
-        if (!name || isAccountName(name)) continue;
+        const variants = pr.st && typeof pr.st === "object" && !Array.isArray(pr.st) ? pr.st : null;
+        const qty = variants
+          ? Object.values(variants).reduce((sum, value) => sum + (Number(value) || 0), 0)
+          : (Number(getField(pr, ["qty", "q", "stock", "balance"]) || 0) || 0);
+        const buyPrice = Number(getField(pr, ["buy", "buy_price", "price", "pr"]) || 0) || 0;
+        const warehouse = Array.isArray(S.wh)
+          ? (S.wh.find(w => String(w.id) === String(pr.wh)) || {}).name
+          : "";
         const row = {
           user_id: owner,
-          external_id: String(getField(pr, ["id", "code", "sku"]) || name),
+          external_id: externalId,
           name,
-          qty: Number(getField(pr, ["qty", "q", "stock", "balance"]) || 0) || 0,
-          price: Number(getField(pr, ["price", "pr", "unit"]) || 0) || 0,
+          sku: String(getField(pr, ["sku", "code"]) || "") || null,
+          unit: String(getField(pr, ["unit", "u"]) || "قطعة"),
+          warehouse: warehouse || (pr.wh == null ? null : String(pr.wh)),
+          buy_price: buyPrice,
+          retail_price: Number(getField(pr, ["retail", "retail_price"]) || 0) || 0,
+          wholesale_price: Number(getField(pr, ["wholesale", "wholesale_price"]) || 0) || 0,
+          qty,
+          price: buyPrice,
+          image_url: String(getField(pr, ["img", "image_url"]) || "") || null,
           raw: pr
         };
         const { error } = await supabase.from("products").upsert(row, { onConflict: "user_id,external_id" });
-        if (error) errors.push("products: " + error.message);
+        if (error) errors.push("products " + externalId + ": " + error.message);
       }
     }
 
@@ -260,7 +284,9 @@ async function uploadToTables(showAlert = false) {
       if (showAlert) alert(msg);
       return msg;
     }
-    syncState = "synced";
+    // Non-admin accounts still lack cloud persistence for the complete accounting ledger and several modules.
+    // Never display the green "Synced" state for a detail-only employee sync.
+    syncState = admin ? "synced" : "partial";
     lastSyncTime = new Date().toLocaleTimeString(isEN() ? "en-US" : "ar-EG");
     drawAll();
     const msg = admin
@@ -345,10 +371,25 @@ async function loadFromTablesMerge(isAuto = false) {
       S.docs = m.arr; totalAdded += m.added; invoiceConflicts += m.conflicts;
     }
     if (prods?.length) {
-      const cloudProds = prods.map(p => p.raw || { id: p.external_id, name: p.name, qty: p.qty, price: p.price });
-      if (!Array.isArray(S.products)) S.products = [];
-      const m = mergeByKey(S.products, cloudProds, x => x.id || x.name);
-      S.products = m.arr; totalAdded += m.added;
+      const cloudProducts = prods.map(p => {
+        if (p.raw && typeof p.raw === "object" && !Array.isArray(p.raw)) {
+          const raw = { ...p.raw };
+          if (!raw.st || typeof raw.st !== "object" || Array.isArray(raw.st)) raw.st = {};
+          return raw;
+        }
+        const qty = Number(p.qty || 0) || 0;
+        const buy = Number(p.buy_price ?? p.price ?? 0) || 0;
+        return {
+          id: p.external_id || p.id, name: p.name, sku: p.sku || p.external_id || "",
+          unit: p.unit || "قطعة", wh: p.warehouse || null,
+          buy, retail: Number(p.retail_price || 0) || 0,
+          wholesale: Number(p.wholesale_price || 0) || 0,
+          img: p.image_url || "", st: qty ? { "-": qty } : {}, val: qty * buy
+        };
+      });
+      if (!Array.isArray(S.items)) S.items = [];
+      const m = mergeByKey(S.items, cloudProducts, x => x.id || x.sku || x.name);
+      S.items = m.arr; totalAdded += m.added;
     }
     Object.getPrototypeOf(localStorage).setItem.call(localStorage, "mgr6", JSON.stringify(S));
     if (restoredSnapshot && isAuto) setTimeout(() => location.reload(), 500);
@@ -609,6 +650,7 @@ function drawAll() {
   let bg = "#0f766e";
   if (!navigator.onLine || syncState === "offline") { label = T("💾 محفوظ في الجهاز - مفيش نت", "💾 Saved on device - offline"); bg = "#f59e0b"; }
   else if (syncState === "saving") { label = T("⏳ جاري الرفع...", "⏳ Uploading..."); bg = "#3b82f6"; }
+  else if (syncState === "partial") { label = T("⚠️ مزامنة جزئية", "⚠️ Partial sync"); bg = "#b45309"; }
   else if (syncState === "synced") { label = mobile ? T("☁️ متزامن", "☁️ Synced") : `${T("☁️ متزامن", "☁️ Synced")} ${lastSyncTime}`; bg = "#0f766e"; }
   else { label = T("☁️ متصل - في انتظار المزامنة", "☁️ Online - waiting to sync"); bg = "#64748b"; }
   const s1 = document.createElement("span"); s1.textContent = label; s1.style.whiteSpace = "nowrap";
