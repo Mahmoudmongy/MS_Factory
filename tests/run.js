@@ -12,6 +12,7 @@ const browser=await pw.chromium.launch();
 const app=fs.readFileSync(path.join(ROOT,'js/app.js'),'utf8'),idx=fs.readFileSync(path.join(ROOT,'index.html'),'utf8'),cloud=fs.readFileSync(path.join(ROOT,'js/cloud-sync.js'),'utf8'),css=fs.readFileSync(path.join(ROOT,'css/style.css'),'utf8');
 const names=[...app.matchAll(/^(?:async )?function ([A-Za-z0-9_$]+)\(/gm)].map(m=>m[1]),dup=[...new Set(names.filter((n,i)=>names.indexOf(n)!==i))];
 ok('app.js has no duplicate top-level function definitions',dup.length==0,dup);
+ok('conditional form values and descriptions are escaped, not inserted as HTML',/escapeHTML\(p\?p\.name/.test(app)&&/escapeHTML\(pre\.desc/.test(app)&&/escapeHTML\(v\.split/.test(app));
 ok('HTML text and attribute values are escaped before rendering user-controlled fields',/const escapeHTML =/.test(app)&&/escapeHTML\(p\.name\)/.test(app)&&/escapeHTML\(x\.name\)/.test(app)&&/escapeHTML\(S\.name\)/.test(app));
 ok('image URLs are restricted to safe image, HTTPS, relative or blob sources',/const safeImageSrc =/.test(app)&&/safeImageSrc\(s\)/.test(app));
 ok('customer/supplier rows expose permission-gated edit actions',app.includes('pForm(${c},${p.id})')&&app.includes('can("edit")'));
