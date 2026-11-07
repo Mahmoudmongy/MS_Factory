@@ -1,4 +1,4 @@
-// js/cloud-sync.js - V8 - فوق خالص + موبايل + AR/EN
+// js/cloud-sync.js - V9 - فوق خالص + ✕ خروج بس + موبايل + AR/EN
 import { supabase } from './supabase.js';
 
 let saveTimer = null;
@@ -59,15 +59,47 @@ window.restoreCloud = async function() {
 };
 window.backupNowManual = function() { backupNow(true); };
 
+// ===== نلاقي زرار الخروج - حتى لو بقى ✕ =====
 function findLogoutBtn() {
-  const all = Array.from(document.querySelectorAll("button, a, span"));
+  const all = Array.from(document.querySelectorAll("button, a"));
   return all.find(el => {
     const t = (el.textContent || "").trim();
-    return t === "تسجيل خروج" || t === "خروج" || t === "Logout" || t === "Log out" || t === "Sign out";
+    const id = (el.id || "").toLowerCase();
+    return id.includes("logout") || id.includes("signout") || t === "تسجيل خروج" || t === "خروج" || t === "Logout" || t === "Log out" || t === "✕" || t === "✕ تسجيل الخروج" || t === "✕ Logout" || t === "X";
   });
 }
 
+// ===== ده اللي بيشيل جملة "مسجل الدخول باسم..." =====
+function cleanUserBar() {
+  // اخفي أي عنصر فيه جملة مسجل الدخول أو الإيميل، وسيب زرار الخروج بس
+  const logout = findLogoutBtn();
+  document.querySelectorAll("span, div, p, small").forEach(el => {
+    const txt = (el.textContent || "");
+    if (el === logout || el.contains(logout)) return;
+    if (txt.includes("مسجل الدخول") || txt.includes("مسجل الدخول باسم") || txt.includes("Logged in as") || txt.includes("Signed in as")) {
+      // لو العنصر ده هو اللي فيه الإيميل بس، اخفيه
+      if (el.children.length === 0) el.style.display = "none";
+      else {
+        // لو فيه الإيميل + الزرار مع بعض، اخفي نص الإيميل بس عن طريق إخفاء الـ span اللي فيه @
+        Array.from(el.childNodes).forEach(n => {
+          if (n.nodeType === 3 && (n.textContent.includes("@") || n.textContent.includes("مسجل"))) n.textContent = "";
+        });
+        Array.from(el.children).forEach(ch => {
+          if (ch !== logout && (ch.textContent || "").includes("@")) ch.style.display = "none";
+        });
+      }
+    }
+  });
+  // حول زرار الخروج لـ ✕ بس
+  if (logout) {
+    logout.textContent = "✕";
+    logout.title = isEN() ? "Logout" : "تسجيل الخروج";
+    logout.style.cssText = "background:#ef4444;color:#fff;border:none;width:28px;height:28px;border-radius:50%;font-size:14px;font-weight:bold;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;flex-shrink:0;";
+  }
+}
+
 function drawBadge(text) {
+  cleanUserBar();
   let b = document.getElementById("cloud-badge");
   if (!b) {
     b = document.createElement("div");
@@ -88,18 +120,19 @@ function drawBadge(text) {
   s3.onclick = (e) => { e.stopPropagation(); restoreCloud(); };
   b.appendChild(s1); b.appendChild(s2); b.appendChild(s3);
 
-  // ===== موبايل: شريط رفيع فوق خالص بعرض الشاشة، مش زرار عايم =====
+  const logout = findLogoutBtn();
+
+  // ===== موبايل: شريط رفيع فوق خالص، فيه السحابة + ✕ جنب بعض =====
   if (mobile) {
-    // لو كان جوه سطر تسجيل الخروج، رجعه للـ body
     if (b.parentElement !== document.body) document.body.appendChild(b);
     b.style.cssText = "position:fixed;top:0;left:0;right:0;width:100%;z-index:99999;background:#0f766e;color:#fff;padding:5px 8px;font-size:11px;font-weight:bold;display:flex;gap:6px;align-items:center;justify-content:center;flex-wrap:wrap;direction:" + (en ? "ltr" : "rtl") + ";border-radius:0;box-shadow:0 2px 8px rgba(0,0,0,.3);";
-    // ننزل محتوى الصفحة 28px تحت عشان الشريط ميغطيش على حاجة
+    // حط ✕ جوه نفس الشريط على الموبايل عشان ميغطيش على حاجة
+    if (logout && logout.parentElement !== b) b.appendChild(logout);
     document.body.style.paddingTop = "28px";
   } else {
     document.body.style.paddingTop = "";
-    // ===== كمبيوتر: في نفس سطر تسجيل الخروج فوق خالص =====
-    const logout = findLogoutBtn();
-    if (logout && logout.parentElement) {
+    // ===== كمبيوتر: جنب ✕ فوق خالص =====
+    if (logout && logout.parentElement && logout.parentElement !== b) {
       const bar = logout.parentElement;
       bar.style.display = "flex";
       bar.style.alignItems = "center";
@@ -112,10 +145,17 @@ function drawBadge(text) {
       if (en && bar.firstChild === b) bar.appendChild(b);
       if (!en && bar.lastChild === b) bar.insertBefore(b, bar.firstChild);
     } else {
-      // لو زرار الخروج لسه مظهرش، حطه فوق خالص مؤقتاً - مش تحت خالص
       if (b.parentElement !== document.body) document.body.appendChild(b);
       if (en) b.style.cssText = "position:fixed;top:6px;right:12px;z-index:99999;background:#0f766e;color:#fff;padding:6px 12px;border-radius:20px;font-size:13px;font-weight:bold;display:flex;gap:8px;align-items:center;direction:ltr;";
       else b.style.cssText = "position:fixed;top:6px;left:12px;z-index:99999;background:#0f766e;color:#fff;padding:6px 12px;border-radius:20px;font-size:13px;font-weight:bold;display:flex;gap:8px;align-items:center;direction:rtl;";
+      // لو ✕ بره، حطه جنب الزرار في نفس السطر
+      if (logout && logout.parentElement !== b && logout.parentElement !== document.body) {
+        logout.style.position = "fixed";
+        logout.style.top = "6px";
+        logout.style.zIndex = "99999";
+        logout.style.left = en ? "auto" : "12px";
+        logout.style.right = en ? "12px" : "auto";
+      }
     }
   }
   lastLang = en ? "en" : "ar";
@@ -130,8 +170,9 @@ setInterval(() => {
   const logout = findLogoutBtn();
   const inBar = logout && b && b.parentElement === logout.parentElement;
   if (!b || cur !== lastLang || mode !== lastMode || (!isMobile() && logout && !inBar)) drawBadge();
+  else cleanUserBar();
 }, 500);
 
 window.addEventListener("resize", () => drawBadge());
 drawBadge();
-console.log("☁️ Cloud Sync V8 شغال - فوق خالص + موبايل");
+console.log("☁️ Cloud Sync V9 شغال - ✕ بس");
