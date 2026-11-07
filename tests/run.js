@@ -135,8 +135,9 @@ await ctx.close();
 /* ---------- C. PWA: service worker + offline shell ---------- */
 const c2=await browser.newContext({viewport:{width:1280,height:800}}),q=await c2.newPage();await q.goto(BASE);await q.evaluate(()=>navigator.serviceWorker.ready);await q.reload();await q.waitForTimeout(600);
 const swi=await q.evaluate(async()=>({ctl:!!navigator.serviceWorker.controller,keys:await caches.keys(),cached:(await (await caches.open((await caches.keys())[0])).keys()).map(r=>new URL(r.url).pathname)}));
-ok('service worker installed and controlling the page; single versioned cache',swi.ctl&&swi.keys.length==1&&/^factory-v5$/.test(swi.keys[0]),swi.keys);
-ok('app shell files are precached (index, css, js, manifest, icons)',['/index.html','/css/style.css','/js/app.js','/manifest.json','/assets/icon-192.png','/assets/icon-512.png'].every(f=>swi.cached.includes(f)),swi.cached);
+ok('service worker installed and controlling the page; single versioned cache',swi.ctl&&swi.keys.length==1&&/^factory-v6$/.test(swi.keys[0]),swi.keys);
+ok('app shell files are precached (index, css, js, manifest, icons)',['/index.html','/css/style.css','/js/app.js','/manifest.json','/assets/icon-192.png','/assets/icon-512.png','/auth.html','/js/auth.js','/js/supabase.js','/js/cloud-sync.js'].every(f=>swi.cached.includes(f)),swi.cached);
+ok('offline cache does not include authenticated API responses or user records',swi.cached.every(f=>!f.includes('/rest/v1/')&&!f.includes('/auth/v1/')&&!f.includes('/storage/v1/')));
 await q.evaluate(()=>{const s=JSON.parse(localStorage.getItem('mgr6')||'null');localStorage.setItem('mgr6',JSON.stringify(s))});
 await c2.setOffline(true);await q.reload();await q.waitForTimeout(500);const off=await q.evaluate(()=>({ok:!!document.querySelector('#sb a'),tabs:document.querySelectorAll('#sb a').length}));
 ok('app loads and works with the network switched off (from the service-worker cache)',off.ok&&off.tabs>=15,off);
