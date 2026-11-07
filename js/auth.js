@@ -14,8 +14,10 @@ function say(text, isError = true) {
 }
 
 function credentials() {
+  const entered = $('auth-email').value.trim();
+  const email = entered.includes('@') || !entered ? entered : `${entered.toLowerCase()}@ms-factory.local`;
   return {
-    email: $('auth-email').value.trim(),
+    email,
     password: $('auth-password').value,
   };
 }
@@ -30,8 +32,8 @@ function showSession(session) {
 }
 
 if (!supabase) {
-  if(status) status.textContent = 'غير متصل - حط الـ URL والـ Key في supabase.js';
-  say('غير متصل - حط الـ URL والـ Key في supabase.js');
+  if(status) status.textContent = 'غير متصل';
+  say('غير متصل');
 } else {
   if(status) status.textContent = 'متصل بـ Supabase ✅';
 
@@ -57,6 +59,7 @@ if (!supabase) {
     const { email, password } = credentials();
     if (!email || !password) return say('أدخل البريد الإلكتروني وكلمة المرور');
     if (password.length < 6) return say('كلمة المرور يجب ألا تقل عن 6 أحرف');
+    if (!$('auth-email').value.includes('@')) return say('أدخل بريداً إلكترونياً صالحاً');
     say('جاري إنشاء الحساب...', false);
     const { data, error } = await supabase.auth.signUp({ email, password });
     if (error) return say('خطأ تسجيل: ' + error.message);

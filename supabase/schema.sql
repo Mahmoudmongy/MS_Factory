@@ -1,148 +1,160 @@
 /*
-# إنشاء جداول التطبيق مع حماية الصفوف (RLS)
+# Create app tables aligned with the cloud sync and owner-shared access
 
-1. الجداول الجديدة
-- profiles: بيانات المستخدم الأساسية، تُنشأ تلقائياً عند التسجيل
-- customers: العملاء
-- suppliers: الموردون
-- products: الأصناف (المنتجات والخامات)
-- inventory: أرصدة المخزون لكل صنف ومقاس/لون
-- invoices: فواتير البيع والشراء
-- invoice_items: بنود الفواتير
-- returns: المرتجعات (مرتجع بيع ومرتجع شراء)
-- vouchers: السندات (مقبوضات ومدفوعات)
-- production_orders: أوامر الإنتاج
+1. Overview
+- The factory app stores its data in the browser and syncs it to these tables.
+- The owner (the account that signed up first) and the employees created by the owner share one data set.
+- Employees are identified by profiles.created_by; their data rows use the owner's id as user_id.
 
-2. الأمان
-- تفعيل RLS على كل الجداول
-- كل مستخدم يرى ويعدّل بياناته فقط عبر عمود user_id
-- الصلاحيات (GRANT) للمستخدمين المسجلين فقط، بدون وصول للزوار
+2. New tables (all with RLS enabled)
+- profiles: one row per auth user. username and permissions are used by employee accounts. created_by is empty for the owner.
+- customers, suppliers: partner records synced from the app (external_id links to the app's id).
+- products: product records synced from the app, full app record kept in raw.
+- inventory: stock balance per product and variant (not yet written by the app).
+- invoices: one row per app document, full app record kept in raw.
+- invoice_items: line items of an invoice.
+- returns, vouchers, production_orders: created for future sync (not yet written by the app).
 
-3. ملاحظات
-- يُنفَّذ هذا الملف مرة واحدة في SQL Editor
-- لا يحذف أي بيانات
+3. Security
+- RLS enabled on every table.
+- Data tables: readable and writable only for rows whose user_id equals the current owner (public.current_owner_id()).
+- profiles: a user can read their own profile and change only full_name. username, created_by, and permissions can be changed only by the server function that creates employees.
+- Employee accounts are created by the create-employee edge function, not from the browser.
+
+4. Notes
+- Idempotent: safe to run again.
+- No data is deleted.
 */
 
 CREATE TABLE IF NOT EXISTS profiles (
   id uuid PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
   email text,
   full_name text,
+  username text UNIQUE CHECK (username IS NULL OR username ~ '^[a-z0-9._-]+$'),
+  created_by uuid REFERENCES auth.users(id) ON DELETE SET NULL,
+  permissions jsonb NOT NULL DEFAULT '{}'::jsonb,
+  must_change_password boolean NOT NULL DEFAULT false,
   created_at timestamptz NOT NULL DEFAULT now()
 );
 
+CREATE OR REPLACE FUNCTION public.current_owner_id()
+RETURNS uuid
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path = public
+AS $$
+  SELECT COALESCE(p.created_by, p.id) FROM public.profiles p WHERE p.id = auth.uid();
+$$;
+
+REVOKE EXECUTE ON FUNCTION public.current_owner_id() FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION public.current_owner_id() TO authenticated;
+
 CREATE TABLE IF NOT EXISTS customers (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  user_id uuid NOT NULL DEFAULT auth.uid() REFERENCES auth.users(id) ON DELETE CASCADE,
+  user_id uuid NOT NULL DEFAULT public.current_owner_id() REFERENCES auth.users(id) ON DELETE CASCADE,
+  external_id text NOT NULL,
   name text NOT NULL,
   phone text,
-  customer_type text NOT NULL DEFAULT 'retail' CHECK (customer_type IN ('retail', 'wholesale')),
-  governorate text,
-  city text,
+  email text,
   address text,
-  created_at timestamptz NOT NULL DEFAULT now()
+  created_at timestamptz NOT NULL DEFAULT now(),
+  UNIQUE (user_id, external_id)
 );
 
 CREATE TABLE IF NOT EXISTS suppliers (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  user_id uuid NOT NULL DEFAULT auth.uid() REFERENCES auth.users(id) ON DELETE CASCADE,
+  user_id uuid NOT NULL DEFAULT public.current_owner_id() REFERENCES auth.users(id) ON DELETE CASCADE,
+  external_id text NOT NULL,
   name text NOT NULL,
   phone text,
-  governorate text,
-  city text,
+  email text,
   address text,
-  created_at timestamptz NOT NULL DEFAULT now()
+  created_at timestamptz NOT NULL DEFAULT now(),
+  UNIQUE (user_id, external_id)
 );
 
 CREATE TABLE IF NOT EXISTS products (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  user_id uuid NOT NULL DEFAULT auth.uid() REFERENCES auth.users(id) ON DELETE CASCADE,
+  user_id uuid NOT NULL DEFAULT public.current_owner_id() REFERENCES auth.users(id) ON DELETE CASCADE,
+  external_id text NOT NULL,
   name text NOT NULL,
-  sku text,
-  model text,
-  unit text NOT NULL DEFAULT 'قطعة',
-  warehouse text,
-  buy_price numeric(12,2) NOT NULL DEFAULT 0,
-  retail_price numeric(12,2) NOT NULL DEFAULT 0,
-  wholesale_price numeric(12,2) NOT NULL DEFAULT 0,
-  image_url text,
-  created_at timestamptz NOT NULL DEFAULT now()
+  qty numeric(14,3) NOT NULL DEFAULT 0,
+  price numeric(14,2) NOT NULL DEFAULT 0,
+  raw jsonb,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  UNIQUE (user_id, external_id)
 );
 
 CREATE TABLE IF NOT EXISTS inventory (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  user_id uuid NOT NULL DEFAULT auth.uid() REFERENCES auth.users(id) ON DELETE CASCADE,
+  user_id uuid NOT NULL DEFAULT public.current_owner_id() REFERENCES auth.users(id) ON DELETE CASCADE,
   product_id uuid NOT NULL REFERENCES products(id) ON DELETE CASCADE,
   variant text NOT NULL DEFAULT '-',
-  quantity numeric(12,3) NOT NULL DEFAULT 0,
+  quantity numeric(14,3) NOT NULL DEFAULT 0,
   updated_at timestamptz NOT NULL DEFAULT now(),
   UNIQUE (product_id, variant)
 );
 
 CREATE TABLE IF NOT EXISTS invoices (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  user_id uuid NOT NULL DEFAULT auth.uid() REFERENCES auth.users(id) ON DELETE CASCADE,
-  invoice_no text NOT NULL,
-  invoice_type text NOT NULL CHECK (invoice_type IN ('sale', 'purchase')),
-  customer_id uuid REFERENCES customers(id) ON DELETE SET NULL,
-  supplier_id uuid REFERENCES suppliers(id) ON DELETE SET NULL,
-  invoice_date date NOT NULL DEFAULT current_date,
-  discount numeric(12,2) NOT NULL DEFAULT 0,
-  total numeric(12,2) NOT NULL DEFAULT 0,
-  note text,
-  created_at timestamptz NOT NULL DEFAULT now()
+  user_id uuid NOT NULL DEFAULT public.current_owner_id() REFERENCES auth.users(id) ON DELETE CASCADE,
+  external_id text NOT NULL,
+  customer_name text,
+  total numeric(14,2) NOT NULL DEFAULT 0,
+  raw jsonb,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  UNIQUE (user_id, external_id)
 );
 
 CREATE TABLE IF NOT EXISTS invoice_items (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  user_id uuid NOT NULL DEFAULT auth.uid() REFERENCES auth.users(id) ON DELETE CASCADE,
+  user_id uuid NOT NULL DEFAULT public.current_owner_id() REFERENCES auth.users(id) ON DELETE CASCADE,
   invoice_id uuid NOT NULL REFERENCES invoices(id) ON DELETE CASCADE,
-  product_id uuid REFERENCES products(id) ON DELETE SET NULL,
-  item_name text NOT NULL,
-  variant text NOT NULL DEFAULT '-',
-  quantity numeric(12,3) NOT NULL DEFAULT 0,
-  unit_price numeric(12,2) NOT NULL DEFAULT 0,
-  line_total numeric(12,2) NOT NULL DEFAULT 0,
-  note text
+  product_name text NOT NULL DEFAULT '',
+  qty numeric(14,3) NOT NULL DEFAULT 1,
+  price numeric(14,2) NOT NULL DEFAULT 0,
+  total numeric(14,2) NOT NULL DEFAULT 0
 );
 
 CREATE TABLE IF NOT EXISTS returns (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  user_id uuid NOT NULL DEFAULT auth.uid() REFERENCES auth.users(id) ON DELETE CASCADE,
+  user_id uuid NOT NULL DEFAULT public.current_owner_id() REFERENCES auth.users(id) ON DELETE CASCADE,
   return_no text NOT NULL,
   return_type text NOT NULL CHECK (return_type IN ('sale_return', 'purchase_return')),
   invoice_id uuid REFERENCES invoices(id) ON DELETE SET NULL,
   customer_id uuid REFERENCES customers(id) ON DELETE SET NULL,
   supplier_id uuid REFERENCES suppliers(id) ON DELETE SET NULL,
   return_date date NOT NULL DEFAULT current_date,
-  total numeric(12,2) NOT NULL DEFAULT 0,
+  total numeric(14,2) NOT NULL DEFAULT 0,
   note text,
   created_at timestamptz NOT NULL DEFAULT now()
 );
 
 CREATE TABLE IF NOT EXISTS vouchers (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  user_id uuid NOT NULL DEFAULT auth.uid() REFERENCES auth.users(id) ON DELETE CASCADE,
+  user_id uuid NOT NULL DEFAULT public.current_owner_id() REFERENCES auth.users(id) ON DELETE CASCADE,
   voucher_no text NOT NULL,
   direction text NOT NULL CHECK (direction IN ('in', 'out')),
   account text NOT NULL,
   customer_id uuid REFERENCES customers(id) ON DELETE SET NULL,
   supplier_id uuid REFERENCES suppliers(id) ON DELETE SET NULL,
   voucher_date date NOT NULL DEFAULT current_date,
-  amount numeric(12,2) NOT NULL DEFAULT 0,
+  amount numeric(14,2) NOT NULL DEFAULT 0,
   note text,
   created_at timestamptz NOT NULL DEFAULT now()
 );
 
 CREATE TABLE IF NOT EXISTS production_orders (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  user_id uuid NOT NULL DEFAULT auth.uid() REFERENCES auth.users(id) ON DELETE CASCADE,
+  user_id uuid NOT NULL DEFAULT public.current_owner_id() REFERENCES auth.users(id) ON DELETE CASCADE,
   order_no text NOT NULL,
   product_id uuid REFERENCES products(id) ON DELETE SET NULL,
   item_name text NOT NULL,
   description text,
   status text NOT NULL DEFAULT 'new' CHECK (status IN ('new', 'in_progress', 'delivered')),
   breakdown jsonb NOT NULL DEFAULT '[]'::jsonb,
-  total_cost numeric(12,2) NOT NULL DEFAULT 0,
+  total_cost numeric(14,2) NOT NULL DEFAULT 0,
   order_date date NOT NULL DEFAULT current_date,
   created_at timestamptz NOT NULL DEFAULT now()
 );
@@ -202,16 +214,16 @@ BEGIN
     EXECUTE format('ALTER TABLE public.%I ENABLE ROW LEVEL SECURITY', t);
     EXECUTE format('GRANT SELECT, INSERT, UPDATE, DELETE ON public.%I TO authenticated', t);
 
-    EXECUTE format('DROP POLICY IF EXISTS %I ON public.%I', 'select_own_' || t, t);
-    EXECUTE format('CREATE POLICY %I ON public.%I FOR SELECT TO authenticated USING (auth.uid() = user_id)', 'select_own_' || t, t);
+    EXECUTE format('DROP POLICY IF EXISTS %I ON public.%I', 'select_owner_' || t, t);
+    EXECUTE format('CREATE POLICY %I ON public.%I FOR SELECT TO authenticated USING (user_id = public.current_owner_id())', 'select_owner_' || t, t);
 
-    EXECUTE format('DROP POLICY IF EXISTS %I ON public.%I', 'insert_own_' || t, t);
-    EXECUTE format('CREATE POLICY %I ON public.%I FOR INSERT TO authenticated WITH CHECK (auth.uid() = user_id)', 'insert_own_' || t, t);
+    EXECUTE format('DROP POLICY IF EXISTS %I ON public.%I', 'insert_owner_' || t, t);
+    EXECUTE format('CREATE POLICY %I ON public.%I FOR INSERT TO authenticated WITH CHECK (user_id = public.current_owner_id())', 'insert_owner_' || t, t);
 
-    EXECUTE format('DROP POLICY IF EXISTS %I ON public.%I', 'update_own_' || t, t);
-    EXECUTE format('CREATE POLICY %I ON public.%I FOR UPDATE TO authenticated USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id)', 'update_own_' || t, t);
+    EXECUTE format('DROP POLICY IF EXISTS %I ON public.%I', 'update_owner_' || t, t);
+    EXECUTE format('CREATE POLICY %I ON public.%I FOR UPDATE TO authenticated USING (user_id = public.current_owner_id()) WITH CHECK (user_id = public.current_owner_id())', 'update_owner_' || t, t);
 
-    EXECUTE format('DROP POLICY IF EXISTS %I ON public.%I', 'delete_own_' || t, t);
-    EXECUTE format('CREATE POLICY %I ON public.%I FOR DELETE TO authenticated USING (auth.uid() = user_id)', 'delete_own_' || t, t);
+    EXECUTE format('DROP POLICY IF EXISTS %I ON public.%I', 'delete_owner_' || t, t);
+    EXECUTE format('CREATE POLICY %I ON public.%I FOR DELETE TO authenticated USING (user_id = public.current_owner_id())', 'delete_owner_' || t, t);
   END LOOP;
 END $$;

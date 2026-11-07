@@ -1,6 +1,5 @@
 // js/cloud-sync.js - V28 - إصلاح الشاشة البيضا + إخفاء شريط مسجل الدخول صح + تحميل تلقائي آمن
 import { supabase } from './supabase.js';
-import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm';
 
 let saveTimer = null;
 let lastSyncTime = "";
@@ -20,25 +19,24 @@ function isEN() {
 }
 function T(ar, en) { return isEN() ? en : ar; }
 function isMobile() { return window.innerWidth <= 640; }
-function usernameToEmail(u) { return u.trim().toLowerCase().replace(/\s+/g, ".") + "@ms-factory.local"; }
 
 async function getMyProfile() {
   if (myProfile) return myProfile;
-  try {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return null;
-    const { data } = await supabase.from('profiles').select('*').eq('id', user.id).single();
-    myProfile = data || { id: user.id, is_admin: true };
-  } catch(e){ myProfile = { is_admin: true }; }
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return null;
+  const { data, error } = await supabase.from('profiles').select('*').eq('id', user.id).maybeSingle();
+  if (error || !data) return null;
+  myProfile = data;
   return myProfile;
 }
 async function getOwnerId() {
   if (ownerIdCache) return ownerIdCache;
   const p = await getMyProfile();
-  ownerIdCache = (p && p.created_by) ? p.created_by : p?.id;
+  if (!p) return null;
+  ownerIdCache = p.created_by || p.id;
   return ownerIdCache;
 }
-function isAdmin() { return !myProfile || myProfile.is_admin === true || !myProfile.created_by; }
+function isAdmin() { return !!myProfile && !myProfile.created_by; }
 function getCachedState() { try { return JSON.parse(localStorage.getItem("mgr6") || "{}"); } catch(e){ return {}; } }
 function getField(obj, names) {
   if (!obj) return "";
@@ -118,7 +116,7 @@ async function uploadToTables(showAlert = false) {
           const { error } = await supabase.from('invoices').upsert(row, { onConflict: 'user_id,external_id' });
           if (error) errors.push("invoices: " + error.message);
           else inv++;
-          const { data: invRow } = await supabase.from('invoices').select('id').eq('user_id', owner).eq('external_id', extId).single();
+          const { data: invRow } = await supabase.from('invoices').select('id').eq('user_id', owner).eq('external_id', extId).maybeSingle();
           if (invRow) {
             await supabase.from('invoice_items').delete().eq('invoice_id', invRow.id);
             const its = d.items || d.lines || d.details || [];
@@ -165,12 +163,15 @@ async function loadFromTablesMerge(isAuto = false) {
       const cur = localStorage.getItem("mgr6");
       if (cur) localStorage.setItem("mgr6-backup-v28", cur);
     } catch(e){}
-    const [{ data: custs }, { data: supps }, { data: invs }, { data: prods }] = await Promise.all([
+    const results = await Promise.all([
       supabase.from('customers').select('*').eq('user_id', owner),
       supabase.from('suppliers').select('*').eq('user_id', owner),
       supabase.from('invoices').select('*').eq('user_id', owner),
       supabase.from('products').select('*').eq('user_id', owner),
     ]);
+    const failed = results.find(r => r.error);
+    if (failed) return isAuto ? "cloud read failed" : T("تعذر قراءة البيانات من السحابة: " + failed.error.message, "Cloud read failed: " + failed.error.message);
+    const [{ data: custs }, { data: supps }, { data: invs }, { data: prods }] = results;
     if ((!custs?.length && !supps?.length && !invs?.length && !prods?.length)) {
       return isAuto ? "cloud empty - keep local" : T("مفيش بيانات في السحابة", "No data in cloud");
     }
@@ -253,7 +254,8 @@ async function enforcePermissions() {
     });
     const card = document.getElementById("ms-emp-in-tab");
     // كارت الموظفين هنسيبه للمدير بس، مش هنمسحه من هنا
-    if (card && !(await getMyProfile())?.is_admin) card.remove();
+    await getMyProfile();
+    if (card && !isAdmin()) card.remove();
   } catch(e){}
 }
 
@@ -274,6 +276,13 @@ function isEmployeesTabOpen() {
   const activeTab = document.querySelector('[data-tab="emp"], [data-tab="employees"], .tab.active');
   if (activeTab && (activeTab.textContent.includes("موظف") || activeTab.textContent.includes("Employee"))) return true;
   return txt.includes("الموظفين") || txt.includes("Employees") || txt.includes("إضافة موظف") || txt.includes("Add Employee");
+}
+async function employeeErrorText(error) {
+  try {
+    const body = await error.context.json();
+    if (body?.error) return body.error;
+  } catch(e){}
+  return error.message;
 }
 async function injectEmployeeAccountForm() {
   if (!isEmployeesTabOpen()) return;
@@ -311,17 +320,8 @@ async function injectEmployeeAccountForm() {
     box.querySelectorAll("input[type=checkbox]:checked").forEach(c => perms[c.value] = true);
     msg.textContent = T("جارٍ الإنشاء...", "Creating...");
     try {
-      const { data: { user } } = await supabase.auth.getUser();
-      const SUPA_URL = supabase.supabaseUrl;
-      const SUPA_KEY = supabase.supabaseKey;
-      const temp = createClient(SUPA_URL, SUPA_KEY, { auth: { storageKey: 'temp-emp', persistSession: false, autoRefreshToken: false } });
-      const email = usernameToEmail(username);
-      const { data: signup, error: signupErr } = await temp.auth.signUp({ email, password: pass });
-      if (signupErr) throw signupErr;
-      const newId = signup.user?.id;
-      if (!newId) throw new Error(T("فشل إنشاء الحساب", "Failed to create account"));
-      const { error: profErr } = await supabase.from('profiles').upsert({ id: newId, username, full_name: fullName || username, must_change_password: true, permissions: perms, created_by: user?.id, is_admin: false });
-      if (profErr) console.error(profErr);
+      const { error } = await supabase.functions.invoke('create-employee', { body: { username, full_name: fullName, password: pass, permissions: perms } });
+      if (error) throw new Error(await employeeErrorText(error));
       msg.textContent = T(`تم ✅ - يدخل بالاسم: ${username} والباسورد: ${pass}`, `Done ✅ - Login with: ${username} / ${pass}`);
       alert(T(`تم إضافة ${username} ✅`, `Added ${username} ✅`));
     } catch(e) { msg.textContent = e.message; console.error(e); }
@@ -415,7 +415,11 @@ function checkWhiteScreen() {
       const btn = document.getElementById("ms-recovery-btn");
       btn.textContent = T("جارٍ الاستعادة...", "Restoring...");
       // امسح الكاش البايظ وخلي التلقائي يحمل من السحابة
-      try { localStorage.removeItem("mgr6"); } catch(e){}
+      try {
+        const cur = localStorage.getItem("mgr6");
+        if (cur) localStorage.setItem("mgr6-backup-v28", cur);
+        localStorage.removeItem("mgr6");
+      } catch(e){}
       const r = await loadFromTablesMerge(false);
       alert(r);
       location.reload();
