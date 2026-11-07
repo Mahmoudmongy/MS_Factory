@@ -1,0 +1,208 @@
+name: Encrypted Supabase database backup
+
+on:
+  schedule:
+    - cron: "20 2 * * *"
+  workflow_dispatch:
+    inputs:
+      run_confirmed:
+        description: "Run a backup now (only after the R2 bucket and secrets are configured)"
+        type: boolean
+        required: true
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: supabase-encrypted-backup
+  cancel-in-progress: false
+
+jobs:
+  backup:
+    # Scheduling remains inert until the external R2 bucket and credentials
+    # have been created. Manual runs require an explicit checkbox as well.
+    if: ${{ vars.BACKUP_ENABLED == 'true' && (github.event_name != 'workflow_dispatch' || inputs.run_confirmed) }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    env:
+      SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+      SUPABASE_PROJECT_REF: ${{ vars.SUPABASE_PROJECT_REF }}
+      R2_BUCKET: ${{ vars.R2_BUCKET }}
+      R2_ENDPOINT: ${{ vars.R2_ENDPOINT }}
+      AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+      AWS_DEFAULT_REGION: auto
+      BACKUP_GPG_PASSPHRASE: ${{ secrets.BACKUP_GPG_PASSPHRASE }}
+
+    steps:
+      - name: Check out backup scripts and migrations
+        uses: actions/checkout@v4
+
+      - name: Validate backup configuration
+        shell: bash
+        run: |
+          set -euo pipefail
+          for name in SUPABASE_DB_URL SUPABASE_PROJECT_REF R2_BUCKET R2_ENDPOINT AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY BACKUP_GPG_PASSPHRASE; do
+            if [[ -z "${!name:-}" ]]; then
+              echo "::error::Missing required GitHub secret or variable: $name"
+              exit 1
+            fi
+          done
+          command -v gpg >/dev/null
+          command -v docker >/dev/null
+          aws --version
+          [[ "$R2_ENDPOINT" == https://*.r2.cloudflarestorage.com ]]
+
+      - name: Create logical database and Auth backups
+        shell: bash
+        run: |
+          set -euo pipefail
+          umask 077
+          BACKUP_DIR="$RUNNER_TEMP/ms-factory-backup"
+          mkdir -p "$BACKUP_DIR"
+
+          # Supabase CLI exports custom schema, RLS, functions, policies,
+          # triggers, roles, and public data. It intentionally excludes
+          # Supabase-managed schemas such as auth and storage.
+          npx --yes supabase@latest db dump --db-url "$SUPABASE_DB_URL" -f "$BACKUP_DIR/roles.sql" --role-only
+          npx --yes supabase@latest db dump --db-url "$SUPABASE_DB_URL" -f "$BACKUP_DIR/schema.sql"
+          npx --yes supabase@latest db dump --db-url "$SUPABASE_DB_URL" -f "$BACKUP_DIR/data.sql" --use-copy --data-only -x "storage.buckets_vectors" -x "storage.vector_indexes"
+
+          # Preserve account credentials and login identities, but deliberately
+          # do not preserve sessions or refresh tokens. Use pg_dump 17 to match
+          # the current production Postgres major version.
+          docker run --rm \
+            -v "$BACKUP_DIR:/backup" \
+            -e SUPABASE_DB_URL \
+            postgres:17-alpine sh -ec '
+              pg_dump "$SUPABASE_DB_URL" --data-only --no-owner --no-privileges \
+                --table=auth.users \
+                --table=auth.identities \
+                --table=auth.mfa_factors \
+                --table=auth.mfa_recovery_code_sets \
+                --table=auth.mfa_recovery_codes \
+                --table=auth.webauthn_credentials \
+                --file=/backup/auth-data.sql
+              psql "$SUPABASE_DB_URL" -Atqc "select version()" > /backup/postgres-version.txt
+              psql "$SUPABASE_DB_URL" -Atqc "select count(*) from auth.users" > /backup/auth-user-count.txt
+              psql "$SUPABASE_DB_URL" -Atqc "select count(*) from storage.buckets" > /backup/storage-bucket-count.txt
+            '
+
+          if [[ "$(cat "$BACKUP_DIR/storage-bucket-count.txt")" != "0" ]]; then
+            echo "::error::Storage buckets exist. Storage object bytes are not included in pg_dump; configure and test a separate object backup before treating this backup as complete."
+            exit 1
+          fi
+
+          cp supabase/restore/auth-trigger.sql "$BACKUP_DIR/auth-trigger.sql"
+          cp -a supabase/migrations "$BACKUP_DIR/migrations"
+          cp -a supabase/functions "$BACKUP_DIR/functions"
+
+          for file in roles.sql schema.sql data.sql auth-data.sql auth-trigger.sql; do
+            test -s "$BACKUP_DIR/$file" || { echo "::error::Missing or empty backup file: $file"; exit 1; }
+          done
+
+          {
+            echo "backup_created_utc=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+            echo "source_project_ref=$SUPABASE_PROJECT_REF"
+            echo "source_git_commit=$GITHUB_SHA"
+            echo "postgres_version=$(cat "$BACKUP_DIR/postgres-version.txt")"
+            echo "auth_user_count=$(cat "$BACKUP_DIR/auth-user-count.txt")"
+            echo "storage_bucket_count=$(cat "$BACKUP_DIR/storage-bucket-count.txt")"
+            echo "backup_format=logical-supabase-cli-plus-auth-data-v1"
+          } > "$BACKUP_DIR/manifest.txt"
+
+          (
+            cd "$BACKUP_DIR"
+            sha256sum roles.sql schema.sql data.sql auth-data.sql auth-trigger.sql > SHA256SUMS
+          )
+
+          ARCHIVE="$RUNNER_TEMP/ms-factory-$(date -u +%Y%m%dT%H%M%SZ).tar.gz"
+          tar -czf "$ARCHIVE" -C "$RUNNER_TEMP" ms-factory-backup
+          echo "BACKUP_ARCHIVE=$ARCHIVE" >> "$GITHUB_ENV"
+
+      - name: Encrypt and verify before upload
+        shell: bash
+        run: |
+          set -euo pipefail
+          umask 077
+          PASS_FILE="$RUNNER_TEMP/backup-gpg-passphrase"
+          printf '%s' "$BACKUP_GPG_PASSPHRASE" > "$PASS_FILE"
+          chmod 600 "$PASS_FILE"
+
+          ENCRYPTED="${BACKUP_ARCHIVE}.gpg"
+          gpg --batch --yes --pinentry-mode loopback --passphrase-file "$PASS_FILE" \
+            --symmetric --cipher-algo AES256 --output "$ENCRYPTED" "$BACKUP_ARCHIVE"
+
+          # Decrypt a second copy and verify every SQL dump hash before upload.
+          gpg --batch --yes --pinentry-mode loopback --passphrase-file "$PASS_FILE" \
+            --decrypt --output "$RUNNER_TEMP/verified.tar.gz" "$ENCRYPTED"
+          mkdir -p "$RUNNER_TEMP/verified"
+          tar -xzf "$RUNNER_TEMP/verified.tar.gz" -C "$RUNNER_TEMP/verified"
+          (cd "$RUNNER_TEMP/verified/ms-factory-backup" && sha256sum -c SHA256SUMS)
+
+          echo "BACKUP_ENCRYPTED=$ENCRYPTED" >> "$GITHUB_ENV"
+          echo "BACKUP_SHA256=$(sha256sum "$ENCRYPTED" | cut -d' ' -f1)" >> "$GITHUB_ENV"
+
+      - name: Upload encrypted backup to private Cloudflare R2
+        shell: bash
+        run: |
+          set -euo pipefail
+          DAY="$(date -u +%Y/%m/%d)"
+          FILE="$(basename "$BACKUP_ENCRYPTED")"
+          KEY="ms-factory/daily/$DAY/$FILE"
+
+          aws s3 cp "$BACKUP_ENCRYPTED" "s3://$R2_BUCKET/$KEY" \
+            --endpoint-url "$R2_ENDPOINT" --region auto --only-show-errors
+
+          # Read the object back and compare the encrypted bytes checksum.
+          aws s3 cp "s3://$R2_BUCKET/$KEY" "$RUNNER_TEMP/roundtrip.gpg" \
+            --endpoint-url "$R2_ENDPOINT" --region auto --only-show-errors
+          ACTUAL="$(sha256sum "$RUNNER_TEMP/roundtrip.gpg" | cut -d' ' -f1)"
+          [[ "$ACTUAL" == "$BACKUP_SHA256" ]] || { echo "::error::R2 read-back checksum mismatch"; exit 1; }
+
+          # Keep a monthly point-in-time copy on the first day of each month.
+          if [[ "$(date -u +%d)" == "01" ]]; then
+            MONTH="$(date -u +%Y-%m)"
+            aws s3 cp "$BACKUP_ENCRYPTED" "s3://$R2_BUCKET/ms-factory/monthly/$MONTH/$FILE" \
+              --endpoint-url "$R2_ENDPOINT" --region auto --only-show-errors
+          fi
+
+      - name: Apply backup retention (45 daily / 400 monthly days)
+        shell: bash
+        run: |
+          set -euo pipefail
+          for entry in "daily:45" "monthly:400"; do
+            PREFIX="${entry%%:*}"
+            DAYS="${entry##*:}"
+            LIST="$RUNNER_TEMP/r2-$PREFIX.json"
+            aws s3api list-objects-v2 --bucket "$R2_BUCKET" \
+              --prefix "ms-factory/$PREFIX/" --endpoint-url "$R2_ENDPOINT" \
+              --region auto --output json > "$LIST"
+
+            python3 - "$LIST" "$DAYS" <<'PY' > "$RUNNER_TEMP/delete-$PREFIX.txt"
+          import json, sys
+          from datetime import datetime, timedelta, timezone
+          path, days = sys.argv[1], int(sys.argv[2])
+          cutoff = datetime.now(timezone.utc) - timedelta(days=days)
+          payload = json.load(open(path, encoding="utf-8"))
+          for item in payload.get("Contents", []):
+              stamp = datetime.fromisoformat(item["LastModified"].replace("Z", "+00:00"))
+              if stamp < cutoff:
+                  print(item["Key"])
+          PY
+
+            while IFS= read -r key; do
+              [[ -z "$key" ]] && continue
+              aws s3api delete-object --bucket "$R2_BUCKET" --key "$key" \
+                --endpoint-url "$R2_ENDPOINT" --region auto >/dev/null
+            done < "$RUNNER_TEMP/delete-$PREFIX.txt"
+          done
+
+      - name: Remove decrypted temporary files
+        if: always()
+        shell: bash
+        run: |
+          rm -rf "$RUNNER_TEMP/ms-factory-backup" "$RUNNER_TEMP/verified" \
+            "$RUNNER_TEMP/verified.tar.gz" "$RUNNER_TEMP/backup-gpg-passphrase" \
+            "$RUNNER_TEMP/roundtrip.gpg"
