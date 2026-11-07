@@ -628,43 +628,45 @@ async function loadFromTablesMerge(isAuto = false) {
 
 // ===== التحميل التلقائي أول ما النت يرجع - زي ما اتفقنا =====
 async function onInternetBack() {
-  if (autoLoadRunning || syncState === "saving") return;
+  if (autoLoadRunning || uploadRunning) { scheduleAutoSync(1400); return "sync busy"; }
   // Revalidate the session profile before using cached offline permissions for cloud writes.
   myProfile = null; ownerIdCache = null; window.__factoryAuthProfile = null;
   const freshProfile = await getMyProfile();
   if (!freshProfile) { syncState = "idle"; drawAll(); return "profile revalidation failed"; }
   window.__factoryOfflineMode = false;
   syncState = "saving"; drawAll();
-  // Always pull first: localStorage is the offline workspace, not proof it is newer.
-  // The merge is append-only for master data and version-aware for invoices.
+  // Pull first, but never let a snapshot conflict block independent detail-table uploads.
   const pulled = await loadFromTablesMerge(true);
-  if (pulled === "cloud snapshot conflict") {
-    syncState = "conflict"; drawAll(); return pulled;
-  }
   if (pulled === "cloud read failed" || String(pulled).startsWith("تعذر قراءة")) {
     syncState = "idle"; drawAll(); return pulled;
   }
-  // Then upload the merged local state so offline-created records reach the cloud.
   const pushed = await uploadToTables(false);
   if (String(pushed).startsWith("خطأ:") || String(pushed).includes("فشلت")) {
-    syncState = "idle"; drawAll(); return pushed;
+    syncState = localStorage.getItem("mgr6-cloud-snapshot-conflict") ? "conflict" : "idle"; drawAll();
+    if (!localStorage.getItem("mgr6-cloud-snapshot-conflict")) scheduleAutoSync(2500);
+    return pushed;
   }
+  if (localStorage.getItem(PENDING_SYNC_KEY) && !localStorage.getItem("mgr6-cloud-snapshot-conflict")) scheduleAutoSync(800);
   return pushed;
 }
 const _origSetItem = localStorage.setItem.bind(localStorage);
 localStorage.setItem = function(key, value) {
   _origSetItem(key, value);
   if (key === "mgr6") {
+    markPendingSync();
     if (!navigator.onLine) { syncState = "offline"; drawAll(); }
-    else { clearTimeout(saveTimer); saveTimer = setTimeout(() => uploadToTables(false), 1500); }
+    else scheduleAutoSync(1500);
   }
   if (key === "mgr6pref") setTimeout(drawAll, 100);
 };
-window.addEventListener("online", () => onInternetBack());
+window.addEventListener("online", () => { retryCount = 0; scheduleAutoSync(500); });
 window.addEventListener("offline", () => { syncState = "offline"; drawAll(); });
+window.addEventListener("focus", () => { if (navigator.onLine && localStorage.getItem(PENDING_SYNC_KEY)) scheduleAutoSync(500); });
+document.addEventListener("visibilitychange", () => { if (!document.hidden && navigator.onLine && localStorage.getItem(PENDING_SYNC_KEY)) scheduleAutoSync(500); });
+setInterval(() => { if (navigator.onLine && localStorage.getItem(PENDING_SYNC_KEY) && !localStorage.getItem("mgr6-cloud-snapshot-conflict")) scheduleAutoSync(0); }, 60000);
 if (navigator.onLine) {
-  // On every launch, fetch the latest remote records before pushing the device cache.
-  setTimeout(() => onInternetBack(), 1200);
+  // Always refresh remote data on launch; pending local writes are retried automatically.
+  scheduleAutoSync(1200);
 }
 window.restoreCloud = async function() {
   if (!confirm(T("هتحمّل البيانات من الجداول؟ هيتضاف الناقص بس، مش هيمسح حاجة", "Load from tables? Only missing will be added, nothing will be deleted"))) return;
@@ -894,6 +896,10 @@ function drawAll() {
   logout.title = T('تسجيل الخروج', 'Logout');
   logout.setAttribute('aria-label', logout.title);
   logout.style.cssText = 'position:fixed;top:8px;' + (isEN() ? 'right:8px;left:auto;' : 'left:8px;right:auto;') + 'width:34px;height:34px;min-width:34px;padding:0;z-index:100000;background:#ef4444;color:#fff;border:0;border-radius:8px;font-size:19px;font-weight:bold;cursor:pointer;display:flex;align-items:center;justify-content:center;box-shadow:0 2px 8px rgba(0,0,0,.18);';
+  const netStatus = document.getElementById('net-status');
+  if (netStatus) netStatus.textContent = navigator.onLine ? '🟢 متصل' : '🔴 غير متصل';
+  const syncIcon = document.getElementById('sync-icon');
+  if (syncIcon) { syncIcon.classList.toggle('syncing', syncState === 'saving'); syncIcon.title = syncState === 'saving' ? T('جارٍ المزامنة', 'Synchronizing') : T('المزامنة التلقائية', 'Automatic sync'); }
   const oldToolbar = document.getElementById('ms-topbar');
   if (oldToolbar) oldToolbar.remove();
   document.body.style.paddingTop = '';
