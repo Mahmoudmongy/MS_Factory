@@ -82,7 +82,7 @@ await ev(id=>retFrom(id),sale.id);ok('return opens with blank quantities',await 
 await ev(()=>{SAVING=0;saveDoc()});ok('return with all-empty quantities is rejected (nothing saved)',await ev(()=>!S.docs.some(d=>d.t=="sret")));
 await ev(()=>{D.lines[0].qty=1;saveDoc()});ok('return of 1 piece saved at the invoice price (250) and stock +1',await ev(()=>{const r=S.docs.find(d=>d.t=="sret");return r&&r.total==250&&tq(it_(3))==19}));ok('ledger balanced after return',await bal());
 /* edit / delete */
-await ev(id=>editDoc(id),sale.id);await ev(()=>{D.lines[0].qty=3;saveDoc()});ok('edit sale (qty 3): total 740 (3x250-10), stock 17 and ledger balanced',await ev(()=>{const d=S.docs.find(x=>x.t=="sale");return d.total==740&&tq(it_(3))==17-1+1-1+1-0&&true})||true,await ev(()=>[S.docs.find(x=>x.t=="sale").total,tq(it_(3))]));
+await ev(id=>editDoc(id),sale.id);await ev(()=>{D.lines[0].qty=3;saveDoc()});ok('edit sale (qty 3): total 740 (3x250-10), stock 18 after reversing the old sale and applying the new quantity, ledger balanced',await ev(()=>{const d=S.docs.find(x=>x.t=="sale");return !!d&&d.total==740&&tq(it_(3))==18&&Math.abs(S.L.reduce((a,l)=>a+l.dr-l.cr,0))<.01}),await ev(()=>[S.docs.find(x=>x.t=="sale").total,tq(it_(3)),S.L.reduce((a,l)=>a+l.dr-l.cr,0)]));
 ok('after edit ledger is balanced',await bal());
 /* ---------- voucher linked to invoice ---------- */
 const invId=await ev(()=>S.docs.find(d=>d.t=="sale").id),tot=await ev(()=>S.docs.find(d=>d.t=="sale").total);
