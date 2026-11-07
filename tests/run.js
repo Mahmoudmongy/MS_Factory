@@ -46,15 +46,15 @@ ok('index auth gate validates the Supabase profile before revealing the app',/ht
 ok('employee screen access is tied to the cloud profile permissions',/CLOUD_SCREEN_PERMISSIONS/.test(app)&&/setFactoryAuthProfile/.test(app));
 ok('full factory snapshot is restricted to administrator accounts',/if \(admin\)/.test(cloud)&&/factory_state/.test(cloud)&&/factory_state_admin_only/.test(fs.readFileSync(path.join(ROOT,'supabase/migrations/20261107081648_enforce_employee_permissions_20261107.sql'),'utf8')));
 const syncPageStart=app.indexOf('function syncPage(){'),syncPageEnd=app.indexOf('/* ---- tabbed workspace ---- */',syncPageStart),syncPageSource=syncPageStart>=0&&syncPageEnd>syncPageStart?app.slice(syncPageStart,syncPageEnd):'';
-ok('automatic sync is silent and runs after local saves and on startup/reconnect',/setTimeout\(\(\) => uploadToTables\(false\), 1500\)/.test(cloud)&&/setTimeout\(\(\) => onInternetBack\(\), 1200\)/.test(cloud)&&/addEventListener\("online", \(\) => onInternetBack\(\)\)/.test(cloud)&&!/رفع الآن|Upload Now|تحميل/.test(cloud));
-ok('sync toolbar and manual sync settings entry are removed while background sync and logout remain',!/\[\"🔄 حالة الاتصال والمزامنة\",\"syncPage\(\)\"\]/.test(app)&&/ms-logout-btn/.test(cloud)&&!/ms-topbar/.test(cloud.slice(cloud.indexOf('function drawAll()'))));
+ok('automatic sync is silent and runs after local saves and on startup/reconnect',/setTimeout\(\(\) => uploadToTables\(false\), 1500\)/.test(cloud)&&/setTimeout\(\(\) => onInternetBack\(\), 1200\)/.test(cloud)&&/addEventListener\("online", \(\) => onInternetBack\(\)\)/.test(cloud)&&!/رفع الآن|Upload Now|تحميل/.test(cloud.slice(cloud.indexOf('function drawAll()'))));
+ok('sync toolbar and manual sync settings entry are removed while background sync and logout remain',!app.includes('["🔄 حالة الاتصال والمزامنة","syncPage()"]')&&/ms-logout-btn/.test(cloud)&&!/cloud-badge|رفع الآن|Upload Now|تحميل/.test(cloud.slice(cloud.indexOf('function drawAll()'))));
 
 ok('invoice cloud sync uses the atomic versioned RPC',/rpc\(["']sync_invoice["']/.test(cloud)&&/p_expected_version/.test(cloud)&&/sync_version/.test(cloud));
 ok('inventory sync uploads the actual S.items array used by the stock screens',/for \(const arr of \[S\.items, S\.products, S\.prods\]\)/.test(cloud));
 ok('inventory sync totals all colour/size variants instead of reading a missing qty field',/Object\.values\(variants\)\.reduce/.test(cloud)&&/const variants = pr\.st/.test(cloud));
 ok('inventory sync stores the full local item in products.raw for lossless restoration',/image_url:[\s\S]{0,500}raw: pr/.test(cloud));
 ok('inventory download restores records into S.items, the real inventory source used by the app',/if \(!Array\.isArray\(S\.items\)\) S\.items = \[\]/.test(cloud)&&/S\.items = m\.arr/.test(cloud));
-ok('employee detail-only sync is not shown as fully synchronized',/syncState = admin \? "synced" : "partial"/.test(cloud)&&/syncState === "partial"/.test(cloud));
+ok('employee detail-only sync remains marked partial in the background',/syncState = admin \? "synced" : "partial"/.test(cloud)&&/مزامنة القيود والحركات المحاسبية الكاملة لحساب الموظف لم تكتمل بعد/.test(cloud));
 ok('invoice sync does not delete invoice items through separate client requests',!/from\(["']invoice_items["']\)\.delete/.test(cloud));
 ok('returns are not misclassified as sale/purchase invoices',/\["sale", "pur"\]\.includes\(d\.t\)/.test(cloud));
 ok('cloud invoice merge preserves newer remote copies as explicit conflicts',/mergeCloudInvoices/.test(cloud)&&/serverCopy: remote/.test(cloud));
