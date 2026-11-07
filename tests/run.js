@@ -58,7 +58,7 @@ ok('inventory sync totals all colour/size variants instead of reading a missing 
 ok('inventory sync stores the full local item in products.raw for lossless restoration',/image_url:[\s\S]{0,500}raw: pr/.test(cloud));
 ok('inventory download restores records into S.items, the real inventory source used by the app',/if \(!Array\.isArray\(S\.items\)\) S\.items = \[\]/.test(cloud)&&/S\.items = m\.arr/.test(cloud));
 ok('employee detail-only sync remains marked partial in the background',/admin \? "synced" : "partial"/.test(cloud)&&/مزامنة القيود والحركات المحاسبية الكاملة لحساب الموظف لم تكتمل بعد/.test(cloud));
-ok('production-only employees are allowed through the upload sync permission gate',/if \(!admin && !\["customers", "suppliers", "invoices", "inventory", "production"\]\.some\(canWrite\)\)/.test(cloud)&&/if \(canWrite\("production"\)\)/.test(cloud));
+ok('production-only employees can upload and pull their production orders',/if \(!admin && !\["customers", "suppliers", "invoices", "inventory", "production"\]\.some\(canWrite\)\)/.test(cloud)&&/if \(canWrite\("production"\)\)/.test(cloud)&&/if \(!\["customers","suppliers","invoices","inventory","production","reports"\]\.some\(canRead\)\)/.test(cloud));
 ok('invoice sync does not delete invoice items through separate client requests',!/from\(["']invoice_items["']\)\.delete/.test(cloud));
 ok('returns are not misclassified as sale/purchase invoices',/\["sale", "pur"\]\.includes\(d\.t\)/.test(cloud));
 ok('cloud invoice merge preserves newer remote copies as explicit conflicts',/mergeCloudInvoices/.test(cloud)&&/serverCopy: remote/.test(cloud));
@@ -226,7 +226,7 @@ ok('offline cache does not include authenticated API responses or user records',
 await q.evaluate(()=>{const s=JSON.parse(localStorage.getItem('mgr6')||'null');localStorage.setItem('mgr6',JSON.stringify(s))});
 await c2.setOffline(true);await q.reload();await q.waitForTimeout(500);const off=await q.evaluate(()=>({ok:!!document.querySelector('#sb a'),tabs:document.querySelectorAll('#sb a').length}));
 ok('app loads and works with the network switched off (from the service-worker cache)',off.ok&&off.tabs>=15,off);
-const none=await q.evaluate(async()=>{const c=await caches.open('factory-v5');return (await c.keys()).every(r=>new URL(r.url).origin==location.origin&&!r.url.includes('/api/'))});ok('cache holds only same-origin app files (no cross-origin / API / user data)',none);
+const none=await q.evaluate(async()=>{const c=await caches.open('factory-v10');const keys=await c.keys();return keys.length>0&&keys.every(r=>new URL(r.url).origin==location.origin&&!r.url.includes('/rest/v1/')&&!r.url.includes('/auth/v1/')&&!r.url.includes('/storage/v1/'))});ok('active factory-v10 cache holds only same-origin app files (no authenticated API or user data)',none);
 await c2.setOffline(false);await c2.close();
 /* ---------- D. mobile ---------- */
 const mc=await browser.newContext({viewport:{width:390,height:800},isMobile:true,hasTouch:true}),m=await mc.newPage(),merr=[];m.on('pageerror',e=>merr.push(e.message));await m.goto(BASE);await m.waitForTimeout(400);
