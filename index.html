@@ -81,10 +81,9 @@ import { supabase } from './js/supabase.js';
       <button onclick="bkw(-1)" title="رجوع">▶</button>
       <button onclick="bkw(1)" title="تقدم">◀</button>
       <h1 id="ttl"></h1>
-      <span id="net" onclick="syncPage()" role="button" tabindex="0" aria-live="polite" title="حالة الاتصال والمزامنة"></span>
-      <select id="who" onchange="swho(this.value)"></select>
-      <select id="thb" onchange="togTheme(this.value)"><option value="">🎨</option><option value="light">فاتح</option><option value="dark">داكن</option><option value="auto">تلقائي</option></select>
-      <button id="lgb" onclick="togLang()">🌐</button>
+      <span id="net" onclick="syncPage()" role="button" tabindex="0" aria-live="polite" title="حالة الاتصال والمزامنة"><span id="net-status">🟢 متصل</span><span id="sync-icon" class="sync-icon" aria-label="المزامنة التلقائية" title="المزامنة التلقائية">↻</span></span>
+      <select id="who" onchange="swho(this.value)" aria-label="الحساب"></select>
+      <button id="thb" type="button" onclick="togTheme()" aria-label="تغيير المظهر" title="تغيير المظهر">🌙</button>
     </div>
     <div id="tabs"></div>
     <main id="m"></main>
