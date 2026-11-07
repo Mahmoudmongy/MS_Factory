@@ -16,7 +16,8 @@
   <style>html{visibility:hidden}</style>
 </head>
 <script type="module">
-    import { supabase } from './js/supabase.js';
+import { supabase } from './js/supabase.js';
+(async function bootstrapFactoryApp() {
     try {
       const { data, error } = supabase ? await supabase.auth.getSession() : { data: { session: null }, error: new Error('Supabase unavailable') };
       if (!data?.session || (error && navigator.onLine)) location.replace('auth.html');
@@ -57,7 +58,9 @@
       console.error('Authentication bootstrap failed:', e);
       location.replace('auth.html');
     }
-  </script>
+  
+})();
+</script>
 <body>
 <div id="app">
   <div id="sb-overlay" onclick="closeSB()"></div>
