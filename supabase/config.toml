@@ -1,3 +1,6 @@
 
 [functions.create-employee-account]
 verify_jwt = true
+
+[functions.change-initial-password]
+verify_jwt = true
