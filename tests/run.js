@@ -54,7 +54,7 @@ ok('inventory sync uploads the actual S.items array used by the stock screens',/
 ok('inventory sync totals all colour/size variants instead of reading a missing qty field',/Object\.values\(variants\)\.reduce/.test(cloud)&&/const variants = pr\.st/.test(cloud));
 ok('inventory sync stores the full local item in products.raw for lossless restoration',/image_url:[\s\S]{0,500}raw: pr/.test(cloud));
 ok('inventory download restores records into S.items, the real inventory source used by the app',/if \(!Array\.isArray\(S\.items\)\) S\.items = \[\]/.test(cloud)&&/S\.items = m\.arr/.test(cloud));
-ok('employee detail-only sync remains marked partial in the background',/syncState = admin \? "synced" : "partial"/.test(cloud)&&/مزامنة القيود والحركات المحاسبية الكاملة لحساب الموظف لم تكتمل بعد/.test(cloud));
+ok('employee detail-only sync remains marked partial in the background',/admin \? "synced" : "partial"/.test(cloud)&&/مزامنة القيود والحركات المحاسبية الكاملة لحساب الموظف لم تكتمل بعد/.test(cloud));
 ok('invoice sync does not delete invoice items through separate client requests',!/from\(["']invoice_items["']\)\.delete/.test(cloud));
 ok('returns are not misclassified as sale/purchase invoices',/\["sale", "pur"\]\.includes\(d\.t\)/.test(cloud));
 ok('cloud invoice merge preserves newer remote copies as explicit conflicts',/mergeCloudInvoices/.test(cloud)&&/serverCopy: remote/.test(cloud));
