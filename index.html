@@ -13,9 +13,9 @@
   <meta property="og:image" content="https://bolt.new/static/og_default.png">
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:image" content="https://bolt.new/static/og_default.png">
-</head>
   <style>html{visibility:hidden}</style>
-  <script type="module">
+</head>
+<script type="module">
     import { supabase } from './js/supabase.js';
     try {
       const { data, error } = supabase ? await supabase.auth.getSession() : { data: { session: null }, error: new Error('Supabase unavailable') };
