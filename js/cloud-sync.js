@@ -109,6 +109,30 @@ function mergeCloudInvoices(existing, incoming) {
   return { arr: [...map.values()], added, conflicts };
 }
 
+function mergeCloudRecords(existing, incoming) {
+  const map = new Map();
+  (Array.isArray(existing) ? existing : []).forEach(item => {
+    const key = item && (item.id || item.no);
+    if (key !== undefined && key !== null && key !== "") map.set(String(key), item);
+  });
+  let added = 0, conflicts = 0;
+  (Array.isArray(incoming) ? incoming : []).forEach(remote => {
+    const key = remote && (remote.id || remote.no);
+    if (key === undefined || key === null || key === "") return;
+    const local = map.get(String(key));
+    if (!local) { map.set(String(key), remote); added++; return; }
+    const localTime = Date.parse(local._cloudUpdatedAt || "") || 0;
+    const remoteTime = Date.parse(remote._cloudUpdatedAt || "") || 0;
+    if (remoteTime > localTime) {
+      local._cloudConflict = { serverUpdatedAt: remote._cloudUpdatedAt || null, serverCopy: remote };
+      conflicts++;
+    } else if (remoteTime && remoteTime === localTime) {
+      delete local._cloudConflict;
+    }
+  });
+  return { arr: [...map.values()], added, conflicts };
+}
+
 
 // ===== الرفع مرة واحدة على الجداول - الكاش هو الأساس =====
 async function uploadToTables(showAlert = false) {
@@ -227,7 +251,78 @@ async function uploadToTables(showAlert = false) {
         invoiceVersionsChanged = true;
       }
     }
-    if (invoiceVersionsChanged) {
+    let detailVersionsChanged = false;
+
+    if (canWrite("invoices")) {
+      for (const d of (Array.isArray(S.docs) ? S.docs : [])) {
+        if (!d || !["sret", "pret"].includes(d.t)) continue;
+        const externalId = String(getField(d, ["id", "no"]) || "");
+        if (!externalId) { errors.push("return skipped: missing stable ID"); continue; }
+        const raw = { ...d }; delete raw._cloudUpdatedAt; delete raw._cloudConflict;
+        const row = {
+          user_id: owner, external_id: externalId,
+          return_no: String(d.no || externalId),
+          return_type: d.t === "sret" ? "sale_return" : "purchase_return",
+          return_date: String(d.date || new Date().toISOString()).slice(0, 10),
+          total: Number(d.total || 0) || 0, note: d.note || null,
+          raw, updated_at: new Date().toISOString()
+        };
+        const { data, error } = await supabase.from("returns")
+          .upsert(row, { onConflict: "user_id,external_id" }).select("updated_at").single();
+        if (error) errors.push("returns " + externalId + ": " + error.message);
+        else if (data?.updated_at) { d._cloudUpdatedAt = data.updated_at; detailVersionsChanged = true; }
+      }
+
+      for (const v of (Array.isArray(S.vch) ? S.vch : [])) {
+        if (!v) continue;
+        const externalId = String(getField(v, ["id", "no"]) || "");
+        if (!externalId) { errors.push("voucher skipped: missing stable ID"); continue; }
+        const raw = { ...v }; delete raw._cloudUpdatedAt; delete raw._cloudConflict;
+        const row = {
+          user_id: owner, external_id: externalId,
+          voucher_no: String(v.no || externalId),
+          direction: v.dir === "in" ? "in" : "out",
+          account: String(v.title || v.desc || "سند"),
+          voucher_date: String(v.date || new Date().toISOString()).slice(0, 10),
+          amount: Number(v.total || 0) || 0,
+          note: v.desc || null, raw, updated_at: new Date().toISOString()
+        };
+        const { data, error } = await supabase.from("vouchers")
+          .upsert(row, { onConflict: "user_id,external_id" }).select("updated_at").single();
+        if (error) errors.push("vouchers " + externalId + ": " + error.message);
+        else if (data?.updated_at) { v._cloudUpdatedAt = data.updated_at; detailVersionsChanged = true; }
+      }
+    }
+
+    if (canWrite("production")) {
+      for (const o of (Array.isArray(S.po) ? S.po : [])) {
+        if (!o) continue;
+        const externalId = String(getField(o, ["id", "no"]) || "");
+        if (!externalId) { errors.push("production order skipped: missing stable ID"); continue; }
+        const raw = { ...o }; delete raw._cloudUpdatedAt; delete raw._cloudConflict;
+        const extraCost = (Array.isArray(o.x) ? o.x : []).reduce((sum, item) => sum + (Number(item?.amt) || 0), 0);
+        const purchaseCost = (Array.isArray(S.docs) ? S.docs : [])
+          .filter(d => d?.t === "pur" && String(d.dest) === String(o.id))
+          .reduce((sum, d) => sum + (Number(d.total) || 0), 0);
+        const row = {
+          user_id: owner, external_id: externalId,
+          order_no: String(o.no || externalId),
+          item_name: String(o.iname || o.name || "أمر إنتاج"),
+          description: o.desc || null,
+          status: Number(o.st) === 2 ? "delivered" : Number(o.st) === 1 ? "in_progress" : "new",
+          breakdown: { subs: o.subs || [], received: o.rec || [], materials: o.mats || [], extra_costs: o.x || [], stage: Number(o.st) || 0, warehouse: o.wh ?? null },
+          total_cost: (Number(o.matCost) || 0) + (Number(o.wc) || 0) + extraCost + purchaseCost,
+          order_date: String(o.date || new Date().toISOString()).slice(0, 10),
+          raw, updated_at: new Date().toISOString()
+        };
+        const { data, error } = await supabase.from("production_orders")
+          .upsert(row, { onConflict: "user_id,external_id" }).select("updated_at").single();
+        if (error) errors.push("production_orders " + externalId + ": " + error.message);
+        else if (data?.updated_at) { o._cloudUpdatedAt = data.updated_at; detailVersionsChanged = true; }
+      }
+    }
+
+    if (invoiceVersionsChanged || detailVersionsChanged) {
       // Persist server versions without triggering another autosave/upload cycle.
       Object.getPrototypeOf(localStorage).setItem.call(localStorage, "mgr6", JSON.stringify(S));
     }
@@ -339,11 +434,14 @@ async function loadFromTablesMerge(isAuto = false) {
       canRead("suppliers") ? supabase.from("suppliers").select("*").eq("user_id", owner) : Promise.resolve(emptyResult),
       canRead("invoices") ? supabase.from("invoices").select("*").eq("user_id", owner) : Promise.resolve(emptyResult),
       canRead("inventory") ? supabase.from("products").select("*").eq("user_id", owner) : Promise.resolve(emptyResult),
+      canRead("invoices") ? supabase.from("returns").select("*").eq("user_id", owner) : Promise.resolve(emptyResult),
+      canRead("invoices") ? supabase.from("vouchers").select("*").eq("user_id", owner) : Promise.resolve(emptyResult),
+      canRead("production") ? supabase.from("production_orders").select("*").eq("user_id", owner) : Promise.resolve(emptyResult),
     ]);
     const failed = results.find(r => r.error);
     if (failed) return isAuto ? "cloud read failed" : T("تعذر قراءة البيانات من السحابة: " + failed.error.message, "Cloud read failed: " + failed.error.message);
-    const [{ data: custs }, { data: supps }, { data: invs }, { data: prods }] = results;
-    if (!custs?.length && !supps?.length && !invs?.length && !prods?.length) {
+    const [{ data: custs }, { data: supps }, { data: invs }, { data: prods }, { data: returns }, { data: vouchers }, { data: productionOrders }] = results;
+    if (!custs?.length && !supps?.length && !invs?.length && !prods?.length && !returns?.length && !vouchers?.length && !productionOrders?.length) {
       if (restoredSnapshot && isAuto) setTimeout(() => location.reload(), 500);
       return restoredSnapshot
         ? T("تمت استعادة نسخة المصنع الكاملة من السحابة", "Full factory backup restored from cloud")
@@ -369,6 +467,39 @@ async function loadFromTablesMerge(isAuto = false) {
       if (!Array.isArray(S.docs)) S.docs = [];
       const m = mergeCloudInvoices(S.docs, cloudDocs);
       S.docs = m.arr; totalAdded += m.added; invoiceConflicts += m.conflicts;
+    }
+    if (returns?.length) {
+      const cloudReturns = returns.map(row => row.raw && typeof row.raw === "object" ? ({ ...row.raw, _cloudUpdatedAt: row.updated_at }) : ({
+        id: row.external_id || row.id, no: row.return_no,
+        t: row.return_type === "sale_return" ? "sret" : "pret",
+        date: row.return_date, total: Number(row.total || 0), note: row.note || ""
+      }));
+      const merged = mergeCloudRecords(S.docs || [], cloudReturns);
+      S.docs = merged.arr; totalAdded += merged.added; invoiceConflicts += merged.conflicts;
+    }
+    if (vouchers?.length) {
+      const cloudVouchers = vouchers.map(row => row.raw && typeof row.raw === "object" ? ({ ...row.raw, _cloudUpdatedAt: row.updated_at }) : ({
+        id: row.external_id || row.id, no: row.voucher_no, dir: row.direction,
+        date: row.voucher_date, title: row.account, desc: row.note || "", total: Number(row.amount || 0), ac: [], ln: []
+      }));
+      const merged = mergeCloudRecords(S.vch || [], cloudVouchers);
+      S.vch = merged.arr; totalAdded += merged.added; invoiceConflicts += merged.conflicts;
+    }
+    if (productionOrders?.length) {
+      const cloudOrders = productionOrders.map(row => {
+        if (row.raw && typeof row.raw === "object") return { ...row.raw, _cloudUpdatedAt: row.updated_at };
+        const breakdown = row.breakdown && typeof row.breakdown === "object" ? row.breakdown : {};
+        return {
+          id: row.external_id || row.id, no: row.order_no, iname: row.item_name,
+          desc: row.description || "", date: row.order_date,
+          st: row.status === "delivered" ? 2 : row.status === "in_progress" ? 1 : 0,
+          subs: breakdown.subs || [], rec: breakdown.received || [],
+          mats: breakdown.materials || [], x: breakdown.extra_costs || [],
+          wh: breakdown.warehouse || null, matCost: Number(row.total_cost || 0), wc: 0
+        };
+      });
+      const merged = mergeCloudRecords(S.po || [], cloudOrders);
+      S.po = merged.arr; totalAdded += merged.added; invoiceConflicts += merged.conflicts;
     }
     if (prods?.length) {
       const cloudProducts = prods.map(p => {
