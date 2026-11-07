@@ -142,16 +142,57 @@ function mergeCloudRecords(existing, incoming) {
     if (key === undefined || key === null || key === "") return;
     const local = map.get(String(key));
     if (!local) { map.set(String(key), remote); added++; return; }
+    const localVersion = Number(local._cloudVersion || 0);
+    const remoteVersion = Number(remote._cloudVersion || 0);
     const localTime = Date.parse(local._cloudUpdatedAt || "") || 0;
     const remoteTime = Date.parse(remote._cloudUpdatedAt || "") || 0;
-    if (remoteTime > localTime) {
-      local._cloudConflict = { serverUpdatedAt: remote._cloudUpdatedAt || null, serverCopy: remote };
+    // A higher cloud version is authoritative metadata, but never silently
+    // overwrites a local record. Preserve both copies for explicit resolution.
+    if (remoteVersion > localVersion || (!remoteVersion && remoteTime > localTime)) {
+      local._cloudConflict = {
+        serverVersion: remoteVersion || null,
+        serverUpdatedAt: remote._cloudUpdatedAt || null,
+        serverCopy: remote
+      };
       conflicts++;
-    } else if (remoteTime && remoteTime === localTime) {
+    } else if (remoteVersion > 0 && remoteVersion === localVersion) {
       delete local._cloudConflict;
     }
   });
   return { arr: [...map.values()], added, conflicts };
+}
+
+async function syncVersionedDetail(table, owner, externalId, expectedVersion, payload) {
+  const { data, error } = await supabase.rpc("sync_factory_detail", {
+    p_table_name: table,
+    p_external_id: externalId,
+    p_expected_version: Number(expectedVersion || 0),
+    p_payload: payload
+  });
+  if (!error) {
+    const row = Array.isArray(data) ? data[0] : data;
+    return row?.sync_version
+      ? { row }
+      : { error: new Error("The server returned no detail synchronization version") };
+  }
+  if (error.code === "40001") {
+    const { data: remote, error: readError } = await supabase.from(table)
+      .select("*").eq("user_id", owner).eq("external_id", externalId).maybeSingle();
+    if (readError) return { error: readError };
+    if (remote) {
+      const copy = remote.raw && typeof remote.raw === "object" ? { ...remote.raw } : {};
+      copy._cloudVersion = Number(remote.sync_version || 1);
+      copy._cloudUpdatedAt = remote.updated_at || null;
+      return {
+        conflict: {
+          serverVersion: copy._cloudVersion,
+          serverUpdatedAt: copy._cloudUpdatedAt,
+          serverCopy: copy
+        }
+      };
+    }
+  }
+  return { error };
 }
 
 function stableJson(value) {
@@ -306,19 +347,26 @@ async function uploadToTables(showAlert = false) {
         if (d._cloudConflict) { errors.push("return " + String(d.no || d.id) + ": conflict with a newer cloud copy; resolve before uploading"); continue; }
         const externalId = String(getField(d, ["id", "no"]) || "");
         if (!externalId) { errors.push("return skipped: missing stable ID"); continue; }
-        const raw = { ...d }; delete raw._cloudUpdatedAt; delete raw._cloudConflict;
-        const row = {
-          user_id: owner, external_id: externalId,
+        const raw = { ...d };
+        delete raw._cloudUpdatedAt; delete raw._cloudVersion; delete raw._cloudConflict;
+        const payload = {
           return_no: String(d.no || externalId),
           return_type: d.t === "sret" ? "sale_return" : "purchase_return",
           return_date: String(d.date || new Date().toISOString()).slice(0, 10),
-          total: Number(d.total || 0) || 0, note: d.note || null,
-          raw, updated_at: new Date().toISOString()
+          total: Number(d.total || 0) || 0,
+          note: d.note || null,
+          raw
         };
-        const { data, error } = await supabase.from("returns")
-          .upsert(row, { onConflict: "user_id,external_id" }).select("updated_at").single();
-        if (error) errors.push("returns " + externalId + ": " + error.message);
-        else if (data?.updated_at) { d._cloudUpdatedAt = data.updated_at; detailVersionsChanged = true; }
+        const result = await syncVersionedDetail("returns", owner, externalId, d._cloudVersion, payload);
+        if (result.error) errors.push("returns " + externalId + ": " + result.error.message);
+        else if (result.conflict) {
+          d._cloudConflict = result.conflict;
+          errors.push("returns " + externalId + ": version conflict; newer cloud copy preserved");
+        } else {
+          d._cloudVersion = Number(result.row.sync_version);
+          d._cloudUpdatedAt = result.row.updated_at || null;
+          detailVersionsChanged = true;
+        }
       }
 
       for (const v of (Array.isArray(S.vch) ? S.vch : [])) {
@@ -326,20 +374,27 @@ async function uploadToTables(showAlert = false) {
         if (v._cloudConflict) { errors.push("voucher " + String(v.no || v.id) + ": conflict with a newer cloud copy; resolve before uploading"); continue; }
         const externalId = String(getField(v, ["id", "no"]) || "");
         if (!externalId) { errors.push("voucher skipped: missing stable ID"); continue; }
-        const raw = { ...v }; delete raw._cloudUpdatedAt; delete raw._cloudConflict;
-        const row = {
-          user_id: owner, external_id: externalId,
+        const raw = { ...v };
+        delete raw._cloudUpdatedAt; delete raw._cloudVersion; delete raw._cloudConflict;
+        const payload = {
           voucher_no: String(v.no || externalId),
           direction: v.dir === "in" ? "in" : "out",
           account: String(v.title || v.desc || "سند"),
           voucher_date: String(v.date || new Date().toISOString()).slice(0, 10),
           amount: Number(v.total || 0) || 0,
-          note: v.desc || null, raw, updated_at: new Date().toISOString()
+          note: v.desc || null,
+          raw
         };
-        const { data, error } = await supabase.from("vouchers")
-          .upsert(row, { onConflict: "user_id,external_id" }).select("updated_at").single();
-        if (error) errors.push("vouchers " + externalId + ": " + error.message);
-        else if (data?.updated_at) { v._cloudUpdatedAt = data.updated_at; detailVersionsChanged = true; }
+        const result = await syncVersionedDetail("vouchers", owner, externalId, v._cloudVersion, payload);
+        if (result.error) errors.push("vouchers " + externalId + ": " + result.error.message);
+        else if (result.conflict) {
+          v._cloudConflict = result.conflict;
+          errors.push("vouchers " + externalId + ": version conflict; newer cloud copy preserved");
+        } else {
+          v._cloudVersion = Number(result.row.sync_version);
+          v._cloudUpdatedAt = result.row.updated_at || null;
+          detailVersionsChanged = true;
+        }
       }
     }
 
@@ -349,13 +404,13 @@ async function uploadToTables(showAlert = false) {
         if (o._cloudConflict) { errors.push("production order " + String(o.no || o.id) + ": conflict with a newer cloud copy; resolve before uploading"); continue; }
         const externalId = String(getField(o, ["id", "no"]) || "");
         if (!externalId) { errors.push("production order skipped: missing stable ID"); continue; }
-        const raw = { ...o }; delete raw._cloudUpdatedAt; delete raw._cloudConflict;
+        const raw = { ...o };
+        delete raw._cloudUpdatedAt; delete raw._cloudVersion; delete raw._cloudConflict;
         const extraCost = (Array.isArray(o.x) ? o.x : []).reduce((sum, item) => sum + (Number(item?.amt) || 0), 0);
         const purchaseCost = (Array.isArray(S.docs) ? S.docs : [])
           .filter(d => d?.t === "pur" && String(d.dest) === String(o.id))
           .reduce((sum, d) => sum + (Number(d.total) || 0), 0);
-        const row = {
-          user_id: owner, external_id: externalId,
+        const payload = {
           order_no: String(o.no || externalId),
           item_name: String(o.iname || o.name || "أمر إنتاج"),
           description: o.desc || null,
@@ -363,12 +418,18 @@ async function uploadToTables(showAlert = false) {
           breakdown: { subs: o.subs || [], received: o.rec || [], materials: o.mats || [], extra_costs: o.x || [], stage: Number(o.st) || 0, warehouse: o.wh ?? null },
           total_cost: (Number(o.matCost) || 0) + (Number(o.wc) || 0) + extraCost + purchaseCost,
           order_date: String(o.date || new Date().toISOString()).slice(0, 10),
-          raw, updated_at: new Date().toISOString()
+          raw
         };
-        const { data, error } = await supabase.from("production_orders")
-          .upsert(row, { onConflict: "user_id,external_id" }).select("updated_at").single();
-        if (error) errors.push("production_orders " + externalId + ": " + error.message);
-        else if (data?.updated_at) { o._cloudUpdatedAt = data.updated_at; detailVersionsChanged = true; }
+        const result = await syncVersionedDetail("production_orders", owner, externalId, o._cloudVersion, payload);
+        if (result.error) errors.push("production_orders " + externalId + ": " + result.error.message);
+        else if (result.conflict) {
+          o._cloudConflict = result.conflict;
+          errors.push("production_orders " + externalId + ": version conflict; newer cloud copy preserved");
+        } else {
+          o._cloudVersion = Number(result.row.sync_version);
+          o._cloudUpdatedAt = result.row.updated_at || null;
+          detailVersionsChanged = true;
+        }
       }
     }
 
@@ -562,25 +623,33 @@ async function loadFromTablesMerge(isAuto = false) {
       S.docs = m.arr; totalAdded += m.added; recordConflicts += m.conflicts;
     }
     if (returns?.length) {
-      const cloudReturns = returns.map(row => row.raw && typeof row.raw === "object" ? ({ ...row.raw, _cloudUpdatedAt: row.updated_at }) : ({
+      const cloudReturns = returns.map(row => row.raw && typeof row.raw === "object" ? ({
+        ...row.raw, _cloudVersion: Number(row.sync_version || 1), _cloudUpdatedAt: row.updated_at || null
+      }) : ({
         id: row.external_id || row.id, no: row.return_no,
         t: row.return_type === "sale_return" ? "sret" : "pret",
-        date: row.return_date, total: Number(row.total || 0), note: row.note || ""
+        date: row.return_date, total: Number(row.total || 0), note: "",
+        _cloudVersion: Number(row.sync_version || 1), _cloudUpdatedAt: row.updated_at || null
       }));
       const merged = mergeCloudRecords(S.docs || [], cloudReturns);
       S.docs = merged.arr; totalAdded += merged.added; recordConflicts += merged.conflicts;
     }
     if (vouchers?.length) {
-      const cloudVouchers = vouchers.map(row => row.raw && typeof row.raw === "object" ? ({ ...row.raw, _cloudUpdatedAt: row.updated_at }) : ({
+      const cloudVouchers = vouchers.map(row => row.raw && typeof row.raw === "object" ? ({
+        ...row.raw, _cloudVersion: Number(row.sync_version || 1), _cloudUpdatedAt: row.updated_at || null
+      }) : ({
         id: row.external_id || row.id, no: row.voucher_no, dir: row.direction,
-        date: row.voucher_date, title: row.account, desc: row.note || "", total: Number(row.amount || 0), ac: [], ln: []
+        date: row.voucher_date, title: row.account, desc: row.note || "", total: Number(row.amount || 0), ac: [], ln: [],
+        _cloudVersion: Number(row.sync_version || 1), _cloudUpdatedAt: row.updated_at || null
       }));
       const merged = mergeCloudRecords(S.vch || [], cloudVouchers);
       S.vch = merged.arr; totalAdded += merged.added; recordConflicts += merged.conflicts;
     }
     if (productionOrders?.length) {
       const cloudOrders = productionOrders.map(row => {
-        if (row.raw && typeof row.raw === "object") return { ...row.raw, _cloudUpdatedAt: row.updated_at };
+        if (row.raw && typeof row.raw === "object") return {
+          ...row.raw, _cloudVersion: Number(row.sync_version || 1), _cloudUpdatedAt: row.updated_at || null
+        };
         const breakdown = row.breakdown && typeof row.breakdown === "object" ? row.breakdown : {};
         return {
           id: row.external_id || row.id, no: row.order_no, iname: row.item_name,
@@ -588,7 +657,8 @@ async function loadFromTablesMerge(isAuto = false) {
           st: row.status === "delivered" ? 2 : row.status === "in_progress" ? 1 : 0,
           subs: breakdown.subs || [], rec: breakdown.received || [],
           mats: breakdown.materials || [], x: breakdown.extra_costs || [],
-          wh: breakdown.warehouse || null, matCost: Number(row.total_cost || 0), wc: 0
+          wh: breakdown.warehouse || null, matCost: Number(row.total_cost || 0), wc: 0,
+          _cloudVersion: Number(row.sync_version || 1), _cloudUpdatedAt: row.updated_at || null
         };
       });
       const merged = mergeCloudRecords(S.po || [], cloudOrders);
