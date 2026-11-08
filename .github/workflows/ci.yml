@@ -32,4 +32,5 @@ jobs:
           node --check --input-type=module < js/cloud-sync.js
           node --check --input-type=module < js/accounting-sync-core.js
           bash -n scripts/restore-supabase-from-backup.sh
+          sh -n scripts/export-auth-and-counts.sh
       - run: npm test
