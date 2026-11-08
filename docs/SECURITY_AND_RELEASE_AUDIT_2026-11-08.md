@@ -43,6 +43,32 @@ Supabase Auth leaked-password protection is currently disabled according to the 
 - It checksums database exports, verifies the uploaded encrypted object by downloading and byte-comparing it, and enforces a 9 GB ceiling below the 10 GB-month R2 free allowance.
 - R2 is not enabled on the Cloudflare account at audit time; therefore no real backup object or restore drill exists yet. Do not claim recoverability until a complete restore has been performed in QA.
 
+## Detailed QA synchronization test results
+
+The isolated `ms-factory-qa` database was exercised using its existing administrator, production-only employee, and invoice-only employee profiles. The tests ran inside explicit SQL transactions and ended with `ROLLBACK`; a follow-up query confirmed that all QA test products, invoices, returns, vouchers, production orders, accounting snapshots, and factory snapshots were absent afterward.
+
+Passed checks:
+- Production employee created and version-updated a production order; stale order update was rejected with a serialization/version conflict.
+- Production accounting accepted a balanced two-line ledger group and rejected an unbalanced group.
+- Production movement quantity changed from +5 to +7; inventory changed from 10 to 15 to 17. A stale retry with +9 was rejected and inventory remained 17 (no duplicate movement).
+- Invoice employee created a sale invoice, sale return, and receipt voucher using the versioned detail RPC.
+- Invoice accounting synchronized balanced ledger groups for invoice, return, and voucher, and movement deltas changed stock from 17 to 15 after the sale/return net movement. Production-only and invoice-only users were denied the other module's write path.
+- Production employee could read the production order and the restricted production configuration/catalog, but could not read the full factory snapshot or invoice rows. Invoice-only employee could not read production orders.
+- The administrator could synchronize the manual settings source.
+- The production configuration projection was tested with sentinel cash/balance values; the new allowlist migration removed those fields before the employee could read the projection.
+
+These are live Postgres/RLS/RPC integration tests against the QA project, not merely static mocks. They do not replace a real browser password-login test or a full restore drill.
+
+## Latest CI result
+
+Commit `69e831b3fa5b394eca17c2494952803ded745073` passed GitHub Actions:
+- `npm run build`: passed.
+- `wrangler deploy --dry-run`: passed; no deployment was performed.
+- JavaScript and restore shell syntax checks: passed.
+- Browser regression suite: **192/192 checks passed, 0 failed**, including all 19 screens, sales/purchases/returns/vouchers/production flows, stock/ledger balancing, XSS regressions, mobile layout, offline shell and release-gate checks.
+
+The browser suite intentionally runs without live Auth/cloud modules; the separate QA SQL tests above cover the database authorization and RPC layer.
+
 ## Authentication test limitation
 
 The QA SQL tests ran as the `authenticated` database role with controlled JWT claims for administrator, production-only employee, and invoice-only employee profiles. This exercises RLS, RPC authorization, source isolation, version conflicts, and inventory effects. The browser regression suite deliberately disables live Auth/cloud modules; it does not prove a real password sign-in session. A final live login test with actual QA Auth credentials remains a release gate.
