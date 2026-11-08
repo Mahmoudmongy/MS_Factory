@@ -1240,6 +1240,61 @@ window.resolveCloudSnapshotConflict = async function() {
   localStorage.removeItem("mgr6-cloud-snapshot-conflict");
   location.reload();
 };
+window.resolveCloudMasterConflict = async function(table, externalId, choice) {
+  if (!["customers","suppliers","products"].includes(table) || !["cloud","local"].includes(choice)) return;
+  if (!navigator.onLine || !supabase) return alert(T("يلزم اتصال بالإنترنت لحل التعارض", "Internet connection is required to resolve this conflict"));
+  const profile = await getMyProfile();
+  if (!profile?.is_admin) return alert(T("حل تعارض البيانات الرئيسية متاح لمدير النظام فقط", "Only the administrator can resolve master-data conflicts"));
+  const S = getCachedState();
+  const isProduct = table === "products";
+  const local = isProduct
+    ? (S.items || []).find(x => String(x.id || x.sku || "") === String(externalId))
+    : (S.partners || []).find(x => String(x.id || x.no || "") === String(externalId));
+  const conflictKey = table === "customers" ? "_cloudCustomersConflict"
+    : table === "suppliers" ? "_cloudSuppliersConflict" : "_cloudProductsConflict";
+  const versionKey = table === "customers" ? "_cloudCustomersVersion"
+    : table === "suppliers" ? "_cloudSuppliersVersion" : "_cloudProductsVersion";
+  const conflict = local?.[conflictKey];
+  if (!local || !conflict?.serverCopy || !Number(conflict.serverVersion)) {
+    return alert(T("لم يعد هذا التعارض موجودًا؛ حدّث حالة المزامنة", "This conflict is no longer available; refresh sync status"));
+  }
+  const clone = value => JSON.parse(JSON.stringify(value));
+  const backupKey = "mgr6-master-conflict-backups";
+  let backups;
+  try {
+    backups = JSON.parse(localStorage.getItem(backupKey) || "[]");
+    if (!Array.isArray(backups)) backups = [];
+    backups.push({
+      table, externalId: String(externalId), choice, at: new Date().toISOString(),
+      localCopy: clone(local), cloudCopy: clone(conflict.serverCopy)
+    });
+    if (backups.length > 50) backups = backups.slice(-50);
+    localStorage.setItem(backupKey, JSON.stringify(backups));
+  } catch(e) {
+    return alert(T("تعذر حفظ النسختين الاحتياطيتين؛ لم يتم تغيير أي بيانات", "Could not back up both copies; no data was changed"));
+  }
+  if (choice === "cloud") {
+    const stableId = local.id ?? String(externalId);
+    Object.assign(local, conflict.serverCopy, { id: stableId });
+    local[versionKey] = Number(conflict.serverVersion);
+    if (conflict.serverUpdatedAt) local[versionKey.replace("Version","UpdatedAt")] = conflict.serverUpdatedAt;
+    delete local[conflictKey];
+    Object.getPrototypeOf(localStorage).setItem.call(localStorage, "mgr6", JSON.stringify(S));
+    if (typeof window.applyFactoryCloudState === "function") window.applyFactoryCloudState(S);
+    if (typeof drawAll === "function") drawAll();
+    return T("تم اعتماد نسخة السحابة وحفظ النسختين في سجل التعارضات المحلي", "Cloud copy accepted; both copies were saved in the local conflict archive");
+  }
+  local[versionKey] = Number(conflict.serverVersion);
+  if (conflict.serverUpdatedAt) local[versionKey.replace("Version","UpdatedAt")] = conflict.serverUpdatedAt;
+  delete local[conflictKey];
+  Object.getPrototypeOf(localStorage).setItem.call(localStorage, "mgr6", JSON.stringify(S));
+  if (typeof window.applyFactoryCloudState === "function") window.applyFactoryCloudState(S);
+  const result = await uploadToTables(true);
+  if (String(result).includes("تعارض") || String(result).includes("conflict") || String(result).includes("فشل")) {
+    return alert(String(result));
+  }
+  return T("تم اعتماد نسخة الجهاز ورفعها بإصدار جديد بعد حفظ نسخة السحابة القديمة", "Local copy accepted and uploaded as a new version after backing up the previous cloud copy");
+};
 window.backupNowManual = function() { uploadToTables(true); };
 window.testSync = async function() { const r = await uploadToTables(true); alert(r); return r; };
 
