@@ -1,125 +1,68 @@
-# Security and release audit notes — 8 November 2026
+# MS Factory — Security and release audit
+Date: 2026-11-08
+Repository: `Mahmoudmongy/MS_Factory`
+PR: #6 — `migration/cloudflare-workers-hosting`
+Production Supabase: `yvrislcbbhtruwdnuooz`
+Isolated QA Supabase: `bjjouupxxodhbniqkjbs`
 
-## Scope and environments
+## Scope and safety
+This review used the isolated QA project for SQL regression testing and read-only inspection for production. No production migration, data mutation, backup activation, Cloudflare deployment, DNS change, PR merge or test-data cleanup was performed.
 
-- Repository: `Mahmoudmongy/MS_Factory`
-- Production Supabase project: `yvrislcbbhtruwdnuooz`
-- Isolated QA Supabase project: `bjjouupxxodhbniqkjbs`
-- Cloudflare account: linked to this workspace; Workers static-assets path is configured on the migration branch.
-- No production database migration was applied during this QA pass. The new SQL migrations were exercised only against the isolated QA project.
-- No Cloudflare production deployment was performed.
+## CI and browser coverage
+- Latest CI run `42491172536` passed on commit `21b70e7d7c8326b0838d138cb1605b5b57fe4688`.
+- Dependency audit reported zero high-severity vulnerabilities.
+- Vite build, Wrangler dry-run, backup CLI flag validation, syntax checks and `npm test` passed.
+- Browser suite: 218/218 checks passed.
+- Important limitation: browser tests stub live Supabase cloud sync. Real authenticated cross-device behavior is not covered.
 
-## Hosting and release protection
+## Supabase migration state
+- Production has 13 applied migrations; isolated QA has 38.
+- The additional branch migrations are QA/branch-only and have not been applied to production.
+- Production has 11 public application tables with RLS enabled. This does not, by itself, prove every role/policy combination is correct.
+- Production Storage currently has zero buckets.
+- Last observed production row counts: factory_state 1, customers 9, products 3, invoices 0, production_orders 0, vouchers 0.
 
-- The Vercel production alias `ms-factory.vercel.app` remains READY on the previously verified production deployment from main commit `177a44d72bb20c828526950979b929f16e020970`. No new Vercel production deployment was made.
-- Preview deployments were disabled on both Vercel projects (`ms-factory` and `ms-factory-preview`) to stop extra Hobby build consumption; SSO protection is enabled for preview deployments on `ms-factory` and was already enabled on `ms-factory-preview`.
-- Cloudflare Worker `ms-factory` has one earlier uploaded deployment, but its `workers.dev` subdomain and previews remain disabled. The current branch has only passed Wrangler dry-run validation; it has not been published to a public Cloudflare URL.
-- The Cloudflare deploy workflow is manual-only and additionally requires the main branch plus the repository variable `CLOUDFLARE_RELEASE_APPROVED=true`. No release approval variable was enabled during this QA phase.
+## QA synchronization and permission checks
+The QA-only SQL regression suite was rerun on 2026-11-08 and completed without SQL error. It runs inside an explicit transaction and rolls back fixtures. Prior QA assertions cover:
+- Production-only and invoice-only role boundaries.
+- Restricted production catalog/config read models; no full factory snapshot or customer/cash balances exposed to production-only staff.
+- Balanced ledger enforcement and invalid source/category rejection.
+- Versioned invoice/detail/master/accounting writes and stale-version conflict rejection.
+- Inventory delta application, edit/reversal behavior and retry idempotency.
+- Returns, vouchers, production orders and soft-delete tombstones.
+- QA fixture rollback.
 
-## Accounting and stock synchronization
+These database tests do not replace real browser password-login tests or a two-device offline/reconnect exercise.
 
-- The accounting RPC is intentionally `SECURITY DEFINER`: production/invoice employees must update a narrowly scoped accounting source and its shared inventory delta without receiving direct write access to the full accounting table or inventory table.
-- The RPC verifies the authenticated user, resolves their factory owner, checks the source permission, validates accounts/products/source references, enforces balanced ledger groups, checks the optimistic version, and applies the snapshot plus inventory delta in one transaction.
-- Direct authenticated `INSERT/UPDATE/DELETE` privileges on `factory_accounting_state` are revoked. Employees read only their permitted source rows through RLS.
-- For a first employee snapshot, only movement rows newer than the current inventory row's timestamp are applied; this avoids replaying historical movements already included in the inventory baseline. For later versions, the RPC applies the difference between the old and new movement snapshots, including reversals and edits.
-- The administrator remains responsible for the full inventory and accounting snapshot. The employee RPC updates only the stock delta for the invoice or production source they are authorized to write.
+## Security advisor findings
+- Production advisor reports **Leaked Password Protection Disabled**. This Auth setting must be enabled in Supabase Dashboard under Authentication → Settings → Password Security, then verified before release.
+- QA advisor also reports the two public SECURITY DEFINER RPCs `sync_factory_accounting` and `sync_factory_master_record`. This is intentional in the current design: the RPCs are narrow permission-checked write paths, while direct authenticated writes to the accounting snapshot table are revoked. Both functions require careful manual review of `auth.uid()`, factory ownership, module permission, payload validation, search path and grants. Do not blindly revoke execution or change them to SECURITY INVOKER without redesigning and rerunning the role tests.
+- QA performance advisor findings include unused indexes. These are informational in a low-traffic test environment; do not drop indexes based only on this snapshot.
 
-## Production-only read access
+## Hosting
+- Cloudflare Worker `ms-factory` currently reports `has_assets=false`, empty deployment_id and no routes. The Worker record exists, but the app is not verified as deployed as Cloudflare Static Assets.
+- The Cloudflare deploy workflow is manual-only and requires the main branch plus `CLOUDFLARE_RELEASE_APPROVED=true`.
+- No Cloudflare production deploy or DNS change has been made.
+- Vercel remains the fallback. Earlier Vercel Hobby daily deployment limits were reached; avoid repeated preview deployments.
 
-- The previous owner-executed production views have been replaced with two narrow tables: `production_catalog` and `production_factory_config`.
-- Both tables have RLS. Production employees can read only safe product/variant fields and the production configuration needed for their work.
-- Private, non-API-exposed triggers maintain these projections from the canonical products, inventory, and factory_state tables.
-- The full `factory_state` snapshot remains administrator-only; the production projection does not expose journal entries, customer balances, bank balances, or the full state JSON.
-- A final field-level review found that the account chart array included a `cash` opening-amount field. A follow-up migration (`20261108220000_redact_account_balances_from_production_config.sql`) now allowlists only account id/code/name/type/category/currency fields and rebuilds existing projections. It deliberately strips `cash`, `balance`, and any unapproved account properties. This was exercised in a rolled-back QA transaction with sentinel values; the production employee could read the sanitized projection but could not read the full snapshot.
+## Encrypted backup — Backblaze B2
+- Target: private bucket `ms-factory-backups-2026`, endpoint `https://s3.us-east-005.backblazeb2.com`.
+- B2 preflight run `42491172561` passed credential/configuration checks, 90-day Compliance Object Lock verification, lifecycle verification and managed-prefix size check.
+- The preflight job succeeded; the actual `backup` job was skipped intentionally because `BACKUP_ENABLED` is false.
+- No database dump, encrypted archive upload, checksum read-back or restore test has occurred. Recoverability is therefore **not yet proven**.
+- Workflow refuses to back up while Storage buckets exist because object bytes are not exported. Current production bucket count is zero.
+- `SUPABASE_DB_URL` must be configured as a GitHub Actions secret. Never print its value.
+- The age private identity must remain offline in two secure copies and must never be committed to the repository.
 
-## Intentional Supabase advisor exception
+## Release gates
+1. Verify `SUPABASE_DB_URL` secret presence without revealing it.
+2. Obtain explicit approval for one production backup run, then restore into a disposable QA project and verify schema, Auth identities, row counts and login.
+3. Test manager and employee password login in a real browser.
+4. Test two-device offline creation, reconnect, conflict handling and idempotent retry.
+5. Enable and verify leaked-password protection.
+6. Test barcode printing on the actual Android device/printer.
+7. Review all pending migrations and RLS policies against production data.
+8. Separately approve production migration and Cloudflare deployment only after all gates pass.
 
-The security advisor reports two public RPCs as SECURITY DEFINER: `sync_factory_accounting` and `sync_factory_master_record`. This is intentional: the accounting RPC atomically applies permission-scoped ledger/stock deltas without granting direct accounting-table writes; the master-data RPC applies field allowlists and optimistic version checks. Both use an empty search path, fully qualified references, validate `auth.uid()`, factory ownership and module permission, and are executable only by authenticated users (not `anon`). The accounting snapshot table has no direct authenticated write grants.
-
-The QA security advisor no longer reports the two previous SECURITY DEFINER view errors after replacing those views with RLS-protected tables.
-
-## Remaining security action
-
-Supabase Auth leaked-password protection is currently disabled according to the security advisor. This is an Auth project setting, not a SQL setting, and the available Supabase connector does not expose a control to change it. Enable it in the Supabase Dashboard under Authentication → Settings → Password Security before public production release.
-
-## Backup status
-
-- The backup workflow is present but deliberately disabled until R2 is enabled, a private bucket is created, immutable 90-day retention and 120-day lifecycle rules are configured, and the required GitHub variables/secrets are supplied.
-- The workflow stops if any Supabase Storage bucket exists because Storage object bytes are not yet included.
-- The archive uses age public-key encryption; the private key must remain offline and outside GitHub.
-- It checksums database exports, verifies the uploaded encrypted object by downloading and byte-comparing it, and enforces a 9 GB ceiling below the 10 GB-month R2 free allowance.
-- R2 is not enabled on the Cloudflare account at audit time; therefore no real backup object or restore drill exists yet. Do not claim recoverability until a complete restore has been performed in QA.
-
-## Detailed QA synchronization test results
-
-The isolated `ms-factory-qa` database was exercised using its existing administrator, production-only employee, and invoice-only employee profiles. The tests ran inside explicit SQL transactions and ended with `ROLLBACK`; a follow-up query confirmed that all QA test products, invoices, returns, vouchers, production orders, accounting snapshots, and factory snapshots were absent afterward.
-
-Passed checks:
-- Production employee created and version-updated a production order; stale order update was rejected with a serialization/version conflict.
-- Production accounting accepted a balanced two-line ledger group and rejected an unbalanced group.
-- Production movement quantity changed from +5 to +7; inventory changed from 10 to 15 to 17. A stale retry with +9 was rejected and inventory remained 17 (no duplicate movement).
-- Invoice employee created a sale invoice, sale return, and receipt voucher using the versioned detail RPC.
-- Invoice accounting synchronized balanced ledger groups for invoice, return, and voucher, and movement deltas changed stock from 17 to 15 after the sale/return net movement. Production-only and invoice-only users were denied the other module's write path.
-- Production employee could read the production order and the restricted production configuration/catalog, but could not read the full factory snapshot or invoice rows. Invoice-only employee could not read production orders.
-- The administrator could synchronize the manual settings source.
-- The production configuration projection was tested with sentinel cash/balance values; the new allowlist migration removed those fields before the employee could read the projection.
-- The production catalog projection was also exercised with a QA product carrying retail price 250, wholesale price 190, buy cost 12, and stock 7. The production-only user saw only the allowed product/variant quantity and buy-cost projection; the full `products` row and retail/wholesale/raw columns were not exposed.
-- A further end-to-end review found a missing path: the accounting RPC applied inventory deltas for employees but skipped administrator-originated invoice/production/manual-journal movements. That meant a manager's stock changes could leave the production-only catalog stale. Migration `20261108230000_apply_admin_stock_deltas_to_production_catalog.sql` now applies the versioned movement delta for manager sources too. In QA, manager stock went 10 → 7 after a sale, 7 → 6 after editing the sale, and 6 → 8 after a manual stock journal; the production catalog reflected 8. A stale retry did not alter the quantity. This migration is applied to QA only, not production.
-
-These are live Postgres/RLS/RPC integration tests against the QA project, not merely static mocks. They do not replace a real browser password-login test or a full restore drill.
-
-## Latest CI result
-
-Commit `3fd144fe87f222e1ea415ec6a0145ab015a3fe81` passed the full GitHub Actions workflow:
-- `npm audit --audit-level=high`: passed; **0 dependency vulnerabilities found**.
-- `npm run build`: passed.
-- Wrangler 4.158.0 `deploy --dry-run`: passed; it read **22 static assets**, with a **0.34 KiB** Worker bundle. No deployment was performed.
-- Supabase CLI 3.0.0 backup command help/flag validation: passed without connecting to production.
-- JavaScript and backup/restore shell syntax checks: passed.
-- Browser regression suite: **218/218 checks passed, 0 failed**, including XSS regressions for customer/item forms, report cells and print metadata; all 19 screens; sales/purchases/returns/vouchers/production flows; stock/ledger balancing; mobile layout; offline shell; and cloud-sync release-gate checks.
-
-The full `supabase/tests/qa_sync_regression.sql` suite was also executed successfully against the isolated QA Supabase project after the latest QA migrations. It tests admin snapshot CAS, invoice CAS and child-line replacement, master/detail version conflicts, production-only and invoice-only permissions, sales and purchases, both return types, incoming/outgoing vouchers, ledger balancing, inventory deltas and idempotent retries. The entire suite rolls back; a follow-up query confirmed zero retained QA fixture rows. Production table counts remain unchanged.
-
-The browser suite intentionally runs without live Auth/cloud modules; the separate QA SQL tests cover the database authorization and RPC layer.
-
-## Authentication test limitation
-
-The QA SQL tests ran as the `authenticated` database role with controlled JWT claims for administrator, production-only employee, and invoice-only employee profiles. This exercises RLS, RPC authorization, source isolation, version conflicts, and inventory effects. The browser regression suite deliberately disables live Auth/cloud modules; it does not prove a real password sign-in session. A final live login test with actual QA Auth credentials remains a release gate.
-
-## Master-data concurrency hardening
-
-The remaining last-write-wins path for customers, suppliers and products has now been replaced on the migration branch with `sync_factory_master_record` and migration `20261108250000_version_master_data_sync.sql`.
-
-- Each customer, supplier and product row now carries `sync_version`, `updated_at` and `updated_by`.
-- Writes use optimistic compare-and-swap: a new record must submit version 0; edits must submit the current version. Stale edits return SQLSTATE `40001` and cannot overwrite the newer copy.
-- The RPC is permission-scoped: customers → customers permission, suppliers → suppliers permission, products → inventory permission. It validates the record ID, required name, customer type, nonnegative product prices, preserves legitimate negative stock balances, validates raw JSON objects and enforces payload size.
-- The browser sync now calls the RPC for all three master-data types, carries the version metadata across offline saves, preserves the remote copy on conflicts and counts conflicts instead of silently overwriting local edits.
-- The new migration was applied only to the isolated QA project and passed rolled-back SQL tests for create, update, stale-write rejection, profile-field preservation, product update, and denial of production-only/invoice-only employee writes.
-- A follow-up verification confirmed zero retained QA fixture rows after rollback across customers, suppliers, products, invoices, returns, vouchers, production orders and accounting snapshots.
-- Production remains unchanged; do not deploy this branch until the backup and remaining release gates are satisfied.
-
-This removes the identified silent last-write-wins write path. It does not prove a real multi-browser offline race; that remains part of the live Auth/two-device release test.
-
-## Release decision
-
-Do not merge to production or deploy the Cloudflare worker until:
-1. the complete CI suite passes on the final branch head;
-2. the production DB migrations are reviewed and applied only after a verified backup;
-3. R2 is enabled and a full backup plus QA restore drill succeeds;
-4. real administrator and employee password logins are tested in QA;
-5. Android device printing is checked on a physical device.
-6. Customer/supplier/product master records pass versioned compare-and-swap tests (QA SQL passed); a real two-browser offline conflict-resolution drill remains required.
-
-## Edge Function source verification
-
-The two active production Edge Functions were read from Supabase and compared byte-for-byte with the repository sources on this branch:
-
-- `create-employee-account`, deployed version 5 — identical to `supabase/functions/create-employee-account/index.ts`.
-- `change-initial-password`, deployed version 1 — identical to `supabase/functions/change-initial-password/index.ts`.
-
-Both have JWT verification enabled. The backup archive includes the repository function sources; this is currently an exact source backup of both deployed functions. The functions use Supabase-provided environment variables only; any future custom function secrets must be separately escrowed outside the repository.
-
-
-## Performance advisor follow-up
-
-The QA performance advisor initially identified seven unindexed `updated_by` foreign keys. Migration `20261108300000_index_updated_by_foreign_keys.sql` added covering indexes, and the subsequent QA advisor run no longer reports unindexed foreign keys. The remaining `unused_index` notices are informational because the QA database has a tiny dataset and no representative production workload; indexes were not removed based on an empty test workload.
+## Current decision
+**Not ready for production release.** CI and B2 preflight are successful, but backup/restore, real authenticated multi-device tests, Auth password protection, Android printing, migration review and verified Cloudflare static-asset deployment remain incomplete.
