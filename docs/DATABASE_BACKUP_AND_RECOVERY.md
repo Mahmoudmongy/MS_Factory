@@ -9,11 +9,11 @@ The Supabase Free plan does not provide the automatic daily platform backups ava
 ## Architecture
 
 1. GitHub Actions runs once daily (01:35 UTC) and can also be started manually from the `main` branch.
-2. Supabase CLI exports roles, schema, and database data. The data export includes database records such as Auth users; test the restore before relying on it.
+2. Supabase CLI exports roles, schema, and public database data. Because the CLI excludes managed Auth schemas, the workflow separately exports only `auth.users` and `auth.identities` using `pg_dump`; it does not export active sessions or refresh tokens.
 3. The archive is encrypted with an age public recipient before it leaves the runner.
 4. Only the encrypted archive is uploaded to a private Cloudflare R2 bucket over the S3-compatible API.
 5. The workflow verifies that the uploaded object exists and records its encrypted SHA-256 in the job log.
-6. The workflow never uploads plaintext SQL or a plaintext GitHub Actions artifact.
+6. The workflow never uploads plaintext SQL or a plaintext GitHub Actions artifact. The Auth export contains password hashes and identity metadata, so it is included only inside the age-encrypted archive.
 
 The workflow does not run on pull requests. It requires a bucket-scoped R2 access key and read/write access to the backup bucket only.
 
@@ -78,7 +78,7 @@ tar -tzf ms-factory-db-backup.tar.gz
 mkdir restore-check && tar -xzf ms-factory-db-backup.tar.gz -C restore-check
 ```
 
-5. Restore into a disposable QA database with the matching Postgres/Supabase version. Do not point the restore command at production. Supabase-managed roles and Auth schema may require platform-specific handling; validate all SQL files before a real recovery.
+5. Restore into a disposable QA Supabase project with a matching Postgres/Auth version. Restore schema first, then import `auth-users.sql` into the existing managed Auth tables, then import `data.sql` with triggers disabled for the data phase so the `auth.users` trigger does not duplicate `profiles`. The exact restore sequence must be proven on QA before any production recovery. Do not point restore commands at production.
 6. Compare counts for `auth.users`, `profiles`, `factory_state`, customers, suppliers, products, invoices, invoice items, returns, vouchers and production orders. Then log into the restored QA app and verify representative records and permissions.
 7. Record restore duration and the latest recoverable backup timestamp.
 
