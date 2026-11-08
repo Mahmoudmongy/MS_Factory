@@ -46,7 +46,7 @@ async function bootstrapFactoryApp(){
   await startFactoryApp(profile,data.session.user.email||'',false);
  }catch(error){console.error('Authentication bootstrap failed:',error);location.replace('auth.html')}
 }
-await bootstrapFactoryApp();
+bootstrapFactoryApp();
 </script>
 <body>
 <div id="app">
