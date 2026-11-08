@@ -75,7 +75,10 @@ jobs:
         run: |
           set -euo pipefail
           sudo apt-get update
-          sudo apt-get install -y age awscli postgresql-client python3
+          sudo apt-get install -y age postgresql-client python3 python3-venv
+          python3 -m venv "$RUNNER_TEMP/awscli-venv"
+          "$RUNNER_TEMP/awscli-venv/bin/pip" install --disable-pip-version-check awscli
+          echo "$RUNNER_TEMP/awscli-venv/bin" >> "$GITHUB_PATH"
 
       - name: Validate secrets and QA-only destination
         run: |
