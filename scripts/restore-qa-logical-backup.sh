@@ -123,7 +123,8 @@ def read_counts(path):
         if len(parts) != 2:
             continue
         name, value = parts[0].strip(), parts[1].strip()
-        if re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", name) and value.isdigit():
+        if (re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", name) or
+            re.fullmatch(r"auth\\.[A-Za-z_][A-Za-z0-9_]*", name)) and value.isdigit():
             result[name] = int(value)
     if not result:
         raise SystemExit(f"No table counts could be parsed from {path}.")
