@@ -56,7 +56,7 @@ mkdir "$work/archive"
 tar -xzf "$work/ms-factory-db-backup.tar.gz" -C "$work/archive"
 cd "$work/archive"
 
-for required in roles.sql schema.sql data.sql auth-users.sql migration-history.sql auth-trigger.sql auth-row-counts.txt public-row-counts.txt manifest.txt database-files.sha256 auth-user-count.txt migration-count.txt storage-bucket-count.txt; do
+for required in roles.sql schema.sql data.sql auth-users.sql migration-history-schema.sql migration-history.sql auth-trigger.sql auth-row-counts.txt public-row-counts.txt manifest.txt database-files.sha256 auth-user-count.txt migration-count.txt storage-bucket-count.txt; do
   [[ -s "$required" ]] || { echo "ERROR: backup archive is missing $required." >&2; exit 25; }
 done
 grep -qx 'project=ms-factory' manifest.txt || { echo "ERROR: unexpected backup manifest." >&2; exit 26; }
@@ -85,7 +85,12 @@ PY
 chmod 600 "$work/pg_env.sh"
 source "$work/pg_env.sh"
 target_users="$(psql -X -v ON_ERROR_STOP=1 -Atqc 'SELECT count(*) FROM auth.users')"
-target_migrations="$(psql -X -v ON_ERROR_STOP=1 -Atqc 'SELECT count(*) FROM supabase_migrations.schema_migrations')"
+target_migrations_table="$(psql -X -v ON_ERROR_STOP=1 -Atqc \"SELECT to_regclass('supabase_migrations.schema_migrations') IS NOT NULL\")"
+if [[ "$target_migrations_table" == "t" ]]; then
+  target_migrations="$(psql -X -v ON_ERROR_STOP=1 -Atqc 'SELECT count(*) FROM supabase_migrations.schema_migrations')"
+else
+  target_migrations=0
+fi
 if [[ "$target_migrations" != "0" ]]; then
   echo "ERROR: target already has $target_migrations migration-history rows. Restore refused." >&2; exit 32
 fi
@@ -96,7 +101,7 @@ target_buckets="$(psql -X -v ON_ERROR_STOP=1 -Atqc 'SELECT count(*) FROM storage
 if [[ "$target_buckets" != "0" ]]; then
   echo "ERROR: target Storage already has $target_buckets buckets. Restore refused." >&2; exit 31
 fi
-for table in profiles factory_state customers suppliers products inventory invoices invoice_items returns vouchers production_orders; do
+for table in profiles factory_state customers suppliers products inventory invoices invoice_items returns vouchers production_orders factory_accounting_state production_catalog production_factory_config; do
   exists="$(psql -X -v ON_ERROR_STOP=1 -Atqc "SELECT to_regclass('public.$table') IS NOT NULL")"
   if [[ "$exists" == "t" ]]; then
     rows="$(psql -X -v ON_ERROR_STOP=1 -Atqc "SELECT count(*) FROM public.$table")"
@@ -108,7 +113,10 @@ done
 
 echo "Target verified as empty QA project $RESTORE_TARGET_PROJECT_REF."
 psql -X -v ON_ERROR_STOP=1 -f roles.sql
+# Supabase's CLI restore guidance requires revoking target defaults before applying schema grants.
+psql -X -v ON_ERROR_STOP=1 -c 'ALTER DEFAULT PRIVILEGES IN SCHEMA public REVOKE ALL ON TABLES FROM anon, authenticated'
 psql -X -v ON_ERROR_STOP=1 -f schema.sql
+psql -X -v ON_ERROR_STOP=1 -f migration-history-schema.sql
 # Prevent the custom profile trigger from creating duplicate profiles during Auth import.
 psql -X -v ON_ERROR_STOP=1 -c 'DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users'
 psql -X -v ON_ERROR_STOP=1 -f auth-users.sql
