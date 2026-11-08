@@ -137,7 +137,7 @@ jobs:
           npx --yes supabase@3.0.0 db dump --remote="$SUPABASE_DB_URL" -f schema.sql
           npx --yes supabase@3.0.0 db dump --remote="$SUPABASE_DB_URL" -f data.sql --use-copy --data-only
           # Auth rows are exported separately; active sessions and refresh tokens are excluded.
-          docker run --rm -v "$PWD:/backup" -e SUPABASE_DB_URL postgres:17-bookworm bash /backup/scripts/export-auth-and-counts.sh
+          docker run --rm --workdir /backup -v "$PWD:/backup" -e SUPABASE_DB_URL postgres:17-bookworm bash /backup/scripts/export-auth-and-counts.sh
           if [ "$(cat storage-bucket-count.txt)" != "0" ]; then
             echo "::error::Supabase Storage buckets exist. This workflow does not yet export Storage object bytes; refusing an incomplete backup."
             exit 1
