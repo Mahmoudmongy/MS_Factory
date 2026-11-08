@@ -304,9 +304,9 @@ begin
   end if;
 
   if p_section = 'inventory' then
-    v_allowed := private.can_access_factory_owner(v_owner_id, 'inventory', false);
+    v_allowed := private.can_access_factory_owner_strict(v_owner_id, 'inventory');
   elsif p_section = 'accounting' then
-    v_allowed := private.can_access_factory_owner(v_owner_id, 'settings', false);
+    v_allowed := private.can_access_factory_owner_strict(v_owner_id, 'settings');
   else
     raise exception 'Invalid baseline section' using errcode = '22023';
   end if;
