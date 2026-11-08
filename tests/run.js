@@ -313,7 +313,7 @@ ok('remote planner adopts an identical local effect without applying it twice',l
 const localDiff=planRemoteSourceEffectApply?planRemoteSourceEffectApply({...canonicalFixture,L:[...canonicalFixture.L,{src:'doc',rid:91,a:1,dr:1,cr:1}]},[sameRemote],{}):{conflicts:[{}]};
 ok('remote planner preserves local edits as conflicts instead of overwriting them',localDiff.actions.length===0&&localDiff.conflicts.some(x=>x.reason==='local_effect_differs_from_remote'));
 const remoteDeletedAbsent=planRemoteSourceEffectApply?planRemoteSourceEffectApply(localWithoutEffect,[{...sameRemote,deleted_at:'2026-11-08T00:00:00Z',payload:null}],{}):{adoptedVersions:{}};
-ok('remote planner adopts tombstones when the local source is already absent',remoteDeletedAbsent.adoptedVersions['["doc","91"]']===3&&remoteDeletedAbsent.actions.length===0);
+ok('remote planner adopts tombstones when the local source is already absent',remoteDeletedAbsent.actions.length===1&&remoteDeletedAbsent.actions[0].op==='delete'&&remoteDeletedAbsent.actions[0].version===3);
 const remoteDeletePlan=planRemoteSourceEffectApply?planRemoteSourceEffectApply(canonicalFixture,[{...sameRemote,deleted_at:'2026-11-08T00:00:00Z',payload:null}],{'["doc","91"]':3}):{actions:[],conflicts:[{}]};
 ok('remote tombstone schedules a safe reversal when the local effect version is known',
   remoteDeletePlan.actions.length===1&&remoteDeletePlan.actions[0].op==='delete'&&remoteDeletePlan.actions[0].version===3);
