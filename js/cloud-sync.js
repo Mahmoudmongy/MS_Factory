@@ -249,6 +249,11 @@ function normalizeSourceEffects(state) {
         foreignCurrencyAmount: Number(row.fc || 0)
       };
     }).filter(Boolean);
+    const debitTotal = ledger.reduce((sum, row) => sum + row.debit, 0);
+    const creditTotal = ledger.reduce((sum, row) => sum + row.credit, 0);
+    if (ledger.length && Math.abs(debitTotal - creditTotal) > 0.005) {
+      invalid.push({ sourceType: effect.sourceType, sourceId: effect.sourceId, reason: "unbalanced_ledger_effect", debitTotal, creditTotal });
+    }
     const movements = effect.movements.map(row => {
       const item = itemById.get(String(row.iid));
       if (!item) { invalid.push({ sourceType: effect.sourceType, sourceId: effect.sourceId, reason: "unmapped_item", itemId: String(row.iid) }); return null; }
