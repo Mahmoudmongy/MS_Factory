@@ -86,13 +86,14 @@ ok('online startup sync runs even when local cache already has data',/if \(navig
 ok('offline boot permits only a previously verified cached profile for the same user',/factory-profile:/.test(idx)&&/cachedProfile\.id === data\.session\.user\.id/.test(idx)&&/if \(!navigator\.onLine\)/.test(idx));
 ok('reconnect refreshes the profile before using permissions for cloud sync',/myProfile = null; ownerIdCache = null; window\.__factoryAuthProfile = null;/.test(cloud)&&/const freshProfile = await getMyProfile\(\)/.test(cloud));
 
-ok('offline shell precaches the stable production app and first-login password page',/auth\.html/.test(sw)&&/change-password\.html/.test(sw)&&/js\/change-password\.js/.test(sw)&&/js\/app\.js/.test(sw)&&/factory-v11/.test(sw));
+ok('offline shell precaches the stable production app and first-login password page',/auth\.html/.test(sw)&&/change-password\.html/.test(sw)&&/js\/change-password\.js/.test(sw)&&/js\/app\.js/.test(sw)&&/factory-v12/.test(sw));
 ok('mobile and desktop usability includes visible keyboard focus and safe-area spacing',/focus-visible/.test(css)&&/safe-area-inset-bottom/.test(css));
 ok('offline-created detail records are uploaded even when the full snapshot has a preserved conflict',/if \(admin && !snapshotConflict && !accountingConflict && errors\.length === 0\)/.test(cloud)&&/for \(const \{ key, arr \} of partnerArrays\)/.test(cloud)&&/hasSnapshotConflict/.test(cloud));
 ok('local save writes a durable pending-sync marker before network recovery',/mgr6-sync-pending/.test(app)&&/localStorage\.setItem\("mgr6-sync-pending"/.test(app));
 ok('sync indicator is a separate small icon and turns blue while syncing',/id="sync-icon"/.test(idx)&&/syncIcon\.classList\.toggle\('syncing', syncState === 'saving'\)/.test(cloud)&&/#sync-icon\.syncing\{color:#38bdf8/.test(css));
 ok('header uses an icon-only light/dark toggle and language stays out of the header',/<button id="thb"/.test(idx)&&!idx.includes('id="lgb"')&&/togLang\(\)/.test(app)&&/التبديل إلى الوضع الداكن/.test(app));
 ok('authenticated bootstrap scopes mgr6 local data by user before loading the app',/activateUserStorage\(profile\)/.test(idx)&&/factory-user:/.test(idx)&&/await loadClassicScript\('\.\/js\/app\.js'\)/.test(idx)&&!idx.includes('<script src="./js/app.js"></script>'));
+ok('per-user storage helper is included in the offline shell cache',/js\/user-storage\.js/.test(sw)&&/factory-v12/.test(sw));
 ok('cloud synchronization starts only after the authenticated app shell has loaded',/await import\('\.\/js\/cloud-sync\.js'\)/.test(idx)&&idx.indexOf('await loadClassicScript')<idx.indexOf('await import'));
 ok('admin selector is labelled Admin in Arabic and English',/الأدمن \/ Admin/.test(app));
 ok('search filters update while typing and restore cursor focus after filtering',/function fbarType\(/.test(app)&&/oninput="fbarType\(/.test(app)&&/setSelectionRange\(start,end\)/.test(app));
@@ -100,7 +101,7 @@ ok('opening an existing screen in a separate tab activates it instead of duplica
 ok('Excel export splits currency labels into a separate adjacent cell and keeps amounts numeric',/function exportCurrencyCell/.test(app)&&/\[h\+" \(قيمة\)","العملة"\]/.test(app));
 ok('legacy Excel importer supports multiple named sheets for customers, suppliers and inventory',/function impSheet\(/.test(app)&&/function templateExcel\(/.test(app)&&/customers:\[/.test(app)&&/suppliers:\[/.test(app)&&/WZ\.sheetNames/.test(app));
 ok('module navigation uses consistent purpose-specific SVG icons',/const APP_ICONS=/.test(app)&&/ico\("customer"\)/.test(app)&&/ico\("inventory"\)/.test(app));
-ok('offline service worker pre-caches Vite module assets discovered from the HTML shell',/matchAll\(\/\(\?:src\|href\)/.test(sw)&&/modulepreload/.test(idx+sw)&&/factory-v11/.test(sw));
+ok('offline service worker pre-caches Vite module assets discovered from the HTML shell',/matchAll\(\/\(\?:src\|href\)/.test(sw)&&/modulepreload/.test(idx+sw)&&/factory-v12/.test(sw));
 
 
 ok('invoice sync migration uses optimistic version checks and invoker security',/sync_version/.test(fs.readFileSync(path.join(ROOT,'supabase/migrations/20261107090901_20261107111000_atomic_invoice_sync.sql'),'utf8'))&&/SECURITY INVOKER/.test(fs.readFileSync(path.join(ROOT,'supabase/migrations/20261107090901_20261107111000_atomic_invoice_sync.sql'),'utf8'))&&/40001/.test(fs.readFileSync(path.join(ROOT,'supabase/migrations/20261107090901_20261107111000_atomic_invoice_sync.sql'),'utf8')));
@@ -302,13 +303,13 @@ await ctx.close();
 /* ---------- C. PWA: service worker + offline shell ---------- */
 const c2=await browser.newContext({viewport:{width:1280,height:800}}),q=await c2.newPage(),swConsole=[];q.on('console',m=>swConsole.push(m.type()+': '+m.text()));q.on('pageerror',e=>swConsole.push('pageerror: '+e.message));await q.goto(BASE);const swReg=await q.evaluate(async()=>{try{const reg=await navigator.serviceWorker.register('./sw.js');return {ok:true,scope:reg.scope,installing:reg.installing?.state,waiting:reg.waiting?.state,active:reg.active?.state}}catch(e){return {ok:false,error:e.message}}});const swReady=await q.evaluate(()=>Promise.race([navigator.serviceWorker.ready.then(()=>true),new Promise(resolve=>setTimeout(()=>resolve(false),15000))]));if(!swReady){const diag=await q.evaluate(async()=>{const r=await navigator.serviceWorker.getRegistration();return r?{installing:r.installing?.state,waiting:r.waiting?.state,active:r.active?.state,scope:r.scope}:null});await c2.close();throw new Error('Service Worker did not become ready: '+JSON.stringify({swReg,diag,console:swConsole.slice(-20)}))}await q.reload();await q.waitForTimeout(600);
 const swi=await q.evaluate(async()=>({ctl:!!navigator.serviceWorker.controller,keys:await caches.keys(),cached:(await (await caches.open((await caches.keys())[0])).keys()).map(r=>new URL(r.url).pathname)}));
-ok('service worker installed and controlling the page; single versioned cache',swi.ctl&&swi.keys.length==1&&/^factory-v11$/.test(swi.keys[0]),swi.keys);
+ok('service worker installed and controlling the page; single versioned cache',swi.ctl&&swi.keys.length==1&&/^factory-v12$/.test(swi.keys[0]),swi.keys);
 ok('stable app shell files are precached; linked CSS and scripts are cached on first request',['/index.html','/auth.html','/change-password.html','/js/change-password.js','/','/js/app.js','/css/style.css'].every(f=>swi.cached.includes(f)),swi.cached);
 ok('offline cache does not include authenticated API responses or user records',swi.cached.every(f=>!f.includes('/rest/v1/')&&!f.includes('/auth/v1/')&&!f.includes('/storage/v1/')));
 await q.evaluate(()=>{const s=JSON.parse(localStorage.getItem('mgr6')||'null');localStorage.setItem('mgr6',JSON.stringify(s))});
 await c2.setOffline(true);await q.reload();await q.waitForTimeout(500);const off=await q.evaluate(()=>({ok:!!document.querySelector('#sb a'),tabs:document.querySelectorAll('#sb a').length}));
 ok('app loads and works with the network switched off (from the service-worker cache)',off.ok&&off.tabs>=15,off);
-const none=await q.evaluate(async()=>{const c=await caches.open('factory-v11');const keys=await c.keys();return keys.length>0&&keys.every(r=>new URL(r.url).origin==location.origin&&!r.url.includes('/rest/v1/')&&!r.url.includes('/auth/v1/')&&!r.url.includes('/storage/v1/'))});ok('active factory-v11 cache holds only same-origin app files (no authenticated API or user data)',none);
+const none=await q.evaluate(async()=>{const c=await caches.open('factory-v12');const keys=await c.keys();return keys.length>0&&keys.every(r=>new URL(r.url).origin==location.origin&&!r.url.includes('/rest/v1/')&&!r.url.includes('/auth/v1/')&&!r.url.includes('/storage/v1/'))});ok('active factory-v12 cache holds only same-origin app files (no authenticated API or user data)',none);
 await c2.setOffline(false);await c2.close();
 /* ---------- D. mobile ---------- */
 const mc=await browser.newContext({viewport:{width:390,height:800},isMobile:true,hasTouch:true}),m=await mc.newPage(),merr=[];m.on('pageerror',e=>merr.push(e.message));await m.goto(BASE);await m.waitForTimeout(400);
