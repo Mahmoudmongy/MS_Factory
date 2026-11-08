@@ -39,6 +39,7 @@ PY
 
 backup_dir="$(cd "$(dirname "$BACKUP_FILE")" && pwd)"
 backup_name="$(basename "$BACKUP_FILE")"
+BACKUP_FILE="$backup_dir/$backup_name"
 checksum_dir="$(cd "$(dirname "$BACKUP_SHA256_FILE")" && pwd)"
 checksum_name="$(basename "$BACKUP_SHA256_FILE")"
 if [[ "$backup_dir" != "$checksum_dir" ]]; then
@@ -64,10 +65,33 @@ sha256sum -c database-files.sha256
   echo "ERROR: this backup does not include Supabase Storage objects; restore refused." >&2; exit 27;
 }
 
-export PGDATABASE="$RESTORE_SUPABASE_DB_URL"
+# Put connection credentials in a mode-600 temporary libpq service file, not command arguments.
+python3 - "$RESTORE_SUPABASE_DB_URL" "$work/pg_service.conf" <<'PY'
+import sys
+from urllib.parse import urlparse, unquote
+from configparser import ConfigParser
+url = urlparse(sys.argv[1])
+cfg = ConfigParser()
+cfg["restore_target"] = {
+    "host": url.hostname or "",
+    "port": str(url.port or 5432),
+    "user": unquote(url.username or ""),
+    "password": unquote(url.password or ""),
+    "dbname": (url.path or "/postgres").lstrip("/") or "postgres",
+    "sslmode": "require",
+}
+with open(sys.argv[2], "w", encoding="utf-8") as f:
+    cfg.write(f)
+PY
+chmod 600 "$work/pg_service.conf"
+export PGSERVICEFILE="$work/pg_service.conf" PGSERVICE="restore_target"
 target_users="$(psql -X -v ON_ERROR_STOP=1 -Atqc 'SELECT count(*) FROM auth.users')"
 if [[ "$target_users" != "0" ]]; then
   echo "ERROR: target Auth database is not empty ($target_users users). Restore refused." >&2; exit 28
+fi
+target_buckets="$(psql -X -v ON_ERROR_STOP=1 -Atqc 'SELECT count(*) FROM storage.buckets')"
+if [[ "$target_buckets" != "0" ]]; then
+  echo "ERROR: target Storage already has $target_buckets buckets. Restore refused." >&2; exit 31
 fi
 for table in profiles factory_state customers suppliers products inventory invoices invoice_items returns vouchers production_orders; do
   exists="$(psql -X -v ON_ERROR_STOP=1 -Atqc "SELECT to_regclass('public.$table') IS NOT NULL")"
