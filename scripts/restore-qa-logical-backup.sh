@@ -12,7 +12,7 @@ set -Eeuo pipefail
 RESTORE_DIR="${RESTORE_DIR:-$PWD}"
 cd "$RESTORE_DIR"
 
-for file in roles.sql schema.sql data.sql auth-users.sql migration-history.sql auth-trigger.sql \
+for file in roles.sql schema.sql data.sql auth-users.sql migration-history-schema.sql migration-history.sql auth-trigger.sql \
             database-files.sha256 manifest.txt public-row-counts.txt auth-row-counts.txt \
             auth-user-count.txt migration-count.txt storage-bucket-count.txt; do
   test -s "$file" || { echo "::error::Backup file is missing or empty: $file"; exit 1; }
