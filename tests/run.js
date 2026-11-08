@@ -118,6 +118,27 @@ ok('invoice sync fix qualifies child-row deletion columns',/DELETE FROM public\.
 /* ---------- B. app in a desktop context ---------- */
 const ctx=await browser.newContext({viewport:{width:1280,height:900},acceptDownloads:true}),p=await ctx.newPage(),errs=[];p.on('pageerror',e=>errs.push(e.message));
 await p.goto(BASE);await p.waitForTimeout(500);
+const storageIsolation=await p.evaluate(async()=>{
+ const raw={get:Storage.prototype.getItem,set:Storage.prototype.setItem,remove:Storage.prototype.removeItem};
+ const oldState=raw.get.call(localStorage,'mgr6');
+ raw.set.call(localStorage,'mgr6','legacy-admin-state');
+ const {activateUserStorage}=await import('/js/user-storage.js');
+ activateUserStorage({id:'qa-admin-storage',is_admin:true});
+ const adminMigrated=localStorage.getItem('mgr6')==='legacy-admin-state';
+ localStorage.setItem('mgr6','admin-private-state');
+ activateUserStorage({id:'qa-worker-storage',is_admin:false});
+ const workerInitiallyEmpty=localStorage.getItem('mgr6')===null;
+ localStorage.setItem('mgr6','worker-private-state');
+ activateUserStorage({id:'qa-admin-storage',is_admin:true});
+ const adminIsolated=localStorage.getItem('mgr6')==='admin-private-state';
+ activateUserStorage({id:'qa-worker-storage',is_admin:false});
+ const workerIsolated=localStorage.getItem('mgr6')==='worker-private-state';
+ activateUserStorage({id:'__test',is_admin:true});
+ if(oldState!==null)localStorage.setItem('mgr6',oldState);
+ for(const key of ['factory-user:qa-admin-storage:mgr6','factory-user:qa-worker-storage:mgr6'])raw.remove.call(localStorage,key);
+ return {adminMigrated,workerInitiallyEmpty,adminIsolated,workerIsolated};
+});
+ok('offline local state is migrated to the admin account and isolated between admin and employee accounts',storageIsolation.adminMigrated&&storageIsolation.workerInitiallyEmpty&&storageIsolation.adminIsolated&&storageIsolation.workerIsolated,storageIsolation);
 const xssGeo=await p.evaluate(()=>{
   const badGov='<img src=x onerror="window.__xss=1">';
   const badCity='<svg onload="window.__xss=2">';
