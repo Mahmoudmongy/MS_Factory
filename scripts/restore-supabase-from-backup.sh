@@ -1,0 +1,99 @@
+#!/usr/bin/env bash
+# Guarded logical restore for MS Factory. Run only against a new, empty QA project.
+set -euo pipefail
+umask 077
+
+: "${BACKUP_FILE:?Set BACKUP_FILE to the downloaded .tar.gz.age object}"
+: "${BACKUP_SHA256_FILE:?Set BACKUP_SHA256_FILE to its downloaded .sha256 sidecar}"
+: "${AGE_IDENTITY_FILE:?Set AGE_IDENTITY_FILE to the offline age private identity file}"
+: "${RESTORE_SUPABASE_DB_URL:?Set RESTORE_SUPABASE_DB_URL to the QA database connection string}"
+: "${RESTORE_TARGET_PROJECT_REF:?Set RESTORE_TARGET_PROJECT_REF to the target QA project ref}"
+
+PRODUCTION_PROJECT_REF="yvrislcbbhtruwdnuooz"
+if [[ "$RESTORE_TARGET_PROJECT_REF" == "$PRODUCTION_PROJECT_REF" ]]; then
+  echo "ERROR: refusing to restore into the production Supabase project." >&2
+  exit 20
+fi
+if [[ ! "$RESTORE_TARGET_PROJECT_REF" =~ ^[a-z0-9]{20}$ ]]; then
+  echo "ERROR: target project ref must be a 20-character Supabase project ref." >&2
+  exit 21
+fi
+for command in age tar sha256sum psql python3; do
+  command -v "$command" >/dev/null || { echo "ERROR: missing required command: $command" >&2; exit 22; }
+done
+[[ -s "$BACKUP_FILE" && -s "$BACKUP_SHA256_FILE" && -s "$AGE_IDENTITY_FILE" ]] || {
+  echo "ERROR: backup, checksum sidecar, or offline identity file is missing/empty." >&2; exit 23;
+}
+
+# Verify that the declared target ref is actually present in the connection host or pooler username.
+python3 - "$RESTORE_SUPABASE_DB_URL" "$RESTORE_TARGET_PROJECT_REF" <<'PY'
+import sys
+from urllib.parse import urlparse, unquote
+parsed = urlparse(sys.argv[1])
+ref = sys.argv[2]
+host = parsed.hostname or ""
+user = unquote(parsed.username or "")
+if parsed.scheme not in ("postgres", "postgresql") or (ref not in host and ref not in user):
+    raise SystemExit("ERROR: database URL does not identify the declared QA project ref.")
+PY
+
+backup_dir="$(cd "$(dirname "$BACKUP_FILE")" && pwd)"
+backup_name="$(basename "$BACKUP_FILE")"
+checksum_dir="$(cd "$(dirname "$BACKUP_SHA256_FILE")" && pwd)"
+checksum_name="$(basename "$BACKUP_SHA256_FILE")"
+if [[ "$backup_dir" != "$checksum_dir" ]]; then
+  echo "ERROR: keep the encrypted archive and checksum sidecar in the same directory." >&2; exit 24
+fi
+(cd "$backup_dir" && sha256sum -c "$checksum_name")
+
+work="$(mktemp -d)"
+cleanup() { rm -rf "$work"; }
+trap cleanup EXIT INT TERM
+age --decrypt --identity "$AGE_IDENTITY_FILE" --output "$work/ms-factory-db-backup.tar.gz" "$BACKUP_FILE"
+tar -tzf "$work/ms-factory-db-backup.tar.gz" >/dev/null
+mkdir "$work/archive"
+tar -xzf "$work/ms-factory-db-backup.tar.gz" -C "$work/archive"
+cd "$work/archive"
+
+for required in roles.sql schema.sql data.sql auth-users.sql auth-trigger.sql manifest.txt database-files.sha256 auth-user-count.txt storage-bucket-count.txt; do
+  [[ -s "$required" ]] || { echo "ERROR: backup archive is missing $required." >&2; exit 25; }
+done
+grep -qx 'project=ms-factory' manifest.txt || { echo "ERROR: unexpected backup manifest." >&2; exit 26; }
+sha256sum -c database-files.sha256
+[[ "$(cat storage-bucket-count.txt)" == "0" ]] || {
+  echo "ERROR: this backup does not include Supabase Storage objects; restore refused." >&2; exit 27;
+}
+
+export PGDATABASE="$RESTORE_SUPABASE_DB_URL"
+target_users="$(psql -X -v ON_ERROR_STOP=1 -Atqc 'SELECT count(*) FROM auth.users')"
+if [[ "$target_users" != "0" ]]; then
+  echo "ERROR: target Auth database is not empty ($target_users users). Restore refused." >&2; exit 28
+fi
+for table in profiles factory_state customers suppliers products inventory invoices invoice_items returns vouchers production_orders; do
+  exists="$(psql -X -v ON_ERROR_STOP=1 -Atqc "SELECT to_regclass('public.$table') IS NOT NULL")"
+  if [[ "$exists" == "t" ]]; then
+    rows="$(psql -X -v ON_ERROR_STOP=1 -Atqc "SELECT count(*) FROM public.$table")"
+    if [[ "$rows" != "0" ]]; then
+      echo "ERROR: target public.$table already contains $rows rows. Restore refused." >&2; exit 29
+    fi
+  fi
+done
+
+echo "Target verified as empty QA project $RESTORE_TARGET_PROJECT_REF."
+psql -X -v ON_ERROR_STOP=1 -f roles.sql
+psql -X -v ON_ERROR_STOP=1 -f schema.sql
+# Prevent the custom profile trigger from creating duplicate profiles during Auth import.
+psql -X -v ON_ERROR_STOP=1 -c 'DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users'
+psql -X -v ON_ERROR_STOP=1 -f auth-users.sql
+psql -X -v ON_ERROR_STOP=1 -f data.sql
+# Restore the trigger only after profiles and Auth users have both been restored.
+psql -X -v ON_ERROR_STOP=1 -f auth-trigger.sql
+
+restored_users="$(psql -X -v ON_ERROR_STOP=1 -Atqc 'SELECT count(*) FROM auth.users')"
+expected_users="$(cat auth-user-count.txt)"
+[[ "$restored_users" == "$expected_users" ]] || {
+  echo "ERROR: restored Auth user count ($restored_users) does not match backup ($expected_users)." >&2; exit 30;
+}
+restored_profiles="$(psql -X -v ON_ERROR_STOP=1 -Atqc 'SELECT count(*) FROM public.profiles')"
+echo "RESTORE COMPLETE: Auth users=$restored_users, profiles=$restored_profiles, target=$RESTORE_TARGET_PROJECT_REF"
+echo "Next: deploy the archived Edge Functions, configure Auth providers, and run the QA login/invoice/production/ledger/stock checks."
