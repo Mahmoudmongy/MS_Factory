@@ -124,8 +124,8 @@ CREATE TRIGGER production_factory_config_sync AFTER INSERT OR UPDATE OF state ON
 FOR EACH ROW EXECUTE FUNCTION private.sync_production_factory_config();
 
 -- Existing production data is still in the original factory_state JSON snapshot.
--- Seed normalized inventory only for products that have no inventory rows yet;
--- this preserves any inventory rows already synchronized in newer installations.
+-- Seed every missing variant from the legacy JSON snapshot while preserving
+-- quantities already synchronized into normalized inventory.
 INSERT INTO public.inventory(user_id,product_id,variant,quantity,updated_at)
 SELECT fs.user_id,p.id,variant_row.key,variant_row.value::numeric,now()
 FROM public.factory_state AS fs
