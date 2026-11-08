@@ -17,59 +17,54 @@
 </head>
 <script type="module">
 import { supabase } from './js/supabase.js';
-(async function bootstrapFactoryApp() {
-    try {
-      const { data, error } = supabase ? await supabase.auth.getSession() : { data: { session: null }, error: new Error('Supabase unavailable') };
-      if (!data?.session || (error && navigator.onLine)) location.replace('auth.html');
-      else {
-        const { data: profile, error: profileError } = await supabase.from('profiles')
-          .select('id,created_by,is_admin,permissions,must_change_password,username,full_name')
-          .eq('id', data.session.user.id).maybeSingle();
-        if (profileError || !profile) {
-          // Offline use is allowed only for a profile previously verified online on this device.
-          let cachedProfile = null;
-          if (!navigator.onLine) {
-            try { cachedProfile = JSON.parse(localStorage.getItem('factory-profile:' + data.session.user.id) || 'null'); } catch (_) {}
-          }
-          if (cachedProfile && cachedProfile.id === data.session.user.id) {
-            if (cachedProfile.must_change_password === true && cachedProfile.is_admin !== true) {
-              location.replace('change-password.html');
-              return;
-            }
-            window.__factoryAuthProfile = cachedProfile;
-            window.__factoryAuthEmail = data.session.user.email || '';
-            window.__factoryOfflineMode = true;
-            document.documentElement.style.visibility = 'visible';
-            if (typeof window.setFactoryAuthProfile === 'function') window.setFactoryAuthProfile(cachedProfile);
-          } else if (navigator.onLine) {
-            await supabase.auth.signOut();
-            location.replace('auth.html');
-          } else {
-            document.documentElement.style.visibility = 'visible';
-            document.body?.insertAdjacentHTML?.('afterbegin', '<div role="alert" style="padding:12px;background:#fee2e2;color:#991b1b;text-align:center">لا يوجد ملف حساب محفوظ على هذا الجهاز. اتصل بالإنترنت وسجّل الدخول مرة واحدة لتفعيل العمل دون اتصال.</div>');
-            location.replace('auth.html');
-          }
-        } else {
-          if (profile.must_change_password === true && profile.is_admin !== true) {
-            window.__factoryAuthProfile = profile;
-            try { localStorage.setItem('factory-profile:' + data.session.user.id, JSON.stringify(profile)); } catch (_) {}
-            location.replace('change-password.html');
-            return;
-          }
-          window.__factoryAuthProfile = profile;
-          window.__factoryAuthEmail = data.session.user.email || '';
-          window.__factoryOfflineMode = false;
-          try { localStorage.setItem('factory-profile:' + data.session.user.id, JSON.stringify(profile)); } catch (_) {}
-          document.documentElement.style.visibility = 'visible';
-          if (typeof window.setFactoryAuthProfile === 'function') window.setFactoryAuthProfile(profile);
-        }
-      }
-    } catch (e) {
-      console.error('Authentication bootstrap failed:', e);
-      location.replace('auth.html');
-    }
-  
-})();
+function activateUserStorage(profile) {
+ const proto=Storage.prototype, native={get:proto.getItem,set:proto.setItem,remove:proto.removeItem,key:proto.key,clear:proto.clear};
+ let adminId=profile?.is_admin===true?profile.id:null;
+ if(!adminId){for(let i=0;i<localStorage.length;i++){const k=native.key.call(localStorage,i);if(!k||!k.startsWith('factory-profile:'))continue;try{const p=JSON.parse(native.get.call(localStorage,k)||'null');if(p?.is_admin===true&&p.id){adminId=p.id;break}}catch(_){}}}
+ const pendingPrefix='factory-user:__pending_admin__:', legacy=[];
+ for(let i=0;i<localStorage.length;i++){const k=native.key.call(localStorage,i);if(k&&k.startsWith('mgr6'))legacy.push(k)}
+ if(adminId){const pending=[];for(let i=0;i<localStorage.length;i++){const k=native.key.call(localStorage,i);if(k&&k.startsWith(pendingPrefix))pending.push(k)}
+  for(const old of pending){const logical=old.slice(pendingPrefix.length),dest='factory-user:'+adminId+':'+logical;if(native.get.call(localStorage,dest)===null){const v=native.get.call(localStorage,old);if(v!==null)native.set.call(localStorage,dest,v)}native.remove.call(localStorage,old)}}
+ const owner=adminId||'__pending_admin__';
+ for(const k of legacy){const dest='factory-user:'+owner+':'+k;if(native.get.call(localStorage,dest)===null){const v=native.get.call(localStorage,k);if(v!==null)native.set.call(localStorage,dest,v)}native.remove.call(localStorage,k)}
+ window.__factoryStorageUserId=String(profile.id);
+ if(!proto.__factoryUserScoped){const map=k=>{const v=String(k);return v.startsWith('mgr6')?'factory-user:'+String(window.__factoryStorageUserId)+':'+v:v};
+  Object.defineProperty(proto,'__factoryUserScoped',{value:true});
+  proto.getItem=function(k){return native.get.call(this,map(k))};
+  proto.setItem=function(k,v){return native.set.call(this,map(k),v)};
+  proto.removeItem=function(k){return native.remove.call(this,map(k))};
+  proto.clear=function(){const prefix='factory-user:'+String(window.__factoryStorageUserId)+':',keys=[];for(let i=0;i<this.length;i++){const k=native.key.call(this,i);if(k&&k.startsWith(prefix))keys.push(k)}keys.forEach(k=>native.remove.call(this,k))};
+ }
+}
+function loadClassicScript(src){return new Promise((resolve,reject)=>{const script=document.createElement('script');script.src=src;script.onload=resolve;script.onerror=()=>reject(new Error('Could not load '+src));document.body.appendChild(script)})}
+async function startFactoryApp(profile,email,offlineMode){
+ window.__factoryAuthProfile=profile;window.__factoryAuthEmail=email||'';window.__factoryOfflineMode=offlineMode===true;activateUserStorage(profile);
+ await loadClassicScript('./js/app.js');
+ if(typeof window.setFactoryAuthProfile==='function')window.setFactoryAuthProfile(profile);
+ try{await import('./js/cloud-sync.js')}catch(error){console.error('Cloud sync module could not start:',error);window.__factoryCloudSyncUnavailable=true}
+ window.closeSB=function(){try{const sb=document.getElementById('sb'),ov=document.getElementById('sb-overlay');if(sb)sb.classList.remove('open');if(ov)ov.style.display='none';document.body.style.overflow=''}catch(_){}};
+ window.openSB=function(){try{const sb=document.getElementById('sb'),ov=document.getElementById('sb-overlay');if(sb)sb.classList.add('open');if(ov)ov.style.display='block';document.body.style.overflow='hidden'}catch(_){}};
+ if('serviceWorker'in navigator)navigator.serviceWorker.register('./sw.js').catch(()=>{});
+ document.documentElement.style.visibility='visible';
+}
+async function bootstrapFactoryApp(){
+ try{
+  const {data,error}=supabase?await supabase.auth.getSession():{data:{session:null},error:new Error('Supabase unavailable')};
+  if(!data?.session||(error&&navigator.onLine)){location.replace('auth.html');return}
+  const userId=data.session.user.id;
+  const {data:profile,error:profileError}=await supabase.from('profiles').select('id,created_by,is_admin,permissions,must_change_password,username,full_name').eq('id',userId).maybeSingle();
+  if(profileError||!profile){
+   let cached=null;if(!navigator.onLine){try{cached=JSON.parse(localStorage.getItem('factory-profile:'+userId)||'null')}catch(_){}}
+   if(cached&&cached.id===userId){if(cached.must_change_password===true&&cached.is_admin!==true){location.replace('change-password.html');return}await startFactoryApp(cached,data.session.user.email||'',true)}
+   else if(navigator.onLine){await supabase.auth.signOut();location.replace('auth.html')}else location.replace('auth.html');
+   return;
+  }
+  if(profile.must_change_password===true&&profile.is_admin!==true){try{localStorage.setItem('factory-profile:'+userId,JSON.stringify(profile))}catch(_){}location.replace('change-password.html');return}
+  try{localStorage.setItem('factory-profile:'+userId,JSON.stringify(profile))}catch(_){}
+  await startFactoryApp(profile,data.session.user.email||'',false);
+ }catch(error){console.error('Authentication bootstrap failed:',error);location.replace('auth.html')}
+}
+await bootstrapFactoryApp();
 </script>
 <body>
 <div id="app">
@@ -91,34 +86,8 @@ import { supabase } from './js/supabase.js';
 </div>
 <div id="toast"></div>
 <div id="pr" style="display:none"></div>
-<script src="./js/app.js"></script>
-<script type="module" src="./js/cloud-sync.js"></script>
-<script>
 
-// إصلاح إغلاق القائمة - لا يغير الشكل
-(function(){
-  const origClose = window.closeSB;
-  window.closeSB = function(){
-    try{
-      const sb=document.getElementById('sb');
-      const ov=document.getElementById('sb-overlay');
-      if(sb) sb.classList.remove('open');
-      if(ov) ov.style.display='none';
-      document.body.style.overflow='';
-    }catch(e){}
-  };
-  const origOpen = window.openSB || function(){ document.getElementById('sb').classList.add('open'); };
-  window.openSB = function(){
-    try{
-      document.getElementById('sb').classList.add('open');
-      document.getElementById('sb-overlay').style.display='block';
-      document.body.style.overflow='hidden';
-    }catch(e){}
-  };
-})();
-if('serviceWorker' in navigator){
-  window.addEventListener('load', ()=>{ navigator.serviceWorker.register('./sw.js').catch(()=>{}); });
-}
-</script>
+
+
 </body>
 </html>
