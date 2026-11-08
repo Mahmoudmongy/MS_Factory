@@ -84,7 +84,19 @@ Deno.serve(async (req: Request) => {
         if (!data || data.length < pageSize) break;
         offset += pageSize;
         if (offset >= maxRowsPerTable) {
-          return json(413, { error: "حجم أحد الجداول تجاوز الحد الآمن للتصدير؛ استخدم تصدير قاعدة البيانات الكامل من أدوات Supabase", table: table.name });
+          const { data: overflow, error: overflowError } = await service
+            .from(table.name)
+            .select(table.orderBy)
+            .order(table.orderBy, { ascending: true })
+            .range(offset, offset);
+          if (overflowError) {
+            console.error("Backup size check failed:", table.name, overflowError);
+            return json(500, { error: "تعذر التحقق من حجم جدول أثناء إنشاء النسخة الاحتياطية", table: table.name });
+          }
+          if (overflow?.length) {
+            return json(413, { error: "حجم أحد الجداول تجاوز الحد الآمن للتصدير؛ استخدم تصدير قاعدة البيانات الكامل من أدوات Supabase", table: table.name });
+          }
+          break;
         }
       }
       tables[table.name] = rows;
