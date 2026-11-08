@@ -17,25 +17,7 @@
 </head>
 <script type="module">
 import { supabase } from './js/supabase.js';
-function activateUserStorage(profile) {
- const proto=Storage.prototype, native={get:proto.getItem,set:proto.setItem,remove:proto.removeItem,key:proto.key,clear:proto.clear};
- let adminId=profile?.is_admin===true?profile.id:null;
- if(!adminId){for(let i=0;i<localStorage.length;i++){const k=native.key.call(localStorage,i);if(!k||!k.startsWith('factory-profile:'))continue;try{const p=JSON.parse(native.get.call(localStorage,k)||'null');if(p?.is_admin===true&&p.id){adminId=p.id;break}}catch(_){}}}
- const pendingPrefix='factory-user:__pending_admin__:', legacy=[];
- for(let i=0;i<localStorage.length;i++){const k=native.key.call(localStorage,i);if(k&&k.startsWith('mgr6'))legacy.push(k)}
- if(adminId){const pending=[];for(let i=0;i<localStorage.length;i++){const k=native.key.call(localStorage,i);if(k&&k.startsWith(pendingPrefix))pending.push(k)}
-  for(const old of pending){const logical=old.slice(pendingPrefix.length),dest='factory-user:'+adminId+':'+logical;if(native.get.call(localStorage,dest)===null){const v=native.get.call(localStorage,old);if(v!==null)native.set.call(localStorage,dest,v)}native.remove.call(localStorage,old)}}
- const owner=adminId||'__pending_admin__';
- for(const k of legacy){const dest='factory-user:'+owner+':'+k;if(native.get.call(localStorage,dest)===null){const v=native.get.call(localStorage,k);if(v!==null)native.set.call(localStorage,dest,v)}native.remove.call(localStorage,k)}
- window.__factoryStorageUserId=String(profile.id);
- if(!proto.__factoryUserScoped){const map=k=>{const v=String(k);return v.startsWith('mgr6')?'factory-user:'+String(window.__factoryStorageUserId)+':'+v:v};
-  Object.defineProperty(proto,'__factoryUserScoped',{value:true});
-  proto.getItem=function(k){return native.get.call(this,map(k))};
-  proto.setItem=function(k,v){return native.set.call(this,map(k),v)};
-  proto.removeItem=function(k){return native.remove.call(this,map(k))};
-  proto.clear=function(){const prefix='factory-user:'+String(window.__factoryStorageUserId)+':',keys=[];for(let i=0;i<this.length;i++){const k=native.key.call(this,i);if(k&&k.startsWith(prefix))keys.push(k)}keys.forEach(k=>native.remove.call(this,k))};
- }
-}
+import { activateUserStorage } from './js/user-storage.js';
 function loadClassicScript(src){return new Promise((resolve,reject)=>{const script=document.createElement('script');script.src=src;script.onload=resolve;script.onerror=()=>reject(new Error('Could not load '+src));document.body.appendChild(script)})}
 async function startFactoryApp(profile,email,offlineMode){
  window.__factoryAuthProfile=profile;window.__factoryAuthEmail=email||'';window.__factoryOfflineMode=offlineMode===true;activateUserStorage(profile);
