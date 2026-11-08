@@ -20,6 +20,8 @@ jobs:
           node-version: 24
           cache: npm
       - run: npm ci
+      - name: Audit dependency vulnerabilities
+        run: npm audit --audit-level=high
       - run: npx playwright install --with-deps chromium
       - run: npm run build
       - name: Validate Cloudflare Workers bundle without deploying
