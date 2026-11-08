@@ -103,6 +103,29 @@ function isLocalEmpty() {
     return !(hasSavedEdits || hasTransactions || hasAddedMasterData);
   } catch(e){ return true; }
 }
+function mergeCloudPartners(existing, incoming, refreshExisting = false) {
+  const map = new Map();
+  (Array.isArray(existing) ? existing : []).forEach(item => {
+    const key = item && (item.id || item.no);
+    if (key !== undefined && key !== null && key !== "") map.set(String(key), item);
+  });
+  let added = 0;
+  (Array.isArray(incoming) ? incoming : []).forEach(remote => {
+    const key = remote && (remote.id || remote.no);
+    if (key === undefined || key === null || key === "") return;
+    const local = map.get(String(key));
+    if (!local) { map.set(String(key), remote); added++; return; }
+    if (!refreshExisting) return;
+    const customerFlag = Number(local.c) === 1 || local.c === true || Number(remote.c) === 1 || remote.c === true;
+    const supplierFlag = Number(local.s) === 1 || local.s === true || Number(remote.s) === 1 || remote.s === true;
+    Object.assign(local, remote, {
+      id: local.id ?? remote.id,
+      c: customerFlag ? 1 : 0,
+      s: supplierFlag ? 1 : 0
+    });
+  });
+  return { arr: [...map.values()], added };
+}
 function mergeByKey(existing, incoming, keyFn) {
   const map = new Map();
   (existing || []).forEach(it => { try { const k = keyFn(it); if (k) map.set(String(k), it); } catch(e){} });
@@ -405,25 +428,51 @@ async function uploadToTables(showAlert = false) {
     if (Array.isArray(S.customers)) partnerArrays.push({ key: "customers", arr: S.customers });
     if (Array.isArray(S.suppliers)) partnerArrays.push({ key: "suppliers", arr: S.suppliers });
     if (Array.isArray(S.clients)) partnerArrays.push({ key: "clients", arr: S.clients });
+    const partnerMap = new Map();
     for (const { key, arr } of partnerArrays) {
       for (const p of arr) {
+        if (!p || typeof p !== "object") continue;
         const name = String(getField(p, ["name", "nm", "title"]) || "");
         if (!name || isAccountName(name)) continue;
+        const externalId = String(getField(p, ["id", "no", "code"]) || name);
         const typeStr = String(getField(p, ["type", "kind", "cat", "category"]) || "").toLowerCase();
         if (typeStr.includes("account") || typeStr.includes("coa") || typeStr.includes("chart") || typeStr.includes("حساب")) continue;
-        const isSup = typeStr.includes("supp") || typeStr.includes("مورد") || p.isSupplier === true || key === "suppliers";
-        if (!canWrite(isSup ? "suppliers" : "customers")) continue;
-        const table = isSup ? "suppliers" : "customers";
-        const row = {
-          user_id: owner,
-          external_id: String(getField(p, ["id", "no", "code"]) || name),
-          name,
-          phone: String(getField(p, ["phone", "tel", "mobile", "ph"]) || "") || null,
-          email: String(getField(p, ["email", "mail"]) || "") || null,
-          address: String(getField(p, ["addr", "address", "add"]) || "") || null
-        };
-        const { error } = await supabase.from(table).upsert(row, { onConflict: "user_id,external_id" });
-        if (error) errors.push(table + ": " + error.message);
+        const isCustomer = key === "customers" || Number(p.c) === 1 || p.c === true || typeStr.includes("customer") || typeStr.includes("عميل") || (key === "partners" && !p.s && !p.isSupplier && !typeStr.includes("supp") && !typeStr.includes("مورد"));
+        const isSupplier = key === "suppliers" || Number(p.s) === 1 || p.s === true || p.isSupplier === true || typeStr.includes("supp") || typeStr.includes("مورد");
+        const existing = partnerMap.get(externalId) || { p, isCustomer: false, isSupplier: false };
+        existing.isCustomer = existing.isCustomer || isCustomer;
+        existing.isSupplier = existing.isSupplier || isSupplier;
+        if (key === "partners" || !existing.p) existing.p = p;
+        partnerMap.set(externalId, existing);
+      }
+    }
+    for (const [externalId, entry] of partnerMap) {
+      const p = entry.p;
+      const name = String(getField(p, ["name", "nm", "title"]) || "");
+      const typeStr = String(getField(p, ["type", "kind", "cat", "category"]) || "").toLowerCase();
+      const raw = { ...p };
+      delete raw._cloudVersion; delete raw._cloudUpdatedAt; delete raw._cloudConflict;
+      const common = {
+        user_id: owner,
+        external_id: externalId,
+        name,
+        phone: String(getField(p, ["phone", "tel", "mobile", "ph"]) || "") || null,
+        email: String(getField(p, ["email", "mail"]) || "") || null,
+        address: String(getField(p, ["addr", "address", "add"]) || "") || null,
+        governorate: String(getField(p, ["gov", "governorate"]) || "") || null,
+        city: String(getField(p, ["city"]) || "") || null,
+        raw
+      };
+      if (entry.isCustomer && canWrite("customers")) {
+        const { error } = await supabase.from("customers").upsert({
+          ...common,
+          customer_type: p.type === "w" || typeStr.includes("wholesale") || typeStr.includes("جملة") ? "wholesale" : "retail"
+        }, { onConflict: "user_id,external_id" });
+        if (error) errors.push("customers: " + error.message);
+      }
+      if (entry.isSupplier && canWrite("suppliers")) {
+        const { error } = await supabase.from("suppliers").upsert(common, { onConflict: "user_id,external_id" });
+        if (error) errors.push("suppliers: " + error.message);
       }
     }
 
@@ -801,12 +850,50 @@ async function loadFromTablesMerge(isAuto = false) {
     const S = getCachedState();
     if (!S || typeof S !== "object" || Array.isArray(S)) return "bad local";
     let totalAdded = 0;
-    const cloudPartners = [
-      ...(custs || []).map(c => ({ id: c.external_id, name: c.name, phone: c.phone, email: c.email, addr: c.address, type: "customer" })),
-      ...(supps || []).map(s => ({ id: s.external_id, name: s.name, phone: s.phone, email: s.email, addr: s.address, type: "supplier" })),
-    ];
+    const cloudPartnerMap = new Map();
+    for (const c of (custs || [])) {
+      const raw = c.raw && typeof c.raw === "object" && !Array.isArray(c.raw) ? { ...c.raw } : {};
+      const id = String(c.external_id || c.id);
+      const local = cloudPartnerMap.get(id) || raw;
+      Object.assign(local, {
+        id,
+        name: c.name,
+        phone: c.phone || "",
+        email: c.email || "",
+        addr: c.address || "",
+        gov: c.governorate || "",
+        city: c.city || "",
+        c: 1,
+        type: c.customer_type === "wholesale" ? "w" : "r",
+        _cloudCustomersVersion: Number(c.sync_version || 1),
+        _cloudCustomersUpdatedAt: c.updated_at || null
+      });
+      cloudPartnerMap.set(id, local);
+    }
+    for (const supplier of (supps || [])) {
+      const raw = supplier.raw && typeof supplier.raw === "object" && !Array.isArray(supplier.raw) ? { ...supplier.raw } : {};
+      const id = String(supplier.external_id || supplier.id);
+      const local = cloudPartnerMap.get(id) || raw;
+      Object.assign(local, {
+        id,
+        name: supplier.name,
+        phone: supplier.phone || "",
+        email: supplier.email || "",
+        addr: supplier.address || "",
+        gov: supplier.governorate || "",
+        city: supplier.city || "",
+        s: 1,
+        _cloudSuppliersVersion: Number(supplier.sync_version || 1),
+        _cloudSuppliersUpdatedAt: supplier.updated_at || null
+      });
+      if (local.c === undefined) local.c = 0;
+      if (!local.type) local.type = "w";
+      cloudPartnerMap.set(id, local);
+    }
+    const cloudPartners = [...cloudPartnerMap.values()];
     if (cloudPartners.length) {
-      const m = mergeByKey(S.partners || [], cloudPartners, x => x.id || x.name);
+      const refreshPartners = !localStorage.getItem(PENDING_SYNC_KEY);
+      const m = mergeCloudPartners(S.partners || [], cloudPartners, refreshPartners);
       S.partners = m.arr; totalAdded += m.added;
     }
     let recordConflicts = localStorage.getItem("mgr6-cloud-snapshot-conflict") ? 1 : 0;
