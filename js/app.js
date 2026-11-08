@@ -264,11 +264,13 @@ function syncPage(){
   const offline=!navigator.onLine||window.__factoryOfflineMode===true;
   const badge=document.getElementById("cloud-badge");
   const snapshotConflict=localStorage.getItem("mgr6-cloud-snapshot-conflict");
-  const cloudStatus=snapshotConflict?"⚠️ تعارض بين النسخة المحلية والسحابية":offline?"💾 محفوظ محليًا - انتظار عودة الإنترنت":(badge?.innerText||"🟡 تم التحقق من الحساب - في انتظار المزامنة").trim();
+  const accountingConflicts=["invoices","production","settings"].filter(source=>localStorage.getItem("mgr6-accounting-conflict-"+source));
+  const anyConflict=!!snapshotConflict||accountingConflicts.length>0;
+  const cloudStatus=anyConflict?"⚠️ تعارض بين النسخة المحلية والسحابية":offline?"💾 محفوظ محليًا - انتظار عودة الإنترنت":(badge?.innerText||"🟡 تم التحقق من الحساب - في انتظار المزامنة").trim();
   const role=!cp?"غير محدد":cp.is_admin===true?"مدير النظام":"حساب موظف";
   const detail=cp?.is_admin===true
-    ?"حساب المدير يرفع النسخة الكاملة للمصنع، بالإضافة إلى الجداول التفصيلية المدعومة."
-    :"حساب الموظف يزامن الجداول المسموح بها حسب صلاحياته. دفتر الأستاذ والحركات التفصيلية الكاملة ما زالت مرتبطة بنسخة المدير الكاملة.";
+    ?"حساب المدير يزامن النسخة الكاملة، وقيود دفتر الأستاذ وحركات المخزون المقسمة حسب مصدر العملية."
+    :"حساب الموظف يزامن قيود الأستاذ وحركات المخزون الخاصة بالأقسام المسموح بها فقط، دون الوصول إلى نسخة المصنع الكاملة.";
   const c=[
     ["فواتير ومرتجعات",S.docs.length],
     ["سندات قبض ودفع",S.vch.length],
@@ -288,6 +290,7 @@ function syncPage(){
     <p>التغييرات المحلية المحفوظة: <b>${S.pend||0}</b></p>
   </div>
   ${snapshotConflict&&cp?.is_admin===true?`<div class="card"><b>⚠️ تعارض في نسخة المصنع الكاملة</b><p>توجد تغييرات أحدث على السحابة وتغييرات محلية على هذا الجهاز. لم يتم استبدال أي نسخة أو رفع بيانات قديمة فوق الأحدث.</p><p>يمكنك استعادة النسخة السحابية بعد حفظ نسخة محلية احتياطية.</p><button class="rd" onclick="resolveCloudSnapshotConflict()">حفظ نسخة الجهاز ثم استعادة النسخة السحابية</button></div>`:""}
+  ${accountingConflicts.length?`<div class="card"><b>⚠️ تعارض في دفتر الأستاذ أو حركات المخزون</b><p>لم يتم رفع بيانات قديمة فوق النسخة السحابية. تم الاحتفاظ بنسختك المحلية حتى يتم حل التعارض.</p>${U(accountingConflicts,source=>`<div class="row sp"><span>${source==="invoices"?"الفواتير والسندات":source==="production"?"الإنتاج":"القيود والإعدادات"}</span>${cp?.is_admin===true?`<button class="rd" onclick="resolveCloudAccountingConflict('${source}')">حفظ نسخة الجهاز واستعادة السحابة</button>`:"<span class=\"mu\">يراجع مدير النظام التعارض</span>"}</div>`)}</div>`:""}
   <table class="l"><tr><th>البيانات</th><th>العدد على هذا الجهاز</th></tr>${U(c,x=>`<tr><td>${x[0]}</td><td>${x[1]}</td></tr>`)}</table>
   <p class="mu">${detail}</p>
   <p class="mu">البيانات المحلية تظل محفوظة على الجهاز. عند عودة الإنترنت يحاول النظام تحميل التغييرات السحابية ودمجها ثم رفع ما تسمح به الصلاحيات. اضغط على مؤشر الاتصال أعلى الشاشة لعرض التفاصيل أو معالجة أي تعارض مزامنة.</p>`)
