@@ -171,6 +171,18 @@ const partnerRoleTarget={accts:[],partners:[{id:501,name:'عميل افتتاح�
 const partnerRoleApply=applyFactoryBaseline?applyFactoryBaseline(partnerRoleTarget,partnerRoleBaseline):{applied:false};
 ok('accounting baseline merges customer/supplier roles when linking a known partner',
   partnerRoleApply.applied&&partnerRoleTarget.partners[0].cloudId==='partner-31'&&partnerRoleTarget.partners[0].c===1&&partnerRoleTarget.partners[0].s===1);
+
+const qaRestoreScript=fs.readFileSync(path.join(ROOT,'scripts/restore-qa-logical-backup.sh'),'utf8');
+const qaRestoreWorkflow=fs.readFileSync(path.join(ROOT,'.github/workflows/restore-supabase-backup-to-qa.yml'),'utf8');
+const backupWorkflow=fs.readFileSync(path.join(ROOT,'.github/workflows/backup-supabase-to-b2.yml'),'utf8');
+ok('QA restore is hard-locked to the QA project and rejects the production project reference',
+  qaRestoreScript.includes('EXPECTED_QA_PROJECT_REF')&&qaRestoreScript.includes('FORBIDDEN_PRODUCTION_PROJECT_REF')&&qaRestoreWorkflow.includes('bpkkzyjfkktkaadhmbdi')&&qaRestoreWorkflow.includes('yvrislcbbhtruwdnuooz'));
+ok('QA restore uses logical schema/data plus separately exported Auth and migration history',
+  qaRestoreScript.includes('--file roles.sql')&&qaRestoreScript.includes('--file schema.sql')&&qaRestoreScript.includes('--file data.sql')&&qaRestoreScript.includes('--file auth-users.sql')&&qaRestoreScript.includes('--file migration-history.sql')&&qaRestoreScript.includes('--file auth-trigger-qa-idempotent.sql'));
+ok('QA restore refuses non-empty targets and verifies row counts, RLS, and custom Auth trigger',
+  qaRestoreScript.includes('Never overwrite an existing QA dataset')&&qaRestoreScript.includes('public-row-counts.txt')&&qaRestoreScript.includes('auth-row-counts.txt')&&qaRestoreScript.includes('relrowsecurity')&&qaRestoreScript.includes('expected_trigger_names.issubset(actual_trigger_names)'));
+ok('one-off manual backup is possible without enabling scheduled backups',
+  backupWorkflow.includes("github.event_name == 'schedule' && vars.BACKUP_ENABLED == 'true'")&&backupWorkflow.includes("github.event_name == 'workflow_dispatch' && inputs.run_backup == true"));
 const productMergeStart=cloud.indexOf('function mergeCloudProducts(existing, incoming)');
 const productMergeEnd=cloud.indexOf('function mergeCloudInvoices(existing, incoming)',productMergeStart);
 const productMergeContext=vm.createContext({});
