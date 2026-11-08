@@ -208,7 +208,11 @@ function normalizeSourceEffects(state) {
       continue;
     }
     accountCodes.set(code, id);
-    accountById.set(id, { code, name: String(account.name || "") });
+    accountById.set(id, {
+      code, name: String(account.name || ""), type: String(account.t || "A"),
+      key: String(account.k || ""), cash: Number(account.cash || 0),
+      currency: String(account.cur || "EGP")
+    });
   }
   const itemById = new Map();
   const itemIds = new Set();
@@ -249,6 +253,8 @@ function normalizeSourceEffects(state) {
       return {
         date: row.d || null, timestamp: Number(row.ts || 0), reference: String(row.ref || ""),
         description: String(row.desc || ""), accountCode: account.code, accountName: account.name,
+        accountType: account.type, accountKey: account.key, accountIsCash: account.cash,
+        accountCurrency: account.currency,
         debit: Number(row.dr || 0), credit: Number(row.cr || 0),
         partnerExternalId: partner?.externalId || null, partnerName: partner?.name || "",
         foreignCurrencyAmount: Number(row.fc || 0)
