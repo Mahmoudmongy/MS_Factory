@@ -64,10 +64,10 @@ ok('inventory sync uploads the actual S.items array used by the stock screens',/
 ok('inventory sync totals all colour/size variants instead of reading a missing qty field',/Object\.values\(variants\)\.reduce/.test(cloud)&&/const variants = pr\.st/.test(cloud));
 ok('inventory sync stores the full local item in products.raw for lossless restoration',/image_url:[\s\S]{0,500}raw: pr/.test(cloud));
 ok('inventory download restores records into S.items, the real inventory source used by the app',/if \(!Array\.isArray\(S\.items\)\) S\.items = \[\]/.test(cloud)&&/S\.items = m\.arr/.test(cloud));
-ok('employee detail-only sync remains marked partial in the background',/admin \? "synced" : "partial"/.test(cloud)&&/مزامنة القيود والحركات المحاسبية الكاملة لحساب الموظف لم تكتمل بعد/.test(cloud));
+ok('employee detail-only sync remains marked partial in the background',/admin \? "synced" : "partial"/.test(cloud)&&/تم رفع الجداول وقيود الأستاذ وحركات المخزون المسموح بها حسب صلاحيات حسابك/.test(cloud));
 ok('RELEASE GATE: ledger and stock sync is wired to upload, pull, and the versioned RPC',/sync_factory_accounting/.test(cloud)&&/factory_accounting_state/.test(cloud)&&/await syncAccountingSnapshots\(S, profile, errors\)/.test(cloud)&&/replaceAccountingPayload\(S, source, remotePayload\)/.test(cloud)&&/state\.L/.test(core)&&/state\.mv/.test(core));
 ok('production-only catalog exposes quantities and material cost but not retail prices, wholesale prices or raw records',/from\("production_catalog"\)/.test(cloud)&&/buy_price,variant,quantity/.test(cloud)&&/private\.can_access_factory_owner\(p\.user_id, 'production', false\)/.test(catalogMigration)&&!/retail_price|wholesale_price|raw/.test(catalogMigration));
-ok('production-only employees can upload and pull their production orders',/if \(!admin && !\["customers", "suppliers", "invoices", "inventory", "production"\]\.some\(canWrite\)\)/.test(cloud)&&/if \(canWrite\("production"\)\)/.test(cloud)&&/if \(!\["customers","suppliers","invoices","inventory","production","reports"\]\.some\(canRead\)\)/.test(cloud));
+ok('production-only employees can upload and pull their production orders',/if \(!admin && !\["customers", "suppliers", "invoices", "inventory", "production", "settings"\]\.some\(canWrite\)\)/.test(cloud)&&/if \(canWrite\("production"\)\)/.test(cloud)&&/if \(!\["customers","suppliers","invoices","inventory","production","settings","reports"\]\.some\(canRead\)\)/.test(cloud));
 const detailSyncMigration=fs.readFileSync(path.join(ROOT,'supabase/migrations/20261108000100_atomic_versioned_factory_detail_sync.sql'),'utf8');
 ok('returns, vouchers and production orders use the atomic versioned detail RPC',/rpc\(["']sync_factory_detail["']/.test(cloud)&&/p_expected_version/.test(cloud)&&/sync_version/.test(cloud));
 ok('detail sync reads server versions and preserves stale-cloud copies as explicit conflicts',/remoteVersion > localVersion/.test(cloud)&&/serverCopy: remote/.test(cloud)&&/d\._cloudVersion = Number\(result\.row\.sync_version\)/.test(cloud)&&/v\._cloudVersion = Number\(result\.row\.sync_version\)/.test(cloud)&&/o\._cloudVersion = Number\(result\.row\.sync_version\)/.test(cloud));
@@ -83,7 +83,7 @@ ok('reconnect refreshes the profile before using permissions for cloud sync',/my
 
 ok('offline shell precaches the stable production app and first-login password page',/auth\.html/.test(sw)&&/change-password\.html/.test(sw)&&/js\/change-password\.js/.test(sw)&&/js\/app\.js/.test(sw)&&/factory-v11/.test(sw));
 ok('mobile and desktop usability includes visible keyboard focus and safe-area spacing',/focus-visible/.test(css)&&/safe-area-inset-bottom/.test(css));
-ok('offline-created detail records are uploaded even when the full snapshot has a preserved conflict',/if \(admin && !snapshotConflict\)/.test(cloud)&&/for \(const \{ key, arr \} of partnerArrays\)/.test(cloud)&&/hasSnapshotConflict/.test(cloud));
+ok('offline-created detail records are uploaded even when the full snapshot has a preserved conflict',/if \(admin && !snapshotConflict && !accountingConflict && errors\.length === 0\)/.test(cloud)&&/for \(const \{ key, arr \} of partnerArrays\)/.test(cloud)&&/hasSnapshotConflict/.test(cloud));
 ok('local save writes a durable pending-sync marker before network recovery',/mgr6-sync-pending/.test(app)&&/localStorage\.setItem\("mgr6-sync-pending"/.test(app));
 ok('sync indicator is a separate small icon and turns blue while syncing',/id="sync-icon"/.test(idx)&&/syncIcon\.classList\.toggle\('syncing', syncState === 'saving'\)/.test(cloud)&&/#sync-icon\.syncing\{color:#38bdf8/.test(css));
 ok('header uses an icon-only light/dark toggle and language stays out of the header',/<button id="thb"/.test(idx)&&!idx.includes('id="lgb"')&&/togLang\(\)/.test(app)&&/التبديل إلى الوضع الداكن/.test(app));
@@ -148,7 +148,7 @@ const accountingUnit=await p.evaluate(async()=>{
   &&target.wo[0].id==='w1';
  target.items=[{id:1,st:{},val:0}];
  m.recalcAccountingInventory(target);
- const stock=target.items[0].st.M===0&&target.items[0].st.L===-1&&target.items[0].val===-5;
+ const stock=(Number(target.items[0].st.M)||0)===0&&target.items[0].st.L===-1&&target.items[0].val===-5;
  const hashStable=m.accountingHash({b:2,a:1})===m.accountingHash({a:1,b:2});
  const hashChanges=m.accountingHash(production)!==m.accountingHash({...production,movements:[{src:'po',iid:1,v:'L',q:999,val:-5}]});
  return {mapped,sourcePayloads,preserve,stock,hashStable,hashChanges};
