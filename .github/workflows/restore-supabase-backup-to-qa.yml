@@ -45,7 +45,10 @@ jobs:
           print("Embedded Python blocks compile.")
           PY
           ruby -e 'require "yaml"; ARGV.each { |f| YAML.load_file(f) }' .github/workflows/restore-supabase-backup-to-qa.yml
-          grep -q 'session_replication_role = replica' scripts/restore-qa-logical-backup.sh
+          if grep -q 'SET session_replication_role' scripts/restore-qa-logical-backup.sh; then
+            echo "::error::Restore must not require superuser-only session_replication_role on Supabase managed postgres."
+            exit 1
+          fi
           grep -q 'EXPECTED_QA_PROJECT_REF' scripts/restore-qa-logical-backup.sh
           grep -q 'FORBIDDEN_PRODUCTION_PROJECT_REF' scripts/restore-qa-logical-backup.sh
           echo "QA restore script syntax and destination guards validated."
