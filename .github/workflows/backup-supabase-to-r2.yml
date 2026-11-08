@@ -92,12 +92,12 @@ jobs:
             : > /backup/auth-row-counts.txt
             for table in users identities mfa_factors mfa_recovery_code_sets mfa_recovery_codes webauthn_credentials; do
               count="$(psql "$SUPABASE_DB_URL" -Atqc "select count(*) from auth.\"$table\"")"
-              printf "%s=%s\\n" "$table" "$count" >> /backup/auth-row-counts.txt
+              printf "%s=%s\n" "$table" "$count" >> /backup/auth-row-counts.txt
             done
             : > /backup/public-row-counts.txt
             for table in $(psql "$SUPABASE_DB_URL" -Atqc "select table_name from information_schema.tables where table_schema='public' and table_type='BASE TABLE' order by table_name"); do
               count="$(psql "$SUPABASE_DB_URL" -Atqc "select count(*) from public.\"$table\"")"
-              printf "%s=%s\\n" "$table" "$count" >> /backup/public-row-counts.txt
+              printf "%s=%s\n" "$table" "$count" >> /backup/public-row-counts.txt
             done
           '
           if [ "$(cat storage-bucket-count.txt)" != "0" ]; then
