@@ -92,6 +92,18 @@ begin
     raise exception 'Not authorized to write this source category' using errcode = '42501';
   end if;
 
+  -- Version 1 writes are deliberately full-effect only. Until section-aware
+  -- server-side merging is implemented, reject redacted payloads rather than
+  -- allowing an inventory-only client to erase hidden financial ledger rows.
+  if not private.can_access_factory_owner(v_owner_id, 'inventory', true) then
+    raise exception 'Inventory write permission is required for a complete source effect' using errcode = '42501';
+  end if;
+  if not coalesce(p_deleted, false)
+     and (p_payload -> 'ledgerIncluded' is distinct from 'true'::jsonb
+          or p_payload -> 'movementsIncluded' is distinct from 'true'::jsonb) then
+    raise exception 'Partial source-effect writes are not enabled; hidden sections cannot be replaced' using errcode = '42501';
+  end if;
+
   if coalesce(p_deleted, false) is false then
     if p_payload is null
        or pg_catalog.jsonb_typeof(p_payload) <> 'object'
