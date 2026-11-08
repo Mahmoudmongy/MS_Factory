@@ -1,0 +1,222 @@
+name: Restore encrypted Supabase backup to QA
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm_qa_restore:
+        description: "Confirm restore into the dedicated ms-factory-restore-qa project only"
+        type: boolean
+        required: true
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: restore-supabase-backup-to-qa
+  cancel-in-progress: false
+
+jobs:
+  restore-qa:
+    if: github.event_name == 'workflow_dispatch' && inputs.confirm_qa_restore == true
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      B2_BUCKET: ${{ vars.B2_BUCKET }}
+      B2_ENDPOINT: ${{ vars.B2_ENDPOINT }}
+      AWS_ACCESS_KEY_ID: ${{ secrets.B2_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.B2_APPLICATION_KEY }}
+      QA_SUPABASE_DB_URL: ${{ secrets.QA_SUPABASE_DB_URL }}
+      AGE_IDENTITY: ${{ secrets.AGE_IDENTITY }}
+      EXPECTED_QA_PROJECT_REF: bpkkzyjfkktkaadhmbdi
+      FORBIDDEN_PRODUCTION_PROJECT_REF: yvrislcbbhtruwdnuooz
+      AGE_RECIPIENT: age1pge6k5nwg7pyz0ztp3gzrhp8h5g37dch2km2rr9sw88aqqr25dsstg643r
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install restore tools
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y age postgresql-client jq python3
+
+      - name: Validate QA-only destination and credentials
+        run: |
+          set -euo pipefail
+          for name in B2_BUCKET B2_ENDPOINT AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY QA_SUPABASE_DB_URL AGE_IDENTITY; do
+            if [ -z "${!name:-}" ]; then
+              echo "::error::Missing required GitHub secret/variable: $name"
+              exit 1
+            fi
+          done
+
+          python3 - <<'PY'
+          import os
+          from urllib.parse import urlparse, unquote
+          u = urlparse(os.environ["QA_SUPABASE_DB_URL"])
+          host = (u.hostname or "").lower()
+          user = unquote(u.username or "").lower()
+          expected = os.environ["EXPECTED_QA_PROJECT_REF"]
+          forbidden = os.environ["FORBIDDEN_PRODUCTION_PROJECT_REF"]
+          if forbidden in host or forbidden in user:
+              raise SystemExit("Refusing to connect: production project reference detected.")
+          if expected not in host and not user.startswith("postgres." + expected):
+              raise SystemExit("Refusing to connect: DB URL does not identify the dedicated QA project.")
+          if u.scheme not in ("postgres", "postgresql") or not u.path.endswith("/postgres"):
+              raise SystemExit("Refusing to connect: invalid PostgreSQL connection URL.")
+          print("QA destination guard passed; production reference is not present.")
+          PY
+
+          umask 077
+          printf '%s\n' "$AGE_IDENTITY" > "$RUNNER_TEMP/age-identity.txt"
+          chmod 600 "$RUNNER_TEMP/age-identity.txt"
+          actual_recipient="$(age-keygen -y -i "$RUNNER_TEMP/age-identity.txt" 2>/dev/null)"
+          if [ "$actual_recipient" != "$AGE_RECIPIENT" ]; then
+            echo "::error::AGE_IDENTITY does not match the public recipient used for encryption."
+            exit 1
+          fi
+          unset AGE_IDENTITY
+
+      - name: Verify QA is empty before restore
+        env:
+          PGCONNECT_TIMEOUT: "15"
+        run: |
+          set -euo pipefail
+          public_tables="$(psql "$QA_SUPABASE_DB_URL" -X -v ON_ERROR_STOP=1 -Atqc "SELECT count(*) FROM information_schema.tables WHERE table_schema='public' AND table_type='BASE TABLE';")"
+          auth_users="$(psql "$QA_SUPABASE_DB_URL" -X -v ON_ERROR_STOP=1 -Atqc "SELECT count(*) FROM auth.users;")"
+          if [ "$public_tables" != "0" ] || [ "$auth_users" != "0" ]; then
+            echo "::error::QA is not empty (public tables=$public_tables, auth users=$auth_users). Refusing to overwrite or merge existing QA data."
+            exit 1
+          fi
+          echo "QA pre-restore check passed: no public tables and no Auth users."
+
+      - name: Find newest complete encrypted backup in B2
+        id: backup
+        run: |
+          set -euo pipefail
+          region="${B2_ENDPOINT#https://s3.}"
+          region="${region%.backblazeb2.com}"
+          export AWS_DEFAULT_REGION="$region"
+          aws s3api list-objects-v2 \
+            --bucket "$B2_BUCKET" \
+            --prefix "backups/database/ms-factory/" \
+            --endpoint-url "$B2_ENDPOINT" \
+            --output json > "$RUNNER_TEMP/b2-objects.json"
+
+          key="$(python3 - "$RUNNER_TEMP/b2-objects.json" <<'PY'
+          import json, sys
+          objects = json.load(open(sys.argv[1], encoding="utf-8")).get("Contents", [])
+          keys = {o["Key"] for o in objects}
+          candidates = [o for o in objects
+                        if o["Key"].endswith(".tar.gz.age")
+                        and o["Key"] + ".sha256" in keys]
+          candidates.sort(key=lambda o: o.get("LastModified", ""))
+          print(candidates[-1]["Key"] if candidates else "")
+          PY
+          )"
+          if [ -z "$key" ]; then
+            echo "::error::No complete encrypted backup with a checksum sidecar exists in the managed B2 prefix."
+            exit 1
+          fi
+          echo "key=$key" >> "$GITHUB_OUTPUT"
+          echo "Selected newest complete backup object (key withheld from logs)."
+
+      - name: Verify retention and download encrypted backup
+        run: |
+          set -euo pipefail
+          region="${B2_ENDPOINT#https://s3.}"
+          region="${region%.backblazeb2.com}"
+          export AWS_DEFAULT_REGION="$region"
+          key="${{ steps.backup.outputs.key }}"
+          aws s3api get-object-retention --bucket "$B2_BUCKET" --key "$key" --endpoint-url "$B2_ENDPOINT" > "$RUNNER_TEMP/retention.json"
+          python3 - "$RUNNER_TEMP/retention.json" <<'PY'
+          import datetime, json, sys
+          r = json.load(open(sys.argv[1], encoding="utf-8"))["Retention"]
+          until = datetime.datetime.fromisoformat(r["RetainUntilDate"].replace("Z", "+00:00"))
+          if r["Mode"] != "COMPLIANCE" or until < datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(days=1):
+              raise SystemExit("Selected backup does not have active COMPLIANCE retention.")
+          PY
+          aws s3 cp "s3://$B2_BUCKET/$key" "$RUNNER_TEMP/backup.tar.gz.age" --endpoint-url "$B2_ENDPOINT" --only-show-errors --no-progress
+          aws s3 cp "s3://$B2_BUCKET/$key.sha256" "$RUNNER_TEMP/backup.tar.gz.age.sha256" --endpoint-url "$B2_ENDPOINT" --only-show-errors --no-progress
+          (cd "$RUNNER_TEMP" && sha256sum -c backup.tar.gz.age.sha256)
+
+      - name: Decrypt and validate backup contents
+        run: |
+          set -euo pipefail
+          age --decrypt --identity "$RUNNER_TEMP/age-identity.txt" --output "$RUNNER_TEMP/backup.tar.gz" "$RUNNER_TEMP/backup.tar.gz.age"
+          tar -tzf "$RUNNER_TEMP/backup.tar.gz" > "$RUNNER_TEMP/archive-files.txt"
+          for file in roles.sql schema.sql data.sql auth-users.sql migration-history-schema.sql migration-history.sql auth-trigger.sql auth-row-counts.txt public-row-counts.txt database-files.sha256 manifest.txt storage-bucket-count.txt auth-user-count.txt migration-count.txt; do
+            grep -Fxq "$file" "$RUNNER_TEMP/archive-files.txt" || { echo "::error::Backup archive is missing required file: $file"; exit 1; }
+          done
+          mkdir "$RUNNER_TEMP/restore"
+          tar -xzf "$RUNNER_TEMP/backup.tar.gz" -C "$RUNNER_TEMP/restore"
+          (cd "$RUNNER_TEMP/restore" && sha256sum -c database-files.sha256)
+          if [ "$(cat "$RUNNER_TEMP/restore/storage-bucket-count.txt")" != "0" ]; then
+            echo "::error::This restore workflow does not migrate Storage objects; refusing an incomplete restore."
+            exit 1
+          fi
+          if [ "$(cat "$RUNNER_TEMP/restore/auth-user-count.txt")" != "$(grep -c 'INSERT INTO auth.users' "$RUNNER_TEMP/restore/auth-users.sql" || true)" ]; then
+            echo "::warning::Auth user insert count differs from row count metadata; post-restore verification remains mandatory."
+          fi
+
+      - name: Restore SQL into the dedicated empty QA database
+        env:
+          PGCONNECT_TIMEOUT: "15"
+        run: |
+          set -euo pipefail
+          cd "$RUNNER_TEMP/restore"
+          # All SQL is applied in one transaction. Triggers are disabled only during data import,
+          # then restored before commit. The custom auth.users trigger is installed after Auth rows.
+          psql "$QA_SUPABASE_DB_URL" -X -v ON_ERROR_STOP=1 --single-transaction \
+            --file roles.sql \
+            --file schema.sql \
+            --command "SET session_replication_role = replica" \
+            --file data.sql \
+            --file auth-users.sql \
+            --file migration-history-schema.sql \
+            --file migration-history.sql \
+            --command "SET session_replication_role = origin" \
+            --file auth-trigger.sql
+
+      - name: Verify restored row counts
+        env:
+          PGCONNECT_TIMEOUT: "15"
+        run: |
+          set -euo pipefail
+          cd "$RUNNER_TEMP/restore"
+          while IFS='|' read -r table expected; do
+            [ -n "$table" ] || continue
+            case "$table" in public.*) ;; *) echo "::error::Unexpected table in count manifest."; exit 1;; esac
+            name="${table#public.}"
+            actual="$(psql "$QA_SUPABASE_DB_URL" -X -v ON_ERROR_STOP=1 -Atqc "SELECT count(*) FROM public.\"$name\";")"
+            if [ "$actual" != "$expected" ]; then
+              echo "::error::Row-count mismatch for $table (expected $expected, got $actual)."
+              exit 1
+            fi
+          done < public-row-counts.txt
+
+          while IFS='|' read -r table expected; do
+            [ -n "$table" ] || continue
+            case "$table" in auth.users|auth.identities|auth.mfa_factors|auth.mfa_recovery_code_sets|auth.mfa_recovery_codes|auth.webauthn_credentials) ;; *) echo "::error::Unexpected Auth table in count manifest."; exit 1;; esac
+            name="${table#auth.}"
+            actual="$(psql "$QA_SUPABASE_DB_URL" -X -v ON_ERROR_STOP=1 -Atqc "SELECT count(*) FROM auth.\"$name\";")"
+            if [ "$actual" != "$expected" ]; then
+              echo "::error::Auth row-count mismatch for $table (expected $expected, got $actual)."
+              exit 1
+            fi
+          done < auth-row-counts.txt
+
+          expected_migrations="$(cat migration-count.txt)"
+          actual_migrations="$(psql "$QA_SUPABASE_DB_URL" -X -v ON_ERROR_STOP=1 -Atqc "SELECT count(*) FROM supabase_migrations.schema_migrations;")"
+          if [ "$actual_migrations" != "$expected_migrations" ]; then
+            echo "::error::Migration-history count mismatch (expected $expected_migrations, got $actual_migrations)."
+            exit 1
+          fi
+          echo "QA restore verified: public/Auth row counts and migration history match the encrypted backup."
+
+      - name: Remove decrypted material and temporary credentials
+        if: always()
+        run: |
+          set +e
+          rm -rf "$RUNNER_TEMP/restore" "$RUNNER_TEMP/backup.tar.gz" "$RUNNER_TEMP/backup.tar.gz.age" "$RUNNER_TEMP/backup.tar.gz.age.sha256" "$RUNNER_TEMP/age-identity.txt" "$RUNNER_TEMP/retention.json" "$RUNNER_TEMP/b2-objects.json" "$RUNNER_TEMP/archive-files.txt"
