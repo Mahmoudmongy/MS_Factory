@@ -1,0 +1,103 @@
+name: Encrypted Supabase database backup
+
+on:
+  schedule:
+    - cron: "35 1 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: encrypted-database-backup
+  cancel-in-progress: false
+
+jobs:
+  backup:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Validate required configuration
+        env:
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+          AGE_RECIPIENT: ${{ vars.AGE_RECIPIENT }}
+          R2_ACCOUNT_ID: ${{ vars.R2_ACCOUNT_ID }}
+          R2_BUCKET: ${{ vars.R2_BUCKET }}
+          R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+        run: |
+          set -euo pipefail
+          for name in SUPABASE_DB_URL AGE_RECIPIENT R2_ACCOUNT_ID R2_BUCKET R2_ACCESS_KEY_ID R2_SECRET_ACCESS_KEY; do
+            if [ -z "${!name:-}" ]; then
+              echo "::error::Missing GitHub secret/variable: $name"
+              exit 1
+            fi
+          done
+
+      - name: Install backup tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y age
+          npm install --global supabase
+
+      - name: Export Supabase roles, schema and data
+        env:
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+        run: |
+          set -euo pipefail
+          supabase db dump --db-url "$SUPABASE_DB_URL" --file roles.sql --role-only
+          supabase db dump --db-url "$SUPABASE_DB_URL" --file schema.sql
+          supabase db dump --db-url "$SUPABASE_DB_URL" --file data.sql --use-copy --data-only
+          test -s roles.sql
+          test -s schema.sql
+          test -s data.sql
+          cat > manifest.txt <<EOF
+          project=ms-factory
+          created_utc=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+          source=Supabase CLI db dump
+          includes=roles,schema,data
+          encryption=age public-key recipient
+          EOF
+          tar -czf ms-factory-db-backup.tar.gz roles.sql schema.sql data.sql manifest.txt
+          sha256sum ms-factory-db-backup.tar.gz > ms-factory-db-backup.tar.gz.sha256
+
+      - name: Encrypt backup before upload
+        env:
+          AGE_RECIPIENT: ${{ vars.AGE_RECIPIENT }}
+        run: |
+          set -euo pipefail
+          age --encrypt --recipient "$AGE_RECIPIENT" \
+            --output ms-factory-db-backup.tar.gz.age ms-factory-db-backup.tar.gz
+          test -s ms-factory-db-backup.tar.gz.age
+          sha256sum ms-factory-db-backup.tar.gz.age > ms-factory-db-backup.tar.gz.age.sha256
+
+      - name: Upload encrypted backup to private Cloudflare R2
+        env:
+          R2_ACCOUNT_ID: ${{ vars.R2_ACCOUNT_ID }}
+          R2_BUCKET: ${{ vars.R2_BUCKET }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+        run: |
+          set -euo pipefail
+          export AWS_DEFAULT_REGION=auto
+          endpoint="https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com"
+          stamp="$(date -u +%Y/%m/%d/%H%M%S)"
+          key="database/ms-factory/${stamp}/ms-factory-db-backup.tar.gz.age"
+          aws s3 cp ms-factory-db-backup.tar.gz.age "s3://${R2_BUCKET}/${key}" \
+            --endpoint-url "$endpoint" --only-show-errors --no-progress
+          aws s3api head-object --bucket "$R2_BUCKET" --key "$key" \
+            --endpoint-url "$endpoint" > uploaded-object.json
+          test -s uploaded-object.json
+          echo "Encrypted backup uploaded: s3://${R2_BUCKET}/${key}"
+          echo "Encrypted archive SHA-256:"
+          cat ms-factory-db-backup.tar.gz.age.sha256
+
+      - name: Remove plaintext database exports
+        if: always()
+        run: |
+          rm -f roles.sql schema.sql data.sql manifest.txt \
+            ms-factory-db-backup.tar.gz ms-factory-db-backup.tar.gz.sha256
