@@ -1451,13 +1451,6 @@ async function uploadToTables(showAlert = false) {
               conflicts.push({ sourceType, sourceId, reason: "missing_source_effect_write_permission" });
               continue;
             }
-            if (!isDelete && (
-              (action.effect.ledger.length > 0 && !writeLedger) ||
-              (action.effect.movements.length > 0 && !writeMovements)
-            )) {
-              conflicts.push({ sourceType, sourceId, reason: "complete_effect_requires_all_populated_section_permissions" });
-              continue;
-            }
             const payload = isDelete ? null : {
               sourceType, sourceId: String(sourceId),
               ledgerIncluded: writeLedger, movementsIncluded: writeMovements,
