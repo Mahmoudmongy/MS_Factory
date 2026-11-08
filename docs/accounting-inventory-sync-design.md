@@ -60,7 +60,7 @@ The RPC must validate source categories, ownership, payload shape/size, and perm
 - Added a remote-download planner that applies a remote source only when it is absent locally, adopts an identical local copy, and otherwise records a conflict. It does not auto-overwrite local edits.
 - Added a local apply helper that resolves account codes, item external IDs, and partner external IDs; replaces only the matching `(src,rid)` effect; and reverses/reapplies stock deltas so repeated application is idempotent.
 - Updated `rev()` and all edit/delete call sites to scope reversals by source type and ID. Deletions now queue durable offline tombstones before local reversal.
-- Executed 24 focused helper/static checks directly against the branch files: **24/24 passed**. These are not a substitute for the full Playwright suite or a two-device QA restore.
+- Executed 26 focused helper/static checks directly against the branch files: **26/26 passed**. These are not a substitute for the full Playwright suite or a two-device QA restore.
 
 **Not implemented yet:** the client does not call the RPC, does not fetch/apply effect records, and does not alter stock or ledger balances. The draft migration has not been applied to production or QA. The unique SKU index and RPC therefore have no live effect at this stage.
 
