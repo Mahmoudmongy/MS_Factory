@@ -131,7 +131,7 @@ jobs:
           set -euo pipefail
           export AWS_DEFAULT_REGION=auto
           endpoint="https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com"
-          current_bytes="$(aws s3 ls "s3://${R2_BUCKET}/database/ms-factory/" --recursive --endpoint-url "$endpoint" | awk '$3 ~ /^[0-9]+$/ { total += $3 } END { print total + 0 }')"
+          current_bytes="$(aws s3 ls "s3://${R2_BUCKET}/" --recursive --endpoint-url "$endpoint" | awk '$3 ~ /^[0-9]+$/ { total += $3 } END { print total + 0 }')"
           new_bytes="$(stat -c%s ms-factory-db-backup.tar.gz.age)"
           if [ "$((current_bytes + new_bytes))" -gt 9000000000 ]; then
             echo "::error::R2 backup storage would exceed the 9 GB safety ceiling for the 10 GB free allowance."
