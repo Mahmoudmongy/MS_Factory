@@ -63,11 +63,12 @@ These are live Postgres/RLS/RPC integration tests against the QA project, not me
 
 ## Latest CI result
 
-Commit `69e831b3fa5b394eca17c2494952803ded745073` passed GitHub Actions:
+Commit `daaaea44195ada43add1d3e104aa5665c793b08b` passed GitHub Actions:
+- `npm audit --audit-level=high`: passed (no high-severity dependency audit failure).
 - `npm run build`: passed.
 - `wrangler deploy --dry-run`: passed; no deployment was performed.
 - JavaScript and restore shell syntax checks: passed.
-- Browser regression suite: **192/192 checks passed, 0 failed**, including all 19 screens, sales/purchases/returns/vouchers/production flows, stock/ledger balancing, XSS regressions, mobile layout, offline shell and release-gate checks.
+- Browser regression suite: **198/198 checks passed, 0 failed**, including all 19 screens, sales/purchases/returns/vouchers/production flows, stock/ledger balancing, XSS regressions, mobile layout, offline shell, customer/supplier field preservation and cloud refresh checks.
 
 The browser suite intentionally runs without live Auth/cloud modules; the separate QA SQL tests above cover the database authorization and RPC layer.
 
@@ -77,7 +78,7 @@ The QA SQL tests ran as the `authenticated` database role with controlled JWT cl
 
 ## Remaining synchronization release blocker
 
-Invoice, return, voucher, production-order, accounting-source, and stock-movement writes now use versioned compare-and-swap RPCs. Customer, supplier, and product master records are now round-tripped with their full profile fields and existing records refresh from cloud when the device has no pending local edits. However, these three master-data paths still use table upserts without a per-record compare-and-swap version. Two devices editing the same customer, supplier, or product while offline can therefore still produce last-write-wins behavior. This must be upgraded to versioned master-record RPCs with explicit conflict resolution before calling multi-device synchronization fully conflict-safe.
+Invoice, return, voucher, production-order, accounting-source, and stock-movement writes now use versioned compare-and-swap RPCs. Customer, supplier, and product master records are now round-tripped with their full profile fields and existing records refresh from cloud when the device has no pending local edits. This closes the previously missing customer/supplier type and governorate/city round-trip fields, and prevents a clean device from retaining stale existing partner/product values. However, these three master-data paths still use table upserts without a per-record compare-and-swap version. Two devices editing the same customer, supplier, or product while offline can therefore still produce last-write-wins behavior. This must be upgraded to versioned master-record RPCs with explicit conflict resolution before calling multi-device synchronization fully conflict-safe.
 
 ## Release decision
 
