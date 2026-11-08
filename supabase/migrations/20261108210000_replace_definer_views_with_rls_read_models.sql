@@ -153,3 +153,5 @@ ON CONFLICT(user_id) DO UPDATE SET accts=EXCLUDED.accts,codes=EXCLUDED.codes,cur
 
 COMMENT ON TABLE public.production_catalog IS 'Narrow production-only product/variant read model maintained by private triggers.';
 COMMENT ON TABLE public.production_factory_config IS 'Narrow production-only factory configuration; excludes full snapshot balances and ledgers.';
+
+NOTIFY pgrst, 'reload schema';
