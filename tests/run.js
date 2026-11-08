@@ -144,7 +144,7 @@ const cloudIdTarget={items:[{id:999,cloudId:'canonical-fabric-11',st:{'أبيض'
 const cloudIdApply=applyStockBaseline?applyStockBaseline(cloudIdTarget,cloudIdBaseline):{applied:false};
 ok('stock baseline resolves canonical identity on a device with a different local ID',cloudIdApply.applied&&cloudIdTarget.items[0].st['أبيض']===12);
 ok('new inventory items receive a stable cloud identity at creation',/cloudId:String\(itemId\)/.test(app));
-ok('default item SKUs are derived from the unique local item ID rather than item count',/if\\(!o\\.sku\\)o\\.sku="IT"\\+itemId\\.toString\\(36\\)\\.toUpperCase\\(\\)/.test(app)&&/sku:"IT"\\+itemId\\.toString\\(36\\)\\.toUpperCase\\(\\)/.test(app));
+ok('default item SKUs are derived from the unique local item ID rather than item count',/if\(!o\.sku\)o\.sku="IT"\+itemId\.toString\(36\)\.toUpperCase\(\)/.test(app)&&/sku:"IT"\+itemId\.toString\(36\)\.toUpperCase\(\)/.test(app));
 ok('product uploads and ledger effects use canonical cloud identities',cloud.includes('pr.cloudId = String(pr.id)')&&cloud.includes('externalId: String(item.cloudId || id)'));
 const partnerMergeStart=cloud.indexOf('function mergeCloudPartners(existing, incoming)');
 const partnerMergeEnd=cloud.indexOf('function mergeCloudInvoices(existing, incoming)',partnerMergeStart);
