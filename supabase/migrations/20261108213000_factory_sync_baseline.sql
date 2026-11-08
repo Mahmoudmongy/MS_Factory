@@ -297,15 +297,16 @@ begin
     from public.profiles p
    where p.id = v_actor_id;
 
-  if v_owner_id is null or p_section not in ('inventory', 'accounting') then
-    raise exception 'Invalid baseline section or factory profile'
-      using errcode = '22023';
+  if v_owner_id is null then
+    raise exception 'Factory profile not found' using errcode = '42501';
   end if;
 
   if p_section = 'inventory' then
     v_allowed := private.can_access_factory_owner(v_owner_id, 'inventory', false);
-  else
+  elsif p_section = 'accounting' then
     v_allowed := private.can_access_factory_owner(v_owner_id, 'settings', false);
+  else
+    raise exception 'Invalid baseline section' using errcode = '22023';
   end if;
 
   if not v_allowed then
