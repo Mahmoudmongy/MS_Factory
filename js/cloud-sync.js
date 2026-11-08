@@ -207,7 +207,7 @@ function stableJson(value) {
 
 async function syncAccountingSnapshots(S, profile, errors) {
   const admin = profile.is_admin === true;
-  const canWrite = source => admin || profile.permissions?.[source] === true;
+  const canWrite = source => admin || (source !== "settings" && profile.permissions?.[source] === true);
   let hasConflict = false;
   const errorsBefore = errors.length;
   for (const source of ACCOUNTING_SOURCES.filter(canWrite)) {
