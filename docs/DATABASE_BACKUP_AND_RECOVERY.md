@@ -41,7 +41,7 @@ Do not store the age private identity in GitHub. Keep it offline in two encrypte
 - Object Lock must be enabled.
 - Default Bucket Retention must be explicitly configured as **Compliance / 90 days**. Merely seeing “Object Lock: Enabled” is not enough.
 - Configure a lifecycle rule for prefix `backups/database/ms-factory/` to expire objects after 120 days. The workflow checks the rule but does not create or modify it.
-- The scoped Application Key must allow listing, reading and writing objects in the bucket, and reading bucket retention/lifecycle configuration. Do not grant unnecessary account-wide permissions.
+- The Application Key must allow listing, reading and writing objects under the `backups/` prefix. The preflight also needs permission to read bucket Object Lock retention and lifecycle configuration; Backblaze documents `readBucketRetentions` for lock settings. Some bucket-restricted UI keys do not receive Object Lock capabilities, so a simple “Read and Write” label may not be sufficient. Do not use the master key in GitHub.
 
 The workflow uses the prefix `backups/`, matching the filename prefix restriction on the configured Application Key.
 
@@ -57,7 +57,7 @@ The workflow already contains the public recipient. Keep the private identity fi
 
 ## Safe activation sequence
 
-1. Confirm the B2 bucket's default retention is Compliance / 90 days, not merely Object Lock enabled.
+1. Confirm the bucket name and exact S3 endpoint shown in the Backblaze bucket details. A `NoSuchBucket` response usually means the bucket name/region endpoint do not match, or the key cannot access that bucket. Backblaze B2 accounts are associated with a single region; use the bucket's own endpoint. Confirm the default retention is Compliance / 90 days, not merely Object Lock enabled.
 2. Configure the 120-day lifecycle rule for the exact prefix.
 3. Add `SUPABASE_DB_URL` through GitHub Settings. The public age recipient is already configured in the workflow.
 4. Run the workflow manually with the backup checkbox left unchecked. Confirm the B2 preflight succeeds. This checks storage configuration only and does not read Supabase production data.
