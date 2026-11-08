@@ -85,7 +85,7 @@ PY
 chmod 600 "$work/pg_env.sh"
 source "$work/pg_env.sh"
 target_users="$(psql -X -v ON_ERROR_STOP=1 -Atqc 'SELECT count(*) FROM auth.users')"
-target_migrations_table="$(psql -X -v ON_ERROR_STOP=1 -Atqc \"SELECT to_regclass('supabase_migrations.schema_migrations') IS NOT NULL\")"
+target_migrations_table="$(psql -X -v ON_ERROR_STOP=1 -Atqc "SELECT to_regclass('supabase_migrations.schema_migrations') IS NOT NULL")"
 if [[ "$target_migrations_table" == "t" ]]; then
   target_migrations="$(psql -X -v ON_ERROR_STOP=1 -Atqc 'SELECT count(*) FROM supabase_migrations.schema_migrations')"
 else
