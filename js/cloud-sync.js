@@ -287,8 +287,9 @@ window.resolveCloudAccountingConflict = async function(source) {
   localStorage.setItem(accountingVersionKey(source), String(remote.sync_version));
   localStorage.setItem(accountingHashKey(source), accountingHash(remote.payload));
   localStorage.removeItem(accountingConflictKey(source));
+  const syncResult = await uploadToTables(false);
   drawAll();
-  alert(T("تم حفظ نسخة الجهاز في سجل النسخ المحلي واستعادة نسخة السحابة لهذا القسم. راجع الأرصدة والمخزون قبل متابعة العمل.", "The device copy was saved locally and the cloud copy restored for this section. Review balances and stock before continuing."));
+  alert(T("تم حفظ نسخة الجهاز محليًا واستعادة نسخة السحابة لهذا القسم. نتيجة المزامنة: ", "The device copy was saved locally and the cloud copy restored for this section. Sync result: ") + syncResult);
   return "resolved";
 };
 
