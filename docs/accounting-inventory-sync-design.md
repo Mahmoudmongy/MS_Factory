@@ -57,6 +57,11 @@ The RPC must validate source categories, ownership, payload shape/size, and perm
 - Focused regression tests cover source scoping, repeatable collection, opening-baseline exclusion, account/item/partner mapping, duplicate keys, and invalid/unbalanced effects.
 - A draft migration defines a versioned `source_effects` table, read RLS, and an authenticated compare-and-swap RPC with source-category permission checks, tombstones, payload validation, and per-source advisory locking.
 
+- Added a remote-download planner that applies a remote source only when it is absent locally, adopts an identical local copy, and otherwise records a conflict. It does not auto-overwrite local edits.
+- Added a local apply helper that resolves account codes, item external IDs, and partner external IDs; replaces only the matching `(src,rid)` effect; and reverses/reapplies stock deltas so repeated application is idempotent.
+- Updated `rev()` and all edit/delete call sites to scope reversals by source type and ID. Deletions now queue durable offline tombstones before local reversal.
+- Executed 24 focused helper/static checks directly against the branch files: **24/24 passed**. These are not a substitute for the full Playwright suite or a two-device QA restore.
+
 **Not implemented yet:** the client does not call the RPC, does not fetch/apply effect records, and does not alter stock or ledger balances. The draft migration has not been applied to production or QA. The unique SKU index and RPC therefore have no live effect at this stage.
 
 - Added a pure optimistic-concurrency planner for new writes, exact-version replacements, remote-version conflicts, and delete tombstones. It never auto-overwrites a newer remote record or resurrects a remotely deleted source.
