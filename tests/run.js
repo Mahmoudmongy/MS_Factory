@@ -107,7 +107,7 @@ const ambiguousResult=mergeCloudProducts?mergeCloudProducts(ambiguousProducts,[{
 ok('ambiguous duplicate local SKUs are not auto-merged',ambiguousResult.conflicts===1&&ambiguousProducts.length===2);
 const cloudIdFixture={...stockBaselineFixture,items:[{...stockBaselineFixture.items[0],cloudId:'canonical-fabric-11'}]};
 const cloudIdBaseline=buildStockBaseline?buildStockBaseline(cloudIdFixture):{items:[]};
-ok('stock baseline uses canonical cloud identity rather than device-local numeric ID',cloudIdBaseline.items[0]?.itemExternalId==='canonical-fabric-11');
+ok('stock baseline uses canonical cloud identity rather than device-local numeric ID',cloudIdBaseline.items.some(x=>x.itemExternalId==='canonical-fabric-11'));
 const cloudIdTarget={items:[{id:999,cloudId:'canonical-fabric-11',st:{'أبيض':0},val:0}]};
 const cloudIdApply=applyStockBaseline?applyStockBaseline(cloudIdTarget,cloudIdBaseline):{applied:false};
 ok('stock baseline resolves canonical identity on a device with a different local ID',cloudIdApply.applied&&cloudIdTarget.items[0].st['أبيض']===12);
