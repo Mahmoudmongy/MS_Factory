@@ -9,6 +9,9 @@ pg_dump "$SUPABASE_DB_URL" --data-only --no-owner --no-privileges \
   --table=auth.mfa_recovery_codes --table=auth.webauthn_credentials \
   --file=/backup/auth-users.sql
 
+pg_dump "$SUPABASE_DB_URL" --schema-only --no-owner --no-privileges \
+  --schema=supabase_migrations --file=/backup/migration-history-schema.sql
+
 pg_dump "$SUPABASE_DB_URL" --data-only --no-owner --no-privileges \
   --table=supabase_migrations.schema_migrations \
   --file=/backup/migration-history.sql
