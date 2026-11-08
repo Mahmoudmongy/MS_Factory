@@ -15,7 +15,7 @@ ok('app.js has no duplicate top-level function definitions',dup.length==0,dup);
 ok('conditional form values and descriptions are escaped, not inserted as HTML',/escapeHTML\(p\?p\.name/.test(app)&&/escapeHTML\(pre\.desc/.test(app)&&/escapeHTML\(v\.split/.test(app));
 ok('HTML text and attribute values are escaped before rendering user-controlled fields',/const escapeHTML =/.test(app)&&/escapeHTML\(p\.name\)/.test(app)&&/escapeHTML\(x\.name\)/.test(app)&&/escapeHTML\(S\.name\)/.test(app));
 ok('image URLs are restricted to safe image, HTTPS, relative or blob sources',/const safeImageSrc =/.test(app)&&/safeImageSrc\(s\)/.test(app));
-ok('governorate and city values are escaped before HTML insertion',/escapeHTML\(g\)/.test(app)&&/escapeHTML\(x\)\\}<[/]option>/.test(app));
+ok('governorate and city values are escaped before HTML insertion',/escapeHTML\(g\)/.test(app)&&app.includes('escapeHTML(x)}</option>'));
 ok('production colour/size labels and item names are escaped',/escapeHTML\(c\|\|"—"\)/.test(app)&&/escapeHTML\(z\|\|"الكمية"\)/.test(app)&&/escapeHTML\(it_\(m\.iid\)\.name\)/.test(app));
 ok('Excel sheet names and imported column headers are escaped',/escapeHTML\(WZ\.sheet\)/.test(app)&&/escapeHTML\(h\)/.test(app)&&/escapeHTML\(n\)/.test(app));
 ok('ledger account and partner labels are escaped before rendering',/escapeHTML\(an\(l\.a\)\)/.test(app)&&/escapeHTML\(pn\(l\.pid\)\)/.test(app));
