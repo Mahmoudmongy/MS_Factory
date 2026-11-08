@@ -652,7 +652,7 @@ async function uploadToTables(showAlert = false) {
       }
     }
 
-    if (!admin && canRead("production") && !canWrite("inventory") && !snapshotConflict && !accountingConflict && errors.length === 0) {
+    if (!admin && profile.permissions?.production === true && !canWrite("inventory") && !snapshotConflict && !accountingConflict && errors.length === 0) {
       const { data: catalogRows, error: catalogError } = await supabase.from("production_catalog")
         .select("user_id,external_id,name,sku,model,unit,warehouse,image_url,buy_price,variant,quantity")
         .eq("user_id", owner);
@@ -767,19 +767,20 @@ async function loadFromTablesMerge(isAuto = false) {
 
     const emptyResult = { data: [], error: null };
     const inventoryRead = canRead("inventory");
-    const productionConfigRead = canRead("production") && !admin;
+    const productionCatalogRead = admin || profile.permissions?.production === true;
+    const productionConfigRead = productionCatalogRead && !admin;
     const results = await Promise.all([
       canRead("customers") ? supabase.from("customers").select("*").eq("user_id", owner) : Promise.resolve(emptyResult),
       canRead("suppliers") ? supabase.from("suppliers").select("*").eq("user_id", owner) : Promise.resolve(emptyResult),
       canRead("invoices") ? supabase.from("invoices").select("*").eq("user_id", owner) : Promise.resolve(emptyResult),
       inventoryRead
         ? supabase.from("products").select("*").eq("user_id", owner)
-        : canRead("production")
+        : productionCatalogRead
           ? supabase.from("production_catalog").select("user_id,external_id,name,sku,model,unit,warehouse,image_url,buy_price,variant,quantity").eq("user_id", owner)
           : Promise.resolve(emptyResult),
       canRead("invoices") ? supabase.from("returns").select("*").eq("user_id", owner) : Promise.resolve(emptyResult),
       canRead("invoices") ? supabase.from("vouchers").select("*").eq("user_id", owner) : Promise.resolve(emptyResult),
-      canRead("production") ? supabase.from("production_orders").select("*").eq("user_id", owner) : Promise.resolve(emptyResult),
+      productionCatalogRead ? supabase.from("production_orders").select("*").eq("user_id", owner) : Promise.resolve(emptyResult),
       (canRead("invoices") || canRead("production") || canRead("settings"))
         ? supabase.from("factory_accounting_state").select("source,payload,sync_version,updated_at").eq("user_id", owner)
         : Promise.resolve(emptyResult),
@@ -893,7 +894,7 @@ async function loadFromTablesMerge(isAuto = false) {
         });
       }
       if (!Array.isArray(S.items)) S.items = [];
-      if (!inventoryRead && canRead("production")) {
+      if (!inventoryRead && productionCatalogRead) {
         const m = mergeProductionCatalog(S.items, cloudProducts, !localStorage.getItem(PENDING_SYNC_KEY));
         S.items = m.arr; totalAdded += m.added;
       } else {
