@@ -110,6 +110,12 @@ jobs:
           set -euo pipefail
           export AWS_DEFAULT_REGION=auto
           endpoint="https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com"
+          current_bytes="$(aws s3 ls "s3://${R2_BUCKET}/database/ms-factory/" --recursive --endpoint-url "$endpoint" | awk '$3 ~ /^[0-9]+$/ { total += $3 } END { print total + 0 }')"
+          new_bytes="$(stat -c%s ms-factory-db-backup.tar.gz.age)"
+          if [ "$((current_bytes + new_bytes))" -gt 9000000000 ]; then
+            echo "::error::R2 backup storage would exceed the 9 GB safety ceiling for the 10 GB free allowance."
+            exit 1
+          fi
           stamp="$(date -u +%Y/%m/%d/%H%M%S)"
           key="database/ms-factory/${stamp}/ms-factory-db-backup.tar.gz.age"
           aws s3 cp ms-factory-db-backup.tar.gz.age "s3://${R2_BUCKET}/${key}" \
@@ -124,5 +130,5 @@ jobs:
       - name: Remove plaintext database exports
         if: always()
         run: |
-          rm -f roles.sql schema.sql data.sql auth-users.sql manifest.txt \
+          rm -f roles.sql schema.sql data.sql auth-users.sql manifest.txt r2-lock.json r2-lifecycle.json uploaded-object.json \
             ms-factory-db-backup.tar.gz ms-factory-db-backup.tar.gz.sha256
