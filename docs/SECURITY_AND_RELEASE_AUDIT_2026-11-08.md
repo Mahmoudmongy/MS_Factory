@@ -54,3 +54,12 @@ Do not merge to production or deploy the Cloudflare worker until:
 3. R2 is enabled and a full backup plus QA restore drill succeeds;
 4. real administrator and employee password logins are tested in QA;
 5. Android device printing is checked on a physical device.
+
+## Edge Function source verification
+
+The two active production Edge Functions were read from Supabase and compared byte-for-byte with the repository sources on this branch:
+
+- `create-employee-account`, deployed version 5 — identical to `supabase/functions/create-employee-account/index.ts`.
+- `change-initial-password`, deployed version 1 — identical to `supabase/functions/change-initial-password/index.ts`.
+
+Both have JWT verification enabled. The backup archive includes the repository function sources; this is currently an exact source backup of both deployed functions. The functions use Supabase-provided environment variables only; any future custom function secrets must be separately escrowed outside the repository.
