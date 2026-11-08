@@ -143,7 +143,10 @@ jobs:
           aws s3api head-object --bucket "$R2_BUCKET" --key "$key" \
             --endpoint-url "$endpoint" > uploaded-object.json
           test -s uploaded-object.json
-          echo "Encrypted backup uploaded: s3://${R2_BUCKET}/${key}"
+          aws s3 cp "s3://$R2_BUCKET/$key" "$RUNNER_TEMP/ms-factory-backup-readback.age" \
+            --endpoint-url "$endpoint" --only-show-errors --no-progress
+          cmp --silent ms-factory-db-backup.tar.gz.age "$RUNNER_TEMP/ms-factory-backup-readback.age"
+          echo "Encrypted backup uploaded and read-back verified: s3://$R2_BUCKET/$key"
           echo "Encrypted archive SHA-256:"
           cat ms-factory-db-backup.tar.gz.age.sha256
 
