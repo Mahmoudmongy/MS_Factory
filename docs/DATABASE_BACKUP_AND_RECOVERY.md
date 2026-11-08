@@ -13,7 +13,8 @@ The Supabase Free plan does not provide the automatic daily platform backups ava
 3. The archive is encrypted with an age public recipient before it leaves the runner.
 4. Only the encrypted archive is uploaded to a private Cloudflare R2 bucket over the S3-compatible API.
 5. The workflow verifies that the uploaded object exists and records its encrypted SHA-256 in the job log.
-6. The workflow never uploads plaintext SQL or a plaintext GitHub Actions artifact. The Auth export contains password hashes and identity metadata, so it is included only inside the age-encrypted archive.
+6. Before exporting any database data, the workflow verifies a 90-day R2 bucket-lock rule and a 120-day lifecycle-expiry rule for the backup prefix. It stops before export if either rule is missing.
+7. The workflow never uploads plaintext SQL or a plaintext GitHub Actions artifact. The Auth export contains password hashes and identity metadata, so it is included only inside the age-encrypted archive.
 
 The workflow does not run on pull requests. It requires a bucket-scoped R2 access key and read/write access to the backup bucket only.
 
@@ -40,8 +41,9 @@ After enabling R2, create a private bucket named `ms-factory-db-backups` in the 
 Create an R2 API token restricted to this bucket with Object Read & Write. Do not use an account-wide token if a bucket-scoped token is available.
 
 Recommended protection:
-- Add an R2 bucket-lock rule for prefix `database/ms-factory/` with a 35-day age retention. This prevents deletion and overwriting during the retention period, including by a compromised upload token.
-- Configure lifecycle expiry after 90 days. Bucket-lock retention takes precedence, so objects remain locked for at least 35 days.
+- Add an R2 bucket-lock rule for prefix `database/ms-factory/` with a 90-day age retention. This prevents deletion and overwriting during the retention period, including by a compromised upload token.
+- Configure lifecycle expiry after 120 days. Bucket-lock retention takes precedence, so objects remain locked for at least 90 days and then expire after the retention window.
+- The workflow checks both settings before starting a backup. Create a separate Cloudflare API token with R2 Storage Read permission and store it as `CLOUDFLARE_R2_LOCK_TOKEN`; it is used only to verify the lock configuration.
 - Monitor storage against the R2 free allowance (10 GB-month storage, 1 million Class A operations and 10 million Class B operations per month). If usage exceeds the free allowance, stop the job or reduce retention rather than incur charges.
 
 ### C. Add GitHub Actions configuration
@@ -53,10 +55,18 @@ Repository → Settings → Secrets and variables → Actions.
 - `R2_ACCOUNT_ID`: Cloudflare account ID.
 - `R2_BUCKET`: `ms-factory-db-backups`.
 
+Create the following bucket rules in Cloudflare R2 before enabling the workflow:
+
+- Bucket lock: prefix `database/ms-factory/`, retain for 90 days.
+- Lifecycle: prefix `database/ms-factory/`, expire after 120 days.
+
+The workflow will refuse to export or upload data if these rules are not present.
+
 **Secrets**
 - `SUPABASE_DB_URL`: the database connection string from Supabase Connect (use a dedicated database password; never paste it into chat).
 - `R2_ACCESS_KEY_ID`: bucket-scoped R2 key.
 - `R2_SECRET_ACCESS_KEY`: matching secret.
+- `CLOUDFLARE_R2_LOCK_TOKEN`: separate API token with R2 Storage Read permission for the bucket-lock configuration check.
 
 Never store the age private identity in GitHub. The private key stays offline for recovery.
 
