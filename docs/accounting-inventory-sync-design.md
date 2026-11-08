@@ -15,6 +15,25 @@ Status: investigation complete; implementation must remain gated until the data 
 - The client currently generates local numeric IDs and SKU values. Account IDs and item IDs are therefore not safe cross-device foreign keys without a stable mapping strategy.
 - Detail-record conflict handling stores a newer remote copy in `_cloudConflict`; it does not merge or apply it. This is a deliberate safety boundary that must be preserved.
 
+## Verified live production baseline (read-only inspection)
+
+A read-only aggregate inspection of the linked production project found:
+
+- The current `factory_state.state` contains 19 accounts and 3 products.
+- Its ledger contains 4 rows, all tagged `je`, but none has a `rid`. Their shape is the legacy opening-balance journal, not source-scoped transactions.
+- Its stock movement array contains 3 rows, all with reference `رصيد افتتاحي`, and none has `src` or `rid`. These are opening-stock baselines, not replayable transactions.
+- The snapshot currently has 0 sales/purchase documents, 0 production orders, 0 vouchers, and 0 waste records.
+- The 3 product records contain absolute variant quantities and item valuation. The live detail tables currently have no duplicate product SKUs, no duplicate product external IDs, and no products/customers/suppliers missing external IDs.
+
+**Consequence:** for the current factory, there are no historical source-scoped movements or ledger effects to backfill. The four legacy ledger rows and three opening movements must remain part of the opening baseline and must never be replayed as transactions. The first employee bootstrap needs an absolute stock baseline plus the opening ledger snapshot; future movements then use source-scoped effects.
+
+A pure helper pair has now been added to `js/cloud-sync.js`:
+
+- `buildStockBaseline(state)` creates a deterministic, sorted manifest of item external IDs, variants, absolute quantities, and valuation, and rejects duplicate IDs or invalid stock values.
+- `applyStockBaseline(state, manifest)` verifies the manifest checksum and validates every item before changing anything. It replaces absolute quantities (never adds deltas), is idempotent, refuses partial application if any referenced item is missing, and preserves non-stock fields and local-only items.
+
+These helpers are not yet wired into the live sync flow. The baseline must be published and versioned before employee devices use it; only then may post-baseline movement effects be applied as deltas.
+
 ## Non-negotiable correctness requirements
 
 1. **Idempotency:** retrying an upload or download must not duplicate ledger rows, movements, balances, or costs.
