@@ -63,7 +63,7 @@ jobs:
       AGE_IDENTITY: ${{ secrets.AGE_IDENTITY }}
       EXPECTED_QA_PROJECT_REF: bpkkzyjfkktkaadhmbdi
       FORBIDDEN_PRODUCTION_PROJECT_REF: yvrislcbbhtruwdnuooz
-      AGE_RECIPIENT: age1pge6k5nwg7pyz0ztp3gzrhp8h5g37dch2km2rr9sw88aqqr25dsstg643r
+      AGE_RECIPIENT: age1zfva448t0k2t9m9gdv078t62srjkzgrgxqumz9j68sjajtuvssdsvwga8f
     steps:
       - name: Checkout
         uses: actions/checkout@v4
