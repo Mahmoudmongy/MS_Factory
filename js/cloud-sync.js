@@ -329,7 +329,7 @@ async function uploadToTables(showAlert = false) {
     if (!profile) throw new Error("تعذر تحديد صلاحيات الحساب");
     const admin = profile.is_admin === true;
     const canWrite = key => admin || profile.permissions?.[key] === true;
-    if (!admin && !["customers", "suppliers", "invoices", "inventory", "production"].some(canWrite)) {
+    if (!admin && !["customers", "suppliers", "invoices", "inventory", "production", "settings"].some(canWrite)) {
       syncState = "idle"; drawAll();
       const msg = T("حسابك للعرض فقط أو لا توجد صلاحية مزامنة متاحة.", "This account is read-only or has no supported sync permission.");
       if (showAlert) alert(msg);
@@ -666,7 +666,7 @@ async function loadFromTablesMerge(isAuto = false) {
             reason: "concurrent_snapshot", remoteVersion, remoteUpdatedAt: snapshot.updated_at || null
           }));
           syncState = "conflict"; drawAll();
-          return "cloud snapshot conflict";
+          // Continue merging independent detail and source-scoped accounting rows.
         }
         if (restoreRemote) {
           try { localStorage.setItem("mgr6-backup-before-cloud-restore", localStorage.getItem("mgr6") || ""); }
@@ -684,7 +684,7 @@ async function loadFromTablesMerge(isAuto = false) {
       }
     }
 
-    if (!["customers","suppliers","invoices","inventory","production","reports"].some(canRead)) {
+    if (!["customers","suppliers","invoices","inventory","production","settings","reports"].some(canRead)) {
       return T("لا توجد صلاحيات لقراءة بيانات السحابة", "No permission to read cloud data");
     }
     // Preserve a rollback copy, then merge remote records without replacing local master data.
@@ -699,11 +699,14 @@ async function loadFromTablesMerge(isAuto = false) {
       canRead("invoices") ? supabase.from("returns").select("*").eq("user_id", owner) : Promise.resolve(emptyResult),
       canRead("invoices") ? supabase.from("vouchers").select("*").eq("user_id", owner) : Promise.resolve(emptyResult),
       canRead("production") ? supabase.from("production_orders").select("*").eq("user_id", owner) : Promise.resolve(emptyResult),
+      (canRead("invoices") || canRead("production") || canRead("settings"))
+        ? supabase.from("factory_accounting_state").select("source,payload,sync_version,updated_at").eq("user_id", owner)
+        : Promise.resolve(emptyResult),
     ]);
     const failed = results.find(r => r.error);
     if (failed) return isAuto ? "cloud read failed" : T("تعذر قراءة البيانات من السحابة: " + failed.error.message, "Cloud read failed: " + failed.error.message);
-    const [{ data: custs }, { data: supps }, { data: invs }, { data: prods }, { data: returns }, { data: vouchers }, { data: productionOrders }] = results;
-    if (!custs?.length && !supps?.length && !invs?.length && !prods?.length && !returns?.length && !vouchers?.length && !productionOrders?.length) {
+    const [{ data: custs }, { data: supps }, { data: invs }, { data: prods }, { data: returns }, { data: vouchers }, { data: productionOrders }, { data: accountingStates }] = results;
+    if (!custs?.length && !supps?.length && !invs?.length && !prods?.length && !returns?.length && !vouchers?.length && !productionOrders?.length && !accountingStates?.length && !localStorage.getItem("mgr6-cloud-snapshot-conflict")) {
       if (restoredSnapshot && isAuto) setTimeout(() => location.reload(), 500);
       return restoredSnapshot
         ? T("تمت استعادة نسخة المصنع الكاملة من السحابة", "Full factory backup restored from cloud")
@@ -721,7 +724,7 @@ async function loadFromTablesMerge(isAuto = false) {
       const m = mergeByKey(S.partners || [], cloudPartners, x => x.id || x.name);
       S.partners = m.arr; totalAdded += m.added;
     }
-    let recordConflicts = 0;
+    let recordConflicts = localStorage.getItem("mgr6-cloud-snapshot-conflict") ? 1 : 0;
     if (invs?.length) {
       const cloudDocs = invs
         .filter(inv => inv.raw && ["sale", "pur"].includes(inv.raw.t))
@@ -772,6 +775,67 @@ async function loadFromTablesMerge(isAuto = false) {
       const merged = mergeCloudRecords(S.po || [], cloudOrders);
       S.po = merged.arr; totalAdded += merged.added; recordConflicts += merged.conflicts;
     }
+
+    let accountingChanged = false;
+    for (const remote of (accountingStates || [])) {
+      const source = remote?.source;
+      if (!ACCOUNTING_SOURCES.includes(source) || !remote.payload || typeof remote.payload !== "object") continue;
+      const remotePayload = remote.payload;
+      const remoteVersion = Number(remote.sync_version || 1);
+      const localVersion = Number(localStorage.getItem(accountingVersionKey(source)) || 0);
+      const baseline = localStorage.getItem(accountingHashKey(source));
+      const localPayload = accountingPayloadForSource(S, source);
+      const localHash = accountingHash(localPayload);
+      const remoteHash = accountingHash(remotePayload);
+      const emptyLocal = !localPayload.ledger.length && !localPayload.movements.length
+        && !localPayload.work_orders.length && !localPayload.journal_entries.length;
+      let replaceRemote = false;
+      let conflict = false;
+
+      if (remoteVersion < localVersion) {
+        conflict = true;
+      } else if (remoteVersion === localVersion) {
+        if (localHash === remoteHash) {
+          localStorage.setItem(accountingVersionKey(source), String(remoteVersion));
+          localStorage.setItem(accountingHashKey(source), remoteHash);
+          localStorage.removeItem(accountingConflictKey(source));
+        } else if (baseline && localHash === baseline) {
+          conflict = true;
+        } else if (localVersion === 0 && emptyLocal) {
+          replaceRemote = true;
+        } else {
+          conflict = true;
+        }
+      } else if (localVersion === 0) {
+        if (emptyLocal || localHash === remoteHash) replaceRemote = true;
+        else conflict = true;
+      } else if (baseline && localHash === baseline) {
+        replaceRemote = true;
+      } else {
+        conflict = true;
+      }
+
+      if (replaceRemote) {
+        replaceAccountingPayload(S, source, remotePayload);
+        localStorage.setItem(accountingVersionKey(source), String(remoteVersion));
+        localStorage.setItem(accountingHashKey(source), remoteHash);
+        localStorage.removeItem(accountingConflictKey(source));
+        accountingChanged = true;
+        totalAdded += (remotePayload.ledger?.length || 0) + (remotePayload.movements?.length || 0)
+          + (remotePayload.work_orders?.length || 0) + (remotePayload.journal_entries?.length || 0);
+      } else if (conflict) {
+        localStorage.setItem(accountingConflictKey(source), JSON.stringify({
+          reason: "concurrent_accounting_snapshot",
+          source,
+          localVersion,
+          remoteVersion,
+          remoteUpdatedAt: remote.updated_at || null
+        }));
+        recordConflicts++;
+      }
+    }
+    if (accountingChanged) recalcAccountingInventory(S);
+
     if (prods?.length) {
       const cloudProducts = prods.map(p => {
         if (p.raw && typeof p.raw === "object" && !Array.isArray(p.raw)) {
