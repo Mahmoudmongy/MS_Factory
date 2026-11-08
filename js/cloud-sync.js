@@ -372,7 +372,7 @@ function normalizeSourceEffects(state) {
         if (!partner) { invalid.push({ sourceType: effect.sourceType, sourceId: effect.sourceId, reason: "unmapped_partner", partnerId: String(row.pid) }); return null; }
       }
       return {
-        date: row.d || null, timestamp: Number(row.ts || 0), reference: String(row.ref || ""),
+        date: row.d || null, timestamp, reference: String(row.ref || ""),
         description: String(row.desc || ""), accountCode: account.code, accountName: account.name,
         accountType: account.type, accountKey: account.key, accountIsCash: account.cash,
         accountCurrency: account.currency,
@@ -746,7 +746,7 @@ function buildStockBaseline(state) {
 function applyStockBaseline(state, baseline) {
   if (!state || typeof state !== "object" || !Array.isArray(state.items) ||
       !baseline || baseline.baselineVersion !== 1 || !Array.isArray(baseline.items) ||
-      !baseline.fingerprint || baseline.fingerprint !== stockBaselineFingerprint(baseline.items)) {
+      !baseline.fingerprint || (Array.isArray(baseline.invalid) && baseline.invalid.length > 0) || baseline.fingerprint !== stockBaselineFingerprint(baseline.items)) {
     return { applied: false, reason: "invalid_stock_baseline" };
   }
   const localById = new Map();
@@ -813,9 +813,11 @@ function buildFactoryBaseline(state) {
     const code = String(account.code).trim();
     if (accountCodes.has(code)) { invalid.push({ reason: "duplicate_account_code", code }); continue; }
     accountCodes.add(code);
+    const cash = Number(account.cash || 0);
+    if (!Number.isFinite(cash)) { invalid.push({ reason: "invalid_baseline_account_cash", code }); continue; }
     const row = {
       code, name: String(account.name || code), type: String(account.t || "A"),
-      key: String(account.k || ""), cash: Number(account.cash || 0),
+      key: String(account.k || ""), cash,
       currency: String(account.cur || "EGP")
     };
     accounts.push(row);
@@ -828,6 +830,7 @@ function buildFactoryBaseline(state) {
   for (const partner of Array.isArray(state?.partners) ? state.partners : []) {
     if (!partner || partner.id == null) continue;
     const externalId = String(partner.cloudId || partner.id);
+    if (!String(partner.name || "").trim()) { invalid.push({ reason: "invalid_baseline_partner_name", externalId }); continue; }
     if (partnerIds.has(externalId)) { invalid.push({ reason: "duplicate_partner_external_id", externalId }); continue; }
     partnerIds.add(externalId);
     const row = {
@@ -855,8 +858,8 @@ function buildFactoryBaseline(state) {
       partner = partnerById.get(String(row.pid));
       if (!partner) { invalid.push({ reason: "unmapped_opening_partner", partnerId: String(row.pid) }); continue; }
     }
-    const debit = Number(row.dr || 0), credit = Number(row.cr || 0), foreign = Number(row.fc || 0);
-    if (![debit, credit, foreign].every(Number.isFinite) || debit < 0 || credit < 0) {
+    const debit = Number(row.dr || 0), credit = Number(row.cr || 0), foreign = Number(row.fc || 0), timestamp = Number(row.ts || 0);
+    if (![debit, credit, foreign, timestamp].every(Number.isFinite) || debit < 0 || credit < 0) {
       invalid.push({ reason: "invalid_opening_ledger_amount" }); continue;
     }
     debitTotal += debit; creditTotal += credit;
@@ -881,18 +884,18 @@ function buildFactoryBaseline(state) {
   const openingMovements = [];
   for (const row of Array.isArray(state?.mv) ? state.mv : []) {
     if (row?.rid != null) continue;
-    if (String(row?.ref || "").trim() !== "رصيد افتتاحي") {
+    if (row?.src != null || String(row?.ref || "").trim() !== "رصيد افتتاحي") {
       invalid.push({ reason: "unclassified_legacy_stock_movement", reference: String(row?.ref || "") });
       continue;
     }
     const itemExternalId = itemById.get(String(row.iid));
     if (!itemExternalId) { invalid.push({ reason: "unmapped_opening_item", itemId: String(row.iid) }); continue; }
-    const quantity = Number(row.q || 0), value = Number(row.val || 0);
-    if (![quantity, value].every(Number.isFinite)) {
+    const quantity = Number(row.q || 0), value = Number(row.val || 0), timestamp = Number(row.ts || 0);
+    if (![quantity, value, timestamp].every(Number.isFinite)) {
       invalid.push({ reason: "invalid_opening_stock_amount" }); continue;
     }
     openingMovements.push({
-      date: row.d || null, timestamp: Number(row.ts || 0), itemExternalId,
+      date: row.d || null, timestamp, itemExternalId,
       variant: String(row.v || "-"), quantity, value, reference: String(row.ref || "")
     });
   }
@@ -909,7 +912,7 @@ function applyFactoryBaseline(state, baseline) {
       !baseline || baseline.baselineVersion !== 1 || !baseline.stock ||
       !Array.isArray(baseline.accounts) || !Array.isArray(baseline.partners) ||
       !Array.isArray(baseline.openingLedger) || !Array.isArray(baseline.openingMovements) ||
-      !baseline.fingerprint || baseline.fingerprint !== factoryBaselineFingerprint(baseline)) {
+      !baseline.fingerprint || (Array.isArray(baseline.stock?.invalid) && baseline.stock.invalid.length > 0) || baseline.fingerprint !== factoryBaselineFingerprint(baseline)) {
     return { applied: false, reason: "invalid_factory_baseline" };
   }
   const accounts = Array.isArray(state.accts) ? state.accts : [];
@@ -927,7 +930,7 @@ function applyFactoryBaseline(state, baseline) {
   const accountPlans = [];
   for (const row of baseline.accounts) {
     const code = String(row.code || "").trim();
-    if (!code || accountByCode.has(code) && String(accountByCode.get(code).name || "") !== String(row.name || "")) {
+    if (!code || accountByCode.has(code) && (String(accountByCode.get(code).name || "") !== String(row.name || "") || String(accountByCode.get(code).t || "A") !== String(row.type || "A"))) {
       return { applied: false, reason: "account_definition_conflict", code };
     }
     if (!accountByCode.has(code)) {
@@ -948,7 +951,15 @@ function applyFactoryBaseline(state, baseline) {
   for (const row of baseline.partners) {
     const externalId = String(row.externalId || "");
     if (!externalId) return { applied: false, reason: "invalid_baseline_partner" };
-    if (partnerByExternalId.has(externalId)) continue;
+    if (partnerByExternalId.has(externalId)) {
+      const existing = partnerByExternalId.get(externalId);
+      if (String(existing.name || "").trim().toLocaleLowerCase() !== String(row.name || "").trim().toLocaleLowerCase() ||
+          (row.phone && existing.phone && String(existing.phone).trim() !== String(row.phone).trim())) {
+        return { applied: false, reason: "partner_definition_conflict", externalId };
+      }
+      if (!existing.cloudId) partnerLinks.push({ local: existing, externalId });
+      continue;
+    }
     const name = String(row.name || "").trim().toLocaleLowerCase(), phone = String(row.phone || "").trim();
     const matches = partners.filter(p =>
       (name && String(p.name || "").trim().toLocaleLowerCase() === name) ||
