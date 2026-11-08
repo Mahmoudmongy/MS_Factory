@@ -99,7 +99,7 @@ jobs:
 
   backup:
     needs: b2-preflight
-    if: needs.b2-preflight.result == 'success' && ((github.event_name == 'schedule' && vars.BACKUP_ENABLED == 'true') || (github.event_name == 'workflow_dispatch' && inputs.run_backup == true && vars.BACKUP_ENABLED == 'true'))
+    if: needs.b2-preflight.result == 'success' && ((github.event_name == 'schedule' && vars.BACKUP_SCHEDULE_ENABLED == 'true') || (github.event_name == 'workflow_dispatch' && inputs.run_backup == true && vars.BACKUP_ENABLED == 'true'))
     runs-on: ubuntu-latest
     timeout-minutes: 45
     steps:
@@ -109,7 +109,7 @@ jobs:
       - name: Validate backup and encryption configuration
         env:
           SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
-          AGE_RECIPIENT: age1pge6k5nwg7pyz0ztp3gzrhp8h5g37dch2km2rr9sw88aqqr25dsstg643r
+          AGE_RECIPIENT: age1zfva448t0k2t9m9gdv078t62srjkzgrgxqumz9j68sjajtuvssdsvwga8f
         run: |
           set -euo pipefail
           for name in SUPABASE_DB_URL AGE_RECIPIENT; do
@@ -163,7 +163,7 @@ jobs:
 
       - name: Encrypt backup before upload
         env:
-          AGE_RECIPIENT: age1pge6k5nwg7pyz0ztp3gzrhp8h5g37dch2km2rr9sw88aqqr25dsstg643r
+          AGE_RECIPIENT: age1zfva448t0k2t9m9gdv078t62srjkzgrgxqumz9j68sjajtuvssdsvwga8f
         run: |
           set -euo pipefail
           age --encrypt --recipient "$AGE_RECIPIENT" --output ms-factory-db-backup.tar.gz.age ms-factory-db-backup.tar.gz
