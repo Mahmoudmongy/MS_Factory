@@ -69,6 +69,8 @@ The RPC must validate source categories, ownership, payload shape/size, and perm
 - Corrected the existing app-level `rev()` behavior: edits/deletions now scope reversals by both source type and ID. Previously, equal numeric IDs from different source categories could reverse unrelated accounting and stock effects.
 - Deleting a source now persists an offline tombstone in `mgr6-cloud-effect-tombstones` before local reversal, so a later sync can propagate the deletion.
 
+- Refined the draft read API to prevent role leakage: direct table reads are revoked. `get_source_effects()` returns full ledger + movement payloads only for source categories the role can read; inventory-only access receives movement arrays with ledger arrays redacted. The client planners and local apply helper now compare/apply only the visible sections, preserving hidden local ledger rows.
+
 ## Rollout sequence
 
 1. Add pure client helpers to collect and normalize effects by `(src,rid)`, without changing existing upload behavior.
