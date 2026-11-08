@@ -114,7 +114,29 @@ function openRef(src,id){if(src=="doc")inv(id);else if(src=="po")poView(id);else
 function editRef(src,id){if(!can("edit"))return;if(src=="doc")editDoc(id);else if(src=="vch")editV(id);else if(src=="po")editPO(id);else if(src=="je")editJ(id)}
 function refView(id){sh(`<div class="ph"><h3>تفاصيل الحركة</h3>${bk}</div>${lgTbl(srt(S.L.filter(l=>l.rid==id)),1)}`)}
 function delRef(src,id){if(!can("del"))return;sh(`<h3>تأكيد الحذف</h3><p>سيتم حذف الحركة وعكس أثرها على الحسابات والمخزون. لا يمكن التراجع.</p><div class="row"><button class="rd" onclick="delGo('${src}',${id})">نعم، احذف</button>${bk}</div>`)}
-function delGo(src,id){if(!can("del"))return;rev(id);if(src=="doc")S.docs=S.docs.filter(x=>x.id!=id);else if(src=="vch")S.vch=S.vch.filter(x=>x.id!=id);else if(src=="po")S.po=S.po.filter(x=>x.id!=id);else if(src=="je")S.je=S.je.filter(x=>x.id!=id);else if(src=="wo"){const w=S.wo.find(x=>x.id==id);if(w&&w.po){const o=S.po.find(x=>x.id==w.po);if(o)o.wc-=w.c}S.wo=S.wo.filter(x=>x.id!=id)}sv();toast("تم الحذف");cl()}
+function delGo(src,id){
+  if(!can("del"))return;
+  let table=null,record=null;
+  if(src==="doc"){
+    record=S.docs.find(x=>String(x.id)===String(id));
+    if(record&&["sale","pur"].includes(record.t))table="invoices";
+    else if(record&&["sret","pret"].includes(record.t))table="returns";
+  }else if(src==="vch"){record=S.vch.find(x=>String(x.id)===String(id));table="vouchers";}
+  else if(src==="po"){record=S.po.find(x=>String(x.id)===String(id));table="production_orders";}
+  if(table&&record){
+    if(typeof window.queueCloudDeletion==="function")window.queueCloudDeletion(table,record.id,record._cloudVersion||0,record);
+    else{
+      try{const key="mgr6-cloud-deletions",q=JSON.parse(localStorage.getItem(key)||"[]");q.push({table,externalId:String(record.id),expectedVersion:Number(record._cloudVersion||0),localCopy:record,queuedAt:new Date().toISOString()});localStorage.setItem(key,JSON.stringify(q.slice(-1000)))}catch(e){alert("تعذر حفظ طلب الحذف للمزامنة؛ لم يتم الحذف");return}
+    }
+  }
+  rev(id);
+  if(src==="doc")S.docs=S.docs.filter(x=>x.id!=id);
+  else if(src==="vch")S.vch=S.vch.filter(x=>x.id!=id);
+  else if(src==="po")S.po=S.po.filter(x=>x.id!=id);
+  else if(src==="je")S.je=S.je.filter(x=>x.id!=id);
+  else if(src==="wo"){const w=S.wo.find(x=>x.id==id);if(w&&w.po){const o=S.po.find(x=>x.id==w.po);if(o)o.wc-=w.c}S.wo=S.wo.filter(x=>x.id!=id)}
+  sv();toast("تم الحذف");cl()
+}
 function tpr(k){[TL.from,TL.to]=rng(k);render()}
 function vTl(){const l=[];S.docs.forEach(d=>l.push({ts:d.ts,s:"doc",id:d.id,t:TN[d.t],ref:d.no,w:pn(d.pid),amt:d.total,desc:d.note}));S.vch.forEach(v=>l.push({ts:v.ts,s:"vch",id:v.id,t:v.title,ref:v.no,w:v.who,amt:v.total,desc:v.desc}));S.po.forEach(o=>l.push({ts:o.ts,s:"po",id:o.id,t:"أمر إنتاج",ref:o.no,w:"",amt:poCost(o),desc:o.desc}));S.je.filter(j=>j.id).forEach(j=>l.push({ts:j.ts,s:"je",id:j.id,t:"قيد يومية",ref:j.no,w:"",amt:S.L.filter(x=>x.rid==j.id).reduce((a,x)=>a+x.dr,0),desc:j.desc}));S.wo.forEach(w=>l.push({ts:w.ts,s:"wo",id:w.id,t:"هالك مخزون",ref:w.ref,w:"",amt:w.c,desc:w.desc}));
  const rows=l.filter(x=>x.ts&&(!TL.from||lday(new Date(x.ts))>=TL.from)&&(!TL.to||lday(new Date(x.ts))<=TL.to)&&(!TL.k||x.s==TL.k)).sort((a,b)=>b.ts-a.ts);
