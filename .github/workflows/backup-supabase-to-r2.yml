@@ -52,6 +52,7 @@ jobs:
           CLOUDFLARE_R2_LOCK_TOKEN: ${{ secrets.CLOUDFLARE_R2_LOCK_TOKEN }}
           AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          CLOUDFLARE_R2_LOCK_TOKEN: ${{ secrets.CLOUDFLARE_R2_LOCK_TOKEN }}
         run: |
           set -euo pipefail
           lock_url="https://api.cloudflare.com/client/v4/accounts/${R2_ACCOUNT_ID}/r2/buckets/${R2_BUCKET}/lock"
@@ -129,10 +130,21 @@ jobs:
           set -euo pipefail
           export AWS_DEFAULT_REGION=auto
           endpoint="https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com"
-          current_bytes="$(aws s3 ls "s3://${R2_BUCKET}/" --recursive --endpoint-url "$endpoint" | awk '$3 ~ /^[0-9]+$/ { total += $3 } END { print total + 0 }')"
+          curl -fsS -H "Authorization: Bearer ${CLOUDFLARE_R2_LOCK_TOKEN}" \
+            "https://api.cloudflare.com/client/v4/accounts/${R2_ACCOUNT_ID}/r2/metrics" -o r2-metrics.json
+          jq -e '.success == true' r2-metrics.json >/dev/null
+          account_bytes="$(jq -er '((.result.standard.published.payloadSize // 0) + (.result.standard.published.metadataSize // 0) + (.result.standard.uploaded.payloadSize // 0) + (.result.standard.uploaded.metadataSize // 0)) | floor' r2-metrics.json)"
+          infrequent_objects="$(jq -er '((.result.infrequentAccess.published.objects // 0) + (.result.infrequentAccess.uploaded.objects // 0))' r2-metrics.json)"
+          current_bucket_bytes="$(aws s3 ls "s3://${R2_BUCKET}/" --recursive --endpoint-url "$endpoint" | awk '$3 ~ /^[0-9]+$/ { total += $3 } END { print total + 0 }')"
+          # Account metrics can lag briefly; never undercount the dedicated backup bucket.
+          used_bytes="$(( account_bytes > current_bucket_bytes ? account_bytes : current_bucket_bytes ))"
           new_bytes="$(($(stat -c%s ms-factory-db-backup.tar.gz.age) + $(stat -c%s ms-factory-db-backup.tar.gz.age.sha256)))"
-          if [ "$((current_bytes + new_bytes))" -gt 9000000000 ]; then
-            echo "::error::R2 backup storage would exceed the 9 GB safety ceiling for the 10 GB free allowance."
+          if [ "$infrequent_objects" -gt 0 ]; then
+            echo "::error::Infrequent Access R2 objects exist; that storage class has no free-tier allowance. Stop before uploading."
+            exit 1
+          fi
+          if [ "$((used_bytes + new_bytes))" -gt 9000000000 ]; then
+            echo "::error::Account-wide R2 Standard storage would exceed the 9 GB safety ceiling for the 10 GB free allowance."
             exit 1
           fi
           stamp="$(date -u +%Y/%m/%d/%H%M%S)"
