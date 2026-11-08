@@ -142,7 +142,6 @@ else
     --file roles.sql \
     --file schema.sql \
     --file migration-history-schema.sql \
-    --command 'SET session_replication_role = replica' \
     --file data.sql \
     --file auth-users.sql \
     --file migration-history.sql \
