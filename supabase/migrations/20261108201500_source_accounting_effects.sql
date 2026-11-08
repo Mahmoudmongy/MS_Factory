@@ -51,10 +51,16 @@ declare
   v_actor_id uuid := (select auth.uid());
   v_owner_id uuid;
   v_permission text;
+  v_can_write_ledger boolean;
+  v_can_write_movements boolean;
+  v_write_ledger boolean := false;
+  v_write_movements boolean := false;
   v_current_version integer;
   v_new_version integer;
   v_updated_at timestamptz;
   v_deleted_at timestamptz;
+  v_existing_payload jsonb;
+  v_merged_payload jsonb;
   v_debits numeric := 0;
   v_credits numeric := 0;
 begin
@@ -88,112 +94,128 @@ begin
     raise exception 'Invalid source effect identity or version' using errcode = '22023';
   end if;
 
-  if not private.can_access_factory_owner(v_owner_id, v_permission, true) then
-    raise exception 'Not authorized to write this source category' using errcode = '42501';
-  end if;
+  v_can_write_ledger := private.can_access_factory_owner(v_owner_id, v_permission, true);
+  v_can_write_movements := private.can_access_factory_owner(v_owner_id, 'inventory', true);
 
-  -- Version 1 writes are deliberately full-effect only. Until section-aware
-  -- server-side merging is implemented, reject redacted payloads rather than
-  -- allowing an inventory-only client to erase hidden financial ledger rows.
-  if not private.can_access_factory_owner(v_owner_id, 'inventory', true) then
-    raise exception 'Inventory write permission is required for a complete source effect' using errcode = '42501';
-  end if;
-  if not coalesce(p_deleted, false)
-     and (p_payload -> 'ledgerIncluded' is distinct from 'true'::jsonb
-          or p_payload -> 'movementsIncluded' is distinct from 'true'::jsonb) then
-    raise exception 'Partial source-effect writes are not enabled; hidden sections cannot be replaced' using errcode = '42501';
-  end if;
-
-  if coalesce(p_deleted, false) is false then
+  if coalesce(p_deleted, false) then
+    -- A tombstone removes both sections, so it requires permission for both.
+    if not v_can_write_ledger or not v_can_write_movements then
+      raise exception 'Deleting a complete source effect requires ledger and inventory write permissions'
+        using errcode = '42501';
+    end if;
+    p_payload := null;
+  else
     if p_payload is null
        or pg_catalog.jsonb_typeof(p_payload) <> 'object'
-       or pg_catalog.jsonb_typeof(p_payload -> 'ledger') is distinct from 'array'
-       or pg_catalog.jsonb_typeof(p_payload -> 'movements') is distinct from 'array'
        or p_payload ->> 'sourceType' is distinct from p_source_type
        or p_payload ->> 'sourceId' is distinct from p_source_id
-       or (pg_catalog.jsonb_array_length(p_payload -> 'ledger') = 0
-           and pg_catalog.jsonb_array_length(p_payload -> 'movements') = 0)
        or pg_catalog.octet_length(p_payload::text) > 1048576 then
       raise exception 'Invalid or oversized source effect payload' using errcode = '22023';
     end if;
 
-    if exists (
-      select 1
-        from pg_catalog.jsonb_array_elements(p_payload -> 'ledger') as x(value)
-       where nullif(pg_catalog.btrim(x.value ->> 'accountCode'), '') is null
-          or pg_catalog.jsonb_typeof(x.value -> 'debit') is distinct from 'number'
-          or pg_catalog.jsonb_typeof(x.value -> 'credit') is distinct from 'number'
-          or (x.value ->> 'debit')::numeric < 0
-          or (x.value ->> 'credit')::numeric < 0
-    ) then
-      raise exception 'Ledger rows require an account code and non-negative amounts' using errcode = '22023';
+    v_write_ledger := p_payload -> 'ledgerIncluded' = 'true'::jsonb;
+    v_write_movements := p_payload -> 'movementsIncluded' = 'true'::jsonb;
+
+    if not v_write_ledger and not v_write_movements then
+      raise exception 'At least one authorized source-effect section must be included'
+        using errcode = '42501';
+    end if;
+    if v_write_ledger and not v_can_write_ledger then
+      raise exception 'Not authorized to write this source ledger section' using errcode = '42501';
+    end if;
+    if v_write_movements and not v_can_write_movements then
+      raise exception 'Not authorized to write this source inventory section' using errcode = '42501';
     end if;
 
-    select coalesce(sum(coalesce((x.value ->> 'debit')::numeric, 0)), 0),
-           coalesce(sum(coalesce((x.value ->> 'credit')::numeric, 0)), 0)
-      into v_debits, v_credits
-      from pg_catalog.jsonb_array_elements(p_payload -> 'ledger') as x(value);
+    if v_write_ledger then
+      if pg_catalog.jsonb_typeof(p_payload -> 'ledger') is distinct from 'array' then
+        raise exception 'Included ledger section must be an array' using errcode = '22023';
+      end if;
+      if exists (
+        select 1
+          from pg_catalog.jsonb_array_elements(p_payload -> 'ledger') as x(value)
+         where nullif(pg_catalog.btrim(x.value ->> 'accountCode'), '') is null
+            or pg_catalog.jsonb_typeof(x.value -> 'debit') is distinct from 'number'
+            or pg_catalog.jsonb_typeof(x.value -> 'credit') is distinct from 'number'
+            or (x.value ->> 'debit')::numeric < 0
+            or (x.value ->> 'credit')::numeric < 0
+      ) then
+        raise exception 'Ledger rows require an account code and non-negative amounts' using errcode = '22023';
+      end if;
 
-    if pg_catalog.abs(v_debits - v_credits) > 0.005 then
-      raise exception 'Source ledger effect is not balanced' using errcode = '22023';
+      select coalesce(sum(coalesce((x.value ->> 'debit')::numeric, 0)), 0),
+             coalesce(sum(coalesce((x.value ->> 'credit')::numeric, 0)), 0)
+        into v_debits, v_credits
+        from pg_catalog.jsonb_array_elements(p_payload -> 'ledger') as x(value);
+
+      if pg_catalog.abs(v_debits - v_credits) > 0.005 then
+        raise exception 'Source ledger effect is not balanced' using errcode = '22023';
+      end if;
+
+      if exists (
+        select 1
+          from pg_catalog.jsonb_array_elements(p_payload -> 'ledger') as x(value)
+         where nullif(x.value ->> 'partnerExternalId', '') is not null
+           and not exists (
+             select 1 from public.customers as c
+              where c.user_id = v_owner_id and c.external_id = x.value ->> 'partnerExternalId'
+             union all
+             select 1 from public.suppliers as s
+              where s.user_id = v_owner_id and s.external_id = x.value ->> 'partnerExternalId'
+           )
+      ) then
+        raise exception 'Ledger effect references a partner not registered for this factory'
+          using errcode = '22023';
+      end if;
     end if;
 
-    if exists (
-      select 1
-        from pg_catalog.jsonb_array_elements(p_payload -> 'movements') as x(value)
-       where nullif(pg_catalog.btrim(x.value ->> 'itemExternalId'), '') is null
-          or nullif(pg_catalog.btrim(x.value ->> 'variant'), '') is null
-          or pg_catalog.jsonb_typeof(x.value -> 'quantity') is distinct from 'number'
-          or pg_catalog.jsonb_typeof(x.value -> 'value') is distinct from 'number'
-    ) then
-      raise exception 'Stock movements require stable item and variant identities' using errcode = '22023';
-    end if;
+    if v_write_movements then
+      if pg_catalog.jsonb_typeof(p_payload -> 'movements') is distinct from 'array' then
+        raise exception 'Included inventory section must be an array' using errcode = '22023';
+      end if;
+      if exists (
+        select 1
+          from pg_catalog.jsonb_array_elements(p_payload -> 'movements') as x(value)
+         where nullif(pg_catalog.btrim(x.value ->> 'itemExternalId'), '') is null
+            or nullif(pg_catalog.btrim(x.value ->> 'variant'), '') is null
+            or pg_catalog.jsonb_typeof(x.value -> 'quantity') is distinct from 'number'
+            or pg_catalog.jsonb_typeof(x.value -> 'value') is distinct from 'number'
+            or not exists (
+              select 1 from public.products as pr
+               where pr.user_id = v_owner_id
+                 and pr.external_id = x.value ->> 'itemExternalId'
+            )
+      ) then
+        raise exception 'Stock movements contain invalid values or an item not registered for this factory'
+          using errcode = '22023';
+      end if;
 
-    if exists (
-      select 1
-        from pg_catalog.jsonb_array_elements(p_payload -> 'movements') as x(value)
-       where not exists (
-         select 1 from public.products as pr
-          where pr.user_id = v_owner_id
-            and pr.external_id = x.value ->> 'itemExternalId'
-       )
-    ) then
-      raise exception 'Stock movement references an item not registered for this factory' using errcode = '22023';
+      if exists (
+        select 1
+          from pg_catalog.jsonb_array_elements(p_payload -> 'movements') as x(value)
+         where nullif(x.value ->> 'partnerExternalId', '') is not null
+           and not exists (
+             select 1 from public.customers as c
+              where c.user_id = v_owner_id and c.external_id = x.value ->> 'partnerExternalId'
+             union all
+             select 1 from public.suppliers as s
+              where s.user_id = v_owner_id and s.external_id = x.value ->> 'partnerExternalId'
+           )
+      ) then
+        raise exception 'Stock movement references a partner not registered for this factory'
+          using errcode = '22023';
+      end if;
     end if;
-
-    if exists (
-      select 1
-        from (
-          select value ->> 'partnerExternalId' as external_id
-            from pg_catalog.jsonb_array_elements(p_payload -> 'ledger')
-          union all
-          select value ->> 'partnerExternalId' as external_id
-            from pg_catalog.jsonb_array_elements(p_payload -> 'movements')
-        ) as refs
-       where nullif(refs.external_id, '') is not null
-         and not exists (
-           select 1 from public.customers as c
-            where c.user_id = v_owner_id and c.external_id = refs.external_id
-           union all
-           select 1 from public.suppliers as s
-            where s.user_id = v_owner_id and s.external_id = refs.external_id
-         )
-    ) then
-      raise exception 'Source effect references a partner not registered for this factory' using errcode = '22023';
-    end if;
-  else
-    p_payload := null;
   end if;
 
-  -- Serialize concurrent first-writes as well as updates to the same source key.
   perform pg_catalog.pg_advisory_xact_lock(
     pg_catalog.hashtextextended(
       v_owner_id::text || ':' || p_source_type || ':' || p_source_id, 0
     )
   );
 
-  select se.sync_version
-    into v_current_version
+  select se.sync_version, se.payload
+    into v_current_version, v_existing_payload
     from public.source_effects as se
    where se.user_id = v_owner_id
      and se.source_type = p_source_type
@@ -205,12 +227,20 @@ begin
       raise exception 'Source effect version conflict: expected a new source'
         using errcode = '40001';
     end if;
+    if not coalesce(p_deleted, false) then
+      v_merged_payload := pg_catalog.jsonb_build_object(
+        'sourceType', p_source_type,
+        'sourceId', p_source_id,
+        'ledger', case when v_write_ledger then p_payload -> 'ledger' else '[]'::jsonb end,
+        'movements', case when v_write_movements then p_payload -> 'movements' else '[]'::jsonb end
+      );
+    end if;
 
     insert into public.source_effects as se (
       user_id, source_type, source_id, sync_version, payload,
       deleted_at, updated_at, updated_by
     ) values (
-      v_owner_id, p_source_type, p_source_id, 1, p_payload,
+      v_owner_id, p_source_type, p_source_id, 1, v_merged_payload,
       case when p_deleted then pg_catalog.now() else null end,
       pg_catalog.now(), v_actor_id
     )
@@ -223,8 +253,19 @@ begin
         using errcode = '40001';
     end if;
 
+    if not coalesce(p_deleted, false) then
+      v_merged_payload := pg_catalog.jsonb_build_object(
+        'sourceType', p_source_type,
+        'sourceId', p_source_id,
+        'ledger', case when v_write_ledger then p_payload -> 'ledger'
+                       else coalesce(v_existing_payload -> 'ledger', '[]'::jsonb) end,
+        'movements', case when v_write_movements then p_payload -> 'movements'
+                          else coalesce(v_existing_payload -> 'movements', '[]'::jsonb) end
+      );
+    end if;
+
     update public.source_effects as se
-       set payload = p_payload,
+       set payload = v_merged_payload,
            deleted_at = case when p_deleted then pg_catalog.now() else null end,
            sync_version = se.sync_version + 1,
            updated_at = pg_catalog.now(),
@@ -234,6 +275,13 @@ begin
        and se.source_id = p_source_id
      returning se.sync_version, se.updated_at, se.deleted_at
        into v_new_version, v_updated_at, v_deleted_at;
+  end if;
+
+  if not coalesce(p_deleted, false)
+     and pg_catalog.jsonb_array_length(v_merged_payload -> 'ledger') = 0
+     and pg_catalog.jsonb_array_length(v_merged_payload -> 'movements') = 0 then
+    raise exception 'A source effect cannot be empty; use a tombstone to delete it'
+      using errcode = '22023';
   end if;
 
   sync_version := v_new_version;
