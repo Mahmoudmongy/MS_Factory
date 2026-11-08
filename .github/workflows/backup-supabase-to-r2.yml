@@ -76,7 +76,7 @@ jobs:
           npx --yes supabase@latest db dump --db-url "$SUPABASE_DB_URL" -f schema.sql
           npx --yes supabase@latest db dump --db-url "$SUPABASE_DB_URL" -f data.sql --use-copy --data-only
           # Supabase CLI deliberately excludes managed auth/storage schemas.
-          # Export only Auth users and identities separately; never export sessions/tokens.
+          # Export Auth users, identities and MFA recovery material; never export sessions/tokens.
           docker run --rm -v "$PWD:/backup" -e SUPABASE_DB_URL postgres:17-alpine sh -ec '
             pg_dump "$SUPABASE_DB_URL" --data-only --no-owner --no-privileges \
               --table=auth.users --table=auth.identities \
@@ -97,6 +97,8 @@ jobs:
           test -s schema.sql
           test -s data.sql
           test -s auth-users.sql
+          test -s auth-trigger.sql
+          sha256sum roles.sql schema.sql data.sql auth-users.sql auth-trigger.sql > database-files.sha256
           cat > manifest.txt <<EOF
           project=ms-factory
           created_utc=$(date -u +%Y-%m-%dT%H:%M:%SZ)
@@ -106,7 +108,7 @@ jobs:
           auth_user_count=$(cat auth-user-count.txt)
           encryption=age public-key recipient
           EOF
-          tar -czf ms-factory-db-backup.tar.gz roles.sql schema.sql data.sql auth-users.sql auth-trigger.sql backup-migrations backup-edge-functions manifest.txt storage-bucket-count.txt auth-user-count.txt
+          tar -czf ms-factory-db-backup.tar.gz roles.sql schema.sql data.sql auth-users.sql auth-trigger.sql backup-migrations backup-edge-functions database-files.sha256 manifest.txt storage-bucket-count.txt auth-user-count.txt
           sha256sum ms-factory-db-backup.tar.gz > ms-factory-db-backup.tar.gz.sha256
 
       - name: Encrypt backup before upload
