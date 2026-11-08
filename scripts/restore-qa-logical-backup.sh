@@ -72,20 +72,7 @@ if [[ "$migration_rows" != "0" ]]; then
   exit 1
 fi
 
-# Supabase's documented logical restore order. Keep the platform-managed auth,
-# storage, realtime and extension schemas owned by the target Supabase project.
-# Disable triggers for data loading to avoid firing auth/profile triggers twice.
-"${psql_cmd[@]}" --single-transaction \
-  --file roles.sql \
-  --file schema.sql \
-  --command 'SET session_replication_role = replica' \
-  --file data.sql \
-  --file auth-users.sql \
-  --file migration-history.sql
-
-# Recreate the source project's custom auth.users trigger after importing Auth rows.
-# The export contains function definitions and CREATE TRIGGER statements; make the
-# trigger portion repeatable on the QA target without altering Supabase-managed triggers.
+# Prepare an idempotent form of the exported custom Auth trigger before touching QA.
 python3 - <<'PY'
 import re
 from pathlib import Path
@@ -100,7 +87,19 @@ if not names:
 drops = "".join(f"DROP TRIGGER IF EXISTS {name} ON auth.users;\n" for name in dict.fromkeys(names))
 Path("auth-trigger-qa-idempotent.sql").write_text(drops + "\n" + source)
 PY
-"${psql_cmd[@]}" --single-transaction --file auth-trigger-qa-idempotent.sql
+
+# Supabase's documented logical restore order. Keep the platform-managed auth,
+# storage, realtime and extension schemas owned by the target Supabase project.
+# Disable triggers for data loading, then recreate the custom Auth trigger before
+# committing so any failure rolls the entire restore back atomically.
+"${psql_cmd[@]}" --single-transaction \
+  --file roles.sql \
+  --file schema.sql \
+  --command 'SET session_replication_role = replica' \
+  --file data.sql \
+  --file auth-users.sql \
+  --file migration-history.sql \
+  --file auth-trigger-qa-idempotent.sql
 
 # Verify every backed-up public table count, Auth row count, migration count,
 # RLS coverage, and the custom Auth trigger before declaring the restore successful.
