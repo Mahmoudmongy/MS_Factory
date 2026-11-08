@@ -157,6 +157,17 @@ ok('source-effect deletion uses queued tombstones and requires both sections bef
   cloud.includes('mgr6-cloud-effect-tombstones')&&cloud.includes('if (isDelete ? (!writeLedger || !writeMovements)')&&sourceEffectMigration.includes('Deleting a complete source effect requires ledger and inventory write permissions'));
 ok('source effects are downloaded after master data and opening baseline application',
   cloud.indexOf('const effectsResult = await supabase.rpc("get_source_effects")')>cloud.indexOf('for (const [sectionName, row, applySection]')&&cloud.indexOf('for (const [sectionName, row, applySection]')>cloud.indexOf('mergeCloudProducts(S.items'));
+
+const accountConflictTarget={accts:[{id:1,code:'1001',name:'الخزنة',t:'A',k:'bank',cash:1,cur:'EGP'}],partners:[],items:[{id:11,cloudId:'item-11',st:{'-':4},val:40}],L:[],mv:[]};
+const accountConflictBefore=JSON.stringify(accountConflictTarget);
+const accountConflictApply=applyAccountingBaselineSection?applyAccountingBaselineSection(accountConflictTarget,accountingSection):{applied:true};
+ok('accounting baseline refuses a same-code account with a conflicting definition without mutation',
+  !accountConflictApply.applied&&JSON.stringify(accountConflictTarget)===accountConflictBefore);
+const partnerRoleBaseline=buildFactoryBaseline({...factoryBaselineFixture,partners:[{...factoryBaselineFixture.partners[0],s:1}]});
+const partnerRoleTarget={accts:[],partners:[{id:501,name:'عميل افتتاحي',phone:'01000000000',c:1,s:0}],items:[{id:11,cloudId:'item-11',st:{'-':4},val:40}],L:[],mv:[]};
+const partnerRoleApply=applyFactoryBaseline?applyFactoryBaseline(partnerRoleTarget,partnerRoleBaseline):{applied:false};
+ok('accounting baseline merges customer/supplier roles when linking a known partner',
+  partnerRoleApply.applied&&partnerRoleTarget.partners[0].cloudId==='partner-31'&&partnerRoleTarget.partners[0].c===1&&partnerRoleTarget.partners[0].s===1);
 const productMergeStart=cloud.indexOf('function mergeCloudProducts(existing, incoming)');
 const productMergeEnd=cloud.indexOf('function mergeCloudInvoices(existing, incoming)',productMergeStart);
 const productMergeContext=vm.createContext({});
