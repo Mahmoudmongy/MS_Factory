@@ -1,8 +1,15 @@
 -- Narrow, RLS-protected production read models replace owner-executed views.
-DROP VIEW IF EXISTS public.production_catalog;
-DROP VIEW IF EXISTS public.production_factory_config;
+DO $
+BEGIN
+ IF EXISTS (SELECT 1 FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname='public' AND c.relname='production_catalog' AND c.relkind='v') THEN
+  EXECUTE 'DROP VIEW public.production_catalog';
+ END IF;
+ IF EXISTS (SELECT 1 FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname='public' AND c.relname='production_factory_config' AND c.relkind='v') THEN
+  EXECUTE 'DROP VIEW public.production_factory_config';
+ END IF;
+END $;
 
-CREATE TABLE public.production_catalog (
+CREATE TABLE IF NOT EXISTS public.production_catalog (
  user_id uuid NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
  external_id text NOT NULL, name text NOT NULL, sku text, model text,
  unit text NOT NULL DEFAULT 'قطعة', warehouse text, image_url text,
@@ -13,10 +20,11 @@ CREATE TABLE public.production_catalog (
 ALTER TABLE public.production_catalog ENABLE ROW LEVEL SECURITY;
 REVOKE ALL ON public.production_catalog FROM PUBLIC,anon,authenticated;
 GRANT SELECT ON public.production_catalog TO authenticated;
+DROP POLICY IF EXISTS production_catalog_select ON public.production_catalog;
 CREATE POLICY production_catalog_select ON public.production_catalog FOR SELECT TO authenticated
 USING(private.can_access_factory_owner(user_id,'production',false));
 
-CREATE TABLE public.production_factory_config (
+CREATE TABLE IF NOT EXISTS public.production_factory_config (
  user_id uuid PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
  accts jsonb NOT NULL DEFAULT '[]'::jsonb, codes jsonb NOT NULL DEFAULT '[]'::jsonb,
  curs jsonb NOT NULL DEFAULT '[]'::jsonb, warehouses jsonb NOT NULL DEFAULT '[]'::jsonb,
@@ -25,6 +33,7 @@ CREATE TABLE public.production_factory_config (
 ALTER TABLE public.production_factory_config ENABLE ROW LEVEL SECURITY;
 REVOKE ALL ON public.production_factory_config FROM PUBLIC,anon,authenticated;
 GRANT SELECT ON public.production_factory_config TO authenticated;
+DROP POLICY IF EXISTS production_factory_config_select ON public.production_factory_config;
 CREATE POLICY production_factory_config_select ON public.production_factory_config FOR SELECT TO authenticated
 USING(private.can_access_factory_owner(user_id,'production',false));
 
