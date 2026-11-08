@@ -23,7 +23,7 @@ SELECT * FROM public.sync_factory_detail('production_orders','qa-po-cas',0,
  '{"order_no":"QA-PO","item_name":"QA Fabric Order","status":"in_progress","breakdown":{},"total_cost":50,"raw":{"qa":true}}'::jsonb);
 SELECT * FROM public.sync_factory_accounting('production',0,
  '{"ledger":[{"a":"qa-cash","src":"po","rid":"qa-po-cas","dr":50,"cr":0},{"a":"qa-wip","src":"po","rid":"qa-po-cas","dr":0,"cr":50}],
- "movements":[{"iid":"qa-sync-item","v":"-","q":-5,"src":"po","rid":"qa-po-cas","d":"2026-11-08"}],
+ "movements":[{"iid":"qa-sync-item","v":"-","q":-5,"src":"po","rid":"qa-po-cas","d":"2026-11-09"}],
  "work_orders":[],"journal_entries":[]}'::jsonb);
 DO $$
 DECLARE q numeric;
@@ -38,7 +38,7 @@ END $$;
 -- Identical retry must be idempotent; editing -5 to -7 applies only delta -2.
 SELECT * FROM public.sync_factory_accounting('production',1,
  '{"ledger":[{"a":"qa-cash","src":"po","rid":"qa-po-cas","dr":50,"cr":0},{"a":"qa-wip","src":"po","rid":"qa-po-cas","dr":0,"cr":50}],
- "movements":[{"iid":"qa-sync-item","v":"-","q":-5,"src":"po","rid":"qa-po-cas","d":"2026-11-08"}],
+ "movements":[{"iid":"qa-sync-item","v":"-","q":-5,"src":"po","rid":"qa-po-cas","d":"2026-11-09"}],
  "work_orders":[],"journal_entries":[]}'::jsonb);
 DO $$ DECLARE q numeric; BEGIN
  SELECT i.quantity INTO q FROM public.inventory i JOIN public.products p ON p.id=i.product_id WHERE p.external_id='qa-sync-item' AND i.variant='-';
@@ -46,7 +46,7 @@ DO $$ DECLARE q numeric; BEGIN
 END $$;
 SELECT * FROM public.sync_factory_accounting('production',2,
  '{"ledger":[{"a":"qa-cash","src":"po","rid":"qa-po-cas","dr":70,"cr":0},{"a":"qa-wip","src":"po","rid":"qa-po-cas","dr":0,"cr":70}],
- "movements":[{"iid":"qa-sync-item","v":"-","q":-7,"src":"po","rid":"qa-po-cas","d":"2026-11-08"}],
+ "movements":[{"iid":"qa-sync-item","v":"-","q":-7,"src":"po","rid":"qa-po-cas","d":"2026-11-09"}],
  "work_orders":[],"journal_entries":[]}'::jsonb);
 DO $$
 DECLARE q numeric;
@@ -56,7 +56,7 @@ BEGIN
  BEGIN
   PERFORM * FROM public.sync_factory_accounting('production',2,
    '{"ledger":[{"a":"qa-cash","src":"po","rid":"qa-po-cas","dr":90,"cr":0},{"a":"qa-wip","src":"po","rid":"qa-po-cas","dr":0,"cr":90}],
-    "movements":[{"iid":"qa-sync-item","v":"-","q":-9,"src":"po","rid":"qa-po-cas","d":"2026-11-08"}],
+    "movements":[{"iid":"qa-sync-item","v":"-","q":-9,"src":"po","rid":"qa-po-cas","d":"2026-11-09"}],
     "work_orders":[],"journal_entries":[]}'::jsonb);
   RAISE EXCEPTION 'Stale production writer accepted';
  EXCEPTION WHEN SQLSTATE '40001' THEN NULL;
@@ -104,7 +104,7 @@ SELECT * FROM public.sync_factory_accounting('invoices',0,
   {"a":"qa-cash","src":"doc","rid":"qa-invoice-cas","dr":60,"cr":0},{"a":"qa-wip","src":"doc","rid":"qa-invoice-cas","dr":0,"cr":60},
   {"a":"qa-cash","src":"vch","rid":"qa-voucher-cas","dr":20,"cr":0},{"a":"qa-wip","src":"vch","rid":"qa-voucher-cas","dr":0,"cr":20},
   {"a":"qa-cash","src":"doc","rid":"qa-return-cas","dr":20,"cr":0},{"a":"qa-wip","src":"doc","rid":"qa-return-cas","dr":0,"cr":20}],
- "movements":[{"iid":"qa-sync-item","v":"-","q":-3,"src":"doc","rid":"qa-invoice-cas","d":"2026-11-08"}],
+ "movements":[{"iid":"qa-sync-item","v":"-","q":-3,"src":"doc","rid":"qa-invoice-cas","d":"2026-11-09"}],
  "work_orders":[],"journal_entries":[]}'::jsonb);
 DO $$
 DECLARE q numeric;
@@ -164,7 +164,7 @@ BEGIN
  EXCEPTION WHEN SQLSTATE '40001' THEN NULL; END;
 
  SELECT * INTO r FROM public.sync_factory_accounting('settings',0,
-  '{"ledger":[],"movements":[{"iid":"qa-sync-item","v":"-","q":10,"src":"je","rid":"qa-opening","d":"2026-11-08"}],"work_orders":[],"journal_entries":[{"id":"qa-opening"}]}'::jsonb);
+  '{"ledger":[],"movements":[{"iid":"qa-sync-item","v":"-","q":10,"src":"je","rid":"qa-opening","d":"2026-11-09"}],"work_orders":[],"journal_entries":[{"id":"qa-opening"}]}'::jsonb);
  SELECT i.quantity INTO q FROM public.inventory i JOIN public.products p ON p.id=i.product_id WHERE p.external_id='qa-sync-item' AND i.variant='-';
  IF q<>0 THEN RAISE EXCEPTION 'Admin opening stock expected zero after production and sale, got %',q; END IF;
  IF EXISTS(SELECT 1 FROM public.production_catalog WHERE external_id='qa-sync-item' AND quantity<>0) THEN RAISE EXCEPTION 'Production catalog not refreshed after admin stock movement'; END IF;
