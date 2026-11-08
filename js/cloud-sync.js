@@ -374,6 +374,57 @@ function planSourceEffectSync(state, remoteRows, versionMap, tombstones) {
 
 // Applies one already-conflict-checked canonical effect to a local cache.
 // The caller must first establish that product raw stock is not being double-counted.
+
+// Plans remote downloads without overwriting local edits or resurrecting tombstones.
+function planRemoteSourceEffectApply(state, remoteRows, versionMap) {
+  const normalized = normalizeSourceEffects(state);
+  const invalid = [...normalized.invalid];
+  const actions = [];
+  const conflicts = [];
+  const adoptedVersions = {};
+  const keyOf = (type, id) => JSON.stringify([String(type), String(id)]);
+  const versions = versionMap && typeof versionMap === "object" ? versionMap : {};
+  const local = new Map(normalized.effects.map(effect => [keyOf(effect.sourceType, effect.sourceId), effect]));
+  const seen = new Set();
+  for (const row of Array.isArray(remoteRows) ? remoteRows : []) {
+    if (!row || !["doc", "po", "vch", "je", "wo"].includes(row.source_type) || row.source_id == null) {
+      invalid.push({ reason: "invalid_remote_effect_identity" }); continue;
+    }
+    const key = keyOf(row.source_type, row.source_id);
+    if (seen.has(key)) { conflicts.push({ key, reason: "duplicate_remote_effect" }); continue; }
+    seen.add(key);
+    const remoteVersion = Number(row.sync_version || 0);
+    const localVersion = Number(versions[key] || 0);
+    if (!Number.isInteger(remoteVersion) || remoteVersion < 1) {
+      conflicts.push({ key, reason: "invalid_remote_version" }); continue;
+    }
+    const localEffect = local.get(key);
+    if (row.deleted_at) {
+      if (localEffect) conflicts.push({ key, reason: "remote_tombstone_conflicts_with_local_effect", localVersion, remoteVersion });
+      else if (localVersion > remoteVersion) conflicts.push({ key, reason: "remote_tombstone_is_stale", localVersion, remoteVersion });
+      else adoptedVersions[key] = remoteVersion;
+      continue;
+    }
+    const effect = row.payload;
+    if (!effect || effect.sourceType !== row.source_type || String(effect.sourceId) !== String(row.source_id) ||
+        !Array.isArray(effect.ledger) || !Array.isArray(effect.movements)) {
+      invalid.push({ key, reason: "invalid_remote_effect_payload" }); continue;
+    }
+    if (!localEffect) {
+      if (localVersion > 0) conflicts.push({ key, reason: "local_effect_missing_for_known_version", localVersion, remoteVersion });
+      else actions.push({ op: "apply", effect, version: remoteVersion });
+      continue;
+    }
+    if (stableJson(localEffect) !== stableJson(effect)) {
+      conflicts.push({ key, reason: "local_effect_differs_from_remote", localVersion, remoteVersion });
+    } else if (localVersion > remoteVersion) {
+      conflicts.push({ key, reason: "remote_effect_is_stale", localVersion, remoteVersion });
+    } else adoptedVersions[key] = remoteVersion;
+  }
+  if (invalid.length) return { actions: [], conflicts, adoptedVersions, invalid };
+  return { actions, conflicts, adoptedVersions, invalid };
+}
+
 function applyCanonicalSourceEffect(state, effect) {
   if (!state || typeof state !== "object" || !effect ||
       !["doc", "po", "vch", "je", "wo"].includes(effect.sourceType) ||
