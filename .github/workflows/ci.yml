@@ -24,9 +24,10 @@ jobs:
       - run: npm run build
       - name: Validate Cloudflare Workers bundle without deploying
         run: npx --yes wrangler@4 deploy --dry-run
-      - name: Parse browser and cloud-sync JavaScript
+      - name: Parse application and recovery scripts
         run: |
           node --check js/app.js
           node --check --input-type=module < js/cloud-sync.js
           node --check --input-type=module < js/accounting-sync-core.js
+          bash -n scripts/restore-supabase-from-backup.sh
       - run: npm test
