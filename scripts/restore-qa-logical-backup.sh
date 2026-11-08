@@ -92,8 +92,33 @@ for filename in ("roles.sql", "schema.sql", "migration-history-schema.sql"):
         '', text
     )
     text, n2 = re.subn(
-        r'(?im)^\s*GRANT\s+"postgres"\s+TO\s+"cli_login_postgres"[^;]*;\s*
+        r'(?im)^\s*GRANT\s+"postgres"\s+TO\s+"cli_login_postgres"[^;]*;\s*$',
+        '', text
+    )
+    text, n3 = re.subn(
+        r'(?im)^\s*(?:CREATE|ALTER)\s+ROLE\s+"?cli_login_postgres"?[^;]*;\s*$',
+        '', text
+    )
+    text, n4 = re.subn(
+        r'(?im)^\s*(?:GRANT|REVOKE)\s+[^;]*"cli_login_postgres"[^;]*;\s*$',
+        '', text
+    )
+    removed += n1 + n2 + n3 + n4
     path.write_text(text)
+
+# The fresh QA project has no supabase_migrations schema. Make the source dump
+# create it idempotently regardless of whether pg_dump included CREATE SCHEMA.
+history_path = Path("migration-history-schema.sql")
+history = history_path.read_text()
+history, schema_count = re.subn(
+    r'(?im)^\s*CREATE\s+SCHEMA(?:\s+IF\s+NOT\s+EXISTS)?\s+"?supabase_migrations"?\s*;\s*$',
+    'CREATE SCHEMA IF NOT EXISTS supabase_migrations;',
+    history
+)
+if schema_count == 0:
+    history = 'CREATE SCHEMA IF NOT EXISTS supabase_migrations;\n' + history
+history_path.write_text(history)
+
 print(f"Removed {removed} source-project-only Supabase role ownership/grant statements.")
 PY
 
