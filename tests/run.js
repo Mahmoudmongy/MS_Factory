@@ -20,6 +20,8 @@ ok('production colour/size labels and item names are escaped',/escapeHTML\(c\|\|
 ok('Excel sheet names and imported column headers are escaped',/escapeHTML\(WZ\.sheet\)/.test(app)&&/escapeHTML\(h\)/.test(app)&&/escapeHTML\(n\)/.test(app));
 ok('ledger account and partner labels are escaped before rendering',/escapeHTML\(an\(l\.a\)\)/.test(app)&&/escapeHTML\(pn\(l\.pid\)\)/.test(app));
 ok('persisted logo and uploaded document images pass through the safe image URL filter',/safeImageSrc\(S\.logo\)/.test(app)&&/safeImageSrc\(D\.img\)/.test(app));
+ok('report tables escape untrusted cells and only render explicitly marked internal links',/const cell=c=>c&&typeof c==="object"&&c.__msSafeHtml===true\?c.html:escapeHTML\(c\?\?"""\)/.test(app)&&/__msSafeHtml:true/.test(app));
+ok('print views sanitize the company logo, document image, invoice number and voucher account labels',/safeImageSrc\(S\.logo\)/.test(app)&&/safeImageSrc\(d\.img\)/.test(app)&&/escapeHTML\(no\|\|"""\)/.test(app)&&/escapeHTML\(an\(x\.a\)\)/.test(app));
 ok('customer/supplier rows expose permission-gated edit actions',app.includes('pForm(${c},${p.id})')&&app.includes('can("edit")'));
 ok('partner edit preserves the stable record ID and updates the existing object',app.includes('function saveP(id)')&&app.includes('if(old)Object.assign(old,data)'));
 ok('employee edit preserves the existing employee record',app.includes('function saveE(id)')&&app.includes('if(old)Object.assign(old,data)'));
@@ -118,6 +120,18 @@ const xssGeo=await p.evaluate(()=>{
   host.remove();delete S.geo[badGov];return {injected,literal};
 });
 ok('XSS payloads in governorate/city names remain inert text in the live DOM',!xssGeo.injected&&xssGeo.literal,xssGeo);
+const xssTables=await p.evaluate(()=>{
+ const bad='<img src=x onerror="window.__xss=3">';
+ const host=document.createElement('div');host.innerHTML=tb2(['field'],[[bad],[lk(bad,'void(0)')]]);
+ const tableInjected=!!host.querySelector('img');
+ const tableLiteral=(host.textContent.match(/<img/g)||[]).length===2;
+ const print=document.createElement('div');print.innerHTML=pw('sale',bad,bad,'');
+ const printInjected=!!print.querySelector('img');
+ const printLiteral=print.textContent.includes(bad);
+ return {tableInjected,tableLiteral,printInjected,printLiteral};
+});
+ok('XSS payloads in reports and print metadata remain inert text',!xssTables.tableInjected&&xssTables.tableLiteral&&!xssTables.printInjected&&xssTables.printLiteral,xssTables);
+
 
 const ev=(f,a)=>p.evaluate(()=>{SAVING=0}).then(()=>p.evaluate(f,a)),bal=()=>ev(()=>Math.abs(S.L.reduce((a,l)=>a+l.dr-l.cr,0))<.01);
 const scr=await ev(()=>allowed().map(t=>t[0]));for(const s of scr){await ev(x=>go(x),s)}ok(`all ${scr.length} screens render without errors`,errs.length==0,errs.slice(0,2));
