@@ -930,7 +930,14 @@ function applyFactoryBaseline(state, baseline) {
   const accountPlans = [];
   for (const row of baseline.accounts) {
     const code = String(row.code || "").trim();
-    if (!code || accountByCode.has(code) && (String(accountByCode.get(code).name || "") !== String(row.name || "") || String(accountByCode.get(code).t || "A") !== String(row.type || "A"))) {
+    const existingAccount = accountByCode.get(code);
+    if (!code || existingAccount && (
+      String(existingAccount.name || "") !== String(row.name || "") ||
+      String(existingAccount.t || "A") !== String(row.type || "A") ||
+      String(existingAccount.k || "") !== String(row.key || "") ||
+      Number(existingAccount.cash || 0) !== Number(row.cash || 0) ||
+      String(existingAccount.cur || "EGP") !== String(row.currency || "EGP")
+    )) {
       return { applied: false, reason: "account_definition_conflict", code };
     }
     if (!accountByCode.has(code)) {
@@ -957,7 +964,7 @@ function applyFactoryBaseline(state, baseline) {
           (row.phone && existing.phone && String(existing.phone).trim() !== String(row.phone).trim())) {
         return { applied: false, reason: "partner_definition_conflict", externalId };
       }
-      if (!existing.cloudId) partnerLinks.push({ local: existing, externalId });
+      partnerLinks.push({ local: existing, externalId, customer: row.customer, supplier: row.supplier });
       continue;
     }
     const name = String(row.name || "").trim().toLocaleLowerCase(), phone = String(row.phone || "").trim();
@@ -973,7 +980,7 @@ function applyFactoryBaseline(state, baseline) {
           (local.cloudId && String(local.cloudId) !== externalId)) {
         return { applied: false, reason: "partner_definition_conflict", externalId };
       }
-      partnerLinks.push({ local, externalId });
+      partnerLinks.push({ local, externalId, customer: row.customer, supplier: row.supplier });
       partnerByExternalId.set(externalId, local);
     } else {
       const partner = { id: nextPartnerId++, cloudId: externalId, name: row.name, phone: row.phone,
@@ -1035,7 +1042,11 @@ function applyFactoryBaseline(state, baseline) {
   if (!Array.isArray(state.partners)) state.partners = [];
   if (!Array.isArray(state.L)) state.L = [];
   if (!Array.isArray(state.mv)) state.mv = [];
-  partnerLinks.forEach(link => { link.local.cloudId = link.externalId; });
+  partnerLinks.forEach(link => {
+    link.local.cloudId = link.externalId;
+    link.local.c = Number(link.local.c || 0) === 1 || link.customer ? 1 : 0;
+    link.local.s = Number(link.local.s || 0) === 1 || link.supplier ? 1 : 0;
+  });
   state.accts.push(...accountPlans);
   state.partners.push(...partnerPlans);
   state.L.push(...ledgerPlans);
