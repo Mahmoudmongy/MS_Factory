@@ -144,13 +144,17 @@ jobs:
           region="${region%.backblazeb2.com}"
           export AWS_DEFAULT_REGION="$region"
           aws s3api get-object-retention --bucket "$B2_BUCKET" --key "$BACKUP_KEY" --endpoint-url "$B2_ENDPOINT" > "$RUNNER_TEMP/retention.json"
-          python3 - "$RUNNER_TEMP/retention.json" <<'PY'
+          for object_key in "$BACKUP_KEY" "$BACKUP_KEY.sha256"; do
+            aws s3api get-object-retention --bucket "$B2_BUCKET" --key "$object_key" --endpoint-url "$B2_ENDPOINT" > "$RUNNER_TEMP/retention.json"
+            python3 - "$RUNNER_TEMP/retention.json" "$object_key" <<'PY'
           import datetime, json, sys
           r = json.load(open(sys.argv[1]))["Retention"]
           until = datetime.datetime.fromisoformat(r["RetainUntilDate"].replace("Z", "+00:00"))
-          if r["Mode"] != "COMPLIANCE" or until < datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(days=1):
-              raise SystemExit("Backup object is not under active Compliance Object Lock.")
+          required = datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(days=89)
+          if r["Mode"] != "COMPLIANCE" or until < required:
+              raise SystemExit(f"Object {sys.argv[2]} is not protected by Compliance Object Lock for at least 89 more days.")
           PY
+          done
           aws s3 cp "s3://$B2_BUCKET/$BACKUP_KEY" "$RUNNER_TEMP/ms-factory-db-backup.tar.gz.age" --endpoint-url "$B2_ENDPOINT" --only-show-errors --no-progress
           aws s3 cp "s3://$B2_BUCKET/$BACKUP_KEY.sha256" "$RUNNER_TEMP/ms-factory-db-backup.tar.gz.age.sha256" --endpoint-url "$B2_ENDPOINT" --only-show-errors --no-progress
           (cd "$RUNNER_TEMP" && sha256sum --check ms-factory-db-backup.tar.gz.age.sha256)
@@ -161,16 +165,31 @@ jobs:
           age --decrypt --identity "$RUNNER_TEMP/age-identity.txt" \
             --output "$RUNNER_TEMP/ms-factory-db-backup.tar.gz" \
             "$RUNNER_TEMP/ms-factory-db-backup.tar.gz.age"
-          tar -tzf "$RUNNER_TEMP/ms-factory-db-backup.tar.gz" > "$RUNNER_TEMP/archive-files.txt"
-          python3 - "$RUNNER_TEMP/archive-files.txt" <<'PY'
-          import sys
-          for name in open(sys.argv[1]):
-              name = name.strip()
-              if not name or name.startswith("/") or ".." in name.split("/"):
-                  raise SystemExit("Unsafe path in backup archive.")
-          PY
           mkdir -p "$RUNNER_TEMP/ms-factory-restore"
-          tar -xzf "$RUNNER_TEMP/ms-factory-db-backup.tar.gz" -C "$RUNNER_TEMP/ms-factory-restore"
+          python3 - "$RUNNER_TEMP/ms-factory-db-backup.tar.gz" "$RUNNER_TEMP/ms-factory-restore" <<'PY'
+          import pathlib, sys, tarfile
+          archive, destination = pathlib.Path(sys.argv[1]), pathlib.Path(sys.argv[2])
+          required = {
+              "roles.sql", "schema.sql", "data.sql", "auth-users.sql",
+              "migration-history-schema.sql", "migration-history.sql", "auth-trigger.sql",
+              "auth-row-counts.txt", "public-row-counts.txt", "database-files.sha256",
+              "manifest.txt", "storage-bucket-count.txt", "auth-user-count.txt", "migration-count.txt",
+          }
+          seen = set()
+          with tarfile.open(archive, "r:gz") as tar:
+              members = tar.getmembers()
+              for member in members:
+                  name = pathlib.PurePosixPath(member.name)
+                  if (name.is_absolute() or not member.name or ".." in name.parts
+                      or str(name) in ("", ".") or member.name in seen):
+                      raise SystemExit(f"Unsafe or duplicate archive path: {member.name!r}")
+                  seen.add(member.name)
+                  if not (member.isfile() or member.isdir()):
+                      raise SystemExit(f"Unsupported archive entry type: {member.name!r}")
+              if not required.issubset(seen):
+                  raise SystemExit("Backup archive is missing required restore files.")
+              tar.extractall(destination, members=members)
+          PY
           cd "$RUNNER_TEMP/ms-factory-restore"
           sha256sum --check --status database-files.sha256
           grep -qx 'project=ms-factory' <(grep '^project=' manifest.txt)
