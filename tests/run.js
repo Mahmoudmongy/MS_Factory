@@ -53,13 +53,15 @@ ok('sync toolbar is removed but conflict recovery remains reachable from the con
 const collectorStart=cloud.indexOf('function collectSourceEffects(state)');
 const collectorEnd=cloud.indexOf('// ===== الرفع مرة واحدة',collectorStart);
 const effectHelpersContext=vm.createContext({});
-let collectSourceEffects=null, normalizeSourceEffects=null, planSourceEffectSync=null, applyCanonicalSourceEffect=null, planRemoteSourceEffectApply=null, buildStockBaseline=null, applyStockBaseline=null, buildFactoryBaseline=null, applyFactoryBaseline=null, applyInventoryBaselineSection=null, applyAccountingBaselineSection=null;
+let collectSourceEffects=null, normalizeSourceEffects=null, planSourceEffectSync=null, applyCanonicalSourceEffect=null, removeCanonicalSourceEffect=null, removeSourceDocument=null, planRemoteSourceEffectApply=null, buildStockBaseline=null, applyStockBaseline=null, buildFactoryBaseline=null, applyFactoryBaseline=null, applyInventoryBaselineSection=null, applyAccountingBaselineSection=null;
 try {
-  vm.runInContext(cloud.slice(collectorStart,collectorEnd)+';this.collectSourceEffects=collectSourceEffects;this.normalizeSourceEffects=normalizeSourceEffects;this.planSourceEffectSync=planSourceEffectSync;this.applyCanonicalSourceEffect=applyCanonicalSourceEffect;this.planRemoteSourceEffectApply=planRemoteSourceEffectApply;this.buildStockBaseline=buildStockBaseline;this.applyStockBaseline=applyStockBaseline;this.buildFactoryBaseline=buildFactoryBaseline;this.applyFactoryBaseline=applyFactoryBaseline;this.applyInventoryBaselineSection=applyInventoryBaselineSection;this.applyAccountingBaselineSection=applyAccountingBaselineSection;',effectHelpersContext);
+  vm.runInContext(cloud.slice(collectorStart,collectorEnd)+';this.collectSourceEffects=collectSourceEffects;this.normalizeSourceEffects=normalizeSourceEffects;this.planSourceEffectSync=planSourceEffectSync;this.applyCanonicalSourceEffect=applyCanonicalSourceEffect;this.removeCanonicalSourceEffect=removeCanonicalSourceEffect;this.removeSourceDocument=removeSourceDocument;this.planRemoteSourceEffectApply=planRemoteSourceEffectApply;this.buildStockBaseline=buildStockBaseline;this.applyStockBaseline=applyStockBaseline;this.buildFactoryBaseline=buildFactoryBaseline;this.applyFactoryBaseline=applyFactoryBaseline;this.applyInventoryBaselineSection=applyInventoryBaselineSection;this.applyAccountingBaselineSection=applyAccountingBaselineSection;',effectHelpersContext);
   collectSourceEffects=effectHelpersContext.collectSourceEffects;
   normalizeSourceEffects=effectHelpersContext.normalizeSourceEffects;
   planSourceEffectSync=effectHelpersContext.planSourceEffectSync;
   applyCanonicalSourceEffect=effectHelpersContext.applyCanonicalSourceEffect;
+  removeCanonicalSourceEffect=effectHelpersContext.removeCanonicalSourceEffect;
+  removeSourceDocument=effectHelpersContext.removeSourceDocument;
   planRemoteSourceEffectApply=effectHelpersContext.planRemoteSourceEffectApply;
   buildStockBaseline=effectHelpersContext.buildStockBaseline;
   applyStockBaseline=effectHelpersContext.applyStockBaseline;
@@ -312,6 +314,14 @@ const localDiff=planRemoteSourceEffectApply?planRemoteSourceEffectApply({...cano
 ok('remote planner preserves local edits as conflicts instead of overwriting them',localDiff.actions.length===0&&localDiff.conflicts.some(x=>x.reason==='local_effect_differs_from_remote'));
 const remoteDeletedAbsent=planRemoteSourceEffectApply?planRemoteSourceEffectApply(localWithoutEffect,[{...sameRemote,deleted_at:'2026-11-08T00:00:00Z',payload:null}],{}):{adoptedVersions:{}};
 ok('remote planner adopts tombstones when the local source is already absent',remoteDeletedAbsent.adoptedVersions['["doc","91"]']===3&&remoteDeletedAbsent.actions.length===0);
+const remoteDeletePlan=planRemoteSourceEffectApply?planRemoteSourceEffectApply(canonicalFixture,[{...sameRemote,deleted_at:'2026-11-08T00:00:00Z',payload:null}],{'["doc","91"]':3}):{actions:[],conflicts:[{}]};
+ok('remote tombstone schedules a safe reversal when the local effect version is known',
+  remoteDeletePlan.actions.length===1&&remoteDeletePlan.actions[0].op==='delete'&&remoteDeletePlan.actions[0].version===3);
+const remoteDeleteState={...canonicalFixture,docs:[{id:91,no:'S-1'}],L:canonicalFixture.L.map(x=>({...x})),mv:canonicalFixture.mv.map(x=>({...x})),items:canonicalFixture.items.map(x=>({...x,st:{...x.st}}))};
+const remoteDeleteReversal=removeCanonicalSourceEffect?removeCanonicalSourceEffect(remoteDeleteState,normalized.effects[0]):{applied:false};
+const remoteDeleteDocument=removeSourceDocument?removeSourceDocument(remoteDeleteState,'doc','91'):{applied:false};
+ok('remote tombstone reverses stock and ledger effects and removes the deleted local document',
+  remoteDeleteReversal.applied&&remoteDeleteState.items[0].st['أبيض']===12&&remoteDeleteState.L.length===0&&remoteDeleteState.mv.length===0&&remoteDeleteDocument.applied&&remoteDeleteState.docs.length===0);
 const movementOnlyPayload={sourceType:'doc',sourceId:'91',ledgerIncluded:false,movementsIncluded:true,ledger:[],movements:normalized.effects[0].movements};
 const movementOnlyRemote={...sameRemote,payload:movementOnlyPayload};
 const partialDownload=planRemoteSourceEffectApply?planRemoteSourceEffectApply(canonicalFixture,[movementOnlyRemote],{}):{conflicts:[{}]};
