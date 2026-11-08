@@ -406,6 +406,12 @@ async function syncQueuedDeletions(owner, profile, errors) {
   let changed = false;
   const keep = [];
   for (const item of queue) {
+    const existingConflict = conflicts.find(x => x.table === item.table && String(x.externalId) === String(item.externalId));
+    if (existingConflict) {
+      keep.push(item);
+      errors.push("delete " + item.table + " " + item.externalId + ": unresolved cloud deletion conflict");
+      continue;
+    }
     const permission = item.table === "production_orders" ? "production" : "invoices";
     if (!canWrite(permission)) { keep.push(item); continue; }
     const { data, error } = await supabase.rpc("delete_factory_detail", {
@@ -938,7 +944,9 @@ async function uploadToTables(showAlert = false) {
       Object.getPrototypeOf(localStorage).setItem.call(localStorage, "mgr6", JSON.stringify(S));
       const hasMasterConflict = (S.partners || []).some(p => p?._cloudCustomersConflict || p?._cloudSuppliersConflict)
         || (S.items || []).some(p => p?._cloudProductsConflict);
-      syncState = (localStorage.getItem("mgr6-cloud-snapshot-conflict") || hasAccountingConflicts() || hasMasterConflict) ? "conflict" : "idle"; drawAll();
+      let hasDeleteConflict = false;
+      try { hasDeleteConflict = JSON.parse(localStorage.getItem(CLOUD_DELETE_CONFLICT_KEY) || "[]").length > 0; } catch(e) {}
+      syncState = (localStorage.getItem("mgr6-cloud-snapshot-conflict") || hasAccountingConflicts() || hasMasterConflict || hasDeleteConflict) ? "conflict" : "idle"; drawAll();
       const msg = (snapshotError
         ? T("فشل حفظ النسخة الكاملة وبعض الجداول:\n", "Full backup and some table writes failed:\n")
         : T("بعض عمليات المزامنة فشلت:\n", "Some sync operations failed:\n")) + errors.join("\n");
