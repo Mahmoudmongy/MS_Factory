@@ -725,7 +725,7 @@ async function loadFromTablesMerge(isAuto = false) {
     const failed = results.find(r => r.error);
     if (failed) return isAuto ? "cloud read failed" : T("تعذر قراءة البيانات من السحابة: " + failed.error.message, "Cloud read failed: " + failed.error.message);
     const [{ data: custs }, { data: supps }, { data: invs }, { data: prods }, { data: returns }, { data: vouchers }, { data: productionOrders }, { data: accountingStates }, { data: productionConfigs }] = results;
-    if (!custs?.length && !supps?.length && !invs?.length && !prods?.length && !returns?.length && !vouchers?.length && !productionOrders?.length && !accountingStates?.length && !localStorage.getItem("mgr6-cloud-snapshot-conflict")) {
+    if (!custs?.length && !supps?.length && !invs?.length && !prods?.length && !returns?.length && !vouchers?.length && !productionOrders?.length && !accountingStates?.length && !productionConfigs?.length && !localStorage.getItem("mgr6-cloud-snapshot-conflict")) {
       if (restoredSnapshot && isAuto) setTimeout(() => location.reload(), 500);
       return restoredSnapshot
         ? T("تمت استعادة نسخة المصنع الكاملة من السحابة", "Full factory backup restored from cloud")
