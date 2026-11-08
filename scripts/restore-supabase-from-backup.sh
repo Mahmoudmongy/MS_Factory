@@ -80,7 +80,7 @@ values = {
 }
 with open(sys.argv[2], "w", encoding="utf-8") as f:
     for key, value in values.items():
-        f.write("export " + key + "=" + shlex.quote(value) + "\\n")
+        f.write("export " + key + "=" + shlex.quote(value) + "\n")
 PY
 chmod 600 "$work/pg_env.sh"
 source "$work/pg_env.sh"
