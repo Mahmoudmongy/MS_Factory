@@ -52,9 +52,9 @@ ok('sync toolbar is removed but conflict recovery remains reachable from the con
 const collectorStart=cloud.indexOf('function collectSourceEffects(state)');
 const collectorEnd=cloud.indexOf('// ===== الرفع مرة واحدة',collectorStart);
 const effectHelpersContext=vm.createContext({});
-let collectSourceEffects=null, normalizeSourceEffects=null, planSourceEffectSync=null, applyCanonicalSourceEffect=null, planRemoteSourceEffectApply=null, buildStockBaseline=null, applyStockBaseline=null;
+let collectSourceEffects=null, normalizeSourceEffects=null, planSourceEffectSync=null, applyCanonicalSourceEffect=null, planRemoteSourceEffectApply=null, buildStockBaseline=null, applyStockBaseline=null, buildFactoryBaseline=null, applyFactoryBaseline=null;
 try {
-  vm.runInContext(cloud.slice(collectorStart,collectorEnd)+';this.collectSourceEffects=collectSourceEffects;this.normalizeSourceEffects=normalizeSourceEffects;this.planSourceEffectSync=planSourceEffectSync;this.applyCanonicalSourceEffect=applyCanonicalSourceEffect;this.planRemoteSourceEffectApply=planRemoteSourceEffectApply;this.buildStockBaseline=buildStockBaseline;this.applyStockBaseline=applyStockBaseline;',effectHelpersContext);
+  vm.runInContext(cloud.slice(collectorStart,collectorEnd)+';this.collectSourceEffects=collectSourceEffects;this.normalizeSourceEffects=normalizeSourceEffects;this.planSourceEffectSync=planSourceEffectSync;this.applyCanonicalSourceEffect=applyCanonicalSourceEffect;this.planRemoteSourceEffectApply=planRemoteSourceEffectApply;this.buildStockBaseline=buildStockBaseline;this.applyStockBaseline=applyStockBaseline;this.buildFactoryBaseline=buildFactoryBaseline;this.applyFactoryBaseline=applyFactoryBaseline;',effectHelpersContext);
   collectSourceEffects=effectHelpersContext.collectSourceEffects;
   normalizeSourceEffects=effectHelpersContext.normalizeSourceEffects;
   planSourceEffectSync=effectHelpersContext.planSourceEffectSync;
@@ -62,6 +62,8 @@ try {
   planRemoteSourceEffectApply=effectHelpersContext.planRemoteSourceEffectApply;
   buildStockBaseline=effectHelpersContext.buildStockBaseline;
   applyStockBaseline=effectHelpersContext.applyStockBaseline;
+  buildFactoryBaseline=effectHelpersContext.buildFactoryBaseline;
+  applyFactoryBaseline=effectHelpersContext.applyFactoryBaseline;
 } catch(e) {}
 const stockBaselineFixture={
   wh:[{id:1,name:'المخزن الرئيسي'}],
@@ -87,6 +89,36 @@ const baselineMissing=applyStockBaseline?applyStockBaseline(baselineMissingTarge
 ok('stock baseline refuses partial application when an item is missing',!baselineMissing.applied&&JSON.stringify(baselineMissingTarget)===baselineBefore);
 const tamperedBaseline={...stockBaseline,items:stockBaseline.items.map(x=>({...x,value:x.value+1}))};
 ok('stock baseline rejects a modified manifest checksum',!applyStockBaseline(baselineTarget,tamperedBaseline).applied);
+const factoryBaselineFixture={
+  wh:[{id:1,name:'المخزن الرئيسي'}],
+  accts:[{id:1,code:'1001',name:'الخزنة',t:'A',k:'cash',cash:1,cur:'EGP'},{id:2,code:'1100',name:'العملاء',t:'A',k:'ar',cash:0,cur:'EGP'}],
+  partners:[{id:31,cloudId:'partner-31',name:'عميل افتتاحي',phone:'01000000000',c:1,s:0}],
+  items:[{id:11,cloudId:'item-11',sku:'FB011',name:'قماش',unit:'متر',wh:1,st:{'-':5},val:50}],
+  L:[
+    {src:'je',d:'2026-11-01',ts:1,ref:'JE-0001',desc:'رصيد افتتاحي',a:1,dr:100,cr:0,pid:0,fc:0},
+    {src:'je',d:'2026-11-01',ts:1,ref:'JE-0001',desc:'رصيد افتتاحي',a:2,dr:0,cr:100,pid:31,fc:0}
+  ],
+  mv:[{d:'2026-11-01',ts:1,iid:11,v:'-',q:5,val:50,ref:'رصيد افتتاحي',pid:0}]
+};
+const factoryBaseline=buildFactoryBaseline?buildFactoryBaseline(factoryBaselineFixture):{invalid:[{}]};
+ok('factory baseline captures opening ledger, opening stock history, accounts and partners',factoryBaseline.invalid.length===0&&factoryBaseline.openingLedger.length===2&&factoryBaseline.openingMovements.length===1&&factoryBaseline.accounts.length===2);
+ok('factory baseline refuses non-opening legacy ledger rows',buildFactoryBaseline({...factoryBaselineFixture,L:[{src:'je',desc:'قيد غير مصنف',a:1,dr:1,cr:1}]}).invalid.some(x=>x.reason==='unclassified_legacy_ledger_row'));
+ok('factory baseline refuses source effects that were not backfilled',buildFactoryBaseline({...factoryBaselineFixture,L:[...factoryBaselineFixture.L,{src:'doc',rid:99,a:1,dr:1,cr:1}]}).invalid.some(x=>x.reason==='source_effects_require_backfill_before_baseline'));
+const factoryTarget={
+  accts:[{id:1,code:'1001',name:'الخزنة',t:'A',k:'cash',cash:1,cur:'EGP'}],
+  partners:[{id:501,name:'عميل افتتاحي',phone:'01000000000',c:1,s:0}],
+  items:[{id:999,cloudId:'item-11',st:{'-':0},val:0}],
+  L:[],mv:[]
+};
+const factoryApply1=applyFactoryBaseline?applyFactoryBaseline(factoryTarget,factoryBaseline):{applied:false};
+const factoryApply2=applyFactoryBaseline?applyFactoryBaseline(factoryTarget,factoryBaseline):{applied:false};
+ok('factory baseline creates missing account, links partner and imports opening ledger',factoryApply1.applied&&factoryTarget.accts.length===2&&factoryTarget.partners[0].cloudId==='partner-31'&&factoryTarget.L.length===2);
+ok('factory baseline restores opening stock and movement history without double-counting',factoryApply1.applied&&factoryTarget.items[0].st['-']===5&&factoryTarget.mv.length===1);
+ok('factory baseline reapplication is idempotent',factoryApply2.applied&&factoryTarget.L.length===2&&factoryTarget.mv.length===1&&factoryTarget.items[0].st['-']===5);
+const missingFactoryTarget={accts:[],partners:[],items:[],L:[],mv:[]};
+const missingFactoryBefore=JSON.stringify(missingFactoryTarget);
+const missingFactoryApply=applyFactoryBaseline?applyFactoryBaseline(missingFactoryTarget,factoryBaseline):{applied:true};
+ok('factory baseline refuses partial restore when a product is missing',!missingFactoryApply.applied&&JSON.stringify(missingFactoryTarget)===missingFactoryBefore);
 const productMergeStart=cloud.indexOf('function mergeCloudProducts(existing, incoming)');
 const productMergeEnd=cloud.indexOf('function mergeCloudInvoices(existing, incoming)',productMergeStart);
 const productMergeContext=vm.createContext({});
