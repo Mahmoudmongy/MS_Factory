@@ -116,3 +116,19 @@ Executed 26 focused helper/static checks directly against the branch files: **26
 - No secrets, auth settings, or RLS policy changes.
 - No automatic application of remote ledger/movement effects to a local cache.
 - No enabling automated backups or changing deployment settings.
+
+## Next implementation gate — immutable, permission-split baseline RPC
+
+The pure `buildFactoryBaseline` / `applyFactoryBaseline` pair is a **full administrator bootstrap helper**, not a safe employee-facing API. Do not return its full object to a role-limited employee. The server contract must split the baseline into independently readable sections:
+
+- **Inventory section:** absolute stock manifest (`baseline.stock`) plus opening movement history. Reading requires `inventory` read access. Applying the absolute manifest replaces quantities; opening movement rows are imported as history only and must never be replayed as quantity deltas.
+- **Accounting section:** account definitions, partner identities, and opening ledger lines. Reading requires the finance/accounting permission selected by the actual permission model (currently `settings` is the only verified permission key for manual journal access). Do not infer finance access from inventory access. Opening ledger must remain balanced.
+- **Publication:** one immutable version-1 row per factory owner, inserted once by the owner/admin only. The RPC must require expected version 0, reject any existing baseline, validate all item/account/partner references against already-synced master records, reject source-scoped effects that have not been backfilled, and validate the opening journal debit/credit equality. No update or delete RPC is provided.
+- **Read:** one RPC returns only the requested authorized section and its section fingerprint/version. A caller with both permissions may make two calls; neither section may contain the other section's data. Do not use the combined `applyFactoryBaseline` helper on employee data.
+- **Integrity:** the existing FNV fingerprint is a deterministic corruption check only. Authorization, immutable publication, and database-side structural/reference validation are the security boundary. Never treat the fingerprint as authentication.
+- **Rollout order:** sync master products/partners first; owner publishes baseline once; authorized clients download and apply their section idempotently; only then enable post-baseline `source_effects` reads/writes. A failed or partial section apply must leave the local state unchanged and must not advance its section cursor.
+- **Concurrency:** baseline publication and each source effect use optimistic versions. A version conflict is retained as a conflict for reconciliation; never silently overwrite local work or retry with a newer expected version.
+
+### Current implementation status
+
+This RPC contract is specified here but **not implemented or applied**. The current PR migration only drafts source-effect RPCs; it does not create the immutable baseline store or publish/read RPCs. The current full baseline helper is not wired into `loadFromTablesMerge` or `uploadToTables`. The source-effect write RPC intentionally remains full-effect-only until server-side section merging exists. Keep PR #15 draft and do not deploy/apply its migration until these gaps and the role-separated tests are closed.
