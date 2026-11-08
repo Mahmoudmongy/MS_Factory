@@ -284,34 +284,6 @@ async function uploadToTables(showAlert = false) {
     const errors = [];
     let snapshotError = null;
     let snapshotConflict = !!localStorage.getItem("mgr6-cloud-snapshot-conflict");
-    // Upload source-scoped ledger and stock snapshots before the admin-only full snapshot.
-    const accountingConflict = await syncAccountingSnapshots(S, profile, errors);
-
-    // Snapshot conflicts must not block independent, idempotent detail-table writes.
-    if (admin && !snapshotConflict && !accountingConflict) {
-      const expectedVersion = Number(localStorage.getItem("mgr6-cloud-snapshot-version") || 0);
-      const result = await supabase.rpc("sync_factory_state", {
-        p_expected_version: expectedVersion,
-        p_state: S
-      });
-      snapshotError = result.error;
-      if (snapshotError?.code === "40001") {
-        snapshotConflict = true;
-        localStorage.setItem("mgr6-cloud-snapshot-conflict", JSON.stringify({ reason: "stale_snapshot", at: new Date().toISOString() }));
-      } else if (snapshotError) {
-        errors.push("factory_state: " + snapshotError.message);
-      } else {
-        const snapshotRow = Array.isArray(result.data) ? result.data[0] : result.data;
-        if (!snapshotRow?.sync_version) errors.push("factory_state: server returned no snapshot version");
-        else {
-          localStorage.setItem("mgr6-cloud-snapshot-version", String(snapshotRow.sync_version));
-          localStorage.setItem("mgr6-cloud-snapshot-pend", String(Number(S.pend || 0)));
-          localStorage.removeItem("mgr6-cloud-snapshot-conflict");
-          snapshotConflict = false;
-        }
-      }
-    }
-
     const partnerArrays = [];
     if (Array.isArray(S.partners)) partnerArrays.push({ key: "partners", arr: S.partners });
     if (Array.isArray(S.customers)) partnerArrays.push({ key: "customers", arr: S.customers });
@@ -531,6 +503,36 @@ async function uploadToTables(showAlert = false) {
         };
         const { error } = await supabase.from("products").upsert(row, { onConflict: "user_id,external_id" });
         if (error) errors.push("products " + externalId + ": " + error.message);
+      }
+    }
+
+    // Commit detail rows first. Only then commit their source-scoped ledger and stock effects.
+    let accountingConflict = false;
+    if (errors.length === 0) accountingConflict = await syncAccountingSnapshots(S, profile, errors);
+    else accountingConflict = hasAccountingConflicts();
+
+    // The administrator snapshot is the final aggregate commit after detail and accounting sync.
+    if (admin && !snapshotConflict && !accountingConflict && errors.length === 0) {
+      const expectedVersion = Number(localStorage.getItem("mgr6-cloud-snapshot-version") || 0);
+      const result = await supabase.rpc("sync_factory_state", {
+        p_expected_version: expectedVersion,
+        p_state: S
+      });
+      snapshotError = result.error;
+      if (snapshotError?.code === "40001") {
+        snapshotConflict = true;
+        localStorage.setItem("mgr6-cloud-snapshot-conflict", JSON.stringify({ reason: "stale_snapshot", at: new Date().toISOString() }));
+      } else if (snapshotError) {
+        errors.push("factory_state: " + snapshotError.message);
+      } else {
+        const snapshotRow = Array.isArray(result.data) ? result.data[0] : result.data;
+        if (!snapshotRow?.sync_version) errors.push("factory_state: server returned no snapshot version");
+        else {
+          localStorage.setItem("mgr6-cloud-snapshot-version", String(snapshotRow.sync_version));
+          localStorage.setItem("mgr6-cloud-snapshot-pend", String(Number(S.pend || 0)));
+          localStorage.removeItem("mgr6-cloud-snapshot-conflict");
+          snapshotConflict = false;
+        }
       }
     }
 
