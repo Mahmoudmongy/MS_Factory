@@ -75,30 +75,30 @@ BEGIN
   PERFORM * FROM public.sync_factory_master_record('products','qa-sync-item',1,'{"name":"Nope","raw":{}}'::jsonb);
   RAISE EXCEPTION 'Production user wrote product master';
  EXCEPTION WHEN SQLSTATE '42501' THEN NULL; END;
-END $;
+END $$;
 -- Versioned soft-delete: stale deletes conflict, successful retries are idempotent, and a later save restores the row.
 SELECT * FROM public.sync_factory_detail('production_orders','qa-delete-po',0,
  '{"order_no":"QA-DELETE-PO","item_name":"QA Delete Order","status":"new","breakdown":{},"raw":{"qa":true}}'::jsonb);
 SELECT * FROM public.sync_factory_detail('production_orders','qa-delete-po',1,
  '{"order_no":"QA-DELETE-PO","item_name":"QA Delete Order Updated","status":"in_progress","breakdown":{},"raw":{"qa":true,"edit":true}}'::jsonb);
-DO $
+DO $$
 BEGIN
  BEGIN
   PERFORM * FROM public.delete_factory_detail('production_orders','qa-delete-po',1);
   RAISE EXCEPTION 'Stale production delete accepted';
  EXCEPTION WHEN SQLSTATE '40001' THEN NULL; END;
-END $;
+END $$;
 SELECT * FROM public.delete_factory_detail('production_orders','qa-delete-po',2);
 SELECT * FROM public.delete_factory_detail('production_orders','qa-delete-po',2);
-DO $ DECLARE n integer; BEGIN
+DO $$ DECLARE n integer; BEGIN
  SELECT count(*) INTO n FROM public.production_orders WHERE external_id='qa-delete-po' AND is_deleted=true AND sync_version=3;
  IF n<>1 THEN RAISE EXCEPTION 'Production tombstone or idempotent retry failed'; END IF;
  SELECT count(*) INTO n FROM public.production_orders WHERE external_id='qa-delete-po' AND is_deleted=false;
  IF n<>0 THEN RAISE EXCEPTION 'Deleted production row still appears in active pull filter'; END IF;
-END $;
+END $$;
 SELECT * FROM public.sync_factory_detail('production_orders','qa-delete-po',3,
  '{"order_no":"QA-DELETE-PO","item_name":"QA Delete Order Restored","status":"new","breakdown":{},"raw":{"qa":true,"restored":true}}'::jsonb);
-DO $ BEGIN
+DO $$ BEGIN
  IF NOT EXISTS(SELECT 1 FROM public.production_orders WHERE external_id='qa-delete-po' AND is_deleted=false AND sync_version=4) THEN
   RAISE EXCEPTION 'Production re-save did not clear tombstone';
  END IF;
@@ -106,7 +106,7 @@ DO $ BEGIN
   PERFORM * FROM public.delete_factory_detail('invoices','qa-invoice-cas',0);
   RAISE EXCEPTION 'Production employee deleted invoice';
  EXCEPTION WHEN SQLSTATE '42501' THEN NULL; END;
-END $;
+END $$;
 RESET ROLE;
 
 -- Invoice-only employee: invoice, receipt voucher, return and linked ledger.
@@ -151,16 +151,16 @@ BEGIN
   RAISE EXCEPTION 'Invoice-only user wrote settings accounting';
  EXCEPTION WHEN SQLSTATE '42501' THEN NULL; END;
  IF EXISTS(SELECT 1 FROM public.production_catalog) THEN RAISE EXCEPTION 'Invoice-only user read production catalog'; END IF;
-END $;
+END $$;
 -- Invoice, return and voucher tombstones are versioned; retries do not increment twice and a later save restores them.
 SELECT * FROM public.delete_factory_detail('invoices','qa-invoice-cas',2);
 SELECT * FROM public.delete_factory_detail('invoices','qa-invoice-cas',2);
-DO $ BEGIN
+DO $$ BEGIN
  IF NOT EXISTS(SELECT 1 FROM public.invoices WHERE external_id='qa-invoice-cas' AND is_deleted=true AND sync_version=3) THEN
   RAISE EXCEPTION 'Invoice tombstone/idempotent retry failed';
  END IF;
-END $;
-DO $
+END $$;
+DO $$
 DECLARE r record;
 BEGIN
  SELECT * INTO r FROM public.sync_invoice('qa-invoice-cas','QA-INV','sale',CURRENT_DATE,60,0,'QA restored',
@@ -170,14 +170,14 @@ BEGIN
  IF NOT EXISTS(SELECT 1 FROM public.invoices WHERE external_id='qa-invoice-cas' AND is_deleted=false) THEN
   RAISE EXCEPTION 'Invoice upsert did not clear tombstone';
  END IF;
-END $;
+END $$;
 SELECT * FROM public.delete_factory_detail('returns','qa-return-cas',1);
 SELECT * FROM public.sync_factory_detail('returns','qa-return-cas',2,
  '{"return_no":"QA-RET","return_type":"sale_return","total":20,"raw":{"qa":true,"restored":true}}'::jsonb);
 SELECT * FROM public.delete_factory_detail('vouchers','qa-voucher-cas',1);
 SELECT * FROM public.sync_factory_detail('vouchers','qa-voucher-cas',2,
  '{"voucher_no":"QA-VCH","direction":"in","account":"qa-cash","amount":20,"raw":{"qa":true,"restored":true}}'::jsonb);
-DO $
+DO $$
 BEGIN
  IF NOT EXISTS(SELECT 1 FROM public.returns WHERE external_id='qa-return-cas' AND is_deleted=false AND sync_version=3) THEN RAISE EXCEPTION 'Return restore failed'; END IF;
  IF NOT EXISTS(SELECT 1 FROM public.vouchers WHERE external_id='qa-voucher-cas' AND is_deleted=false AND sync_version=3) THEN RAISE EXCEPTION 'Voucher restore failed'; END IF;
@@ -185,7 +185,7 @@ BEGIN
   PERFORM * FROM public.delete_factory_detail('production_orders','qa-delete-po',4);
   RAISE EXCEPTION 'Invoice-only user deleted production order';
  EXCEPTION WHEN SQLSTATE '42501' THEN NULL; END;
-END $;
+END $$;
 RESET ROLE;
 
 -- Administrator: scoped master-data CAS, manual journal/stock baseline and stale-write protection.
