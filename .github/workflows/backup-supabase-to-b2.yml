@@ -143,7 +143,7 @@ jobs:
 
       - name: Encrypt backup before upload
         env:
-          AGE_RECIPIENT: ${{ vars.AGE_RECIPIENT }}
+          AGE_RECIPIENT: age1pge6k5nwg7pyz0ztp3gzrhp8h5g37dch2km2rr9sw88aqqr25dsstg643r
         run: |
           set -euo pipefail
           age --encrypt --recipient "$AGE_RECIPIENT" --output ms-factory-db-backup.tar.gz.age ms-factory-db-backup.tar.gz
