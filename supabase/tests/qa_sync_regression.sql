@@ -163,6 +163,22 @@ BEGIN
   RAISE EXCEPTION 'Stale product writer accepted';
  EXCEPTION WHEN SQLSTATE '40001' THEN NULL; END;
 
+ SELECT * INTO r FROM public.sync_factory_master_record('products','qa-negative-product',0,
+  '{"name":"صنف برصيد سالب","buy_price":10,"retail_price":20,"wholesale_price":15,"qty":-4,"raw":{"custom":"allowed"}}'::jsonb);
+ IF r.sync_version<>1 THEN RAISE EXCEPTION 'Negative stock product insert failed'; END IF;
+ IF NOT EXISTS(SELECT 1 FROM public.products WHERE external_id='qa-negative-product' AND qty=-4) THEN
+  RAISE EXCEPTION 'Negative stock balance was not preserved';
+ END IF;
+ BEGIN
+  PERFORM * FROM public.sync_factory_master_record('products','qa-invalid-raw',0,
+   '{"name":"صنف غير صالح","raw":[]}'::jsonb);
+  RAISE EXCEPTION 'Array raw payload accepted';
+ EXCEPTION WHEN SQLSTATE '22023' THEN NULL; END;
+ BEGIN
+  PERFORM * FROM public.sync_factory_master_record('products','qa-negative-price',0,
+   '{"name":"سعر سالب","buy_price":-1,"raw":{}}'::jsonb);
+  RAISE EXCEPTION 'Negative product price accepted';
+ EXCEPTION WHEN SQLSTATE '22023' THEN NULL; END;
  SELECT * INTO r FROM public.sync_factory_accounting('settings',0,
   '{"ledger":[],"movements":[{"iid":"qa-sync-item","v":"-","q":10,"src":"je","rid":"qa-opening","d":"2026-11-09"}],"work_orders":[],"journal_entries":[{"id":"qa-opening"}]}'::jsonb);
  SELECT i.quantity INTO q FROM public.inventory i JOIN public.products p ON p.id=i.product_id WHERE p.external_id='qa-sync-item' AND i.variant='-';
