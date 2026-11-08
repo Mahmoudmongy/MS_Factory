@@ -48,7 +48,7 @@ BEGIN
         total = COALESCE(p_total, 0), note = p_note, raw = COALESCE(p_raw, '{}'::jsonb), is_deleted = false,
         sync_version = i.sync_version + 1, updated_at = now(), updated_by = (SELECT auth.uid())
     WHERE i.id = v_invoice_id RETURNING i.sync_version, i.updated_at INTO v_version, v_updated_at;
-    DELETE FROM public.invoice_items WHERE invoice_id = v_invoice_id AND user_id = v_owner_id;
+    DELETE FROM public.invoice_items AS ii WHERE ii.invoice_id = v_invoice_id AND ii.user_id = v_owner_id;
   END IF;
   FOR v_item IN SELECT value FROM jsonb_array_elements(p_items) LOOP
     v_item_name := COALESCE(NULLIF(v_item ->> 'name', ''), NULLIF(v_item ->> 'product', ''),
