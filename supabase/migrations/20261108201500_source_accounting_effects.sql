@@ -30,29 +30,10 @@ create index if not exists source_effects_owner_updated_idx
 
 alter table public.source_effects enable row level security;
 
+-- No direct SELECT/INSERT/UPDATE/DELETE: the read RPC redacts ledger and
+-- movement sections independently according to the caller's role.
 drop policy if exists source_effects_read_permission on public.source_effects;
-create policy source_effects_read_permission
-  on public.source_effects
-  for select
-  to authenticated
-  using (
-    private.can_access_factory_owner(
-      user_id,
-      case source_type
-        when 'doc' then 'invoices'
-        when 'po' then 'production'
-        when 'vch' then 'invoices'
-        when 'je' then 'settings'
-        when 'wo' then 'inventory'
-      end,
-      false
-    )
-  );
-
-revoke all on table public.source_effects from public, anon;
-revoke insert, update, delete, truncate, references, trigger
-  on table public.source_effects from authenticated;
-grant select on table public.source_effects to authenticated;
+revoke all on table public.source_effects from public, anon, authenticated;
 
 create or replace function public.sync_source_effect(
   p_source_type text,
@@ -252,6 +233,84 @@ $function$;
 
 revoke all on function public.sync_source_effect(text, text, integer, jsonb, boolean) from public, anon;
 grant execute on function public.sync_source_effect(text, text, integer, jsonb, boolean) to authenticated;
+
+create or replace function public.get_source_effects()
+returns table(
+  source_type text,
+  source_id text,
+  sync_version integer,
+  updated_at timestamptz,
+  deleted_at timestamptz,
+  payload jsonb
+)
+language plpgsql
+security definer
+set search_path = ''
+as $function$
+declare
+  v_actor_id uuid := (select auth.uid());
+  v_owner_id uuid;
+  v_can_read_all_movements boolean;
+begin
+  if v_actor_id is null then
+    raise exception 'Authentication required' using errcode = '42501';
+  end if;
+
+  select coalesce(p.created_by, p.id)
+    into v_owner_id
+    from public.profiles as p
+   where p.id = v_actor_id;
+
+  if v_owner_id is null then
+    raise exception 'Factory profile not found' using errcode = '42501';
+  end if;
+
+  -- Inventory permission (or reports, via can_access_factory_owner) allows
+  -- stock-only access to all source categories without exposing their ledger rows.
+  v_can_read_all_movements :=
+    private.can_access_factory_owner(v_owner_id, 'inventory', false);
+
+  return query
+  select
+    se.source_type,
+    se.source_id,
+    se.sync_version,
+    se.updated_at,
+    se.deleted_at,
+    case
+      when se.deleted_at is not null then null::jsonb
+      else pg_catalog.jsonb_build_object(
+        'sourceType', se.source_type,
+        'sourceId', se.source_id,
+        'ledgerIncluded', ledger_access.allowed,
+        'movementsIncluded', (v_can_read_all_movements or ledger_access.allowed),
+        'ledger', case when ledger_access.allowed then se.payload -> 'ledger' else '[]'::jsonb end,
+        'movements', case when (v_can_read_all_movements or ledger_access.allowed)
+                          then se.payload -> 'movements' else '[]'::jsonb end
+      )
+    end as payload
+  from public.source_effects as se
+  cross join lateral (
+    select private.can_access_factory_owner(
+      v_owner_id,
+      case se.source_type
+        when 'doc' then 'invoices'
+        when 'po' then 'production'
+        when 'vch' then 'invoices'
+        when 'je' then 'settings'
+        when 'wo' then 'inventory'
+      end,
+      false
+    ) as allowed
+  ) as ledger_access
+  where se.user_id = v_owner_id
+    and (ledger_access.allowed or v_can_read_all_movements)
+  order by se.source_type, se.source_id;
+end;
+$function$;
+
+revoke all on function public.get_source_effects() from public, anon;
+grant execute on function public.get_source_effects() to authenticated;
 
 comment on table public.source_effects is
   'Versioned, source-scoped ledger and inventory effects. Deletions are retained as tombstones.';
