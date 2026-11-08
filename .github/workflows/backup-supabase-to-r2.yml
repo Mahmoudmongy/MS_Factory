@@ -52,17 +52,24 @@ jobs:
           supabase db dump --db-url "$SUPABASE_DB_URL" --file roles.sql --role-only
           supabase db dump --db-url "$SUPABASE_DB_URL" --file schema.sql
           supabase db dump --db-url "$SUPABASE_DB_URL" --file data.sql --use-copy --data-only
+          # Supabase CLI deliberately excludes managed auth/storage schemas.
+          # Export only Auth users and identities separately; never export sessions/tokens.
+          docker run --rm -v "$PWD:/backup" postgres:17 pg_dump "$SUPABASE_DB_URL" \
+            --data-only --no-owner --no-privileges \
+            --table=auth.users --table=auth.identities \
+            --file=/backup/auth-users.sql
           test -s roles.sql
           test -s schema.sql
           test -s data.sql
+          test -s auth-users.sql
           cat > manifest.txt <<EOF
           project=ms-factory
           created_utc=$(date -u +%Y-%m-%dT%H:%M:%SZ)
           source=Supabase CLI db dump
-          includes=roles,schema,data
+          includes=roles,schema,public-data,auth-users-and-identities
           encryption=age public-key recipient
           EOF
-          tar -czf ms-factory-db-backup.tar.gz roles.sql schema.sql data.sql manifest.txt
+          tar -czf ms-factory-db-backup.tar.gz roles.sql schema.sql data.sql auth-users.sql manifest.txt
           sha256sum ms-factory-db-backup.tar.gz > ms-factory-db-backup.tar.gz.sha256
 
       - name: Encrypt backup before upload
@@ -99,5 +106,5 @@ jobs:
       - name: Remove plaintext database exports
         if: always()
         run: |
-          rm -f roles.sql schema.sql data.sql manifest.txt \
+          rm -f roles.sql schema.sql data.sql auth-users.sql manifest.txt \
             ms-factory-db-backup.tar.gz ms-factory-db-backup.tar.gz.sha256
