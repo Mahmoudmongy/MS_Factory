@@ -21,8 +21,24 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  validate-backup-code:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Validate backup export script without connecting to production
+        run: |
+          set -euo pipefail
+          test -s scripts/export-auth-and-counts.sh
+          bash -n scripts/export-auth-and-counts.sh
+          grep -q 'auth.users' scripts/export-auth-and-counts.sh
+          grep -q 'supabase_migrations.schema_migrations' scripts/export-auth-and-counts.sh
+          echo "Backup script syntax and required export targets validated."
+
   b2-preflight:
-    if: github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch' || github.event_name == 'schedule'
+    if: github.event_name == 'workflow_dispatch' || github.event_name == 'schedule'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
