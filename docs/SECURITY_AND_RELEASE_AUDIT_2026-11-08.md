@@ -34,7 +34,7 @@
 
 ## Intentional Supabase advisor exception
 
-The security advisor reports the public `sync_factory_accounting` RPC as a SECURITY DEFINER function. This is intentional and required for the atomic, permission-scoped inventory delta described above. It uses an empty search path, fully qualified table/function references, validates `auth.uid()` and module permissions, and is executable only by authenticated users. The underlying accounting table has no direct authenticated write grants.
+The security advisor reports two public RPCs as SECURITY DEFINER: `sync_factory_accounting` and `sync_factory_master_record`. This is intentional: the accounting RPC atomically applies permission-scoped ledger/stock deltas without granting direct accounting-table writes; the master-data RPC applies field allowlists and optimistic version checks. Both use an empty search path, fully qualified references, validate `auth.uid()`, factory ownership and module permission, and are executable only by authenticated users (not `anon`). The accounting snapshot table has no direct authenticated write grants.
 
 The QA security advisor no longer reports the two previous SECURITY DEFINER view errors after replacing those views with RLS-protected tables.
 
@@ -115,3 +115,8 @@ The two active production Edge Functions were read from Supabase and compared by
 - `change-initial-password`, deployed version 1 — identical to `supabase/functions/change-initial-password/index.ts`.
 
 Both have JWT verification enabled. The backup archive includes the repository function sources; this is currently an exact source backup of both deployed functions. The functions use Supabase-provided environment variables only; any future custom function secrets must be separately escrowed outside the repository.
+
+
+## Performance advisor follow-up
+
+The QA performance advisor initially identified seven unindexed `updated_by` foreign keys. Migration `20261108300000_index_updated_by_foreign_keys.sql` added covering indexes, and the subsequent QA advisor run no longer reports unindexed foreign keys. The remaining `unused_index` notices are informational because the QA database has a tiny dataset and no representative production workload; indexes were not removed based on an empty test workload.
