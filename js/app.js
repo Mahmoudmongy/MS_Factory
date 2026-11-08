@@ -294,13 +294,15 @@ function syncPage(){
   const badge=document.getElementById("cloud-badge");
   const snapshotConflict=localStorage.getItem("mgr6-cloud-snapshot-conflict");
   const accountingConflicts=["invoices","production","settings"].filter(source=>localStorage.getItem("mgr6-accounting-conflict-"+source));
+  const deletionQueue=(()=>{try{const x=JSON.parse(localStorage.getItem("mgr6-cloud-deletions")||"[]");return Array.isArray(x)?x:[]}catch(e){return []}})();
+  const deletionConflicts=(()=>{try{const x=JSON.parse(localStorage.getItem("mgr6-cloud-deletion-conflicts")||"[]");return Array.isArray(x)?x:[]}catch(e){return []}})();
   const masterConflicts=[];
   for(const p of (S.partners||[])){
     if(p?._cloudCustomersConflict)masterConflicts.push({table:"customers",id:p.id||p.no,name:p.name||p.id,label:"عميل"});
     if(p?._cloudSuppliersConflict)masterConflicts.push({table:"suppliers",id:p.id||p.no,name:p.name||p.id,label:"مورد"});
   }
   for(const p of (S.items||[]))if(p?._cloudProductsConflict)masterConflicts.push({table:"products",id:p.id||p.sku,name:p.name||p.id,label:"صنف"});
-  const anyConflict=!!snapshotConflict||accountingConflicts.length>0||masterConflicts.length>0;
+  const anyConflict=!!snapshotConflict||accountingConflicts.length>0||masterConflicts.length>0||deletionConflicts.length>0;
   const cloudStatus=anyConflict?"⚠️ تعارض بين النسخة المحلية والسحابية":offline?"💾 محفوظ محليًا - انتظار عودة الإنترنت":(badge?.innerText||"🟡 تم التحقق من الحساب - في انتظار المزامنة").trim();
   const role=!cp?"غير محدد":cp.is_admin===true?"مدير النظام":"حساب موظف";
   const detail=cp?.is_admin===true
@@ -323,10 +325,12 @@ function syncPage(){
     <p>نوع الحساب: <b>${role}</b></p>
     <p>حالة المزامنة: <b>${cloudStatus}</b></p>
     <p>التغييرات المحلية المحفوظة: <b>${S.pend||0}</b></p>
+    <p>طلبات حذف تنتظر المزامنة: <b>${deletionQueue.length}</b></p>
   </div>
   ${snapshotConflict&&cp?.is_admin===true?`<div class="card"><b>⚠️ تعارض في نسخة المصنع الكاملة</b><p>توجد تغييرات أحدث على السحابة وتغييرات محلية على هذا الجهاز. لم يتم استبدال أي نسخة أو رفع بيانات قديمة فوق الأحدث.</p><p>يمكنك استعادة النسخة السحابية بعد حفظ نسخة محلية احتياطية.</p><button class="rd" onclick="resolveCloudSnapshotConflict()">حفظ نسخة الجهاز ثم استعادة النسخة السحابية</button></div>`:""}
   ${accountingConflicts.length?`<div class="card"><b>⚠️ تعارض في دفتر الأستاذ أو حركات المخزون</b><p>لم يتم رفع بيانات قديمة فوق النسخة السحابية. تم الاحتفاظ بنسختك المحلية حتى يتم حل التعارض.</p>${U(accountingConflicts,source=>`<div class="row sp"><span>${source==="invoices"?"الفواتير والسندات":source==="production"?"الإنتاج":"القيود والإعدادات"}</span>${cp?.is_admin===true?`<button class="rd" onclick="resolveCloudAccountingConflict('${source}')">حفظ نسخة الجهاز واستعادة السحابة</button>`:"<span class=\"mu\">يراجع مدير النظام التعارض</span>"}</div>`)}</div>`:""}
   ${masterConflicts.length?`<div class="card"><b>⚠️ تعارض في بيانات العملاء أو الموردين أو الأصناف</b><p>تم حفظ النسختين ولم يتم استبدال بياناتك تلقائيًا. اختر النسخة التي تعتمدها؛ سيتم حفظ النسختين في سجل محلي قبل التنفيذ.</p>${U(masterConflicts,x=>{const id=encodeURIComponent(String(x.id||"")).replace(/'/g,"%27");return `<div class="row sp"><span>${escapeHTML(x.label)}: ${escapeHTML(x.name||"")}</span>${cp?.is_admin===true?`<button class="rd" onclick="resolveCloudMasterConflict('${x.table}',decodeURIComponent('${id}'),'cloud')">اعتماد السحابة</button><button onclick="resolveCloudMasterConflict('${x.table}',decodeURIComponent('${id}'),'local')">اعتماد نسخة الجهاز</button>`:"<span class=\\"mu\\">يراجع مدير النظام التعارض</span>"}</div>`})}</div>`:""}
+  ${deletionConflicts.length?`<div class="card"><b>⚠️ تعارض في حذف سجلات سحابية</b><p>تم تعديل السجل من جهاز آخر بعد آخر مزامنة. اختر الاحتفاظ بالنسخة السحابية أو تأكيد الحذف على أحدث إصدار؛ لن يتم حذفها تلقائيًا.</p>${U(deletionConflicts,x=>{const id=encodeURIComponent(String(x.externalId||"")).replace(/'/g,"%27");const label=x.table==="invoices"?"فاتورة":x.table==="returns"?"مرتجع":x.table==="vouchers"?"سند":"أمر إنتاج";return `<div class="row sp"><span>${escapeHTML(label)}: ${escapeHTML(x.externalId||"")}</span>${cp?.is_admin===true?`<button onclick="resolveCloudDeletionConflict('${x.table}',decodeURIComponent('${id}'),'cloud')">الاحتفاظ بالسحابة</button><button class="rd" onclick="resolveCloudDeletionConflict('${x.table}',decodeURIComponent('${id}'),'delete')">تأكيد الحذف</button>`:"<span class=\\"mu\\">يراجع مدير النظام التعارض</span>"}</div>`})}</div>`:""}
   <table class="l"><tr><th>البيانات</th><th>العدد على هذا الجهاز</th></tr>${U(c,x=>`<tr><td>${x[0]}</td><td>${x[1]}</td></tr>`)}</table>
   <p class="mu">${detail}</p>
   <p class="mu">البيانات المحلية تظل محفوظة على الجهاز. عند عودة الإنترنت يحاول النظام تحميل التغييرات السحابية ودمجها ثم رفع ما تسمح به الصلاحيات. اضغط على مؤشر الاتصال أعلى الشاشة لعرض التفاصيل أو معالجة أي تعارض مزامنة.</p>`)
