@@ -23,6 +23,7 @@
 - Both tables have RLS. Production employees can read only safe product/variant fields and the production configuration needed for their work.
 - Private, non-API-exposed triggers maintain these projections from the canonical products, inventory, and factory_state tables.
 - The full `factory_state` snapshot remains administrator-only; the production projection does not expose journal entries, customer balances, bank balances, or the full state JSON.
+- A final field-level review found that the account chart array included a `cash` opening-amount field. A follow-up migration (`20261108220000_redact_account_balances_from_production_config.sql`) now allowlists only account id/code/name/type/category/currency fields and rebuilds existing projections. It deliberately strips `cash`, `balance`, and any unapproved account properties. This was exercised in a rolled-back QA transaction with sentinel values; the production employee could read the sanitized projection but could not read the full snapshot.
 
 ## Intentional Supabase advisor exception
 
