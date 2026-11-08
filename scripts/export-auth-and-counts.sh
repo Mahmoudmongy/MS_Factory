@@ -55,11 +55,11 @@ if [[ ! -s auth-trigger.sql ]]; then
 fi
 
 # Counts are metadata only; no customer or employee business data is printed to logs.
-"${psql_cmd[@]}" --command="SELECT 'storage_bucket_count=' || count(*) FROM storage.buckets;" \
+"${psql_cmd[@]}" --command="SELECT count(*) FROM storage.buckets;" \
   | sed 's/^[[:space:]]*//' > storage-bucket-count.txt
-"${psql_cmd[@]}" --command="SELECT 'auth_user_count=' || count(*) FROM auth.users;" \
+"${psql_cmd[@]}" --command="SELECT count(*) FROM auth.users;" \
   | sed 's/^[[:space:]]*//' > auth-user-count.txt
-"${psql_cmd[@]}" --command="SELECT 'migration_count=' || count(*) FROM supabase_migrations.schema_migrations;" \
+"${psql_cmd[@]}" --command="SELECT count(*) FROM supabase_migrations.schema_migrations;" \
   | sed 's/^[[:space:]]*//' > migration-count.txt
 
 # Human-readable counts for every public base table, without exporting row contents.
