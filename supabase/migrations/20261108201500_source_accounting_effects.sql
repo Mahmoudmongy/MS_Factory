@@ -320,6 +320,31 @@ $wrapper$;
 revoke all on function public.sync_source_effect(text, text, integer, jsonb, boolean) from public, anon;
 grant execute on function public.sync_source_effect(text, text, integer, jsonb, boolean) to authenticated;
 
+create or replace function private.can_access_factory_owner_strict(
+  p_owner_id uuid,
+  p_permission text
+)
+returns boolean
+language sql
+stable
+security definer
+set search_path = ''
+as $function$
+  select exists (
+    select 1
+      from public.profiles actor
+     where actor.id = (select auth.uid())
+       and (
+         (actor.id = p_owner_id and actor.is_admin is true)
+         or (actor.created_by = p_owner_id
+             and p_permission is not null
+             and actor.permissions ->> p_permission = 'true')
+       )
+  );
+$function$;
+
+revoke all on function private.can_access_factory_owner_strict(uuid, text) from public, anon;
+
 create or replace function private.get_source_effects()
 returns table(
   source_type text,
@@ -353,7 +378,7 @@ begin
 
   -- Inventory permission allows stock-only access to all source categories without exposing ledger rows.
   v_can_read_all_movements :=
-    private.can_access_factory_owner(v_owner_id, 'inventory', false);
+    private.can_access_factory_owner_strict(v_owner_id, 'inventory');
 
   return query
   select
@@ -376,7 +401,7 @@ begin
     end as payload
   from public.source_effects as se
   cross join lateral (
-    select private.can_access_factory_owner(
+    select private.can_access_factory_owner_strict(
       v_owner_id,
       case se.source_type
         when 'doc' then 'invoices'
@@ -385,7 +410,6 @@ begin
         when 'je' then 'settings'
         when 'wo' then 'inventory'
       end,
-      false
     ) as allowed
   ) as ledger_access
   where se.user_id = v_owner_id
