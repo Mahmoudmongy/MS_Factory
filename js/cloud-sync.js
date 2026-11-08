@@ -371,6 +371,112 @@ function planSourceEffectSync(state, remoteRows, versionMap, tombstones) {
   return { actions, conflicts, adoptedVersions, clearTombstones, invalid };
 }
 
+
+// Applies one already-conflict-checked canonical effect to a local cache.
+// The caller must first establish that product raw stock is not being double-counted.
+function applyCanonicalSourceEffect(state, effect) {
+  if (!state || typeof state !== "object" || !effect ||
+      !["doc", "po", "vch", "je", "wo"].includes(effect.sourceType) ||
+      effect.sourceId == null || !Array.isArray(effect.ledger) || !Array.isArray(effect.movements)) {
+    return { applied: false, reason: "invalid_effect" };
+  }
+  if (!Array.isArray(state.accts)) state.accts = [];
+  if (!Array.isArray(state.items)) state.items = [];
+  if (!Array.isArray(state.partners)) state.partners = [];
+  if (!Array.isArray(state.L)) state.L = [];
+  if (!Array.isArray(state.mv)) state.mv = [];
+
+  const accountsByCode = new Map();
+  for (const account of state.accts) {
+    const code = String(account?.code || "").trim();
+    if (!code) continue;
+    if (accountsByCode.has(code)) return { applied: false, reason: "duplicate_local_account_code", code };
+    accountsByCode.set(code, account);
+  }
+  const itemsByExternalId = new Map(state.items.filter(x => x?.id != null).map(x => [String(x.id), x]));
+  const partnersByExternalId = new Map(state.partners.filter(x => x?.id != null).map(x => [String(x.id), x]));
+  const accountPlans = new Map();
+  const ledgerRows = [];
+  const movementRows = [];
+
+  for (const row of effect.ledger) {
+    const code = String(row.accountCode || "").trim();
+    if (!code) return { applied: false, reason: "missing_account_code" };
+    let account = accountsByCode.get(code);
+    if (!account) {
+      if (!accountPlans.has(code)) {
+        accountPlans.set(code, {
+          code, name: String(row.accountName || code), t: String(row.accountType || "A"),
+          k: String(row.accountKey || ""), cash: Number(row.accountIsCash || 0),
+          cur: String(row.accountCurrency || "EGP")
+        });
+      }
+    }
+    let partner = null;
+    if (row.partnerExternalId != null && String(row.partnerExternalId) !== "") {
+      partner = partnersByExternalId.get(String(row.partnerExternalId));
+      if (!partner) return { applied: false, reason: "unmapped_partner", partnerExternalId: String(row.partnerExternalId) };
+    }
+    ledgerRows.push({ sourceRow: row, code, partner });
+  }
+  for (const row of effect.movements) {
+    const item = itemsByExternalId.get(String(row.itemExternalId));
+    if (!item) return { applied: false, reason: "unmapped_item", itemExternalId: String(row.itemExternalId) };
+    let partner = null;
+    if (row.partnerExternalId != null && String(row.partnerExternalId) !== "") {
+      partner = partnersByExternalId.get(String(row.partnerExternalId));
+      if (!partner) return { applied: false, reason: "unmapped_movement_partner", partnerExternalId: String(row.partnerExternalId) };
+    }
+    movementRows.push({ sourceRow: row, item, partner });
+  }
+
+  for (const [code, plan] of accountPlans) {
+    let id = Date.now() + Math.floor(Math.random() * 100000);
+    while (state.accts.some(x => String(x.id) === String(id))) id++;
+    const account = { id, ...plan };
+    state.accts.push(account);
+    accountsByCode.set(code, account);
+  }
+
+  const sourceId = String(effect.sourceId), sourceType = effect.sourceType;
+  const matches = row => row && row.src === sourceType && String(row.rid) === sourceId;
+  const oldMovements = state.mv.filter(matches);
+  for (const movement of oldMovements) {
+    const item = itemsByExternalId.get(String(movement.iid));
+    if (item) {
+      if (!item.st || typeof item.st !== "object" || Array.isArray(item.st)) item.st = {};
+      item.st[movement.v] = (Number(item.st[movement.v]) || 0) - (Number(movement.q) || 0);
+      item.val = (Number(item.val) || 0) - (Number(movement.val) || 0);
+    }
+  }
+  state.L = state.L.filter(row => !matches(row));
+  state.mv = state.mv.filter(row => !matches(row));
+
+  for (const entry of ledgerRows) {
+    const row = entry.sourceRow, account = accountsByCode.get(entry.code);
+    state.L.push({
+      d: row.date || "", ts: Number(row.timestamp || 0), ref: String(row.reference || ""),
+      desc: String(row.description || ""), a: account.id, dr: Number(row.debit || 0),
+      cr: Number(row.credit || 0), pid: entry.partner?.id || 0, src: sourceType, rid: sourceId,
+      fc: Number(row.foreignCurrencyAmount || 0)
+    });
+  }
+  for (const entry of movementRows) {
+    const row = entry.sourceRow;
+    const item = entry.item;
+    if (!item.st || typeof item.st !== "object" || Array.isArray(item.st)) item.st = {};
+    const quantity = Number(row.quantity || 0), value = Number(row.value || 0), variant = String(row.variant || "-");
+    item.st[variant] = (Number(item.st[variant]) || 0) + quantity;
+    item.val = (Number(item.val) || 0) + value;
+    state.mv.push({
+      d: row.date || "", ts: Number(row.timestamp || 0), iid: item.id, v: variant,
+      q: quantity, val: value, ref: String(row.reference || ""), pid: entry.partner?.id || 0,
+      src: sourceType, rid: sourceId
+    });
+  }
+  return { applied: true, ledgerCount: ledgerRows.length, movementCount: movementRows.length };
+}
+
 function stableJson(value) {
   if (Array.isArray(value)) return "[" + value.map(stableJson).join(",") + "]";
   if (value && typeof value === "object") {
