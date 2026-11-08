@@ -208,3 +208,6 @@ $function$;
 
 REVOKE ALL ON FUNCTION public.sync_factory_accounting(text,integer,jsonb) FROM PUBLIC,anon;
 GRANT EXECUTE ON FUNCTION public.sync_factory_accounting(text,integer,jsonb) TO authenticated;
+
+COMMENT ON FUNCTION public.sync_factory_accounting(text,integer,jsonb) IS
+  'Intentionally SECURITY DEFINER: validates auth.uid(), factory ownership and module permission, then atomically updates only the caller-authorized accounting source and its inventory delta. Direct authenticated table writes are revoked.';
