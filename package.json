@@ -7,7 +7,8 @@
     "dev": "vite",
     "test": "node tests/run.js",
     "serve": "node -e \"require('http').createServer((q,r)=>{const f=require('path').join(process.cwd(),q.url==='/'?'index.html':q.url.split('?')[0]);require('fs').createReadStream(f).on('error',()=>{r.statusCode=404;r.end()}).pipe(r)}).listen(8080,()=>console.log('http://localhost:8080'))\"",
-    "build": "vite build"
+    "build": "vite build",
+    "prebuild": "node --check js/app.js && node --check js/cloud-sync.js && node --check js/supabase.js"
   },
   "devDependencies": {
     "playwright": "^1.56.0",
