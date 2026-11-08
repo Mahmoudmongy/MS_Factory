@@ -63,12 +63,12 @@ These are live Postgres/RLS/RPC integration tests against the QA project, not me
 
 ## Latest CI result
 
-Commit `daaaea44195ada43add1d3e104aa5665c793b08b` passed GitHub Actions:
+Commit `b06256b2cf61535523737808be1b278d7efc3151` passed GitHub Actions:
 - `npm audit --audit-level=high`: passed (no high-severity dependency audit failure).
 - `npm run build`: passed.
 - `wrangler deploy --dry-run`: passed; no deployment was performed.
 - JavaScript and restore shell syntax checks: passed.
-- Browser regression suite: **198/198 checks passed, 0 failed**, including all 19 screens, sales/purchases/returns/vouchers/production flows, stock/ledger balancing, XSS regressions, mobile layout, offline shell, customer/supplier field preservation and cloud refresh checks.
+- Browser regression suite: **201/201 checks passed, 0 failed**, including all 19 screens, sales/purchases/returns/vouchers/production flows, stock/ledger balancing, XSS regressions, mobile layout, offline shell, customer/supplier field preservation and cloud refresh checks.
 
 The browser suite intentionally runs without live Auth/cloud modules; the separate QA SQL tests above cover the database authorization and RPC layer.
 
@@ -85,6 +85,7 @@ The remaining last-write-wins path for customers, suppliers and products has now
 - The RPC is permission-scoped: customers → customers permission, suppliers → suppliers permission, products → inventory permission. It validates the record ID, required name, customer type, nonnegative product quantities/prices and payload size.
 - The browser sync now calls the RPC for all three master-data types, carries the version metadata across offline saves, preserves the remote copy on conflicts and counts conflicts instead of silently overwriting local edits.
 - The new migration was applied only to the isolated QA project and passed rolled-back SQL tests for create, update, stale-write rejection, profile-field preservation, product update, and denial of production-only/invoice-only employee writes.
+- A follow-up verification confirmed zero retained QA fixture rows after rollback across customers, suppliers, products, invoices, returns, vouchers, production orders and accounting snapshots.
 - Production remains unchanged; do not deploy this branch until the backup and remaining release gates are satisfied.
 
 This removes the identified silent last-write-wins write path. It does not prove a real multi-browser offline race; that remains part of the live Auth/two-device release test.
