@@ -335,7 +335,20 @@ function planSourceEffectSync(state, remoteRows, versionMap, tombstones) {
     if (row.deleted_at) {
       conflicts.push({ key, reason: "remote_effect_deleted", localVersion, remoteVersion }); continue;
     }
-    const samePayload = stableJson(row.payload) === stableJson(effect);
+    const remotePayload = row.payload || {};
+    const ledgerIncluded = remotePayload.ledgerIncluded !== false;
+    const movementsIncluded = remotePayload.movementsIncluded !== false;
+    const localComparable = {
+      sourceType: effect.sourceType, sourceId: effect.sourceId,
+      ledger: ledgerIncluded ? effect.ledger : [],
+      movements: movementsIncluded ? effect.movements : []
+    };
+    const remoteComparable = {
+      sourceType: effect.sourceType, sourceId: effect.sourceId,
+      ledger: ledgerIncluded ? (remotePayload.ledger || []) : [],
+      movements: movementsIncluded ? (remotePayload.movements || []) : []
+    };
+    const samePayload = stableJson(localComparable) === stableJson(remoteComparable);
     if (localVersion === 0) {
       if (samePayload) adoptedVersions[key] = remoteVersion;
       else conflicts.push({ key, reason: "unknown_remote_baseline", remoteVersion });
@@ -415,7 +428,19 @@ function planRemoteSourceEffectApply(state, remoteRows, versionMap) {
       else actions.push({ op: "apply", effect, version: remoteVersion });
       continue;
     }
-    if (stableJson(localEffect) !== stableJson(effect)) {
+    const ledgerIncluded = effect.ledgerIncluded !== false;
+    const movementsIncluded = effect.movementsIncluded !== false;
+    const localComparable = {
+      sourceType: localEffect.sourceType, sourceId: localEffect.sourceId,
+      ledger: ledgerIncluded ? localEffect.ledger : [],
+      movements: movementsIncluded ? localEffect.movements : []
+    };
+    const remoteComparable = {
+      sourceType: effect.sourceType, sourceId: String(effect.sourceId),
+      ledger: ledgerIncluded ? effect.ledger : [],
+      movements: movementsIncluded ? effect.movements : []
+    };
+    if (stableJson(localComparable) !== stableJson(remoteComparable)) {
       conflicts.push({ key, reason: "local_effect_differs_from_remote", localVersion, remoteVersion });
     } else if (localVersion > remoteVersion) {
       conflicts.push({ key, reason: "remote_effect_is_stale", localVersion, remoteVersion });
