@@ -46,7 +46,7 @@ const createEmployeeFn=fs.readFileSync(path.join(ROOT,'supabase/functions/create
 const changePasswordFn=fs.readFileSync(path.join(ROOT,'supabase/functions/change-initial-password/index.ts'),'utf8');
 const changePasswordPage=fs.readFileSync(path.join(ROOT,'change-password.html'),'utf8')+fs.readFileSync(path.join(ROOT,'js/change-password.js'),'utf8');
 ok('new employee accounts require a first-login password change',/must_change_password:\s*true/.test(createEmployeeFn));
-ok('online and cached profile gates redirect flagged employees before opening the app',/profile\\.must_change_password===true/.test(idx)&&/cached\\.must_change_password===true/.test(idx)&&/change-password\\.html/.test(idx));
+ok('online and cached profile gates redirect flagged employees before opening the app',idx.includes('profile.must_change_password===true')&&idx.includes('cached.must_change_password===true')&&idx.includes('change-password.html'));
 ok('first-login password endpoint verifies the signed-in user before privileged password update',/caller\.auth\.getUser\(\)/.test(changePasswordFn)&&/admin\.auth\.admin\.updateUserById\(\s*authData\.user\.id,\s*\{\s*password\s*\}\s*,\s*\)/.test(changePasswordFn));
 ok('first-login password endpoint only clears the flag for the authenticated employee',/profile\.must_change_password !== true/.test(changePasswordFn)&&/\.eq\("id", authData\.user\.id\)/.test(changePasswordFn)&&/must_change_password: false/.test(changePasswordFn));
 ok('first-login page validates the new password and invokes the protected Supabase function',/password\.length < 10/.test(changePasswordPage)&&/functions\.invoke\(['"]change-initial-password['"]/.test(changePasswordPage));
@@ -83,7 +83,7 @@ ok('returns are not misclassified as sale/purchase invoices',/\["sale", "pur"\]\
 ok('cloud invoice merge preserves newer remote copies as explicit conflicts',/mergeCloudInvoices/.test(cloud)&&/serverCopy: remote/.test(cloud));
 ok('online reconnect pulls remote changes before uploading local cache',/const pulled = await loadFromTablesMerge\(true\)/.test(cloud)&&cloud.indexOf('const pulled = await loadFromTablesMerge(true)')<cloud.indexOf('const pushed = await uploadToTables(false)'));
 ok('online startup sync runs even when local cache already has data',/if \(navigator\.onLine\) \{\s*\/\/ Always refresh remote data on launch/.test(cloud)&&/scheduleAutoSync\(1200\)/.test(cloud));
-ok('offline boot permits only a previously verified cached profile for the same user',/factory-profile:/.test(idx)&&/cached\\.id===userId/.test(idx)&&/if\\(!navigator\\.onLine\\)/.test(idx));
+ok('offline boot permits only a previously verified cached profile for the same user',idx.includes("factory-profile:'+userId")&&idx.includes('cached&&cached.id===userId')&&idx.includes('!navigator.onLine'));
 ok('reconnect refreshes the profile before using permissions for cloud sync',/myProfile = null; ownerIdCache = null; window\.__factoryAuthProfile = null;/.test(cloud)&&/const freshProfile = await getMyProfile\(\)/.test(cloud));
 
 ok('offline shell precaches the stable production app and first-login password page',/auth\.html/.test(sw)&&/change-password\.html/.test(sw)&&/js\/change-password\.js/.test(sw)&&/js\/app\.js/.test(sw)&&/factory-v12/.test(sw));
@@ -92,7 +92,7 @@ ok('offline-created detail records are uploaded even when the full snapshot has 
 ok('local save writes a durable pending-sync marker before network recovery',/mgr6-sync-pending/.test(app)&&/localStorage\.setItem\("mgr6-sync-pending"/.test(app));
 ok('sync indicator is a separate small icon and turns blue while syncing',/id="sync-icon"/.test(idx)&&/syncIcon\.classList\.toggle\('syncing', syncState === 'saving'\)/.test(cloud)&&/#sync-icon\.syncing\{color:#38bdf8/.test(css));
 ok('header uses an icon-only light/dark toggle and language stays out of the header',/<button id="thb"/.test(idx)&&!idx.includes('id="lgb"')&&/togLang\(\)/.test(app)&&/التبديل إلى الوضع الداكن/.test(app));
-ok('authenticated bootstrap scopes mgr6 local data by user before loading the app',/activateUserStorage\\(profile\\)/.test(idx)&&idx.indexOf('activateUserStorage(profile)')<idx.indexOf("loadClassicScript('./js/app.js')")&&/await loadClassicScript\\('\\.\\/js\\/app\\.js'\\)/.test(idx)&&!idx.includes('<script src="./js/app.js"></script>'));
+ok('authenticated bootstrap scopes mgr6 local data by user before loading the app',idx.includes('activateUserStorage(profile)')&&storage.includes('factory-user:')&&idx.indexOf('activateUserStorage(profile)')<idx.indexOf("loadClassicScript('./js/app.js')")&&idx.includes("await loadClassicScript('./js/app.js')")&&!idx.includes('<script src="./js/app.js"></script>'));
 ok('per-user storage helper is included in the offline shell cache',/js\/user-storage\.js/.test(sw)&&/factory-v12/.test(sw));
 ok('cloud synchronization starts only after the authenticated app shell has loaded',/await import\('\.\/js\/cloud-sync\.js'\)/.test(idx)&&idx.indexOf('await loadClassicScript')<idx.indexOf('await import'));
 ok('admin selector is labelled Admin in Arabic and English',/الأدمن \/ Admin/.test(app));
