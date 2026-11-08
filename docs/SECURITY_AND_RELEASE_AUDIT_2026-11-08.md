@@ -76,9 +76,18 @@ The browser suite intentionally runs without live Auth/cloud modules; the separa
 
 The QA SQL tests ran as the `authenticated` database role with controlled JWT claims for administrator, production-only employee, and invoice-only employee profiles. This exercises RLS, RPC authorization, source isolation, version conflicts, and inventory effects. The browser regression suite deliberately disables live Auth/cloud modules; it does not prove a real password sign-in session. A final live login test with actual QA Auth credentials remains a release gate.
 
-## Remaining synchronization release blocker
+## Master-data concurrency hardening
 
-Invoice, return, voucher, production-order, accounting-source, and stock-movement writes now use versioned compare-and-swap RPCs. Customer, supplier, and product master records are now round-tripped with their full profile fields and existing records refresh from cloud when the device has no pending local edits. This closes the previously missing customer/supplier type and governorate/city round-trip fields, and prevents a clean device from retaining stale existing partner/product values. However, these three master-data paths still use table upserts without a per-record compare-and-swap version. Two devices editing the same customer, supplier, or product while offline can therefore still produce last-write-wins behavior. This must be upgraded to versioned master-record RPCs with explicit conflict resolution before calling multi-device synchronization fully conflict-safe.
+The remaining last-write-wins path for customers, suppliers and products has now been replaced on the migration branch with `sync_factory_master_record` and migration `20261108250000_version_master_data_sync.sql`.
+
+- Each customer, supplier and product row now carries `sync_version`, `updated_at` and `updated_by`.
+- Writes use optimistic compare-and-swap: a new record must submit version 0; edits must submit the current version. Stale edits return SQLSTATE `40001` and cannot overwrite the newer copy.
+- The RPC is permission-scoped: customers → customers permission, suppliers → suppliers permission, products → inventory permission. It validates the record ID, required name, customer type, nonnegative product quantities/prices and payload size.
+- The browser sync now calls the RPC for all three master-data types, carries the version metadata across offline saves, preserves the remote copy on conflicts and counts conflicts instead of silently overwriting local edits.
+- The new migration was applied only to the isolated QA project and passed rolled-back SQL tests for create, update, stale-write rejection, profile-field preservation, product update, and denial of production-only/invoice-only employee writes.
+- Production remains unchanged; do not deploy this branch until the backup and remaining release gates are satisfied.
+
+This removes the identified silent last-write-wins write path. It does not prove a real multi-browser offline race; that remains part of the live Auth/two-device release test.
 
 ## Release decision
 
@@ -88,7 +97,7 @@ Do not merge to production or deploy the Cloudflare worker until:
 3. R2 is enabled and a full backup plus QA restore drill succeeds;
 4. real administrator and employee password logins are tested in QA;
 5. Android device printing is checked on a physical device.
-6. Customer/supplier/product master records receive versioned compare-and-swap synchronization and conflict-resolution tests.
+6. Customer/supplier/product master records pass versioned compare-and-swap tests (QA SQL passed); a real two-browser offline conflict-resolution drill remains required.
 
 ## Edge Function source verification
 
