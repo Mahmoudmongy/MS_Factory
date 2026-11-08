@@ -1044,6 +1044,72 @@ function applyFactoryBaseline(state, baseline) {
     partnersAdded: partnerPlans.length, ledgerAdded: ledgerPlans.length, movementsAdded: movementPlans.length };
 }
 
+
+function applyInventoryBaselineSection(state, section) {
+  if (!state || typeof state !== "object" || !section ||
+      section.baselineVersion !== 1 || !section.stock ||
+      !Array.isArray(section.openingMovements)) {
+    return { applied: false, reason: "invalid_inventory_baseline_section" };
+  }
+  const itemByExternalId = new Map();
+  for (const item of Array.isArray(state.items) ? state.items : []) {
+    if (item?.id == null) continue;
+    for (const id of [item.id, item.cloudId].filter(x => x != null).map(String)) {
+      if (itemByExternalId.has(id) && itemByExternalId.get(id) !== item) {
+        return { applied: false, reason: "duplicate_local_item_external_id", itemExternalId: id };
+      }
+      itemByExternalId.set(id, item);
+    }
+  }
+  const movements = Array.isArray(state.mv) ? state.mv : [];
+  const keys = new Set(movements.map(row => {
+    const item = state.items.find(x => String(x.id) === String(row.iid));
+    return stableJson({ date: row.d || null, timestamp: Number(row.ts || 0),
+      itemExternalId: item ? String(item.cloudId || item.id) : "",
+      variant: String(row.v || "-"), quantity: Number(row.q || 0),
+      value: Number(row.val || 0), reference: String(row.ref || "") });
+  }));
+  const planned = [];
+  for (const row of section.openingMovements) {
+    const item = itemByExternalId.get(String(row?.itemExternalId || ""));
+    if (!item || !Number.isFinite(Number(row.quantity)) ||
+        !Number.isFinite(Number(row.value)) || !Number.isFinite(Number(row.timestamp || 0)) ||
+        !String(row.variant || "").trim()) {
+      return { applied: false, reason: "invalid_or_unmapped_opening_movement",
+        itemExternalId: String(row?.itemExternalId || "") };
+    }
+    const key = stableJson(row);
+    if (keys.has(key)) continue;
+    keys.add(key);
+    planned.push({ d: row.date || "", ts: Number(row.timestamp || 0), iid: item.id,
+      v: String(row.variant), q: Number(row.quantity), val: Number(row.value),
+      ref: String(row.reference || "رصيد افتتاحي") });
+  }
+  // applyStockBaseline performs a complete preflight before changing any quantity.
+  const stockResult = applyStockBaseline(state, section.stock);
+  if (!stockResult.applied) return stockResult;
+  if (!Array.isArray(state.mv)) state.mv = [];
+  state.mv.push(...planned);
+  return { applied: true, fingerprint: section.fingerprint || section.stock.fingerprint,
+    movementsAdded: planned.length, stock: stockResult };
+}
+
+function applyAccountingBaselineSection(state, section) {
+  if (!state || typeof state !== "object" || !section ||
+      section.baselineVersion !== 1 || !Array.isArray(section.accounts) ||
+      !Array.isArray(section.partners) || !Array.isArray(section.openingLedger)) {
+    return { applied: false, reason: "invalid_accounting_baseline_section" };
+  }
+  // Reuse the full baseline's all-or-nothing mapping and ledger validation,
+  // while supplying a no-op absolute stock baseline from the current device.
+  const stock = buildStockBaseline(state);
+  if (stock.invalid.length) return { applied: false, reason: "invalid_local_stock_for_accounting_bootstrap" };
+  const combined = { baselineVersion: 1, stock, accounts: section.accounts,
+    partners: section.partners, openingLedger: section.openingLedger, openingMovements: [] };
+  combined.fingerprint = factoryBaselineFingerprint(combined);
+  return applyFactoryBaseline(state, combined);
+}
+
 function stableJson(value) {
   if (Array.isArray(value)) return "[" + value.map(stableJson).join(",") + "]";
   if (value && typeof value === "object") {
