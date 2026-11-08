@@ -143,19 +143,19 @@ i = 0
 while i < len(lines):
     line = lines[i]
     # Supabase-managed Storage table data is not customer data. Drop the complete
-    # pg_dump COPY block, including its mandatory \\. terminator.
-    if re.match(r'^COPY\\s+(?:"?storage"?\\.)', line, flags=re.IGNORECASE):
+    # pg_dump COPY block, including its mandatory \. terminator.
+    if re.match(r'^COPY\s+(?:"?storage"?\.)', line, flags=re.IGNORECASE):
         table = line.split()[1]
         skipped.append(table)
         i += 1
-        while i < len(lines) and lines[i].strip() != r'\\.':
+        while i < len(lines) and lines[i].strip() != r'\.':
             i += 1
         if i >= len(lines):
             raise SystemExit(f"Unterminated pg_dump COPY block for {table}.")
         i += 1
         continue
     # Sequence state for managed Storage tables is likewise Supabase-owned.
-    if re.match(r"^SELECT pg_catalog\\.setval\\('storage\\.", line, flags=re.IGNORECASE):
+    if re.match(r"^SELECT pg_catalog\.setval\('storage\.", line, flags=re.IGNORECASE):
         i += 1
         continue
     out.append(line)
