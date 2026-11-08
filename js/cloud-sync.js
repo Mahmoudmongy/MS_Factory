@@ -1417,30 +1417,39 @@ async function uploadToTables(showAlert = false) {
       else if (!missingEffectsRpc) {
         let versions = {};
         try { versions = JSON.parse(localStorage.getItem("mgr6-source-effect-versions") || "{}") || {}; } catch(e) {}
-        const plan = planSourceEffectSync(S, remoteResult.data || [], versions, []);
+        let queuedTombstones = [];
+        try { queuedTombstones = JSON.parse(localStorage.getItem("mgr6-cloud-effect-tombstones") || "[]") || []; } catch(e) {}
+        const plan = planSourceEffectSync(S, remoteResult.data || [], versions, queuedTombstones);
         if (plan.invalid.length) errors.push("source effects invalid: " + plan.invalid.map(x => x.reason).join(", "));
         else {
-          if (plan.conflicts.length) localStorage.setItem("mgr6-source-effect-conflicts", JSON.stringify(plan.conflicts));
+          const conflicts = [...plan.conflicts];
+          const completedTombstones = new Set();
+          for (const key of plan.clearTombstones) completedTombstones.add(key);
           for (const action of plan.actions) {
-            if (action.op !== "upsert") continue;
-            const permission = ({ doc: "invoices", po: "production", vch: "invoices", je: "settings", wo: "inventory" })[action.effect.sourceType];
+            const sourceType = action.effect?.sourceType || action.sourceType;
+            const sourceId = action.effect?.sourceId || action.sourceId;
+            const permission = ({ doc: "invoices", po: "production", vch: "invoices", je: "settings", wo: "inventory" })[sourceType];
             if (!canWrite(permission)) continue;
-            const payload = { ...action.effect, ledgerIncluded: true, movementsIncluded: true };
+            const isDelete = action.op === "delete";
+            const payload = isDelete ? null : { ...action.effect, ledgerIncluded: true, movementsIncluded: true };
             const saved = await supabase.rpc("sync_source_effect", {
-              p_source_type: action.effect.sourceType, p_source_id: action.effect.sourceId,
-              p_expected_version: action.expectedVersion, p_payload: payload, p_deleted: false
+              p_source_type: sourceType, p_source_id: sourceId,
+              p_expected_version: action.expectedVersion, p_payload: payload, p_deleted: isDelete
             });
             if (saved.error) {
-              if (saved.error.code === "40001") {
-                const conflicts = JSON.parse(localStorage.getItem("mgr6-source-effect-conflicts") || "[]");
-                conflicts.push({ sourceType: action.effect.sourceType, sourceId: action.effect.sourceId, reason: "write_version_conflict" });
-                localStorage.setItem("mgr6-source-effect-conflicts", JSON.stringify(conflicts));
-              } else errors.push("source effect " + action.effect.sourceType + "/" + action.effect.sourceId + ": " + saved.error.message);
+              if (saved.error.code === "40001") conflicts.push({ sourceType, sourceId, reason: "write_version_conflict" });
+              else errors.push("source effect " + sourceType + "/" + sourceId + ": " + saved.error.message);
               continue;
             }
             const row = Array.isArray(saved.data) ? saved.data[0] : saved.data;
-            if (row?.sync_version) versions[JSON.stringify([action.effect.sourceType, action.effect.sourceId])] = Number(row.sync_version);
+            if (row?.sync_version) versions[JSON.stringify([sourceType, sourceId])] = Number(row.sync_version);
+            if (isDelete) completedTombstones.add(JSON.stringify([sourceType, sourceId]));
           }
+          if (conflicts.length) localStorage.setItem("mgr6-source-effect-conflicts", JSON.stringify(conflicts));
+          const remainingTombstones = queuedTombstones.filter(item =>
+            !completedTombstones.has(JSON.stringify([String(item.sourceType), String(item.sourceId)]))
+          );
+          localStorage.setItem("mgr6-cloud-effect-tombstones", JSON.stringify(remainingTombstones));
           localStorage.setItem("mgr6-source-effect-versions", JSON.stringify(versions));
         }
       }
