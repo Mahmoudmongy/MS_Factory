@@ -1443,7 +1443,14 @@ async function uploadToTables(showAlert = false) {
             const writeLedger = canWrite(permission);
             const writeMovements = canWrite("inventory");
             const isDelete = action.op === "delete";
-            if (isDelete ? (!writeLedger || !writeMovements) : (!writeLedger && !writeMovements)) continue;
+            if (isDelete && (!writeLedger || !writeMovements)) {
+              conflicts.push({ sourceType, sourceId, reason: "delete_requires_ledger_and_inventory_permissions" });
+              continue;
+            }
+            if (!isDelete && !writeLedger && !writeMovements) {
+              conflicts.push({ sourceType, sourceId, reason: "missing_source_effect_write_permission" });
+              continue;
+            }
             if (!isDelete && (
               (action.effect.ledger.length > 0 && !writeLedger) ||
               (action.effect.movements.length > 0 && !writeMovements)
