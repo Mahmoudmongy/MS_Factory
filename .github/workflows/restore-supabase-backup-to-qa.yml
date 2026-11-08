@@ -71,7 +71,7 @@ jobs:
           umask 077
           printf '%s\n' "$AGE_IDENTITY" > "$RUNNER_TEMP/age-identity.txt"
           chmod 600 "$RUNNER_TEMP/age-identity.txt"
-          actual_recipient="$(age-keygen -y -i "$RUNNER_TEMP/age-identity.txt" 2>/dev/null)"
+          actual_recipient="$(age-keygen -y "$RUNNER_TEMP/age-identity.txt" 2>/dev/null)"
           if [ "$actual_recipient" != "$AGE_RECIPIENT" ]; then
             echo "::error::AGE_IDENTITY does not match the public recipient used for encryption."
             exit 1
