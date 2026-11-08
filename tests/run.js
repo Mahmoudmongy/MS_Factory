@@ -91,7 +91,7 @@ const unmapped=normalizeSourceEffects?normalizeSourceEffects({...canonicalFixtur
 ok('normalizer rejects unmapped account and item references rather than guessing',unmapped.invalid.some(x=>x.reason==='unmapped_account')&&unmapped.invalid.some(x=>x.reason==='unmapped_item'));
 const duplicateCodes=normalizeSourceEffects?normalizeSourceEffects({...canonicalFixture,accts:[...canonicalFixture.accts,{id:3,code:'1001',name:'حساب مكرر'}],L:[]}):{invalid:[]};
 ok('normalizer rejects duplicate account codes',duplicateCodes.invalid.some(x=>x.reason==='duplicate_account_code'));
-const openingRows=collectSourceEffects?collectSourceEffects({L:[{desc:'رصيد افتتاحي',a:1,dr:10,cr:0}],mv:[{ref:'رصيد افتتاحي',iid:1,v:'-',q:10,val:10}]}):{ignored:[]};
+const openingRows=collectSourceEffects?collectSourceEffects({L:[{src:'je',desc:'رصيد افتتاحي',a:1,dr:10,cr:0}],mv:[{ref:'رصيد افتتاحي',iid:1,v:'-',q:10,val:10}]}):{ignored:[]};
 ok('legacy opening-balance baseline rows are not replayed as transaction effects',openingRows.ignored.length===2&&openingRows.effects.length===0);
 ok('production-only employees are allowed through the cloud upload permission gate',/!admin && !\["customers", "suppliers", "invoices", "inventory", "production"\]\.some\(canWrite\)/.test(cloud));
 ok('production-only employees are allowed through the cloud download permission gate',/!\["customers","suppliers","invoices","inventory","production","reports"\]\.some\(canRead\)/.test(cloud));
