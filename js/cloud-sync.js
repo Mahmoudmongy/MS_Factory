@@ -212,15 +212,20 @@ function normalizeSourceEffects(state) {
   }
   const itemById = new Map();
   const itemIds = new Set();
+  const itemSkuToId = new Map();
   for (const item of Array.isArray(state?.items) ? state.items : []) {
     if (!item || item.id == null) continue;
     const id = String(item.id);
     if (itemIds.has(id)) invalid.push({ reason: "duplicate_item_id", id });
     itemIds.add(id);
+    const sku = String(item.sku || "").trim();
+    if (sku && itemSkuToId.has(sku) && itemSkuToId.get(sku) !== id) {
+      invalid.push({ reason: "duplicate_item_sku", sku });
+    } else if (sku) itemSkuToId.set(sku, id);
     itemById.set(id, {
       externalId: id,
       name: String(item.name || ""),
-      sku: String(item.sku || ""),
+      sku,
       warehouseId: item.wh == null ? null : String(item.wh),
       warehouseName: (state.wh || []).find(w => String(w.id) === String(item.wh))?.name || "",
       unit: String(item.unit || "")
