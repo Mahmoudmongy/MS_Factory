@@ -59,6 +59,11 @@ The RPC must validate source categories, ownership, payload shape/size, and perm
 
 **Not implemented yet:** the client does not call the RPC, does not fetch/apply effect records, and does not alter stock or ledger balances. The draft migration has not been applied to production or QA. The unique SKU index and RPC therefore have no live effect at this stage.
 
+- Added a pure optimistic-concurrency planner for new writes, exact-version replacements, remote-version conflicts, and delete tombstones. It never auto-overwrites a newer remote record or resurrects a remotely deleted source.
+- Added a local effect replacement helper that removes only rows matching both source type and source ID, reverses their old stock delta, then applies the replacement delta. Focused checks confirm repeated application leaves stock and ledger row counts unchanged.
+- Corrected the existing app-level `rev()` behavior: edits/deletions now scope reversals by both source type and ID. Previously, equal numeric IDs from different source categories could reverse unrelated accounting and stock effects.
+- Deleting a source now persists an offline tombstone in `mgr6-cloud-effect-tombstones` before local reversal, so a later sync can propagate the deletion.
+
 ## Rollout sequence
 
 1. Add pure client helpers to collect and normalize effects by `(src,rid)`, without changing existing upload behavior.
