@@ -337,10 +337,21 @@ async function syncVersionedMasterRecord(table, owner, externalId, expectedVersi
         email: remote.email || "",
         addr: remote.address || "",
         gov: remote.governorate || "",
-        city: remote.city || "",
-        _cloudMasterVersion: Number(remote.sync_version || 1),
-        _cloudMasterUpdatedAt: remote.updated_at || null
+        city: remote.city || ""
       });
+      if (table === "customers") {
+        copy.c = 1;
+        copy.type = remote.customer_type === "wholesale" ? "w" : "r";
+        copy._cloudCustomersVersion = Number(remote.sync_version || 1);
+        copy._cloudCustomersUpdatedAt = remote.updated_at || null;
+      } else if (table === "suppliers") {
+        copy.s = 1;
+        copy._cloudSuppliersVersion = Number(remote.sync_version || 1);
+        copy._cloudSuppliersUpdatedAt = remote.updated_at || null;
+      } else {
+        copy._cloudProductsVersion = Number(remote.sync_version || 1);
+        copy._cloudProductsUpdatedAt = remote.updated_at || null;
+      }
       return { conflict: { serverVersion: Number(remote.sync_version || 1), serverUpdatedAt: remote.updated_at || null, serverCopy: copy } };
     }
   }
