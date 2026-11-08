@@ -72,7 +72,7 @@ jobs:
           SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
         run: |
           set -euo pipefail
-          npx --yes supabase@latest db dump --db-url "$SUPABASE_DB_URL" -f roles.sql --role-only
+          npx --yes supabase@3.0.0 db dump --remote "$SUPABASE_DB_URL" -f roles.sql --role-only
           npx --yes supabase@latest db dump --db-url "$SUPABASE_DB_URL" -f schema.sql
           npx --yes supabase@latest db dump --db-url "$SUPABASE_DB_URL" -f data.sql --use-copy --data-only
           # Supabase CLI deliberately excludes managed auth/storage schemas.
@@ -90,21 +90,22 @@ jobs:
           test -s schema.sql
           test -s data.sql
           test -s auth-users.sql
+          test -s migration-history-schema.sql
           test -s migration-history.sql
           test -s auth-trigger.sql
           test -s auth-row-counts.txt
           test -s public-row-counts.txt
-          sha256sum roles.sql schema.sql data.sql auth-users.sql migration-history.sql auth-trigger.sql auth-row-counts.txt public-row-counts.txt > database-files.sha256
+          sha256sum roles.sql schema.sql data.sql auth-users.sql migration-history-schema.sql migration-history.sql auth-trigger.sql auth-row-counts.txt public-row-counts.txt > database-files.sha256
           cat > manifest.txt <<EOF
           project=ms-factory
           created_utc=$(date -u +%Y-%m-%dT%H:%M:%SZ)
           source=Supabase CLI db dump
-          includes=roles,schema,public-data,auth-users-identities-mfa-webauthn,migration-history,auth-trigger,auth-and-public-row-counts,migrations,edge-functions
+          includes=roles,schema,public-data,auth-users-identities-mfa-webauthn,migration-history-schema,migration-history,auth-trigger,auth-and-public-row-counts,migrations,edge-functions
           storage_bucket_count=$(cat storage-bucket-count.txt)
           auth_user_count=$(cat auth-user-count.txt)
           encryption=age public-key recipient
           EOF
-          tar -czf ms-factory-db-backup.tar.gz roles.sql schema.sql data.sql auth-users.sql migration-history.sql auth-trigger.sql auth-row-counts.txt public-row-counts.txt backup-migrations backup-edge-functions backup-scripts database-files.sha256 manifest.txt storage-bucket-count.txt auth-user-count.txt migration-count.txt
+          tar -czf ms-factory-db-backup.tar.gz roles.sql schema.sql data.sql auth-users.sql migration-history-schema.sql migration-history.sql auth-trigger.sql auth-row-counts.txt public-row-counts.txt backup-migrations backup-edge-functions backup-scripts database-files.sha256 manifest.txt storage-bucket-count.txt auth-user-count.txt migration-count.txt
           sha256sum ms-factory-db-backup.tar.gz > ms-factory-db-backup.tar.gz.sha256
 
       - name: Encrypt backup before upload
