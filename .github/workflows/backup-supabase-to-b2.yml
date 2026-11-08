@@ -73,7 +73,8 @@ jobs:
           region="${B2_ENDPOINT#https://s3.}"
           region="${region%.backblazeb2.com}"
           export AWS_DEFAULT_REGION="$region"
-          used_bytes="$(aws s3 ls "s3://$B2_BUCKET/backups/database/ms-factory/" --recursive --endpoint-url "$B2_ENDPOINT" | awk '$3 ~ /^[0-9]+$/ { total += $3 } END { print total + 0 }')"
+          aws s3api list-objects-v2 --bucket "$B2_BUCKET" --prefix "backups/database/ms-factory/" --endpoint-url "$B2_ENDPOINT" --output json > b2-existing-objects.json
+          used_bytes="$(jq '[.Contents[]?.Size] | add // 0' b2-existing-objects.json)"
           echo "Existing MS Factory backup prefix bytes: $used_bytes"
           if [ "$used_bytes" -gt 9000000000 ]; then
             echo "::error::The managed backup prefix already exceeds the 9 GB safety ceiling."
@@ -167,7 +168,8 @@ jobs:
           key="backups/database/ms-factory/$stamp/ms-factory-db-backup.tar.gz.age"
           archive_bytes="$(stat -c%s ms-factory-db-backup.tar.gz.age)"
           sidecar_bytes="$(stat -c%s ms-factory-db-backup.tar.gz.age.sha256)"
-          used_bytes="$(aws s3 ls "s3://$B2_BUCKET/backups/database/ms-factory/" --recursive --endpoint-url "$B2_ENDPOINT" | awk '$3 ~ /^[0-9]+$/ { total += $3 } END { print total + 0 }')"
+          aws s3api list-objects-v2 --bucket "$B2_BUCKET" --prefix "backups/database/ms-factory/" --endpoint-url "$B2_ENDPOINT" --output json > b2-existing-objects.json
+          used_bytes="$(jq '[.Contents[]?.Size] | add // 0' b2-existing-objects.json)"
           if [ "$((used_bytes + archive_bytes + sidecar_bytes))" -gt 9000000000 ]; then
             echo "::error::The MS Factory backup prefix would exceed the 9 GB safety ceiling."
             exit 1
@@ -188,4 +190,4 @@ jobs:
       - name: Remove plaintext exports and temporary metadata
         if: always()
         run: |
-          rm -rf roles.sql schema.sql data.sql auth-users.sql migration-history-schema.sql migration-history.sql auth-trigger.sql auth-row-counts.txt public-row-counts.txt backup-migrations backup-edge-functions backup-scripts manifest.txt storage-bucket-count.txt auth-user-count.txt migration-count.txt database-files.sha256 b2-lock.json b2-lifecycle.json uploaded-retention.json uploaded-object.json ms-factory-db-backup.tar.gz ms-factory-db-backup.tar.gz.sha256
+          rm -rf roles.sql schema.sql data.sql auth-users.sql migration-history-schema.sql migration-history.sql auth-trigger.sql auth-row-counts.txt public-row-counts.txt backup-migrations backup-edge-functions backup-scripts manifest.txt storage-bucket-count.txt auth-user-count.txt migration-count.txt database-files.sha256 b2-lock.json b2-lifecycle.json b2-existing-objects.json uploaded-retention.json uploaded-object.json ms-factory-db-backup.tar.gz ms-factory-db-backup.tar.gz.sha256
