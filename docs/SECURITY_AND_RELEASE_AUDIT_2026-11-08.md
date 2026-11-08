@@ -82,7 +82,7 @@ The remaining last-write-wins path for customers, suppliers and products has now
 
 - Each customer, supplier and product row now carries `sync_version`, `updated_at` and `updated_by`.
 - Writes use optimistic compare-and-swap: a new record must submit version 0; edits must submit the current version. Stale edits return SQLSTATE `40001` and cannot overwrite the newer copy.
-- The RPC is permission-scoped: customers → customers permission, suppliers → suppliers permission, products → inventory permission. It validates the record ID, required name, customer type, nonnegative product quantities/prices and payload size.
+- The RPC is permission-scoped: customers → customers permission, suppliers → suppliers permission, products → inventory permission. It validates the record ID, required name, customer type, nonnegative product prices, preserves legitimate negative stock balances, validates raw JSON objects and enforces payload size.
 - The browser sync now calls the RPC for all three master-data types, carries the version metadata across offline saves, preserves the remote copy on conflicts and counts conflicts instead of silently overwriting local edits.
 - The new migration was applied only to the isolated QA project and passed rolled-back SQL tests for create, update, stale-write rejection, profile-field preservation, product update, and denial of production-only/invoice-only employee writes.
 - A follow-up verification confirmed zero retained QA fixture rows after rollback across customers, suppliers, products, invoices, returns, vouchers, production orders and accounting snapshots.
