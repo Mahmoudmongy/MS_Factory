@@ -17,6 +17,7 @@ ok('partner edit preserves the stable record ID and updates the existing object'
 ok('employee edit preserves the existing employee record',app.includes('function saveE(id)')&&app.includes('if(old)Object.assign(old,data)'));
 ok('warehouse names can be edited without replacing warehouse IDs',app.includes('function saveWh(id)')&&app.includes('w.name=n'));
 ok('chart-of-account names can be edited while preserving their account IDs',app.includes('function saveAccName(id)')&&app.includes('a.name=n'));
+ok('cloud transaction deletion requires both its module and inventory permissions',/effectPermission=\(\{doc:"invoices",po:"production",vch:"invoices",je:"settings",wo:"inventory"\}\)\[src\]/.test(app)&&/cp\.permissions\?\.inventory!==true\|\|cp\.permissions\?\.\[effectPermission\]!==true/.test(app));
 ok('master-data edit handlers enforce edit permission when called directly',[
   'function saveP(id){if(id&&!can("edit"))return;',
   'function saveItem(id){if(id&&!can("edit"))return;',
