@@ -139,6 +139,13 @@ const localDiff=planRemoteSourceEffectApply?planRemoteSourceEffectApply({...cano
 ok('remote planner preserves local edits as conflicts instead of overwriting them',localDiff.actions.length===0&&localDiff.conflicts.some(x=>x.reason==='local_effect_differs_from_remote'));
 const remoteDeletedAbsent=planRemoteSourceEffectApply?planRemoteSourceEffectApply(localWithoutEffect,[{...sameRemote,deleted_at:'2026-11-08T00:00:00Z',payload:null}],{}):{adoptedVersions:{}};
 ok('remote planner adopts tombstones when the local source is already absent',remoteDeletedAbsent.adoptedVersions['["doc","91"]']===3&&remoteDeletedAbsent.actions.length===0);
+const movementOnlyPayload={sourceType:'doc',sourceId:'91',ledgerIncluded:false,movementsIncluded:true,ledger:[],movements:normalized.effects[0].movements};
+const movementOnlyRemote={...sameRemote,payload:movementOnlyPayload};
+const partialDownload=planRemoteSourceEffectApply?planRemoteSourceEffectApply(canonicalFixture,[movementOnlyRemote],{}):{conflicts:[{}]};
+ok('role-redacted inventory payload compares movements without exposing ledger lines',partialDownload.actions.length===0&&partialDownload.adoptedVersions['["doc","91"]']===3);
+const partialState={accts:canonicalFixture.accts.map(x=>({...x})),items:[{...canonicalFixture.items[0],st:{'أبيض':8},val:80}],partners:canonicalFixture.partners.map(x=>({...x})),L:[{src:'doc',rid:91,a:1,dr:100,cr:0},{src:'doc',rid:91,a:2,dr:0,cr:100,pid:31}],mv:[{src:'doc',rid:91,iid:21,v:'أبيض',q:-2,val:-20}]};
+const partialApply=applyCanonicalSourceEffect?applyCanonicalSourceEffect(partialState,{...normalized.effects[0],...movementOnlyPayload}):{applied:false};
+ok('partial inventory application preserves hidden ledger rows while replacing movements',partialApply.applied&&partialState.L.length===2&&partialState.items[0].st['أبيض']===8);
 ok('production-only employees are allowed through the cloud upload permission gate',/!admin && !\["customers", "suppliers", "invoices", "inventory", "production"\]\.some\(canWrite\)/.test(cloud));
 ok('production-only employees are allowed through the cloud download permission gate',/!\["customers","suppliers","invoices","inventory","production","reports"\]\.some\(canRead\)/.test(cloud));
 ok('invoice cloud sync uses the atomic versioned RPC',/rpc\(["']sync_invoice["']/.test(cloud)&&/p_expected_version/.test(cloud)&&/sync_version/.test(cloud));
