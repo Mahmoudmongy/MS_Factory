@@ -134,7 +134,7 @@ BEGIN
  IF NOT EXISTS(SELECT 1 FROM public.invoices WHERE external_id='qa-invoice-cas' AND total=60 AND sync_version=2) THEN
   RAISE EXCEPTION 'Stale invoice writer changed the accepted invoice';
  END IF;
-END $;
+END $$;
 SELECT * FROM public.sync_factory_detail('vouchers','qa-voucher-cas',0,
  '{"voucher_no":"QA-VCH","direction":"in","account":"qa-cash","amount":20,"raw":{"qa":true}}'::jsonb);
 SELECT * FROM public.sync_factory_detail('vouchers','qa-payment-cas',0,
