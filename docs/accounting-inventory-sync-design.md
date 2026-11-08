@@ -52,24 +52,17 @@ The RPC must validate source categories, ownership, payload shape/size, and perm
 
 ## Implemented on the isolated branch (not enabled)
 
-- `collectSourceEffects` groups `S.L` and `S.mv` by `(src,rid)`, keeping equal IDs from different source categories separate.
-- `normalizeSourceEffects` maps account IDs to account codes, item IDs to the existing product external ID, and partner IDs to partner external IDs. It rejects missing/ambiguous mappings, duplicate account codes/SKUs, and unbalanced ledger groups.
-- Focused regression tests cover source scoping, repeatable collection, opening-baseline exclusion, account/item/partner mapping, duplicate keys, and invalid/unbalanced effects.
-- A draft migration defines a versioned `source_effects` table, read RLS, and an authenticated compare-and-swap RPC with source-category permission checks, tombstones, payload validation, and per-source advisory locking.
+- `collectSourceEffects` groups `S.L` and `S.mv` by `(src,rid)`, keeping equal IDs from different source categories separate and excluding legacy seed opening rows that have no source ID.
+- `normalizeSourceEffects` maps local account IDs to account codes, item IDs to the product external ID already used by detail sync, and partner IDs to partner external IDs. It carries account metadata and rejects missing/ambiguous mappings, duplicate account codes/SKUs, and unbalanced ledger groups.
+- Upload and download planners handle new effects, exact-version replacement, remote-version conflicts, tombstones, and no-resurrection behavior.
+- The local apply helper can replace one source effect, resolve local foreign keys, and reverse/reapply only that source's stock deltas. It supports redacted payloads so inventory-only access does not overwrite or expose ledger lines.
+- `rev()` and all edit/delete call sites now scope reversals by both source type and source ID. Previously, equal IDs from different categories could reverse unrelated rows.
+- Deleting a source now persists an offline tombstone in `mgr6-cloud-effect-tombstones` before local reversal.
+- The draft migration creates versioned source-effect storage, a compare-and-swap write RPC, per-source locking, tombstones, and per-factory SKU uniqueness. Direct table reads are revoked; `get_source_effects()` returns role-redacted ledger/movement sections.
 
-- Added a remote-download planner that applies a remote source only when it is absent locally, adopts an identical local copy, and otherwise records a conflict. It does not auto-overwrite local edits.
-- Added a local apply helper that resolves account codes, item external IDs, and partner external IDs; replaces only the matching `(src,rid)` effect; and reverses/reapplies stock deltas so repeated application is idempotent.
-- Updated `rev()` and all edit/delete call sites to scope reversals by source type and ID. Deletions now queue durable offline tombstones before local reversal.
-- Executed 26 focused helper/static checks directly against the branch files: **26/26 passed**. These are not a substitute for the full Playwright suite or a two-device QA restore.
+Executed 26 focused helper/static checks directly against the branch files: **26/26 passed**. These checks are not a substitute for the full Playwright suite or a two-device QA restore.
 
-**Not implemented yet:** the client does not call the RPC, does not fetch/apply effect records, and does not alter stock or ledger balances. The draft migration has not been applied to production or QA. The unique SKU index and RPC therefore have no live effect at this stage.
-
-- Added a pure optimistic-concurrency planner for new writes, exact-version replacements, remote-version conflicts, and delete tombstones. It never auto-overwrites a newer remote record or resurrects a remotely deleted source.
-- Added a local effect replacement helper that removes only rows matching both source type and source ID, reverses their old stock delta, then applies the replacement delta. Focused checks confirm repeated application leaves stock and ledger row counts unchanged.
-- Corrected the existing app-level `rev()` behavior: edits/deletions now scope reversals by both source type and ID. Previously, equal numeric IDs from different source categories could reverse unrelated accounting and stock effects.
-- Deleting a source now persists an offline tombstone in `mgr6-cloud-effect-tombstones` before local reversal, so a later sync can propagate the deletion.
-
-- Refined the draft read API to prevent role leakage: direct table reads are revoked. `get_source_effects()` returns full ledger + movement payloads only for source categories the role can read; inventory-only access receives movement arrays with ledger arrays redacted. The client planners and local apply helper now compare/apply only the visible sections, preserving hidden local ledger rows.
+**Not wired/enabled yet:** normal sync does not call the new RPCs or fetch/apply effect rows. The migration has not been executed against Supabase. Stock replay must wait until the full historical effect backfill is complete, because product raw records currently carry aggregate stock and replaying movements on top of that would double-count. The migration and helpers have no live effect on production or QA.
 
 ## Rollout sequence
 
