@@ -154,6 +154,41 @@ function mergeCloudRecords(existing, incoming) {
   return { arr: [...map.values()], added, conflicts };
 }
 
+
+// Build a deterministic, source-scoped view of accounting/inventory effects.
+// This is intentionally a pure collector: it does not upload, mutate, or apply balances.
+function collectSourceEffects(state) {
+  const allowed = new Set(["doc", "po", "vch", "je", "wo"]);
+  const groups = new Map();
+  const invalid = [];
+  const add = (kind, row, index) => {
+    if (!row || typeof row !== "object") { invalid.push({ kind, index, reason: "invalid_row" }); return; }
+    const sourceType = String(row.src || "");
+    if (!allowed.has(sourceType)) { invalid.push({ kind, index, reason: "unsupported_source", sourceType }); return; }
+    if (row.rid === undefined || row.rid === null || String(row.rid) === "") {
+      invalid.push({ kind, index, reason: "missing_source_id", sourceType }); return;
+    }
+    const sourceId = String(row.rid);
+    const key = JSON.stringify([sourceType, sourceId]);
+    if (!groups.has(key)) groups.set(key, { sourceType, sourceId, ledger: [], movements: [] });
+    groups.get(key)[kind].push(row);
+  };
+  (Array.isArray(state?.L) ? state.L : []).forEach((row, index) => add("ledger", row, index));
+  (Array.isArray(state?.mv) ? state.mv : []).forEach((row, index) => add("movements", row, index));
+  const effects = [...groups.values()];
+  const stable = value => {
+    if (Array.isArray(value)) return "[" + value.map(stable).join(",") + "]";
+    if (value && typeof value === "object") return "{" + Object.keys(value).sort().map(k => JSON.stringify(k) + ":" + stable(value[k])).join(",") + "}";
+    return JSON.stringify(value);
+  };
+  for (const effect of effects) {
+    effect.ledger.sort((a, b) => stable(a).localeCompare(stable(b)));
+    effect.movements.sort((a, b) => stable(a).localeCompare(stable(b)));
+  }
+  effects.sort((a, b) => a.sourceType.localeCompare(b.sourceType) || a.sourceId.localeCompare(b.sourceId));
+  return { effects, invalid };
+}
+
 function stableJson(value) {
   if (Array.isArray(value)) return "[" + value.map(stableJson).join(",") + "]";
   if (value && typeof value === "object") {
