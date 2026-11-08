@@ -208,6 +208,11 @@ begin
     end if;
   end if;
 
+  -- Serialize source writes against the one-time factory baseline publication.
+  perform pg_catalog.pg_advisory_xact_lock(
+    pg_catalog.hashtextextended(v_owner_id::text || ':factory-opening-baseline', 0)
+  );
+
   perform pg_catalog.pg_advisory_xact_lock(
     pg_catalog.hashtextextended(
       v_owner_id::text || ':' || p_source_type || ':' || p_source_id, 0
