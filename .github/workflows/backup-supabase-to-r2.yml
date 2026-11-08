@@ -77,7 +77,7 @@ jobs:
           npx --yes supabase@latest db dump --db-url "$SUPABASE_DB_URL" -f data.sql --use-copy --data-only
           # Supabase CLI deliberately excludes managed auth/storage schemas.
           # Export Auth users, identities and MFA recovery material; never export sessions/tokens.
-          docker run --rm -v "$PWD:/backup" -e SUPABASE_DB_URL postgres:17-alpine sh -ec '
+          docker run --rm -v "$PWD:/backup" -e SUPABASE_DB_URL postgres:17-alpine sh -e <<'BACKUP_SCRIPT'
             pg_dump "$SUPABASE_DB_URL" --data-only --no-owner --no-privileges \
               --table=auth.users --table=auth.identities \
               --table=auth.mfa_factors --table=auth.mfa_recovery_code_sets \
@@ -99,7 +99,7 @@ jobs:
               count="$(psql "$SUPABASE_DB_URL" -Atqc "select count(*) from public.\"$table\"")"
               printf "%s=%s\n" "$table" "$count" >> /backup/public-row-counts.txt
             done
-          '
+          BACKUP_SCRIPT
           if [ "$(cat storage-bucket-count.txt)" != "0" ]; then
             echo "::error::Supabase Storage buckets exist; object bytes are not included. Configure and test a separate object backup before enabling database backups."
             exit 1
