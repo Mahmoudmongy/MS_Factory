@@ -109,6 +109,58 @@ function mergeByKey(existing, incoming, keyFn) {
   (incoming || []).forEach(it => { try { const k = keyFn(it); if (k && !map.has(String(k))) { map.set(String(k), it); added++; } } catch(e){} });
   return { arr: [...map.values()], added };
 }
+function mergeCloudProducts(existing, incoming) {
+  const rows = Array.isArray(existing) ? existing : [];
+  const map = new Map();
+  const skuMap = new Map();
+  rows.forEach(item => {
+    if (!item || typeof item !== "object") return;
+    const identity = item.cloudId || item.id;
+    if (identity != null) map.set(String(identity), item);
+    const sku = String(item.sku || "").trim();
+    if (sku) {
+      if (!skuMap.has(sku)) skuMap.set(sku, []);
+      skuMap.get(sku).push(item);
+    }
+  });
+  let added = 0, linked = 0, conflicts = 0;
+  (Array.isArray(incoming) ? incoming : []).forEach(remote => {
+    if (!remote || typeof remote !== "object") return;
+    const identity = remote.cloudId || remote.id;
+    if (identity == null) return;
+    const key = String(identity);
+    if (map.has(key)) return;
+    const sku = String(remote.sku || "").trim();
+    const matches = sku ? (skuMap.get(sku) || []) : [];
+    if (matches.length === 1) {
+      const local = matches[0];
+      const sameName = String(local.name || "").trim().toLocaleLowerCase() === String(remote.name || "").trim().toLocaleLowerCase();
+      if (sameName && (!local.cloudId || String(local.cloudId) === key)) {
+        local.cloudId = key;
+        map.set(key, local);
+        linked++;
+      } else {
+        local._cloudConflict = { reason: "product_identity_mismatch", serverCopy: remote };
+        conflicts++;
+      }
+      return;
+    }
+    if (matches.length > 1) {
+      matches.forEach(local => { local._cloudConflict = { reason: "ambiguous_product_sku", serverCopy: remote }; });
+      conflicts++;
+      return;
+    }
+    map.set(key, remote);
+    rows.push(remote);
+    if (sku) {
+      if (!skuMap.has(sku)) skuMap.set(sku, []);
+      skuMap.get(sku).push(remote);
+    }
+    added++;
+  });
+  return { arr: rows, added, linked, conflicts };
+}
+
 function mergeCloudInvoices(existing, incoming) {
   const map = new Map();
   (existing || []).forEach(it => { const k = it && (it.id || it.no); if (k) map.set(String(k), it); });
@@ -226,14 +278,16 @@ function normalizeSourceEffects(state) {
     if (sku && itemSkuToId.has(sku) && itemSkuToId.get(sku) !== id) {
       invalid.push({ reason: "duplicate_item_sku", sku });
     } else if (sku) itemSkuToId.set(sku, id);
-    itemById.set(id, {
-      externalId: id,
+    const itemInfo = {
+      externalId: String(item.cloudId || id),
       name: String(item.name || ""),
       sku,
       warehouseId: item.wh == null ? null : String(item.wh),
       warehouseName: (state.wh || []).find(w => String(w.id) === String(item.wh))?.name || "",
       unit: String(item.unit || "")
-    });
+    };
+    itemById.set(id, itemInfo);
+    itemById.set(itemInfo.externalId, itemInfo);
   }
   const partnerById = new Map();
   for (const partner of Array.isArray(state?.partners) ? state.partners : []) {
@@ -472,7 +526,11 @@ function applyCanonicalSourceEffect(state, effect) {
     if (accountsByCode.has(code)) return { applied: false, reason: "duplicate_local_account_code", code };
     accountsByCode.set(code, account);
   }
-  const itemsByExternalId = new Map(state.items.filter(x => x?.id != null).map(x => [String(x.id), x]));
+  const itemsByExternalId = new Map();
+  for (const item of state.items) {
+    if (item?.id != null) itemsByExternalId.set(String(item.id), item);
+    if (item?.cloudId != null) itemsByExternalId.set(String(item.cloudId), item);
+  }
   const partnersByExternalId = new Map(state.partners.filter(x => x?.id != null).map(x => [String(x.id), x]));
   const accountPlans = new Map();
   const ledgerRows = [];
@@ -576,7 +634,7 @@ function buildStockBaseline(state) {
     if (!item || item.id == null || String(item.id).trim() === "") {
       invalid.push({ reason: "missing_item_external_id" }); continue;
     }
-    const id = String(item.id);
+    const id = String(item.cloudId || item.id);
     if (seen.has(id)) { invalid.push({ reason: "duplicate_item_external_id", itemExternalId: id }); continue; }
     seen.add(id);
     if (item.st != null && (typeof item.st !== "object" || Array.isArray(item.st))) {
@@ -623,7 +681,7 @@ function applyStockBaseline(state, baseline) {
   const localById = new Map();
   for (const item of state.items) {
     if (!item || item.id == null) continue;
-    const id = String(item.id);
+    const id = String(item.cloudId || item.id);
     if (localById.has(id)) return { applied: false, reason: "duplicate_local_item_external_id", itemExternalId: id };
     localById.set(id, item);
   }
@@ -887,7 +945,8 @@ async function uploadToTables(showAlert = false) {
           if (!pr || typeof pr !== "object") continue;
           const name = String(getField(pr, ["name", "title", "product"]) || "");
           if (!name || isAccountName(name)) continue;
-          const externalId = String(getField(pr, ["id", "code", "sku"]) || name);
+          if (pr.id != null && !pr.cloudId) pr.cloudId = String(pr.id);
+        const externalId = String(pr.cloudId || getField(pr, ["id", "code", "sku"]) || name);
           if (!productMap.has(externalId)) productMap.set(externalId, pr);
         }
       }
@@ -1098,6 +1157,7 @@ async function loadFromTablesMerge(isAuto = false) {
       const cloudProducts = prods.map(p => {
         if (p.raw && typeof p.raw === "object" && !Array.isArray(p.raw)) {
           const raw = { ...p.raw };
+          if (!raw.cloudId) raw.cloudId = String(p.external_id || raw.id || p.id);
           if (!raw.st || typeof raw.st !== "object" || Array.isArray(raw.st)) raw.st = {};
           return raw;
         }
@@ -1112,8 +1172,8 @@ async function loadFromTablesMerge(isAuto = false) {
         };
       });
       if (!Array.isArray(S.items)) S.items = [];
-      const m = mergeByKey(S.items, cloudProducts, x => x.id || x.sku || x.name);
-      S.items = m.arr; totalAdded += m.added;
+      const m = mergeCloudProducts(S.items, cloudProducts);
+      S.items = m.arr; totalAdded += m.added; recordConflicts += m.conflicts;
     }
     Object.getPrototypeOf(localStorage).setItem.call(localStorage, "mgr6", JSON.stringify(S));
     if (restoredSnapshot && isAuto) setTimeout(() => location.reload(), 500);
