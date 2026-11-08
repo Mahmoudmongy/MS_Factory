@@ -49,7 +49,7 @@ create policy source_effects_read_permission
     )
   );
 
-revoke all on table public.source_effects from anon;
+revoke all on table public.source_effects from public, anon;
 revoke insert, update, delete, truncate, references, trigger
   on table public.source_effects from authenticated;
 grant select on table public.source_effects to authenticated;
