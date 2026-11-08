@@ -170,5 +170,5 @@ jobs:
       - name: Remove plaintext database exports
         if: always()
         run: |
-          rm -rf roles.sql schema.sql data.sql auth-users.sql migration-history-schema.sql migration-history.sql auth-trigger.sql auth-row-counts.txt public-row-counts.txt backup-migrations backup-edge-functions backup-scripts manifest.txt storage-bucket-count.txt auth-user-count.txt migration-count.txt r2-lock.json r2-lifecycle.json uploaded-object.json \
+          rm -rf roles.sql schema.sql data.sql auth-users.sql migration-history-schema.sql migration-history.sql auth-trigger.sql auth-row-counts.txt public-row-counts.txt backup-migrations backup-edge-functions backup-scripts manifest.txt storage-bucket-count.txt auth-user-count.txt migration-count.txt r2-lock.json r2-lifecycle.json r2-metrics.json uploaded-object.json \
             ms-factory-db-backup.tar.gz ms-factory-db-backup.tar.gz.sha256
