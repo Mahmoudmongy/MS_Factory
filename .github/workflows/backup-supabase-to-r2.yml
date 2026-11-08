@@ -78,12 +78,22 @@ jobs:
           supabase db dump --db-url "$SUPABASE_DB_URL" -f data.sql --use-copy --data-only
           # Supabase CLI deliberately excludes managed auth/storage schemas.
           # Export only Auth users and identities separately; never export sessions/tokens.
-          docker run --rm -v "$PWD:/backup" postgres:17 pg_dump "$SUPABASE_DB_URL" \
-            --data-only --no-owner --no-privileges \
-            --table=auth.users --table=auth.identities \
-            --table=auth.mfa_factors --table=auth.mfa_recovery_code_sets \
-            --table=auth.mfa_recovery_codes --table=auth.webauthn_credentials \
-            --file=/backup/auth-users.sql
+          docker run --rm -v "$PWD:/backup" -e SUPABASE_DB_URL postgres:17-alpine sh -ec '
+            pg_dump "$SUPABASE_DB_URL" --data-only --no-owner --no-privileges \
+              --table=auth.users --table=auth.identities \
+              --table=auth.mfa_factors --table=auth.mfa_recovery_code_sets \
+              --table=auth.mfa_recovery_codes --table=auth.webauthn_credentials \
+              --file=/backup/auth-users.sql
+            psql "$SUPABASE_DB_URL" -Atqc "select count(*) from storage.buckets" > /backup/storage-bucket-count.txt
+            psql "$SUPABASE_DB_URL" -Atqc "select count(*) from auth.users" > /backup/auth-user-count.txt
+          '
+          if [ "$(cat storage-bucket-count.txt)" != "0" ]; then
+            echo "::error::Supabase Storage buckets exist; object bytes are not included. Configure and test a separate object backup before enabling database backups."
+            exit 1
+          fi
+          cp supabase/restore/auth-trigger.sql auth-trigger.sql
+          cp -a supabase/migrations backup-migrations
+          cp -a supabase/functions backup-edge-functions
           test -s roles.sql
           test -s schema.sql
           test -s data.sql
@@ -92,10 +102,12 @@ jobs:
           project=ms-factory
           created_utc=$(date -u +%Y-%m-%dT%H:%M:%SZ)
           source=Supabase CLI db dump
-          includes=roles,schema,public-data,auth-users-and-identities
+          includes=roles,schema,public-data,auth-users-identities-mfa-webauthn,auth-trigger,migrations,edge-functions
+          storage_bucket_count=$(cat storage-bucket-count.txt)
+          auth_user_count=$(cat auth-user-count.txt)
           encryption=age public-key recipient
           EOF
-          tar -czf ms-factory-db-backup.tar.gz roles.sql schema.sql data.sql auth-users.sql manifest.txt
+          tar -czf ms-factory-db-backup.tar.gz roles.sql schema.sql data.sql auth-users.sql auth-trigger.sql backup-migrations backup-edge-functions manifest.txt storage-bucket-count.txt auth-user-count.txt
           sha256sum ms-factory-db-backup.tar.gz > ms-factory-db-backup.tar.gz.sha256
 
       - name: Encrypt backup before upload
@@ -138,5 +150,5 @@ jobs:
       - name: Remove plaintext database exports
         if: always()
         run: |
-          rm -f roles.sql schema.sql data.sql auth-users.sql manifest.txt r2-lock.json r2-lifecycle.json uploaded-object.json \
+          rm -rf roles.sql schema.sql data.sql auth-users.sql auth-trigger.sql backup-migrations backup-edge-functions manifest.txt storage-bucket-count.txt auth-user-count.txt r2-lock.json r2-lifecycle.json uploaded-object.json \
             ms-factory-db-backup.tar.gz ms-factory-db-backup.tar.gz.sha256
