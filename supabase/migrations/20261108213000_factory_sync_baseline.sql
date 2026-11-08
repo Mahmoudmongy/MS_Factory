@@ -60,6 +60,9 @@ begin
      or pg_catalog.jsonb_typeof(p_inventory_section) <> 'object'
      or pg_catalog.jsonb_typeof(p_accounting_section) <> 'object'
      or pg_catalog.jsonb_typeof(p_inventory_section -> 'stock') <> 'object'
+     or pg_catalog.jsonb_typeof(p_inventory_section #> '{stock,items}') <> 'array'
+     or nullif(p_inventory_section #>> '{stock,fingerprint}', '') is null
+     or (p_inventory_section #> '{stock,invalid}' is not null and pg_catalog.jsonb_array_length(p_inventory_section #> '{stock,invalid}') > 0)
      or pg_catalog.jsonb_typeof(p_inventory_section -> 'openingMovements') <> 'array'
      or pg_catalog.jsonb_typeof(p_accounting_section -> 'accounts') <> 'array'
      or pg_catalog.jsonb_typeof(p_accounting_section -> 'partners') <> 'array'
@@ -81,6 +84,31 @@ begin
   if exists (
     select 1
       from pg_catalog.jsonb_array_elements(p_inventory_section #> '{stock,items}') x(value)
+     where pg_catalog.jsonb_typeof(x.value -> 'variants') is distinct from 'array'
+        or pg_catalog.jsonb_typeof(x.value -> 'value') is distinct from 'number'
+        or exists (
+          select 1 from pg_catalog.jsonb_array_elements(coalesce(x.value -> 'variants', '[]'::jsonb)) v(value)
+           where nullif(pg_catalog.btrim(v.value ->> 'variant'), '') is null
+              or pg_catalog.jsonb_typeof(v.value -> 'quantity') is distinct from 'number'
+        )
+  ) then
+    raise exception 'Stock baseline contains invalid values or variants'
+      using errcode = '22023';
+  end if;
+
+  if exists (
+    select 1
+      from pg_catalog.jsonb_array_elements(p_inventory_section #> '{stock,items}') x(value)
+     group by x.value ->> 'itemExternalId'
+    having count(*) > 1
+  ) then
+    raise exception 'Duplicate item identities in stock baseline'
+      using errcode = '22023';
+  end if;
+
+  if exists (
+    select 1
+      from pg_catalog.jsonb_array_elements(p_inventory_section #> '{stock,items}') x(value)
      where nullif(pg_catalog.btrim(x.value ->> 'itemExternalId'), '') is null
         or not exists (
           select 1 from public.products pr
@@ -96,6 +124,9 @@ begin
     select 1
       from pg_catalog.jsonb_array_elements(p_inventory_section -> 'openingMovements') x(value)
      where nullif(pg_catalog.btrim(x.value ->> 'itemExternalId'), '') is null
+        or nullif(pg_catalog.btrim(x.value ->> 'variant'), '') is null
+        or pg_catalog.jsonb_typeof(x.value -> 'quantity') is distinct from 'number'
+        or pg_catalog.jsonb_typeof(x.value -> 'value') is distinct from 'number'
         or not exists (
           select 1 from public.products pr
            where pr.user_id = v_owner_id
@@ -104,6 +135,25 @@ begin
   ) then
     raise exception 'Opening movement references an item not synced to this factory'
       using errcode = '23503';
+  end if;
+
+  if exists (
+    select 1
+      from pg_catalog.jsonb_array_elements(p_accounting_section -> 'partners') x(value)
+     where nullif(pg_catalog.btrim(x.value ->> 'name'), '') is null
+  ) then
+    raise exception 'Every baseline partner must have a name'
+      using errcode = '22023';
+  end if;
+
+  if exists (
+    select 1
+      from pg_catalog.jsonb_array_elements(p_accounting_section -> 'partners') x(value)
+     group by x.value ->> 'externalId'
+    having count(*) > 1
+  ) then
+    raise exception 'Duplicate partner identities in baseline'
+      using errcode = '22023';
   end if;
 
   if exists (
@@ -141,6 +191,19 @@ begin
   ) then
     raise exception 'Duplicate account codes in baseline'
       using errcode = '22023';
+  end if;
+
+  if exists (
+    select 1
+      from pg_catalog.jsonb_array_elements(p_accounting_section -> 'openingLedger') x(value)
+     where nullif(x.value ->> 'partnerExternalId', '') is not null
+       and not exists (
+         select 1 from pg_catalog.jsonb_array_elements(p_accounting_section -> 'partners') p(value)
+          where p.value ->> 'externalId' = x.value ->> 'partnerExternalId'
+       )
+  ) then
+    raise exception 'Opening ledger references a partner not included in the baseline'
+      using errcode = '23503';
   end if;
 
   if exists (
