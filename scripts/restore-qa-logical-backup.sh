@@ -47,10 +47,12 @@ expected = os.environ["EXPECTED_QA_PROJECT_REF"].lower()
 forbidden = os.environ["FORBIDDEN_PRODUCTION_PROJECT_REF"].lower()
 if forbidden in host or forbidden in user:
     raise SystemExit("Refusing restore: production project reference detected.")
-if expected not in host and expected not in user:
-    raise SystemExit("Refusing restore: connection string does not identify the dedicated QA project.")
 if u.scheme not in ("postgres", "postgresql") or not u.path.endswith("/postgres"):
     raise SystemExit("Refusing restore: invalid PostgreSQL connection string.")
+if host != "aws-0-eu-west-2.pooler.supabase.com" or u.port != 6543:
+    raise SystemExit("Refusing restore: QA must use its EU-West-2 Supabase Transaction Pooler on port 6543.")
+if user != "postgres." + expected:
+    raise SystemExit("Refusing restore: Transaction Pooler username must be postgres.<QA project ref>; verify QA_SUPABASE_DB_URL.")
 PY
 
 psql_cmd=(psql --no-psqlrc --set=ON_ERROR_STOP=1 --dbname "$QA_SUPABASE_DB_URL")
