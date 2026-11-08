@@ -150,6 +150,7 @@ ok('baseline SQL validates synced item/partner references, source-effect backfil
   /Source effects exist; backfill them before baseline publication/.test(baselineMigration)&&/Opening ledger is not balanced/.test(baselineMigration)&&/products pr/.test(baselineMigration)&&/public\.customers c/.test(baselineMigration)&&/public\.suppliers s/.test(baselineMigration));
 
 const sourceEffectMigration=fs.readFileSync(path.join(ROOT,'supabase/migrations/20261108201500_source_accounting_effects.sql'),'utf8');
+ok('baseline section reads are requested only with explicit inventory/settings permission',cloud.includes('admin || profile.permissions?.inventory === true')&&cloud.includes('admin || profile.permissions?.settings === true'));
 ok('reports-only permission cannot read inventory or accounting source-effect sections',sourceEffectMigration.includes("can_access_factory_owner_strict(v_owner_id, 'inventory')")&&sourceEffectMigration.includes("can_access_factory_owner_strict(\n      v_owner_id,")&&!sourceEffectMigration.includes("private.can_access_factory_owner(v_owner_id, 'inventory', false)"));
 ok('source-effect SQL merges authorized sections and preserves the hidden section atomically',
   sourceEffectMigration.includes("else coalesce(v_existing_payload -> 'ledger', '[]'::jsonb)")&&sourceEffectMigration.includes("else coalesce(v_existing_payload -> 'movements', '[]'::jsonb)")&&sourceEffectMigration.includes("v_write_ledger and not v_can_write_ledger")&&sourceEffectMigration.includes("v_write_movements and not v_can_write_movements"));
