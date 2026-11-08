@@ -92,6 +92,8 @@ ok('backup workflow refuses to run without 90-day immutable retention and 120-da
 ok('backup workflow stops before exceeding the 9 GB R2 safety ceiling',/9000000000/.test(backupWorkflow)&&/current_bytes/.test(backupWorkflow)&&/new_bytes/.test(backupWorkflow));
 ok('backup job remains disabled until explicitly enabled and manually confirmed',backupWorkflow.includes("vars.BACKUP_ENABLED == 'true'")&&backupWorkflow.includes('inputs.run_confirmed')&&backupWorkflow.includes('default: false'));
 ok('backup workflow uses supported npx Supabase CLI and verifies export hashes inside the encrypted archive',backupWorkflow.includes('npx --yes supabase@latest db dump')&&!backupWorkflow.includes('npm install --global supabase')&&backupWorkflow.includes('database-files.sha256')&&backupWorkflow.includes('sha256sum roles.sql schema.sql data.sql auth-users.sql auth-trigger.sql'));
+ok('R2 backup workflow enforces a 9 GB ceiling across the entire dedicated bucket before upload',backupWorkflow.includes('aws s3 ls "s3://${R2_BUCKET}/" --recursive')&&backupWorkflow.includes('9000000000')&&backupWorkflow.includes('current_bytes + new_bytes'));
+
 
 ok('encrypted backup contains MFA recovery data and Auth trigger restoration files',backupWorkflow.includes('auth.mfa_factors')&&backupWorkflow.includes('auth.mfa_recovery_codes')&&backupWorkflow.includes('auth.webauthn_credentials')&&backupWorkflow.includes('auth-trigger.sql'));
 ok('backup refuses unsupported Storage objects and verifies the encrypted R2 read-back',backupWorkflow.includes('storage-bucket-count.txt')&&backupWorkflow.includes('Storage buckets exist')&&backupWorkflow.includes('cmp --silent'));
