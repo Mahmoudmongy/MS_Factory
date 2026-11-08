@@ -348,6 +348,13 @@ function nav(){document.title=S.name;const cp=cloudProfile();if(cp&&!cp.is_admin
   onmousedown="if(event.button==1) event.preventDefault()"
 >${escapeHTML(t[1])} ${t[2]}</a>`)}
 window.setFactoryAuthProfile=function(profile){window.__factoryAuthProfile=profile||null;if(profile&&!profile.is_admin){who="0";const tabs=allowed();if(!tabs.some(t=>t[0]===tab))tab=tabs[0]?.[0]||"home";}nav();render();};
+window.applyFactoryCloudState=function(state){
+ if(!state||typeof state!=="object"||Array.isArray(state))return false;
+ const keepOpenForm=!!(CUR&&CUR.kind==="page");
+ S=state;migrate();nav();
+ if(!keepOpenForm)render();
+ return true;
+};
 function migrate(){S.curs=S.curs||["EGP","USD","EUR"];S.codes=S.codes||[];S.accts.forEach(a=>{if(!a.cur)a.cur="EGP"});S.items.forEach(i=>{if(i.model===undefined)i.model="";Object.keys(i.st).forEach(v=>codeFor(i.id,v))});if(!S.tpl)S.tpl=TPL0();S.pend=S.pend||0}
 /* ---- unified balance display: positive = له علينا (plain), negative = عليه لنا (red) ---- */
 function pvh(v){const s=`${f(Math.abs(v))} ج.م`;return Math.abs(v)<.005?`${f(0)} ج.م`:v<0?`<span class="neg">-${s}</span>`:s}
