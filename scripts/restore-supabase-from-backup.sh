@@ -56,7 +56,7 @@ mkdir "$work/archive"
 tar -xzf "$work/ms-factory-db-backup.tar.gz" -C "$work/archive"
 cd "$work/archive"
 
-for required in roles.sql schema.sql data.sql auth-users.sql auth-trigger.sql manifest.txt database-files.sha256 auth-user-count.txt storage-bucket-count.txt; do
+for required in roles.sql schema.sql data.sql auth-users.sql migration-history.sql auth-trigger.sql manifest.txt database-files.sha256 auth-user-count.txt migration-count.txt storage-bucket-count.txt; do
   [[ -s "$required" ]] || { echo "ERROR: backup archive is missing $required." >&2; exit 25; }
 done
 grep -qx 'project=ms-factory' manifest.txt || { echo "ERROR: unexpected backup manifest." >&2; exit 26; }
@@ -85,6 +85,10 @@ PY
 chmod 600 "$work/pg_env.sh"
 source "$work/pg_env.sh"
 target_users="$(psql -X -v ON_ERROR_STOP=1 -Atqc 'SELECT count(*) FROM auth.users')"
+target_migrations="$(psql -X -v ON_ERROR_STOP=1 -Atqc 'SELECT count(*) FROM supabase_migrations.schema_migrations')"
+if [[ "$target_migrations" != "0" ]]; then
+  echo "ERROR: target already has $target_migrations migration-history rows. Restore refused." >&2; exit 32
+fi
 if [[ "$target_users" != "0" ]]; then
   echo "ERROR: target Auth database is not empty ($target_users users). Restore refused." >&2; exit 28
 fi
@@ -109,6 +113,8 @@ psql -X -v ON_ERROR_STOP=1 -f schema.sql
 psql -X -v ON_ERROR_STOP=1 -c 'DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users'
 psql -X -v ON_ERROR_STOP=1 -f auth-users.sql
 psql -X -v ON_ERROR_STOP=1 -f data.sql
+# Restore the exact source migration history so future CLI pushes do not replay old migrations.
+psql -X -v ON_ERROR_STOP=1 -f migration-history.sql
 # Restore the trigger only after profiles and Auth users have both been restored.
 psql -X -v ON_ERROR_STOP=1 -f auth-trigger.sql
 
@@ -118,5 +124,10 @@ expected_users="$(cat auth-user-count.txt)"
   echo "ERROR: restored Auth user count ($restored_users) does not match backup ($expected_users)." >&2; exit 30;
 }
 restored_profiles="$(psql -X -v ON_ERROR_STOP=1 -Atqc 'SELECT count(*) FROM public.profiles')"
-echo "RESTORE COMPLETE: Auth users=$restored_users, profiles=$restored_profiles, target=$RESTORE_TARGET_PROJECT_REF"
+restored_migrations="$(psql -X -v ON_ERROR_STOP=1 -Atqc 'SELECT count(*) FROM supabase_migrations.schema_migrations')"
+expected_migrations="$(cat migration-count.txt)"
+[[ "$restored_migrations" == "$expected_migrations" ]] || {
+  echo "ERROR: restored migration history ($restored_migrations) does not match backup ($expected_migrations)." >&2; exit 33;
+}
+echo "RESTORE COMPLETE: Auth users=$restored_users, profiles=$restored_profiles, migrations=$restored_migrations, target=$RESTORE_TARGET_PROJECT_REF"
 echo "Next: deploy the archived Edge Functions, configure Auth providers, and run the QA login/invoice/production/ledger/stock checks."
