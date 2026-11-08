@@ -113,8 +113,8 @@ begin
       raise exception 'Invalid or oversized source effect payload' using errcode = '22023';
     end if;
 
-    v_write_ledger := p_payload -> 'ledgerIncluded' = 'true'::jsonb;
-    v_write_movements := p_payload -> 'movementsIncluded' = 'true'::jsonb;
+    v_write_ledger := coalesce(p_payload -> 'ledgerIncluded' = 'true'::jsonb, false);
+    v_write_movements := coalesce(p_payload -> 'movementsIncluded' = 'true'::jsonb, false);
 
     if not v_write_ledger and not v_write_movements then
       raise exception 'At least one authorized source-effect section must be included'
