@@ -60,16 +60,20 @@ psql_cmd=(psql --no-psqlrc --set=ON_ERROR_STOP=1 --dbname "$QA_SUPABASE_DB_URL")
 # Never overwrite an existing QA dataset. The destination must be empty before restore.
 public_tables="$("${psql_cmd[@]}" --tuples-only --no-align --command="SELECT count(*) FROM information_schema.tables WHERE table_schema='public' AND table_type='BASE TABLE';" | tr -d '[:space:]')"
 auth_users="$("${psql_cmd[@]}" --tuples-only --no-align --command="SELECT count(*) FROM auth.users;" | tr -d '[:space:]')"
+migration_schema="$("${psql_cmd[@]}" --tuples-only --no-align --command="SELECT to_regnamespace('supabase_migrations') IS NOT NULL;" | tr -d '[:space:]')"
 migration_table="$("${psql_cmd[@]}" --tuples-only --no-align --command="SELECT to_regclass('supabase_migrations.schema_migrations') IS NOT NULL;" | tr -d '[:space:]')"
 storage_buckets="$("${psql_cmd[@]}" --tuples-only --no-align --command="SELECT count(*) FROM storage.buckets;" | tr -d '[:space:]')"
-if [[ "$public_tables" != "0" || "$auth_users" != "0" || "$migration_table" != "t" || "$storage_buckets" != "0" ]]; then
+if [[ "$public_tables" != "0" || "$auth_users" != "0" || "$storage_buckets" != "0" ||
+      ( "$migration_schema" == "t" && "$migration_table" != "t" ) ]]; then
   echo "::error::QA is not an empty, compatible Supabase restore target. No data was changed."
   exit 1
 fi
-migration_rows="$("${psql_cmd[@]}" --tuples-only --no-align --command="SELECT count(*) FROM supabase_migrations.schema_migrations;" | tr -d '[:space:]')"
-if [[ "$migration_rows" != "0" ]]; then
-  echo "::error::QA migration history is not empty. No data was changed."
-  exit 1
+if [[ "$migration_table" == "t" ]]; then
+  migration_rows="$("${psql_cmd[@]}" --tuples-only --no-align --command="SELECT count(*) FROM supabase_migrations.schema_migrations;" | tr -d '[:space:]')"
+  if [[ "$migration_rows" != "0" ]]; then
+    echo "::error::QA migration history is not empty. No data was changed."
+    exit 1
+  fi
 fi
 
 # Prepare an idempotent form of the exported custom Auth trigger before touching QA.
@@ -92,14 +96,28 @@ PY
 # storage, realtime and extension schemas owned by the target Supabase project.
 # Disable triggers for data loading, then recreate the custom Auth trigger before
 # committing so any failure rolls the entire restore back atomically.
-"${psql_cmd[@]}" --single-transaction \
-  --file roles.sql \
-  --file schema.sql \
-  --command 'SET session_replication_role = replica' \
-  --file data.sql \
-  --file auth-users.sql \
-  --file migration-history.sql \
-  --file auth-trigger-qa-idempotent.sql
+if [[ "$migration_schema" == "t" ]]; then
+  "${psql_cmd[@]}" --single-transaction \
+    --file roles.sql \
+    --file schema.sql \
+    --command 'SET session_replication_role = replica' \
+    --file data.sql \
+    --file auth-users.sql \
+    --file migration-history.sql \
+    --file auth-trigger-qa-idempotent.sql
+else
+  # The fresh QA project has no supabase_migrations schema; restore only this
+  # migration-history metadata schema from the source backup, not auth/storage.
+  "${psql_cmd[@]}" --single-transaction \
+    --file roles.sql \
+    --file schema.sql \
+    --file migration-history-schema.sql \
+    --command 'SET session_replication_role = replica' \
+    --file data.sql \
+    --file auth-users.sql \
+    --file migration-history.sql \
+    --file auth-trigger-qa-idempotent.sql
+fi
 
 # Verify every backed-up public table count, Auth row count, migration count,
 # RLS coverage, and the custom Auth trigger before declaring the restore successful.
