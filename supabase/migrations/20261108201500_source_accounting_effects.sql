@@ -140,6 +140,8 @@ begin
         from pg_catalog.jsonb_array_elements(p_payload -> 'movements') as x(value)
        where nullif(pg_catalog.btrim(x.value ->> 'itemExternalId'), '') is null
           or nullif(pg_catalog.btrim(x.value ->> 'variant'), '') is null
+          or coalesce((x.value ->> 'quantity')::numeric, 0) = 'NaN'::numeric
+          or coalesce((x.value ->> 'value')::numeric, 0) = 'NaN'::numeric
     ) then
       raise exception 'Stock movements require stable item and variant identities' using errcode = '22023';
     end if;
@@ -168,7 +170,7 @@ begin
         using errcode = '40001';
     end if;
 
-    insert into public.source_effects (
+    insert into public.source_effects as se (
       user_id, source_type, source_id, sync_version, payload,
       deleted_at, updated_at, updated_by
     ) values (
@@ -176,7 +178,7 @@ begin
       case when p_deleted then pg_catalog.now() else null end,
       pg_catalog.now(), v_actor_id
     )
-    returning source_effects.sync_version, source_effects.updated_at, source_effects.deleted_at
+    returning se.sync_version, se.updated_at, se.deleted_at
       into v_new_version, v_updated_at, v_deleted_at;
   else
     if p_expected_version <> v_current_version then
