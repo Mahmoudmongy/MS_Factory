@@ -66,16 +66,15 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y age
-          npm install --global supabase
 
       - name: Export Supabase roles, schema and data
         env:
           SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
         run: |
           set -euo pipefail
-          supabase db dump --db-url "$SUPABASE_DB_URL" -f roles.sql --role-only
-          supabase db dump --db-url "$SUPABASE_DB_URL" -f schema.sql
-          supabase db dump --db-url "$SUPABASE_DB_URL" -f data.sql --use-copy --data-only
+          npx --yes supabase@latest db dump --db-url "$SUPABASE_DB_URL" -f roles.sql --role-only
+          npx --yes supabase@latest db dump --db-url "$SUPABASE_DB_URL" -f schema.sql
+          npx --yes supabase@latest db dump --db-url "$SUPABASE_DB_URL" -f data.sql --use-copy --data-only
           # Supabase CLI deliberately excludes managed auth/storage schemas.
           # Export only Auth users and identities separately; never export sessions/tokens.
           docker run --rm -v "$PWD:/backup" -e SUPABASE_DB_URL postgres:17-alpine sh -ec '
