@@ -170,6 +170,18 @@ if not skipped["storage"]:
 path.write_text(cleaned)
 for schema in ("auth", "storage"):
     print(f"Excluded {schema} COPY blocks: " + (", ".join(skipped[schema]) if skipped[schema] else "(none present)"))
+
+# Guard the boundary between general database data and the separately exported
+# Auth identity file. If any Auth user slipped through data.sql, abort the same
+# transaction before auth-users.sql can collide with those primary keys.
+Path("assert-auth-empty.sql").write_text("""DO $restore_guard$
+BEGIN
+  IF EXISTS (SELECT 1 FROM auth.users) THEN
+    RAISE EXCEPTION 'data.sql populated auth.users; refusing duplicate Auth import.';
+  END IF;
+END
+$restore_guard$;
+""")
 PY
 
 # Supabase's managed postgres role is not a PostgreSQL superuser and cannot SET
@@ -181,6 +193,7 @@ if [[ "$migration_schema" == "t" ]]; then
     --file roles.sql \
     --file schema.sql \
     --file data.sql \
+    --file assert-auth-empty.sql \
     --file auth-users.sql \
     --file migration-history.sql \
     --file auth-trigger-qa-idempotent.sql
@@ -190,6 +203,7 @@ else
     --file schema.sql \
     --file migration-history-schema.sql \
     --file data.sql \
+    --file assert-auth-empty.sql \
     --file auth-users.sql \
     --file migration-history.sql \
     --file auth-trigger-qa-idempotent.sql
