@@ -109,13 +109,25 @@ function mergeCloudPartners(existing, incoming, refreshExisting = false) {
     const key = item && (item.id || item.no);
     if (key !== undefined && key !== null && key !== "") map.set(String(key), item);
   });
-  let added = 0;
+  let added = 0, conflicts = 0;
   (Array.isArray(incoming) ? incoming : []).forEach(remote => {
     const key = remote && (remote.id || remote.no);
     if (key === undefined || key === null || key === "") return;
     const local = map.get(String(key));
     if (!local) { map.set(String(key), remote); added++; return; }
-    if (!refreshExisting) return;
+    if (!refreshExisting) {
+      for (const [flag, versionKey, conflictKey] of [
+        ["c", "_cloudCustomersVersion", "_cloudCustomersConflict"],
+        ["s", "_cloudSuppliersVersion", "_cloudSuppliersConflict"]
+      ]) {
+        if ((Number(remote[flag]) === 1 || remote[flag] === true)
+            && Number(remote[versionKey] || 0) > Number(local[versionKey] || 0)) {
+          local[conflictKey] = { serverVersion: Number(remote[versionKey]), serverUpdatedAt: remote[versionKey.replace("Version","UpdatedAt")] || null, serverCopy: remote };
+          conflicts++;
+        }
+      }
+      return;
+    }
     const customerFlag = Number(local.c) === 1 || local.c === true || Number(remote.c) === 1 || remote.c === true;
     const supplierFlag = Number(local.s) === 1 || local.s === true || Number(remote.s) === 1 || remote.s === true;
     Object.assign(local, remote, {
@@ -123,8 +135,10 @@ function mergeCloudPartners(existing, incoming, refreshExisting = false) {
       c: customerFlag ? 1 : 0,
       s: supplierFlag ? 1 : 0
     });
+    delete local._cloudCustomersConflict;
+    delete local._cloudSuppliersConflict;
   });
-  return { arr: [...map.values()], added };
+  return { arr: [...map.values()], added, conflicts };
 }
 function mergeByKey(existing, incoming, keyFn) {
   const map = new Map();
@@ -139,17 +153,28 @@ function mergeCloudProducts(existing, incoming, refreshExisting = false) {
     const key = item && (item.id || item.sku || item.name);
     if (key !== undefined && key !== null && key !== "") map.set(String(key), item);
   });
-  let added = 0, refreshed = 0;
+  let added = 0, refreshed = 0, conflicts = 0;
   (Array.isArray(incoming) ? incoming : []).forEach(remote => {
     const key = remote && (remote.id || remote.sku || remote.name);
     if (key === undefined || key === null || key === "") return;
     const local = map.get(String(key));
     if (!local) { map.set(String(key), remote); added++; return; }
-    if (!refreshExisting) return;
+    if (!refreshExisting) {
+      if (Number(remote._cloudProductsVersion || 0) > Number(local._cloudProductsVersion || 0)) {
+        local._cloudProductsConflict = {
+          serverVersion: Number(remote._cloudProductsVersion),
+          serverUpdatedAt: remote._cloudProductsUpdatedAt || null,
+          serverCopy: remote
+        };
+        conflicts++;
+      }
+      return;
+    }
     Object.assign(local, remote, { id: local.id ?? remote.id });
+    delete local._cloudProductsConflict;
     refreshed++;
   });
-  return { arr: [...map.values()], added, refreshed };
+  return { arr: [...map.values()], added, refreshed, conflicts };
 }
 function groupProductionCatalogRows(rows) {
   const grouped = new Map();
@@ -283,6 +308,40 @@ async function syncVersionedDetail(table, owner, externalId, expectedVersion, pa
           serverCopy: copy
         }
       };
+    }
+  }
+  return { error };
+}
+
+async function syncVersionedMasterRecord(table, owner, externalId, expectedVersion, payload) {
+  const { data, error } = await supabase.rpc("sync_factory_master_record", {
+    p_table_name: table,
+    p_external_id: externalId,
+    p_expected_version: Number(expectedVersion || 0),
+    p_payload: payload
+  });
+  if (!error) {
+    const row = Array.isArray(data) ? data[0] : data;
+    return row?.sync_version ? { row } : { error: new Error("The server returned no master-data synchronization version") };
+  }
+  if (error.code === "40001" || error.code === "23505") {
+    const { data: remote, error: readError } = await supabase.from(table)
+      .select("*").eq("user_id", owner).eq("external_id", externalId).maybeSingle();
+    if (readError) return { error: readError };
+    if (remote) {
+      const copy = remote.raw && typeof remote.raw === "object" ? { ...remote.raw } : {};
+      Object.assign(copy, {
+        id: remote.external_id || remote.id,
+        name: remote.name,
+        phone: remote.phone || "",
+        email: remote.email || "",
+        addr: remote.address || "",
+        gov: remote.governorate || "",
+        city: remote.city || "",
+        _cloudMasterVersion: Number(remote.sync_version || 1),
+        _cloudMasterUpdatedAt: remote.updated_at || null
+      });
+      return { conflict: { serverVersion: Number(remote.sync_version || 1), serverUpdatedAt: remote.updated_at || null, serverCopy: copy } };
     }
   }
   return { error };
@@ -470,6 +529,8 @@ async function uploadToTables(showAlert = false) {
       const typeStr = String(getField(p, ["type", "kind", "cat", "category"]) || "").toLowerCase();
       const raw = { ...p };
       delete raw._cloudVersion; delete raw._cloudUpdatedAt; delete raw._cloudConflict;
+      delete raw._cloudCustomersVersion; delete raw._cloudCustomersUpdatedAt; delete raw._cloudCustomersConflict;
+      delete raw._cloudSuppliersVersion; delete raw._cloudSuppliersUpdatedAt; delete raw._cloudSuppliersConflict;
       const common = {
         user_id: owner,
         external_id: externalId,
@@ -482,15 +543,31 @@ async function uploadToTables(showAlert = false) {
         raw
       };
       if (entry.isCustomer && canWrite("customers")) {
-        const { error } = await supabase.from("customers").upsert({
+        const result = await syncVersionedMasterRecord("customers", owner, externalId, p._cloudCustomersVersion, {
           ...common,
           customer_type: p.type === "w" || typeStr.includes("wholesale") || typeStr.includes("جملة") ? "wholesale" : "retail"
-        }, { onConflict: "user_id,external_id" });
-        if (error) errors.push("customers: " + error.message);
+        });
+        if (result.error) errors.push("customer " + externalId + ": " + result.error.message);
+        else if (result.conflict) {
+          p._cloudCustomersConflict = result.conflict;
+          errors.push("customer " + externalId + ": version conflict; newer cloud copy preserved");
+        } else {
+          p._cloudCustomersVersion = Number(result.row.sync_version);
+          p._cloudCustomersUpdatedAt = result.row.updated_at || null;
+          delete p._cloudCustomersConflict;
+        }
       }
       if (entry.isSupplier && canWrite("suppliers")) {
-        const { error } = await supabase.from("suppliers").upsert(common, { onConflict: "user_id,external_id" });
-        if (error) errors.push("suppliers: " + error.message);
+        const result = await syncVersionedMasterRecord("suppliers", owner, externalId, p._cloudSuppliersVersion, common);
+        if (result.error) errors.push("supplier " + externalId + ": " + result.error.message);
+        else if (result.conflict) {
+          p._cloudSuppliersConflict = result.conflict;
+          errors.push("supplier " + externalId + ": version conflict; newer cloud copy preserved");
+        } else {
+          p._cloudSuppliersVersion = Number(result.row.sync_version);
+          p._cloudSuppliersUpdatedAt = result.row.updated_at || null;
+          delete p._cloudSuppliersConflict;
+        }
       }
     }
 
@@ -682,10 +759,18 @@ async function uploadToTables(showAlert = false) {
           qty,
           price: buyPrice,
           image_url: String(getField(pr, ["img", "image_url"]) || "") || null,
-          raw: pr
+          raw: (() => { const raw = { ...pr }; delete raw._cloudProductsVersion; delete raw._cloudProductsUpdatedAt; delete raw._cloudProductsConflict; return raw; })()
         };
-        const { error } = await supabase.from("products").upsert(row, { onConflict: "user_id,external_id" });
-        if (error) errors.push("products " + externalId + ": " + error.message);
+        const result = await syncVersionedMasterRecord("products", owner, externalId, pr._cloudProductsVersion, row);
+        if (result.error) errors.push("product " + externalId + ": " + result.error.message);
+        else if (result.conflict) {
+          pr._cloudProductsConflict = result.conflict;
+          errors.push("product " + externalId + ": version conflict; newer cloud copy preserved");
+        } else {
+          pr._cloudProductsVersion = Number(result.row.sync_version);
+          pr._cloudProductsUpdatedAt = result.row.updated_at || null;
+          delete pr._cloudProductsConflict;
+        }
       }
     }
 
@@ -867,7 +952,8 @@ async function loadFromTablesMerge(isAuto = false) {
 
     const S = getCachedState();
     if (!S || typeof S !== "object" || Array.isArray(S)) return "bad local";
-    let totalAdded = 0;
+    let totalAdded = 0, masterConflicts = 0;
+    let recordConflicts = localStorage.getItem("mgr6-cloud-snapshot-conflict") ? 1 : 0;
     const cloudPartnerMap = new Map();
     for (const c of (custs || [])) {
       const raw = c.raw && typeof c.raw === "object" && !Array.isArray(c.raw) ? { ...c.raw } : {};
@@ -912,9 +998,8 @@ async function loadFromTablesMerge(isAuto = false) {
     if (cloudPartners.length) {
       const refreshPartners = !localStorage.getItem(PENDING_SYNC_KEY);
       const m = mergeCloudPartners(S.partners || [], cloudPartners, refreshPartners);
-      S.partners = m.arr; totalAdded += m.added;
+      S.partners = m.arr; totalAdded += m.added; masterConflicts += m.conflicts || 0;
     }
-    let recordConflicts = localStorage.getItem("mgr6-cloud-snapshot-conflict") ? 1 : 0;
     if (invs?.length) {
       const cloudDocs = invs
         .filter(inv => inv.raw && ["sale", "pur"].includes(inv.raw.t))
@@ -985,6 +1070,8 @@ async function loadFromTablesMerge(isAuto = false) {
           if (p.raw && typeof p.raw === "object" && !Array.isArray(p.raw)) {
             const raw = { ...p.raw };
             if (!raw.st || typeof raw.st !== "object" || Array.isArray(raw.st)) raw.st = {};
+            raw._cloudProductsVersion = Number(p.sync_version || 1);
+            raw._cloudProductsUpdatedAt = p.updated_at || null;
             return raw;
           }
           const qty = Number(p.qty || 0) || 0;
@@ -994,7 +1081,9 @@ async function loadFromTablesMerge(isAuto = false) {
             unit: p.unit || "قطعة", wh: p.warehouse || null,
             buy, retail: Number(p.retail_price || 0) || 0,
             wholesale: Number(p.wholesale_price || 0) || 0,
-            img: p.image_url || "", st: qty ? { "-": qty } : {}, val: qty * buy
+            img: p.image_url || "", st: qty ? { "-": qty } : {}, val: qty * buy,
+            _cloudProductsVersion: Number(p.sync_version || 1),
+            _cloudProductsUpdatedAt: p.updated_at || null
           };
         });
       }
@@ -1004,9 +1093,10 @@ async function loadFromTablesMerge(isAuto = false) {
         S.items = m.arr; totalAdded += m.added;
       } else {
         const m = mergeCloudProducts(S.items, cloudProducts, !localStorage.getItem(PENDING_SYNC_KEY));
-        S.items = m.arr; totalAdded += m.added;
+        S.items = m.arr; totalAdded += m.added; masterConflicts += m.conflicts || 0;
       }
     }
+    recordConflicts += masterConflicts;
     let accountingChanged = false;
     for (const remote of (accountingStates || [])) {
       const source = remote?.source;
