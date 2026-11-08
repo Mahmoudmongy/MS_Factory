@@ -534,7 +534,7 @@ function planRemoteSourceEffectApply(state, remoteRows, versionMap) {
     }
     const localEffect = local.get(key);
     if (row.deleted_at) {
-      if (localVersion > remoteVersion) {
+      if (localVersion >= remoteVersion && localVersion > 0) {
         conflicts.push({ key, reason: "remote_tombstone_is_stale", localVersion, remoteVersion });
       } else if (localEffect && localVersion === 0) {
         conflicts.push({ key, reason: "untracked_local_effect_conflicts_with_remote_tombstone" });
