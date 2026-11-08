@@ -265,6 +265,7 @@ async function syncAccountingSnapshots(S, profile, errors) {
   const admin = profile.is_admin === true;
   const canWrite = source => admin || profile.permissions?.[source] === true;
   let hasConflict = false;
+  const errorsBefore = errors.length;
   for (const source of ACCOUNTING_SOURCES.filter(canWrite)) {
     const payload = accountingPayloadForSource(S, source);
     const hash = accountingHash(payload);
@@ -306,7 +307,7 @@ async function syncAccountingSnapshots(S, profile, errors) {
     localStorage.setItem(accountingHashKey(source), hash);
     localStorage.removeItem(conflictKey);
   }
-  return hasConflict || hasAccountingConflicts();
+  return hasConflict || hasAccountingConflicts() || errors.length > errorsBefore;
 }
 
 
@@ -339,9 +340,11 @@ async function uploadToTables(showAlert = false) {
     const errors = [];
     let snapshotError = null;
     let snapshotConflict = !!localStorage.getItem("mgr6-cloud-snapshot-conflict");
+    // Upload source-scoped ledger and stock snapshots before the admin-only full snapshot.
+    const accountingConflict = await syncAccountingSnapshots(S, profile, errors);
 
     // Snapshot conflicts must not block independent, idempotent detail-table writes.
-    if (admin && !snapshotConflict) {
+    if (admin && !snapshotConflict && !accountingConflict) {
       const expectedVersion = Number(localStorage.getItem("mgr6-cloud-snapshot-version") || 0);
       const result = await supabase.rpc("sync_factory_state", {
         p_expected_version: expectedVersion,
@@ -588,7 +591,7 @@ async function uploadToTables(showAlert = false) {
     }
 
     if (errors.length) {
-      syncState = localStorage.getItem("mgr6-cloud-snapshot-conflict") ? "conflict" : "idle"; drawAll();
+      syncState = (localStorage.getItem("mgr6-cloud-snapshot-conflict") || hasAccountingConflicts()) ? "conflict" : "idle"; drawAll();
       const msg = (snapshotError
         ? T("فشل حفظ النسخة الكاملة وبعض الجداول:\n", "Full backup and some table writes failed:\n")
         : T("بعض عمليات المزامنة فشلت:\n", "Some sync operations failed:\n")) + errors.join("\n");
@@ -596,18 +599,18 @@ async function uploadToTables(showAlert = false) {
       return msg;
     }
     const hasSnapshotConflict = snapshotConflict || !!localStorage.getItem("mgr6-cloud-snapshot-conflict");
+    const hasAccountingConflictNow = accountingConflict || hasAccountingConflicts();
     const latestPend = Number(getCachedState().pend || 0);
-    if (!hasSnapshotConflict && latestPend === Number(S.pend || 0)) localStorage.removeItem(PENDING_SYNC_KEY);
-    else if (!hasSnapshotConflict) scheduleAutoSync(400);
-    // Employee detail-only sync is deliberately not labelled fully synchronized.
-    syncState = hasSnapshotConflict ? "conflict" : (admin ? "synced" : "partial");
+    if (!hasSnapshotConflict && !hasAccountingConflictNow && latestPend === Number(S.pend || 0)) localStorage.removeItem(PENDING_SYNC_KEY);
+    else if (!hasSnapshotConflict && !hasAccountingConflictNow) scheduleAutoSync(400);
+    syncState = (hasSnapshotConflict || hasAccountingConflictNow) ? "conflict" : (admin ? "synced" : "partial");
     lastSyncTime = new Date().toLocaleTimeString(isEN() ? "en-US" : "ar-EG");
     drawAll();
-    const msg = hasSnapshotConflict
-      ? T("تمت مزامنة السجلات التفصيلية المتاحة، لكن النسخة الكاملة بها تعارض محفوظ ولم يتم استبدالها.", "Available detail records were synchronized; the full snapshot conflict was preserved without overwriting it.")
+    const msg = hasSnapshotConflict || hasAccountingConflictNow
+      ? T("تم حفظ البيانات التي لا يوجد بها تعارض. توجد نسخة أستاذ/مخزون أو نسخة مصنع أقدم؛ لم نستبدل البيانات المتعارضة.", "Non-conflicting data was saved. A ledger/stock or factory snapshot conflict remains; no conflicting data was overwritten.")
       : admin
-        ? T("تم حفظ نسخة المصنع الكاملة ومزامنة الجداول التفصيلية", "Full factory backup saved and detail tables synchronized")
-        : T("تم رفع الجداول المسموح بها فقط. مزامنة القيود والحركات المحاسبية الكاملة لحساب الموظف لم تكتمل بعد.", "Only permitted detail tables were uploaded. Full accounting-ledger synchronization for employee accounts is not complete yet.");
+        ? T("تم حفظ نسخة المصنع الكاملة ومزامنة دفتر الأستاذ وحركات المخزون والجداول التفصيلية", "Full factory snapshot, ledger, stock movements and detail tables synchronized")
+        : T("تم رفع الجداول وقيود الأستاذ وحركات المخزون المسموح بها حسب صلاحيات حسابك.", "Permitted detail tables, ledger entries and stock movements were synchronized for your account.");
     if (showAlert) alert(msg);
     return msg;
   } catch(e) {
