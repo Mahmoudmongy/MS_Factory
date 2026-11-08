@@ -64,7 +64,7 @@ Create the following bucket rules in Cloudflare R2 before enabling the workflow:
 The workflow will refuse to export or upload data if these rules are not present.
 
 **Secrets**
-- `SUPABASE_DB_URL`: the database connection string from Supabase Connect (use a dedicated database password; never paste it into chat).
+- `SUPABASE_DB_URL`: the database connection string from Supabase Connect (use the Session Pooler connection string shown in Supabase Connect for GitHub-hosted runners; use a dedicated database password and never paste it into chat).
 - `R2_ACCESS_KEY_ID`: bucket-scoped R2 key.
 - `R2_SECRET_ACCESS_KEY`: matching secret.
 - `CLOUDFLARE_R2_LOCK_TOKEN`: separate API token with R2 Storage Read permission for the bucket-lock configuration check.
@@ -89,7 +89,7 @@ tar -tzf ms-factory-db-backup.tar.gz
 mkdir restore-check && tar -xzf ms-factory-db-backup.tar.gz -C restore-check
 ```
 
-5. Restore into a disposable QA Supabase project with a matching Postgres/Auth version. Restore roles and schema first; import `auth-users.sql` into the managed Auth tables while the custom `on_auth_user_created` trigger is still absent; import `data.sql` to restore public rows such as `profiles`; then execute the packaged `auth-trigger.sql` to recreate the trigger. The archive also includes the exact `supabase_migrations.schema_migrations` history (and its row count), migration source files, and Edge Function source for redeployment. The restore script imports the migration history after schema/public data and verifies the restored count. It also verifies every recorded public/Auth table row count, so a truncated or incomplete restore is rejected. The exact restore sequence must be proven on QA before any production recovery. Do not point restore commands at production.
+5. Restore into a disposable QA Supabase project with a matching Postgres/Auth version. Restore roles first, revoke target default public-table grants, import `schema.sql`, then import `migration-history-schema.sql` to create the exact `supabase_migrations` history table. Import `auth-users.sql` into the managed Auth tables while the custom `on_auth_user_created` trigger is absent; import `data.sql` to restore public rows such as `profiles`; import `migration-history.sql`; then execute the packaged `auth-trigger.sql` to recreate the trigger. The archive also includes migration source files and Edge Function source for redeployment. The restore script verifies the migration-history count and every recorded public/Auth table count. It also verifies every recorded public/Auth table row count, so a truncated or incomplete restore is rejected. The exact restore sequence must be proven on QA before any production recovery. Do not point restore commands at production.
 6. Compare counts for `auth.users`, `profiles`, `factory_state`, customers, suppliers, products, invoices, invoice items, returns, vouchers and production orders. Then log into the restored QA app and verify representative records and permissions.
 7. Record restore duration and the latest recoverable backup timestamp.
 
