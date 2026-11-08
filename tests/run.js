@@ -209,6 +209,24 @@ const xssGeo=await p.evaluate(()=>{
   host.remove();delete S.geo[badGov];return {injected,literal};
 });
 ok('XSS payloads in governorate/city names remain inert text in the live DOM',!xssGeo.injected&&xssGeo.literal,xssGeo);
+const xssForms=await p.evaluate(()=>{
+ const bad='<img src=x onerror="window.__xss=4">';
+ const partner={id:987654321,name:bad,phone:'',c:1,s:0,type:'r',gov:'',city:''};
+ const item={id:987654322,name:bad,model:'',sku:'QA-XSS',unit:'قطعة',wh:0,buy:0,retail:0,wholesale:0,st:{},img:''};
+ S.partners.push(partner);S.items.push(item);
+ pForm(1,partner.id);
+ const partnerInput=document.querySelector('#b1');
+ const partnerSafe=!!partnerInput&&partnerInput.value===bad&&!document.querySelector('#b1 img');
+ cl();
+ itemForm(item.id);
+ const itemInput=document.querySelector('#a1');
+ const itemSafe=!!itemInput&&itemInput.value===bad&&!document.querySelector('#a1 img');
+ cl();
+ S.partners=S.partners.filter(x=>x.id!==partner.id);S.items=S.items.filter(x=>x.id!==item.id);
+ return {partnerSafe,itemSafe};
+});
+ok('XSS payloads in customer and inventory item names stay inside form values',xssForms.partnerSafe&&xssForms.itemSafe,xssForms);
+
 
 const accountingUnit=await p.evaluate(async()=>{
  const m=await import('/js/accounting-sync-core.js');
