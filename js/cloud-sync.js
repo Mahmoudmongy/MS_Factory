@@ -534,9 +534,14 @@ function planRemoteSourceEffectApply(state, remoteRows, versionMap) {
     }
     const localEffect = local.get(key);
     if (row.deleted_at) {
-      if (localEffect) conflicts.push({ key, reason: "remote_tombstone_conflicts_with_local_effect", localVersion, remoteVersion });
-      else if (localVersion > remoteVersion) conflicts.push({ key, reason: "remote_tombstone_is_stale", localVersion, remoteVersion });
-      else adoptedVersions[key] = remoteVersion;
+      if (localVersion > remoteVersion) {
+        conflicts.push({ key, reason: "remote_tombstone_is_stale", localVersion, remoteVersion });
+      } else if (localEffect && localVersion === 0) {
+        conflicts.push({ key, reason: "untracked_local_effect_conflicts_with_remote_tombstone" });
+      } else {
+        actions.push({ op: "delete", sourceType: String(row.source_type),
+          sourceId: String(row.source_id), effect: localEffect || null, version: remoteVersion });
+      }
       continue;
     }
     const effect = row.payload;
@@ -1119,6 +1124,57 @@ function applyAccountingBaselineSection(state, section) {
     partners: section.partners, openingLedger: section.openingLedger, openingMovements: [] };
   combined.fingerprint = factoryBaselineFingerprint(combined);
   return applyFactoryBaseline(state, combined);
+}
+
+function removeCanonicalSourceEffect(state, effect) {
+  if (!state || typeof state !== "object" || !effect ||
+      !["doc", "po", "vch", "je", "wo"].includes(effect.sourceType) ||
+      effect.sourceId == null || !Array.isArray(effect.ledger) || !Array.isArray(effect.movements)) {
+    return { applied: false, reason: "invalid_effect" };
+  }
+  const sourceType = String(effect.sourceType), sourceId = String(effect.sourceId);
+  const matches = row => row && row.src === sourceType && String(row.rid) === sourceId;
+  const itemByExternalId = new Map();
+  for (const item of Array.isArray(state.items) ? state.items : []) {
+    if (item?.id == null) continue;
+    itemByExternalId.set(String(item.id), item);
+    if (item.cloudId != null) itemByExternalId.set(String(item.cloudId), item);
+  }
+  const rows = (Array.isArray(state.mv) ? state.mv : []).filter(matches);
+  const plans = [];
+  for (const row of rows) {
+    const item = itemByExternalId.get(String(row.iid));
+    if (!item || !item.st || typeof item.st !== "object" ||
+        !Number.isFinite(Number(row.q)) || !Number.isFinite(Number(row.val)) ||
+        !Object.prototype.hasOwnProperty.call(item.st, row.v)) {
+      return { applied: false, reason: "invalid_or_unmapped_local_movement" };
+    }
+    plans.push({ row, item });
+  }
+  for (const { row, item } of plans) {
+    item.st[row.v] = Number(item.st[row.v] || 0) - Number(row.q || 0);
+    item.val = Number(item.val || 0) - Number(row.val || 0);
+  }
+  state.mv = (Array.isArray(state.mv) ? state.mv : []).filter(row => !matches(row));
+  state.L = (Array.isArray(state.L) ? state.L : []).filter(row => !matches(row));
+  return { applied: true, movementsReversed: plans.length };
+}
+
+function removeSourceDocument(state, sourceType, sourceId) {
+  const key = String(sourceId);
+  const fields = { doc: "docs", po: "po", vch: "vch", je: "je", wo: "wo" };
+  const field = fields[sourceType];
+  if (!field) return { applied: false, reason: "unsupported_source_type" };
+  if (!Array.isArray(state[field])) state[field] = [];
+  if (sourceType === "wo") {
+    const workOrder = state.wo.find(row => String(row.id) === key);
+    if (workOrder?.po != null) {
+      const order = (state.po || []).find(row => String(row.id) === String(workOrder.po));
+      if (order) order.wc = Number(order.wc || 0) - Number(workOrder.c || 0);
+    }
+  }
+  state[field] = state[field].filter(row => String(row?.id) !== key);
+  return { applied: true };
 }
 
 function stableJson(value) {
