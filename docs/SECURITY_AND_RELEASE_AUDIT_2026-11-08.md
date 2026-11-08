@@ -70,14 +70,17 @@ These are live Postgres/RLS/RPC integration tests against the QA project, not me
 
 ## Latest CI result
 
-Commit `b06256b2cf61535523737808be1b278d7efc3151` passed GitHub Actions:
-- `npm audit --audit-level=high`: passed (no high-severity dependency audit failure).
+Commit `3fd144fe87f222e1ea415ec6a0145ab015a3fe81` passed the full GitHub Actions workflow:
+- `npm audit --audit-level=high`: passed; **0 dependency vulnerabilities found**.
 - `npm run build`: passed.
-- `wrangler deploy --dry-run`: passed; no deployment was performed.
-- JavaScript and restore shell syntax checks: passed.
-- Browser regression suite: **201/201 checks passed, 0 failed**, including all 19 screens, sales/purchases/returns/vouchers/production flows, stock/ledger balancing, XSS regressions, mobile layout, offline shell, customer/supplier field preservation and cloud refresh checks.
+- Wrangler 4.158.0 `deploy --dry-run`: passed; it read **22 static assets**, with a **0.34 KiB** Worker bundle. No deployment was performed.
+- Supabase CLI 3.0.0 backup command help/flag validation: passed without connecting to production.
+- JavaScript and backup/restore shell syntax checks: passed.
+- Browser regression suite: **218/218 checks passed, 0 failed**, including XSS regressions for customer/item forms, report cells and print metadata; all 19 screens; sales/purchases/returns/vouchers/production flows; stock/ledger balancing; mobile layout; offline shell; and cloud-sync release-gate checks.
 
-The browser suite intentionally runs without live Auth/cloud modules; the separate QA SQL tests above cover the database authorization and RPC layer.
+The full `supabase/tests/qa_sync_regression.sql` suite was also executed successfully against the isolated QA Supabase project after the latest QA migrations. It tests admin snapshot CAS, invoice CAS and child-line replacement, master/detail version conflicts, production-only and invoice-only permissions, sales and purchases, both return types, incoming/outgoing vouchers, ledger balancing, inventory deltas and idempotent retries. The entire suite rolls back; a follow-up query confirmed zero retained QA fixture rows. Production table counts remain unchanged.
+
+The browser suite intentionally runs without live Auth/cloud modules; the separate QA SQL tests cover the database authorization and RPC layer.
 
 ## Authentication test limitation
 
