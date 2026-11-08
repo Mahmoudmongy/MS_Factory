@@ -63,6 +63,7 @@ ok('inventory sync totals all colour/size variants instead of reading a missing 
 ok('inventory sync stores the full local item in products.raw for lossless restoration',/image_url:[\s\S]{0,500}raw: pr/.test(cloud));
 ok('inventory download restores records into S.items, the real inventory source used by the app',/if \(!Array\.isArray\(S\.items\)\) S\.items = \[\]/.test(cloud)&&/S\.items = m\.arr/.test(cloud));
 ok('employee detail-only sync remains marked partial in the background',/admin \? "synced" : "partial"/.test(cloud)&&/مزامنة القيود والحركات المحاسبية الكاملة لحساب الموظف لم تكتمل بعد/.test(cloud));
+ok('RELEASE GATE: versioned cloud synchronization exists for the accounting ledger and stock movements',/sync_factory_accounting/.test(cloud)&&/factory_accounting_state/.test(cloud)&&/S\\.L/.test(cloud)&&/S\\.mv/.test(cloud));
 ok('production-only employees can upload and pull their production orders',/if \(!admin && !\["customers", "suppliers", "invoices", "inventory", "production"\]\.some\(canWrite\)\)/.test(cloud)&&/if \(canWrite\("production"\)\)/.test(cloud)&&/if \(!\["customers","suppliers","invoices","inventory","production","reports"\]\.some\(canRead\)\)/.test(cloud));
 const detailSyncMigration=fs.readFileSync(path.join(ROOT,'supabase/migrations/20261108000100_atomic_versioned_factory_detail_sync.sql'),'utf8');
 ok('returns, vouchers and production orders use the atomic versioned detail RPC',/rpc\(["']sync_factory_detail["']/.test(cloud)&&/p_expected_version/.test(cloud)&&/sync_version/.test(cloud));
