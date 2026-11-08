@@ -24,7 +24,7 @@ Repository → Settings → Secrets and variables → Actions.
 
 - `B2_BUCKET`: `ms-factory-backups-2026`
 - `B2_ENDPOINT`: `https://s3.us-east-005.backblazeb2.com`
-- `AGE_RECIPIENT`: public age recipient only (line begins with `age1`)
+- The public age recipient is pinned in the workflow file; it is not secret.
 - `BACKUP_ENABLED`: keep `false` until all prerequisites and a QA restore drill have passed. Do not enable yet.
 
 ### Secrets
@@ -53,13 +53,13 @@ On a trusted computer with age installed:
 age-keygen -o ms-factory-backup-identity.txt
 ```
 
-Copy only the public recipient (the `age1...` line) into GitHub variable `AGE_RECIPIENT`. Keep the private identity file offline; losing it makes the encrypted backups unrecoverable. Never commit or upload the private identity.
+The workflow already contains the public recipient. Keep the private identity file offline in two encrypted copies; losing it makes the encrypted backups unrecoverable. Never commit or upload the private identity.
 
 ## Safe activation sequence
 
 1. Confirm the B2 bucket's default retention is Compliance / 90 days, not merely Object Lock enabled.
 2. Configure the 120-day lifecycle rule for the exact prefix.
-3. Add `AGE_RECIPIENT` and `SUPABASE_DB_URL` through GitHub Settings.
+3. Add `SUPABASE_DB_URL` through GitHub Settings. The public age recipient is already configured in the workflow.
 4. Run the workflow manually with the backup checkbox left unchecked. Confirm the B2 preflight succeeds. This checks storage configuration only and does not read Supabase production data.
 5. Verify the workflow reports that Storage bucket count is zero. If not, stop and implement/test object backup before proceeding.
 6. Keep `BACKUP_ENABLED=false` until an encrypted backup can be restored into a disposable QA Supabase project and Auth login, schema, row counts and application permissions are verified.
