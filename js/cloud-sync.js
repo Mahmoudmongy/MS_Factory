@@ -789,6 +789,9 @@ async function loadFromTablesMerge(isAuto = false) {
       const remoteVersion = Number(remote.sync_version || 1);
       const localVersion = Number(localStorage.getItem(accountingVersionKey(source)) || 0);
       const baseline = localStorage.getItem(accountingHashKey(source));
+      const snapshotBaselinePend = localStorage.getItem("mgr6-cloud-snapshot-pend");
+      const localUnchangedFromSnapshot = snapshotBaselinePend !== null
+        && String(Number(S.pend || 0)) === snapshotBaselinePend;
       const localPayload = accountingPayloadForSource(S, source);
       const localHash = accountingHash(localPayload);
       const remoteHash = accountingHash(remotePayload);
@@ -812,7 +815,7 @@ async function loadFromTablesMerge(isAuto = false) {
           conflict = true;
         }
       } else if (localVersion === 0) {
-        if (emptyLocal || localHash === remoteHash) replaceRemote = true;
+        if (emptyLocal || localHash === remoteHash || localUnchangedFromSnapshot) replaceRemote = true;
         else conflict = true;
       } else if (baseline && localHash === baseline) {
         replaceRemote = true;
