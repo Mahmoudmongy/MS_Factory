@@ -32,6 +32,8 @@ A pure helper pair has now been added to `js/cloud-sync.js`:
 - `buildStockBaseline(state)` creates a deterministic, sorted manifest of item external IDs, variants, absolute quantities, and valuation, and rejects duplicate IDs or invalid stock values.
 - `applyStockBaseline(state, manifest)` verifies the manifest checksum and validates every item before changing anything. It replaces absolute quantities (never adds deltas), is idempotent, refuses partial application if any referenced item is missing, and preserves non-stock fields and local-only items.
 
+The draft SQL RPCs were also tightened during review: privileged `SECURITY DEFINER` implementations now live in the unexposed `private` schema behind `SECURITY INVOKER` public RPC wrappers. The read RPC exposes ledger and movement sections independently according to permissions. **Writes currently reject role-redacted/partial payloads and require both source-category and inventory write permissions**; this is an intentional fail-closed gate until atomic section-aware merging is implemented. This prevents an inventory-only client from replacing a full effect with an empty hidden ledger section.
+
 These helpers are not yet wired into the live sync flow. The baseline must be published and versioned before employee devices use it; only then may post-baseline movement effects be applied as deltas.
 
 ## Non-negotiable correctness requirements
