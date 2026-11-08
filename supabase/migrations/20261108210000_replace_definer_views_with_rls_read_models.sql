@@ -123,6 +123,19 @@ DROP TRIGGER IF EXISTS production_factory_config_sync ON public.factory_state;
 CREATE TRIGGER production_factory_config_sync AFTER INSERT OR UPDATE OF state ON public.factory_state
 FOR EACH ROW EXECUTE FUNCTION private.sync_production_factory_config();
 
+-- Existing production data is still in the original factory_state JSON snapshot.
+-- Seed normalized inventory only for products that have no inventory rows yet;
+-- this preserves any inventory rows already synchronized in newer installations.
+INSERT INTO public.inventory(user_id,product_id,variant,quantity,updated_at)
+SELECT fs.user_id,p.id,variant_row.key,variant_row.value::numeric,now()
+FROM public.factory_state AS fs
+CROSS JOIN LATERAL jsonb_array_elements(COALESCE(fs.state->'items','[]'::jsonb)) AS item(value)
+JOIN public.products AS p
+  ON p.user_id=fs.user_id AND p.external_id=item.value->>'id'
+CROSS JOIN LATERAL jsonb_each_text(COALESCE(item.value->'st','{}'::jsonb)) AS variant_row(key,value)
+WHERE NOT EXISTS (SELECT 1 FROM public.inventory AS existing WHERE existing.product_id=p.id)
+ON CONFLICT (product_id,variant) DO NOTHING;
+
 INSERT INTO public.production_catalog(user_id,external_id,name,sku,model,unit,warehouse,image_url,buy_price,variant,quantity,updated_at)
 SELECT p.user_id,p.external_id,p.name,p.sku,p.model,p.unit,p.warehouse,p.image_url,p.buy_price,
  COALESCE(i.variant,'-'),COALESCE(i.quantity,0),COALESCE(i.updated_at,p.created_at)
