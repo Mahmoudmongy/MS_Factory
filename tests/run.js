@@ -93,6 +93,8 @@ ok('normalizer rejects unmapped account and item references rather than guessing
 const duplicateCodes=normalizeSourceEffects?normalizeSourceEffects({...canonicalFixture,accts:[...canonicalFixture.accts,{id:3,code:'1001',name:'حساب مكرر'}],L:[]}):{invalid:[]};
 const unbalanced=normalizeSourceEffects?normalizeSourceEffects({...canonicalFixture,L:[{src:'doc',rid:94,a:1,dr:100,cr:0}]}):{invalid:[]};
 ok('normalizer rejects an unbalanced source ledger before it can be synchronized',unbalanced.invalid.some(x=>x.reason==='unbalanced_ledger_effect'));
+const duplicateSku=normalizeSourceEffects?normalizeSourceEffects({...canonicalFixture,items:[...canonicalFixture.items,{id:22,name:'قماش آخر',sku:'FB021',wh:1,unit:'متر',st:{}}],L:[]}):{invalid:[]};
+ok('normalizer rejects duplicate item SKUs that could map different local IDs to one business code',duplicateSku.invalid.some(x=>x.reason==='duplicate_item_sku'));
 ok('normalizer rejects duplicate account codes',duplicateCodes.invalid.some(x=>x.reason==='duplicate_account_code'));
 const openingRows=collectSourceEffects?collectSourceEffects({L:[{src:'je',desc:'رصيد افتتاحي',a:1,dr:10,cr:0}],mv:[{ref:'رصيد افتتاحي',iid:1,v:'-',q:10,val:10}]}):{ignored:[]};
 ok('legacy opening-balance baseline rows are not replayed as transaction effects',openingRows.ignored.length===2&&openingRows.effects.length===0);
