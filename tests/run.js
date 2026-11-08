@@ -52,12 +52,13 @@ ok('sync toolbar is removed but conflict recovery remains reachable from the con
 const collectorStart=cloud.indexOf('function collectSourceEffects(state)');
 const collectorEnd=cloud.indexOf('// ===== الرفع مرة واحدة',collectorStart);
 const effectHelpersContext=vm.createContext({});
-let collectSourceEffects=null, normalizeSourceEffects=null, planSourceEffectSync=null;
+let collectSourceEffects=null, normalizeSourceEffects=null, planSourceEffectSync=null, applyCanonicalSourceEffect=null;
 try {
-  vm.runInContext(cloud.slice(collectorStart,collectorEnd)+';this.collectSourceEffects=collectSourceEffects;this.normalizeSourceEffects=normalizeSourceEffects;this.planSourceEffectSync=planSourceEffectSync;',effectHelpersContext);
+  vm.runInContext(cloud.slice(collectorStart,collectorEnd)+';this.collectSourceEffects=collectSourceEffects;this.normalizeSourceEffects=normalizeSourceEffects;this.planSourceEffectSync=planSourceEffectSync;this.applyCanonicalSourceEffect=applyCanonicalSourceEffect;',effectHelpersContext);
   collectSourceEffects=effectHelpersContext.collectSourceEffects;
   normalizeSourceEffects=effectHelpersContext.normalizeSourceEffects;
   planSourceEffectSync=effectHelpersContext.planSourceEffectSync;
+  applyCanonicalSourceEffect=effectHelpersContext.applyCanonicalSourceEffect;
 } catch(e) {}
 const effectFixture={
   L:[
@@ -118,6 +119,16 @@ const resurrect=planSourceEffectSync?planSourceEffectSync(canonicalFixture,[{...
 ok('planner never resurrects a remotely deleted source automatically',resurrect.actions.length===0&&resurrect.conflicts.some(x=>x.reason==='remote_effect_deleted'));
 ok('source deletions are queued as durable offline tombstones before local reversal',/function queueCloudEffectTombstone\\(src,id\\)/.test(app)&&/mgr6-cloud-effect-tombstones/.test(app)&&/queueCloudEffectTombstone\\(src,id\\);rev\\(id,src\\)/.test(app));
 ok('editing and deleting transactions reverses only matching source type plus ID',/function rev\\(rid,src\\)/.test(app)&&/rev\\(id,src\\)/.test(app)&&/rev\\(old\\.id,"doc"\\)/.test(app)&&/rev\\(old\\.id,"vch"\\)/.test(app)&&/rev\\(old\\.id,"po"\\)/.test(app)&&/rev\\(old\\.id,"je"\\)/.test(app));
+const applyState={accts:[{id:1,code:'1001',name:'الخزنة',t:'A'},{id:2,code:'1100',name:'العملاء',t:'A'}],items:[{id:21,name:'قماش',sku:'FB021',wh:1,unit:'متر',st:{'أبيض':8},val:80}],partners:[{id:31,name:'عميل تجريبي'}],L:[{src:'doc',rid:91,a:1,dr:100,cr:0},{src:'doc',rid:91,a:2,dr:0,cr:100,pid:31}],mv:[{src:'doc',rid:91,iid:21,v:'أبيض',q:-2,val:-20}]};
+const replacementEffect={...normalized.effects[0],movements:[{...normalized.effects[0].movements[0],quantity:-3,value:-30}]};
+const appliedOnce=applyCanonicalSourceEffect?applyCanonicalSourceEffect(applyState,replacementEffect):{applied:false};
+const qtyAfterFirst=applyState.items[0].st['أبيض'],valAfterFirst=applyState.items[0].val,ledgerCountAfterFirst=applyState.L.filter(x=>x.src==='doc'&&String(x.rid)==='91').length;
+const appliedTwice=applyCanonicalSourceEffect?applyCanonicalSourceEffect(applyState,replacementEffect):{applied:false};
+ok('applying a replacement effect reverses old movement then applies the new quantity and value',appliedOnce.applied&&qtyAfterFirst===7&&valAfterFirst===70);
+ok('reapplying the same source effect is idempotent for stock and ledger rows',appliedTwice.applied&&applyState.items[0].st['أبيض']===7&&applyState.items[0].val===70&&applyState.L.filter(x=>x.src==='doc'&&String(x.rid)==='91').length===ledgerCountAfterFirst);
+const missingItemState={accts:[{id:1,code:'1001',name:'الخزنة'}],items:[],partners:[],L:[],mv:[]};
+const missingItemApply=applyCanonicalSourceEffect?applyCanonicalSourceEffect(missingItemState,replacementEffect):{applied:true};
+ok('effect application refuses missing item mappings before mutating the local ledger',!missingItemApply.applied&&missingItemState.L.length===0);
 ok('production-only employees are allowed through the cloud upload permission gate',/!admin && !\["customers", "suppliers", "invoices", "inventory", "production"\]\.some\(canWrite\)/.test(cloud));
 ok('production-only employees are allowed through the cloud download permission gate',/!\["customers","suppliers","invoices","inventory","production","reports"\]\.some\(canRead\)/.test(cloud));
 ok('invoice cloud sync uses the atomic versioned RPC',/rpc\(["']sync_invoice["']/.test(cloud)&&/p_expected_version/.test(cloud)&&/sync_version/.test(cloud));
