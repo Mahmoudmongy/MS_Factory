@@ -409,7 +409,7 @@ begin
         when 'vch' then 'invoices'
         when 'je' then 'settings'
         when 'wo' then 'inventory'
-      end,
+      end
     ) as allowed
   ) as ledger_access
   where se.user_id = v_owner_id
