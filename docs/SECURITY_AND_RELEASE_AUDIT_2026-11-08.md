@@ -1,0 +1,56 @@
+# Security and release audit notes — 8 November 2026
+
+## Scope and environments
+
+- Repository: `Mahmoudmongy/MS_Factory`
+- Production Supabase project: `yvrislcbbhtruwdnuooz`
+- Isolated QA Supabase project: `bjjouupxxodhbniqkjbs`
+- Cloudflare account: linked to this workspace; Workers static-assets path is configured on the migration branch.
+- No production database migration was applied during this QA pass. The new SQL migrations were exercised only against the isolated QA project.
+- No Cloudflare production deployment was performed.
+
+## Accounting and stock synchronization
+
+- The accounting RPC is intentionally `SECURITY DEFINER`: production/invoice employees must update a narrowly scoped accounting source and its shared inventory delta without receiving direct write access to the full accounting table or inventory table.
+- The RPC verifies the authenticated user, resolves their factory owner, checks the source permission, validates accounts/products/source references, enforces balanced ledger groups, checks the optimistic version, and applies the snapshot plus inventory delta in one transaction.
+- Direct authenticated `INSERT/UPDATE/DELETE` privileges on `factory_accounting_state` are revoked. Employees read only their permitted source rows through RLS.
+- For a first employee snapshot, only movement rows newer than the current inventory row's timestamp are applied; this avoids replaying historical movements already included in the inventory baseline. For later versions, the RPC applies the difference between the old and new movement snapshots, including reversals and edits.
+- The administrator remains responsible for the full inventory and accounting snapshot. The employee RPC updates only the stock delta for the invoice or production source they are authorized to write.
+
+## Production-only read access
+
+- The previous owner-executed production views have been replaced with two narrow tables: `production_catalog` and `production_factory_config`.
+- Both tables have RLS. Production employees can read only safe product/variant fields and the production configuration needed for their work.
+- Private, non-API-exposed triggers maintain these projections from the canonical products, inventory, and factory_state tables.
+- The full `factory_state` snapshot remains administrator-only; the production projection does not expose journal entries, customer balances, bank balances, or the full state JSON.
+
+## Intentional Supabase advisor exception
+
+The security advisor reports the public `sync_factory_accounting` RPC as a SECURITY DEFINER function. This is intentional and required for the atomic, permission-scoped inventory delta described above. It uses an empty search path, fully qualified table/function references, validates `auth.uid()` and module permissions, and is executable only by authenticated users. The underlying accounting table has no direct authenticated write grants.
+
+The QA security advisor no longer reports the two previous SECURITY DEFINER view errors after replacing those views with RLS-protected tables.
+
+## Remaining security action
+
+Supabase Auth leaked-password protection is currently disabled according to the security advisor. This is an Auth project setting, not a SQL setting, and the available Supabase connector does not expose a control to change it. Enable it in the Supabase Dashboard under Authentication → Settings → Password Security before public production release.
+
+## Backup status
+
+- The backup workflow is present but deliberately disabled until R2 is enabled, a private bucket is created, immutable 90-day retention and 120-day lifecycle rules are configured, and the required GitHub variables/secrets are supplied.
+- The workflow stops if any Supabase Storage bucket exists because Storage object bytes are not yet included.
+- The archive uses age public-key encryption; the private key must remain offline and outside GitHub.
+- It checksums database exports, verifies the uploaded encrypted object by downloading and byte-comparing it, and enforces a 9 GB ceiling below the 10 GB-month R2 free allowance.
+- R2 is not enabled on the Cloudflare account at audit time; therefore no real backup object or restore drill exists yet. Do not claim recoverability until a complete restore has been performed in QA.
+
+## Authentication test limitation
+
+The QA SQL tests ran as the `authenticated` database role with controlled JWT claims for administrator, production-only employee, and invoice-only employee profiles. This exercises RLS, RPC authorization, source isolation, version conflicts, and inventory effects. The browser regression suite deliberately disables live Auth/cloud modules; it does not prove a real password sign-in session. A final live login test with actual QA Auth credentials remains a release gate.
+
+## Release decision
+
+Do not merge to production or deploy the Cloudflare worker until:
+1. the complete CI suite passes on the final branch head;
+2. the production DB migrations are reviewed and applied only after a verified backup;
+3. R2 is enabled and a full backup plus QA restore drill succeeds;
+4. real administrator and employee password logins are tested in QA;
+5. Android device printing is checked on a physical device.
