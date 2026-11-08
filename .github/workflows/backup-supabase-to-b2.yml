@@ -59,8 +59,8 @@ jobs:
           aws s3api get-bucket-lifecycle-configuration --bucket "$B2_BUCKET" --endpoint-url "$B2_ENDPOINT" > b2-lifecycle.json
           echo "Backblaze lifecycle configuration returned by S3 API:"
           jq '.Rules[]? | {ID,Status,Filter,Prefix,Expiration}' b2-lifecycle.json
-          jq -e 'any(.Rules[]?; .Status == "Enabled" and ((.Filter.Prefix // .Prefix // "") == "backups/database/ms-factory/") and (.Expiration.Days // 0) >= 120)' b2-lifecycle.json >/dev/null
-          echo "B2 preflight passed: Object Lock Compliance 90 days and lifecycle >=120 days."
+          jq -e 'any(.Rules[]?; .Status == "Enabled" and ((.Filter.Prefix // .Prefix // "") == "backups/database/ms-factory/") and (.Expiration.Days // 0) >= 120) and any(.Rules[]?; .Status == "Enabled" and ((.Filter.Prefix // .Prefix // "") == "backups/database/ms-factory/") and (.NoncurrentVersionExpiration.NoncurrentDays // 0) >= 1)' b2-lifecycle.json >/dev/null
+          echo "B2 preflight passed: Object Lock Compliance 90 days; hide backup objects after >=120 days and delete hidden versions."
 
       - name: Check managed backup prefix storage ceiling
         env:
