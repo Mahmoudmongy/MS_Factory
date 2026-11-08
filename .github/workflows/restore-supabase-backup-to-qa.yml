@@ -101,10 +101,12 @@ jobs:
           forbidden = os.environ["FORBIDDEN_PRODUCTION_PROJECT_REF"].lower()
           if forbidden in host or forbidden in user:
               raise SystemExit("Refusing restore: production project reference detected.")
-          if expected not in host and expected not in user:
-              raise SystemExit("Refusing restore: DB URL does not identify the dedicated QA project.")
           if u.scheme not in ("postgres", "postgresql") or not u.path.endswith("/postgres"):
               raise SystemExit("Refusing restore: invalid PostgreSQL connection URL.")
+          if host != "aws-0-eu-west-2.pooler.supabase.com" or u.port != 6543:
+              raise SystemExit("Refusing restore: QA must use its EU-West-2 Supabase Transaction Pooler on port 6543.")
+          if user != "postgres." + expected:
+              raise SystemExit("Refusing restore: Transaction Pooler username must be postgres.<QA project ref>; verify QA_SUPABASE_DB_URL.")
           PY
 
           umask 077
