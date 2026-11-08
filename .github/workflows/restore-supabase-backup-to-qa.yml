@@ -152,7 +152,8 @@ jobs:
           mkdir "$RUNNER_TEMP/restore"
           tar -xzf "$RUNNER_TEMP/backup.tar.gz" -C "$RUNNER_TEMP/restore"
           (cd "$RUNNER_TEMP/restore" && sha256sum -c database-files.sha256)
-          grep -Fxq "project=ms-factory" "$RUNNER_TEMP/restore/manifest.txt" || { echo "::error::Backup manifest does not identify MS Factory."; exit 1; }\n          if [ "$(cat "$RUNNER_TEMP/restore/storage-bucket-count.txt")" != "0" ]; then
+          grep -Fxq "project=ms-factory" "$RUNNER_TEMP/restore/manifest.txt" || { echo "::error::Backup manifest does not identify MS Factory."; exit 1; }
+          if [ "$(cat "$RUNNER_TEMP/restore/storage-bucket-count.txt")" != "0" ]; then
             echo "::error::This restore workflow does not migrate Storage objects; refusing an incomplete restore."
             exit 1
           fi
