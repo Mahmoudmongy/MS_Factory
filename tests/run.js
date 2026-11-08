@@ -322,6 +322,10 @@ const remoteDeleteReversal=removeCanonicalSourceEffect?removeCanonicalSourceEffe
 const remoteDeleteDocument=removeSourceDocument?removeSourceDocument(remoteDeleteState,'doc','91'):{applied:false};
 ok('remote tombstone reverses stock and ledger effects and removes the deleted local document',
   remoteDeleteReversal.applied&&remoteDeleteState.items[0].st['أبيض']===12&&remoteDeleteState.L.length===0&&remoteDeleteState.mv.length===0&&remoteDeleteDocument.applied&&remoteDeleteState.docs.length===0);
+const untrackedDocumentState={...canonicalFixture,docs:[{id:91}],L:[],mv:[]};
+const untrackedDocumentTombstone=planRemoteSourceEffectApply?planRemoteSourceEffectApply(untrackedDocumentState,[{...sameRemote,deleted_at:'2026-11-08T00:00:00Z',payload:null}],{}):{actions:[{}],conflicts:[]};
+ok('remote tombstone preserves a local document when its local version is unknown, even if no effect rows exist',
+  untrackedDocumentTombstone.actions.length===0&&untrackedDocumentTombstone.conflicts.some(x=>x.reason==='untracked_local_effect_conflicts_with_remote_tombstone')&&untrackedDocumentState.docs.length===1);
 const movementOnlyPayload={sourceType:'doc',sourceId:'91',ledgerIncluded:false,movementsIncluded:true,ledger:[],movements:normalized.effects[0].movements};
 const movementOnlyRemote={...sameRemote,payload:movementOnlyPayload};
 const partialDownload=planRemoteSourceEffectApply?planRemoteSourceEffectApply(canonicalFixture,[movementOnlyRemote],{}):{conflicts:[{}]};
