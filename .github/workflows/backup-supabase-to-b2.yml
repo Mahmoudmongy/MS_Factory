@@ -108,6 +108,8 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y age
+          test -s scripts/export-auth-and-counts.sh
+          bash -n scripts/export-auth-and-counts.sh
 
       - name: Export Supabase roles, schema, data and Auth metadata
         env:
@@ -119,12 +121,11 @@ jobs:
           npx --yes supabase@3.0.0 db dump --remote="$SUPABASE_DB_URL" -f schema.sql
           npx --yes supabase@3.0.0 db dump --remote="$SUPABASE_DB_URL" -f data.sql --use-copy --data-only
           # Auth rows are exported separately; active sessions and refresh tokens are excluded.
-          docker run --rm -v "$PWD:/backup" -e SUPABASE_DB_URL postgres:17-alpine sh /backup/scripts/export-auth-and-counts.sh
+          docker run --rm -v "$PWD:/backup" -e SUPABASE_DB_URL postgres:17-bookworm bash /backup/scripts/export-auth-and-counts.sh
           if [ "$(cat storage-bucket-count.txt)" != "0" ]; then
             echo "::error::Supabase Storage buckets exist. This workflow does not yet export Storage object bytes; refusing an incomplete backup."
             exit 1
           fi
-          cp supabase/restore/auth-trigger.sql auth-trigger.sql
           cp -a supabase/migrations backup-migrations
           if [ -d supabase/functions ]; then cp -a supabase/functions backup-edge-functions; else mkdir backup-edge-functions; fi
           cp -a scripts backup-scripts
