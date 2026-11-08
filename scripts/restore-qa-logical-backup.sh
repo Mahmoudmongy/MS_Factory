@@ -63,9 +63,12 @@ auth_users="$("${psql_cmd[@]}" --tuples-only --no-align --command="SELECT count(
 migration_schema="$("${psql_cmd[@]}" --tuples-only --no-align --command="SELECT to_regnamespace('supabase_migrations') IS NOT NULL;" | tr -d '[:space:]')"
 migration_table="$("${psql_cmd[@]}" --tuples-only --no-align --command="SELECT to_regclass('supabase_migrations.schema_migrations') IS NOT NULL;" | tr -d '[:space:]')"
 storage_buckets="$("${psql_cmd[@]}" --tuples-only --no-align --command="SELECT count(*) FROM storage.buckets;" | tr -d '[:space:]')"
-if [[ "$public_tables" != "0" || "$auth_users" != "0" || "$storage_buckets" != "0" ||
-      ( "$migration_schema" == "t" && "$migration_table" != "t" ) ]]; then
-  echo "::error::QA is not an empty, compatible Supabase restore target. No data was changed."
+if [[ "$public_tables" != "0" || "$auth_users" != "0" || "$storage_buckets" != "0" ]]; then
+  echo "::error::QA is not an empty Supabase restore target. No data was changed."
+  exit 1
+fi
+if [[ "$migration_schema" == "t" && "$migration_table" != "t" ]]; then
+  echo "::error::QA has an incomplete migration-history schema. No data was changed."
   exit 1
 fi
 if [[ "$migration_table" == "t" ]]; then
