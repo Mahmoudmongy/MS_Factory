@@ -182,7 +182,7 @@ async function uploadToTables(showAlert = false) {
     if (!profile) throw new Error("تعذر تحديد صلاحيات الحساب");
     const admin = profile.is_admin === true;
     const canWrite = key => admin || profile.permissions?.[key] === true;
-    if (!admin && !["customers", "suppliers", "invoices", "inventory"].some(canWrite)) {
+    if (!admin && !["customers", "suppliers", "invoices", "inventory", "production"].some(canWrite)) {
       syncState = "idle"; drawAll();
       const msg = T("حسابك للعرض فقط أو لا توجد صلاحية مزامنة متاحة.", "This account is read-only or has no supported sync permission.");
       if (showAlert) alert(msg);
@@ -515,7 +515,7 @@ async function loadFromTablesMerge(isAuto = false) {
       }
     }
 
-    if (!["customers","suppliers","invoices","inventory","reports"].some(canRead)) {
+    if (!["customers","suppliers","invoices","inventory","production","reports"].some(canRead)) {
       return T("لا توجد صلاحيات لقراءة بيانات السحابة", "No permission to read cloud data");
     }
     // Preserve a rollback copy, then merge remote records without replacing local master data.

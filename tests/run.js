@@ -49,6 +49,8 @@ const syncPageStart=app.indexOf('function syncPage(){'),syncPageEnd=app.indexOf(
 ok('offline saves are durably queued and retried on reconnect, focus and visibility',/mgr6-sync-pending/.test(cloud)&&/function markPendingSync/.test(cloud)&&/function scheduleAutoSync/.test(cloud)&&/addEventListener\("online", \(\) => \{ retryCount = 0; scheduleAutoSync\(500\); \}\)/.test(cloud)&&/addEventListener\("focus"/.test(cloud)&&/visibilitychange/.test(cloud)&&/scheduleAutoSync\(1500\)/.test(cloud));
 ok('sync toolbar is removed but conflict recovery remains reachable from the connection indicator',!app.includes('["🔄 حالة الاتصال والمزامنة","syncPage()"]')&&/id="net" onclick="syncPage\(\)"/.test(idx)&&/ms-logout-btn/.test(cloud)&&!/cloud-badge|رفع الآن|Upload Now|تحميل/.test(cloud.slice(cloud.indexOf('function drawAll()'))));
 
+ok('production-only employees are allowed through the cloud upload permission gate',/!admin && !\["customers", "suppliers", "invoices", "inventory", "production"\]\.some\(canWrite\)/.test(cloud));
+ok('production-only employees are allowed through the cloud download permission gate',/!\["customers","suppliers","invoices","inventory","production","reports"\]\.some\(canRead\)/.test(cloud));
 ok('invoice cloud sync uses the atomic versioned RPC',/rpc\(["']sync_invoice["']/.test(cloud)&&/p_expected_version/.test(cloud)&&/sync_version/.test(cloud));
 ok('inventory sync uploads the actual S.items array used by the stock screens',/for \(const arr of \[S\.items, S\.products, S\.prods\]\)/.test(cloud));
 ok('inventory sync totals all colour/size variants instead of reading a missing qty field',/Object\.values\(variants\)\.reduce/.test(cloud)&&/const variants = pr\.st/.test(cloud));
