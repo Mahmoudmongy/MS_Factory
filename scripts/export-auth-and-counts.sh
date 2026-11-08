@@ -3,11 +3,24 @@
 set -eu
 : "${SUPABASE_DB_URL:?SUPABASE_DB_URL is required}"
 
-pg_dump "$SUPABASE_DB_URL" --data-only --no-owner --no-privileges \
-  --table=auth.users --table=auth.identities \
-  --table=auth.mfa_factors --table=auth.mfa_recovery_code_sets \
-  --table=auth.mfa_recovery_codes --table=auth.webauthn_credentials \
-  --file=/backup/auth-users.sql
+# Auth table availability differs between Supabase Auth versions. Export only tables
+# that actually exist, and fail if core user/identity tables are missing.
+set -- --data-only --no-owner --no-privileges
+for table in users identities mfa_factors mfa_recovery_code_sets mfa_recovery_codes webauthn_credentials; do
+  exists="$(psql "$SUPABASE_DB_URL" -Atqc "SELECT to_regclass('auth.$table') IS NOT NULL")"
+  if [ "$exists" = "t" ]; then
+    set -- "$@" "--table=auth.$table"
+  fi
+done
+case " $* " in
+  *"--table=auth.users"*) ;;
+  *) echo "ERROR: auth.users table is missing." >&2; exit 10 ;;
+esac
+case " $* " in
+  *"--table=auth.identities"*) ;;
+  *) echo "ERROR: auth.identities table is missing." >&2; exit 11 ;;
+esac
+pg_dump "$SUPABASE_DB_URL" "$@" --file=/backup/auth-users.sql
 
 cat > /backup/migration-history-schema.sql <<'SQL'
 CREATE SCHEMA IF NOT EXISTS supabase_migrations;
@@ -28,7 +41,6 @@ CREATE UNIQUE INDEX IF NOT EXISTS schema_migrations_idempotency_key_key
   ON supabase_migrations.schema_migrations(idempotency_key);
 SQL
 
-
 pg_dump "$SUPABASE_DB_URL" --data-only --no-owner --no-privileges \
   --table=supabase_migrations.schema_migrations \
   --file=/backup/migration-history.sql
@@ -39,8 +51,11 @@ psql "$SUPABASE_DB_URL" -Atqc "select count(*) from supabase_migrations.schema_m
 
 : > /backup/auth-row-counts.txt
 for table in users identities mfa_factors mfa_recovery_code_sets mfa_recovery_codes webauthn_credentials; do
-  count="$(psql "$SUPABASE_DB_URL" -Atqc "select count(*) from auth.\"$table\"")"
-  printf '%s=%s\n' "$table" "$count" >> /backup/auth-row-counts.txt
+  exists="$(psql "$SUPABASE_DB_URL" -Atqc "SELECT to_regclass('auth.$table') IS NOT NULL")"
+  if [ "$exists" = "t" ]; then
+    count="$(psql "$SUPABASE_DB_URL" -Atqc "select count(*) from auth.\"$table\"")"
+    printf '%s=%s\n' "$table" "$count" >> /backup/auth-row-counts.txt
+  fi
 done
 
 : > /backup/public-row-counts.txt
