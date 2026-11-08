@@ -19,6 +19,12 @@ create table if not exists public.source_effects (
   )
 );
 
+-- SKU is the human-facing item code; reject cross-device collisions instead of
+-- silently creating two different items with the same operational code.
+create unique index if not exists products_owner_sku_unique_idx
+  on public.products (user_id, sku)
+  where nullif(btrim(sku), '') is not null;
+
 create index if not exists source_effects_owner_updated_idx
   on public.source_effects (user_id, updated_at desc);
 
