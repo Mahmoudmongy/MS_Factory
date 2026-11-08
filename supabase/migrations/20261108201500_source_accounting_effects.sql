@@ -35,7 +35,7 @@ alter table public.source_effects enable row level security;
 drop policy if exists source_effects_read_permission on public.source_effects;
 revoke all on table public.source_effects from public, anon, authenticated;
 
-create or replace function public.sync_source_effect(
+create or replace function private.sync_source_effect(
   p_source_type text,
   p_source_id text,
   p_expected_version integer,
@@ -231,10 +231,31 @@ begin
 end;
 $function$;
 
+revoke all on function private.sync_source_effect(text, text, integer, jsonb, boolean) from public, anon;
+grant usage on schema private to authenticated;
+grant execute on function private.sync_source_effect(text, text, integer, jsonb, boolean) to authenticated;
+
+-- PostgREST-facing wrapper is SECURITY INVOKER; privileged logic stays in the
+-- unexposed private schema and performs its own auth.uid()/permission checks.
+create or replace function public.sync_source_effect(
+  p_source_type text,
+  p_source_id text,
+  p_expected_version integer,
+  p_payload jsonb,
+  p_deleted boolean default false
+)
+returns table(sync_version integer, updated_at timestamptz, deleted_at timestamptz)
+language sql
+security invoker
+set search_path = ''
+as $wrapper$
+  select * from private.sync_source_effect($1, $2, $3, $4, $5);
+$wrapper$;
+
 revoke all on function public.sync_source_effect(text, text, integer, jsonb, boolean) from public, anon;
 grant execute on function public.sync_source_effect(text, text, integer, jsonb, boolean) to authenticated;
 
-create or replace function public.get_source_effects()
+create or replace function private.get_source_effects()
 returns table(
   source_type text,
   source_id text,
@@ -265,8 +286,7 @@ begin
     raise exception 'Factory profile not found' using errcode = '42501';
   end if;
 
-  -- Inventory permission (or reports, via can_access_factory_owner) allows
-  -- stock-only access to all source categories without exposing their ledger rows.
+  -- Inventory permission allows stock-only access to all source categories without exposing ledger rows.
   v_can_read_all_movements :=
     private.can_access_factory_owner(v_owner_id, 'inventory', false);
 
@@ -283,9 +303,9 @@ begin
         'sourceType', se.source_type,
         'sourceId', se.source_id,
         'ledgerIncluded', ledger_access.allowed,
-        'movementsIncluded', (v_can_read_all_movements or ledger_access.allowed),
+        'movementsIncluded', v_can_read_all_movements,
         'ledger', case when ledger_access.allowed then se.payload -> 'ledger' else '[]'::jsonb end,
-        'movements', case when (v_can_read_all_movements or ledger_access.allowed)
+        'movements', case when v_can_read_all_movements
                           then se.payload -> 'movements' else '[]'::jsonb end
       )
     end as payload
@@ -308,6 +328,25 @@ begin
   order by se.source_type, se.source_id;
 end;
 $function$;
+
+revoke all on function private.get_source_effects() from public, anon;
+grant execute on function private.get_source_effects() to authenticated;
+
+create or replace function public.get_source_effects()
+returns table(
+  source_type text,
+  source_id text,
+  sync_version integer,
+  updated_at timestamptz,
+  deleted_at timestamptz,
+  payload jsonb
+)
+language sql
+security invoker
+set search_path = ''
+as $wrapper$
+  select * from private.get_source_effects();
+$wrapper$;
 
 revoke all on function public.get_source_effects() from public, anon;
 grant execute on function public.get_source_effects() to authenticated;
