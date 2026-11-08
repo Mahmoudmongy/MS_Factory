@@ -132,8 +132,8 @@ FROM public.factory_state AS fs
 CROSS JOIN LATERAL jsonb_array_elements(COALESCE(fs.state->'items','[]'::jsonb)) AS item(value)
 JOIN public.products AS p
   ON p.user_id=fs.user_id AND p.external_id=item.value->>'id'
-CROSS JOIN LATERAL jsonb_each_text(COALESCE(item.value->'st','{}'::jsonb)) AS variant_row(key,value)
-WHERE NOT EXISTS (SELECT 1 FROM public.inventory AS existing WHERE existing.product_id=p.id)
+CROSS JOIN LATERAL jsonb_each_text(CASE WHEN jsonb_typeof(item.value->'st')='object' THEN item.value->'st' ELSE '{}'::jsonb END) AS variant_row(key,value)
+-- Insert missing variants individually; preserve existing quantities from newer syncs.
 ON CONFLICT (product_id,variant) DO NOTHING;
 
 INSERT INTO public.production_catalog(user_id,external_id,name,sku,model,unit,warehouse,image_url,buy_price,variant,quantity,updated_at)
