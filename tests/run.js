@@ -113,6 +113,25 @@ const cloudIdApply=applyStockBaseline?applyStockBaseline(cloudIdTarget,cloudIdBa
 ok('stock baseline resolves canonical identity on a device with a different local ID',cloudIdApply.applied&&cloudIdTarget.items[0].st['أبيض']===12);
 ok('new inventory items receive a stable cloud identity at creation',/cloudId:String\(itemId\)/.test(app));
 ok('product uploads and ledger effects use canonical cloud identities',cloud.includes('pr.cloudId = String(pr.id)')&&cloud.includes('externalId: String(item.cloudId || id)'));
+const partnerMergeStart=cloud.indexOf('function mergeCloudPartners(existing, incoming)');
+const partnerMergeEnd=cloud.indexOf('function mergeCloudProducts(existing, incoming)',partnerMergeStart);
+const partnerMergeContext=vm.createContext({});
+let mergeCloudPartners=null;
+try {
+  vm.runInContext(cloud.slice(partnerMergeStart,partnerMergeEnd)+';this.mergeCloudPartners=mergeCloudPartners;',partnerMergeContext);
+  mergeCloudPartners=partnerMergeContext.mergeCloudPartners;
+} catch(e) {}
+const legacyPartner=[{id:201,name:'عميل واحد',phone:'01000000000',c:1,s:0}];
+const remotePartner=[{id:'partner-201',cloudId:'partner-201',name:'عميل واحد',phone:'01000000000',kind:'supplier'}];
+const partnerLink=mergeCloudPartners?mergeCloudPartners(legacyPartner,remotePartner):{linked:0,conflicts:0};
+ok('partner sync links a unique local contact to the canonical cloud identity',partnerLink.linked===1&&legacyPartner[0].cloudId==='partner-201'&&legacyPartner[0].c===1&&legacyPartner[0].s===1);
+const ambiguousPartnerRows=[{id:202,name:'عميل مكرر',phone:''},{id:203,name:'عميل مكرر',phone:''}];
+const partnerAmbiguous=mergeCloudPartners?mergeCloudPartners(ambiguousPartnerRows,[{id:'partner-amb',cloudId:'partner-amb',name:'عميل مكرر',phone:'',kind:'customer'}]):{conflicts:0};
+ok('ambiguous partner matches are preserved as conflicts',partnerAmbiguous.conflicts===1&&ambiguousPartnerRows.length===2);
+const partnerEffectState={accts:[{id:1,code:'1001',name:'الخزنة'}],items:[],partners:[{id:31,cloudId:'partner-canonical-31',name:'عميل'}],L:[{src:'je',rid:91,a:1,dr:10,cr:10,pid:31}],mv:[]};
+const partnerEffect=normalizeSourceEffects?normalizeSourceEffects(partnerEffectState):{effects:[],invalid:[{}]};
+ok('ledger effect references canonical partner identity',partnerEffect.invalid.length===0&&partnerEffect.effects[0]?.ledger[0]?.partnerExternalId==='partner-canonical-31');
+ok('new partner records receive stable cloud identity',/cloudId:String\(partnerId\)/.test(app));
 const effectFixture={
   L:[
     {src:'doc',rid:7,a:1,dr:100,cr:0},
