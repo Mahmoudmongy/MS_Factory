@@ -34,8 +34,12 @@ ok('no secrets / service role keys in shipped files',!/service_role|eyJ[A-Za-z0-
 ok('login screen does not expose public self-registration',!/auth-signup|signUp\(/.test(fs.readFileSync(path.join(ROOT,'auth.html'),'utf8')+fs.readFileSync(path.join(ROOT,'js/auth.js'),'utf8')));
 const createEmployeeFn=fs.readFileSync(path.join(ROOT,'supabase/functions/create-employee-account/index.ts'),'utf8');
 const changePasswordFn=fs.readFileSync(path.join(ROOT,'supabase/functions/change-initial-password/index.ts'),'utf8');
+const backupFn=fs.readFileSync(path.join(ROOT,'supabase/functions/export-factory-backup/index.ts'),'utf8');
 const changePasswordPage=fs.readFileSync(path.join(ROOT,'change-password.html'),'utf8')+fs.readFileSync(path.join(ROOT,'js/change-password.js'),'utf8');
 ok('new employee accounts require a first-login password change',/must_change_password:\s*true/.test(createEmployeeFn));
+ok('database backup endpoint verifies the caller and restricts export to admins',/auth\.getUser\(\)/.test(backupFn)&&/profile\.is_admin !== true/.test(backupFn)&&/SUPABASE_SERVICE_ROLE_KEY/.test(backupFn));
+ok('database backup exports every application table with pagination and a SHA-256 checksum', ['profiles','customers','suppliers','products','inventory','invoices','invoice_items','returns','vouchers','production_orders','factory_state'].every(t=>backupFn.includes('name: "'+t+'"'))&&/\.range\(offset, offset \+ pageSize - 1\)/.test(backupFn)&&/SHA-256/.test(backupFn));
+ok('database backup download is exposed only in administrator settings',/window\.downloadDatabaseBackup/.test(cloud)&&/window\.__factoryAuthProfile\?\.is_admin===true/.test(app));
 ok('online and cached profile gates redirect flagged employees before opening the app',/profile\.must_change_password === true/.test(idx)&&/cachedProfile\.must_change_password === true/.test(idx)&&/change-password\.html/.test(idx));
 ok('first-login password endpoint verifies the signed-in user before privileged password update',/caller\.auth\.getUser\(\)/.test(changePasswordFn)&&/admin\.auth\.admin\.updateUserById\(\s*authData\.user\.id,\s*\{\s*password\s*\}\s*,\s*\)/.test(changePasswordFn));
 ok('first-login password endpoint only clears the flag for the authenticated employee',/profile\.must_change_password !== true/.test(changePasswordFn)&&/\.eq\("id", authData\.user\.id\)/.test(changePasswordFn)&&/must_change_password: false/.test(changePasswordFn));
