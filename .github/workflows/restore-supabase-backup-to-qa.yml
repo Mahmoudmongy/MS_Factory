@@ -1,0 +1,217 @@
+name: Restore encrypted Supabase backup to QA
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - ".github/workflows/restore-supabase-backup-to-qa.yml"
+      - "scripts/restore-qa-logical-backup.sh"
+      - ".github/workflows/backup-supabase-to-b2.yml"
+  workflow_dispatch:
+    inputs:
+      confirm_qa_restore:
+        description: "Confirm restore into the dedicated empty QA project only"
+        type: boolean
+        required: true
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: restore-supabase-backup-to-qa
+  cancel-in-progress: false
+
+jobs:
+  validate-restore-code:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Validate restore scripts without connecting to Supabase or B2
+        run: |
+          set -euo pipefail
+          bash -n scripts/restore-qa-logical-backup.sh
+          bash -n scripts/export-auth-and-counts.sh
+          python3 - <<'PY'
+          import pathlib, re, textwrap
+          for name in [".github/workflows/restore-supabase-backup-to-qa.yml", "scripts/restore-qa-logical-backup.sh"]:
+              text = pathlib.Path(name).read_text()
+              blocks = re.findall(r"python3 - <<'PY'\n(.*?)\n[ \t]*PY", text, flags=re.DOTALL)
+              for index, block in enumerate(blocks):
+                  compile(textwrap.dedent(block), f"{name}:python-block-{index}", "exec")
+          print("Embedded Python blocks compile.")
+          PY
+          ruby -e 'require "yaml"; ARGV.each { |f| YAML.load_file(f) }' .github/workflows/restore-supabase-backup-to-qa.yml
+          if grep -q 'SET session_replication_role' scripts/restore-qa-logical-backup.sh; then
+            echo "::error::Restore must not require superuser-only session_replication_role on Supabase managed postgres."
+            exit 1
+          fi
+          grep -q 'EXPECTED_QA_PROJECT_REF' scripts/restore-qa-logical-backup.sh
+          grep -q 'FORBIDDEN_PRODUCTION_PROJECT_REF' scripts/restore-qa-logical-backup.sh
+          echo "QA restore script syntax and destination guards validated."
+
+  restore-qa:
+    if: github.event_name == 'workflow_dispatch' && inputs.confirm_qa_restore == true
+    runs-on: ubuntu-latest
+    timeout-minutes: 75
+    env:
+      B2_BUCKET: ${{ vars.B2_BUCKET }}
+      B2_ENDPOINT: ${{ vars.B2_ENDPOINT }}
+      AWS_ACCESS_KEY_ID: ${{ secrets.B2_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.B2_APPLICATION_KEY }}
+      QA_SUPABASE_DB_URL: ${{ secrets.QA_SUPABASE_DB_URL }}
+      AGE_IDENTITY: ${{ secrets.AGE_IDENTITY }}
+      EXPECTED_QA_PROJECT_REF: bpkkzyjfkktkaadhmbdi
+      FORBIDDEN_PRODUCTION_PROJECT_REF: yvrislcbbhtruwdnuooz
+      AGE_RECIPIENT: age1zfva448t0k2t9m9gdv078t62srjkzgrgxqumz9j68sjajtuvssdsvwga8f
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install restore tools
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y age awscli postgresql-client python3
+
+      - name: Validate secrets and QA-only destination
+        run: |
+          set -euo pipefail
+          for name in B2_BUCKET B2_ENDPOINT AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY QA_SUPABASE_DB_URL AGE_IDENTITY; do
+            if [ -z "${!name:-}" ]; then
+              echo "::error::Missing required GitHub secret/variable: $name"
+              exit 1
+            fi
+          done
+          case "$B2_ENDPOINT" in https://s3.*.backblazeb2.com) ;; *) echo "::error::Unexpected B2 S3 endpoint"; exit 1;; esac
+          case "$B2_BUCKET" in *[!a-z0-9.-]*|'') echo "::error::Invalid B2 bucket name"; exit 1;; esac
+
+          python3 - <<'PY'
+          import os
+          from urllib.parse import urlparse, unquote
+          u = urlparse(os.environ["QA_SUPABASE_DB_URL"])
+          host, user = (u.hostname or "").lower(), unquote(u.username or "").lower()
+          expected = os.environ["EXPECTED_QA_PROJECT_REF"].lower()
+          forbidden = os.environ["FORBIDDEN_PRODUCTION_PROJECT_REF"].lower()
+          if forbidden in host or forbidden in user:
+              raise SystemExit("Refusing restore: production project reference detected.")
+          if expected not in host and expected not in user:
+              raise SystemExit("Refusing restore: DB URL does not identify the dedicated QA project.")
+          if u.scheme not in ("postgres", "postgresql") or not u.path.endswith("/postgres"):
+              raise SystemExit("Refusing restore: invalid PostgreSQL connection URL.")
+          PY
+
+          umask 077
+          printf '%s\n' "$AGE_IDENTITY" > "$RUNNER_TEMP/age-identity.txt"
+          chmod 600 "$RUNNER_TEMP/age-identity.txt"
+          actual_recipient="$(age-keygen -y "$RUNNER_TEMP/age-identity.txt" | tr -d '\r\n')"
+          if [ "$actual_recipient" != "$AGE_RECIPIENT" ]; then
+            echo "::error::AGE_IDENTITY does not match the configured backup recipient."
+            exit 1
+          fi
+
+      - name: Find newest complete encrypted backup with checksum sidecar
+        id: backup
+        run: |
+          set -euo pipefail
+          region="${B2_ENDPOINT#https://s3.}"
+          region="${region%.backblazeb2.com}"
+          export AWS_DEFAULT_REGION="$region"
+          aws s3api list-objects-v2 --bucket "$B2_BUCKET" --prefix "backups/database/ms-factory/" --endpoint-url "$B2_ENDPOINT" --output json > "$RUNNER_TEMP/b2-objects.json"
+          key="$(python3 - "$RUNNER_TEMP/b2-objects.json" <<'PY'
+          import json, sys
+          objects = json.load(open(sys.argv[1])).get("Contents", [])
+          keys = {x["Key"] for x in objects}
+          candidates = sorted(
+              (k for k in keys if k.endswith("/ms-factory-db-backup.tar.gz.age") and k + ".sha256" in keys),
+              reverse=True
+          )
+          if not candidates:
+              raise SystemExit("No complete encrypted backup with a checksum sidecar exists in the managed B2 prefix.")
+          print(candidates[0])
+          PY
+          )"
+          case "$key" in backups/database/ms-factory/*/ms-factory-db-backup.tar.gz.age) ;; *) echo "::error::Unexpected backup object key"; exit 1;; esac
+          echo "key=$key" >> "$GITHUB_OUTPUT"
+          echo "Selected newest complete encrypted backup object."
+
+      - name: Verify object retention, download, and checksum
+        env:
+          BACKUP_KEY: ${{ steps.backup.outputs.key }}
+        run: |
+          set -euo pipefail
+          region="${B2_ENDPOINT#https://s3.}"
+          region="${region%.backblazeb2.com}"
+          export AWS_DEFAULT_REGION="$region"
+          aws s3api get-object-retention --bucket "$B2_BUCKET" --key "$BACKUP_KEY" --endpoint-url "$B2_ENDPOINT" > "$RUNNER_TEMP/retention.json"
+          for object_key in "$BACKUP_KEY" "$BACKUP_KEY.sha256"; do
+            aws s3api get-object-retention --bucket "$B2_BUCKET" --key "$object_key" --endpoint-url "$B2_ENDPOINT" > "$RUNNER_TEMP/retention.json"
+            python3 - "$RUNNER_TEMP/retention.json" "$object_key" <<'PY'
+          import datetime, json, sys
+          r = json.load(open(sys.argv[1]))["Retention"]
+          until = datetime.datetime.fromisoformat(r["RetainUntilDate"].replace("Z", "+00:00"))
+          required = datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(days=89)
+          if r["Mode"] != "COMPLIANCE" or until < required:
+              raise SystemExit(f"Object {sys.argv[2]} is not protected by Compliance Object Lock for at least 89 more days.")
+          PY
+          done
+          aws s3 cp "s3://$B2_BUCKET/$BACKUP_KEY" "$RUNNER_TEMP/ms-factory-db-backup.tar.gz.age" --endpoint-url "$B2_ENDPOINT" --only-show-errors --no-progress
+          aws s3 cp "s3://$B2_BUCKET/$BACKUP_KEY.sha256" "$RUNNER_TEMP/ms-factory-db-backup.tar.gz.age.sha256" --endpoint-url "$B2_ENDPOINT" --only-show-errors --no-progress
+          (cd "$RUNNER_TEMP" && sha256sum --check ms-factory-db-backup.tar.gz.age.sha256)
+
+      - name: Decrypt and verify logical backup archive
+        run: |
+          set -euo pipefail
+          age --decrypt --identity "$RUNNER_TEMP/age-identity.txt" \
+            --output "$RUNNER_TEMP/ms-factory-db-backup.tar.gz" \
+            "$RUNNER_TEMP/ms-factory-db-backup.tar.gz.age"
+          mkdir -p "$RUNNER_TEMP/ms-factory-restore"
+          python3 - "$RUNNER_TEMP/ms-factory-db-backup.tar.gz" "$RUNNER_TEMP/ms-factory-restore" <<'PY'
+          import pathlib, sys, tarfile
+          archive, destination = pathlib.Path(sys.argv[1]), pathlib.Path(sys.argv[2])
+          required = {
+              "roles.sql", "schema.sql", "data.sql", "auth-users.sql",
+              "migration-history-schema.sql", "migration-history.sql", "auth-trigger.sql",
+              "auth-row-counts.txt", "public-row-counts.txt", "database-files.sha256",
+              "manifest.txt", "storage-bucket-count.txt", "auth-user-count.txt", "migration-count.txt",
+          }
+          seen = set()
+          with tarfile.open(archive, "r:gz") as tar:
+              members = tar.getmembers()
+              for member in members:
+                  name = pathlib.PurePosixPath(member.name)
+                  if (name.is_absolute() or not member.name or ".." in name.parts
+                      or str(name) in ("", ".") or member.name in seen):
+                      raise SystemExit(f"Unsafe or duplicate archive path: {member.name!r}")
+                  seen.add(member.name)
+                  if not (member.isfile() or member.isdir()):
+                      raise SystemExit(f"Unsupported archive entry type: {member.name!r}")
+              if not required.issubset(seen):
+                  raise SystemExit("Backup archive is missing required restore files.")
+              tar.extractall(destination, members=members)
+          PY
+          cd "$RUNNER_TEMP/ms-factory-restore"
+          sha256sum --check --status database-files.sha256
+          grep -qx 'project=ms-factory' <(grep '^project=' manifest.txt)
+          grep -q '^source=Supabase CLI db dump$' manifest.txt
+          test "$(tr -d '[:space:]' < storage-bucket-count.txt)" = "0"
+
+      - name: Restore using Supabase-managed-schema-aware logical process
+        env:
+          RESTORE_DIR: ${{ runner.temp }}/ms-factory-restore
+        run: |
+          set -euo pipefail
+          bash scripts/restore-qa-logical-backup.sh
+
+      - name: Remove decrypted backup and temporary credentials
+        if: always()
+        run: |
+          rm -rf "$RUNNER_TEMP/ms-factory-restore" \
+            "$RUNNER_TEMP/ms-factory-db-backup.tar.gz" \
+            "$RUNNER_TEMP/ms-factory-db-backup.tar.gz.age" \
+            "$RUNNER_TEMP/ms-factory-db-backup.tar.gz.age.sha256" \
+            "$RUNNER_TEMP/age-identity.txt" "$RUNNER_TEMP/b2-objects.json" \
+            "$RUNNER_TEMP/retention.json" "$RUNNER_TEMP/archive-files.txt"
