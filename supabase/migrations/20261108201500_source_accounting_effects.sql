@@ -116,6 +116,8 @@ begin
        or pg_catalog.jsonb_typeof(p_payload) <> 'object'
        or pg_catalog.jsonb_typeof(p_payload -> 'ledger') <> 'array'
        or pg_catalog.jsonb_typeof(p_payload -> 'movements') <> 'array'
+       or p_payload ->> 'sourceType' is distinct from p_source_type
+       or p_payload ->> 'sourceId' is distinct from p_source_id
        or (pg_catalog.jsonb_array_length(p_payload -> 'ledger') = 0
            and pg_catalog.jsonb_array_length(p_payload -> 'movements') = 0)
        or pg_catalog.octet_length(p_payload::text) > 1048576 then
@@ -152,6 +154,39 @@ begin
           or pg_catalog.jsonb_typeof(x.value -> 'value') is distinct from 'number'
     ) then
       raise exception 'Stock movements require stable item and variant identities' using errcode = '22023';
+    end if;
+
+    if exists (
+      select 1
+        from pg_catalog.jsonb_array_elements(p_payload -> 'movements') as x(value)
+       where not exists (
+         select 1 from public.products as pr
+          where pr.user_id = v_owner_id
+            and pr.external_id = x.value ->> 'itemExternalId'
+       )
+    ) then
+      raise exception 'Stock movement references an item not registered for this factory' using errcode = '22023';
+    end if;
+
+    if exists (
+      select 1
+        from (
+          select value ->> 'partnerExternalId' as external_id
+            from pg_catalog.jsonb_array_elements(p_payload -> 'ledger')
+          union all
+          select value ->> 'partnerExternalId' as external_id
+            from pg_catalog.jsonb_array_elements(p_payload -> 'movements')
+        ) as refs
+       where nullif(refs.external_id, '') is not null
+         and not exists (
+           select 1 from public.customers as c
+            where c.user_id = v_owner_id and c.external_id = refs.external_id
+           union all
+           select 1 from public.suppliers as s
+            where s.user_id = v_owner_id and s.external_id = refs.external_id
+         )
+    ) then
+      raise exception 'Source effect references a partner not registered for this factory' using errcode = '22023';
     end if;
   else
     p_payload := null;
