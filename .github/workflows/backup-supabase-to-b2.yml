@@ -99,7 +99,7 @@ jobs:
 
   backup:
     needs: b2-preflight
-    if: needs.b2-preflight.result == 'success' && ((github.event_name == 'schedule' && vars.BACKUP_ENABLED == 'true') || (github.event_name == 'workflow_dispatch' && inputs.run_backup == true && vars.BACKUP_ENABLED == 'true'))
+    if: needs.b2-preflight.result == 'success' && ((github.event_name == 'schedule' && vars.BACKUP_SCHEDULE_ENABLED == 'true') || (github.event_name == 'workflow_dispatch' && inputs.run_backup == true && vars.BACKUP_ENABLED == 'true'))
     runs-on: ubuntu-latest
     timeout-minutes: 45
     steps:
