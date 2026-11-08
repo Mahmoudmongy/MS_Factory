@@ -456,6 +456,9 @@ function applyCanonicalSourceEffect(state, effect) {
       effect.sourceId == null || !Array.isArray(effect.ledger) || !Array.isArray(effect.movements)) {
     return { applied: false, reason: "invalid_effect" };
   }
+  const includeLedger = effect.ledgerIncluded !== false;
+  const includeMovements = effect.movementsIncluded !== false;
+  if (!includeLedger && !includeMovements) return { applied: false, reason: "no_visible_effect_sections" };
   if (!Array.isArray(state.accts)) state.accts = [];
   if (!Array.isArray(state.items)) state.items = [];
   if (!Array.isArray(state.partners)) state.partners = [];
@@ -475,18 +478,15 @@ function applyCanonicalSourceEffect(state, effect) {
   const ledgerRows = [];
   const movementRows = [];
 
-  for (const row of effect.ledger) {
+  if (includeLedger) for (const row of effect.ledger) {
     const code = String(row.accountCode || "").trim();
     if (!code) return { applied: false, reason: "missing_account_code" };
-    let account = accountsByCode.get(code);
-    if (!account) {
-      if (!accountPlans.has(code)) {
-        accountPlans.set(code, {
-          code, name: String(row.accountName || code), t: String(row.accountType || "A"),
-          k: String(row.accountKey || ""), cash: Number(row.accountIsCash || 0),
-          cur: String(row.accountCurrency || "EGP")
-        });
-      }
+    if (!accountsByCode.has(code) && !accountPlans.has(code)) {
+      accountPlans.set(code, {
+        code, name: String(row.accountName || code), t: String(row.accountType || "A"),
+        k: String(row.accountKey || ""), cash: Number(row.accountIsCash || 0),
+        cur: String(row.accountCurrency || "EGP")
+      });
     }
     let partner = null;
     if (row.partnerExternalId != null && String(row.partnerExternalId) !== "") {
@@ -495,7 +495,7 @@ function applyCanonicalSourceEffect(state, effect) {
     }
     ledgerRows.push({ sourceRow: row, code, partner });
   }
-  for (const row of effect.movements) {
+  if (includeMovements) for (const row of effect.movements) {
     const item = itemsByExternalId.get(String(row.itemExternalId));
     if (!item) return { applied: false, reason: "unmapped_item", itemExternalId: String(row.itemExternalId) };
     let partner = null;
@@ -516,19 +516,21 @@ function applyCanonicalSourceEffect(state, effect) {
 
   const sourceId = String(effect.sourceId), sourceType = effect.sourceType;
   const matches = row => row && row.src === sourceType && String(row.rid) === sourceId;
-  const oldMovements = state.mv.filter(matches);
-  for (const movement of oldMovements) {
-    const item = itemsByExternalId.get(String(movement.iid));
-    if (item) {
-      if (!item.st || typeof item.st !== "object" || Array.isArray(item.st)) item.st = {};
-      item.st[movement.v] = (Number(item.st[movement.v]) || 0) - (Number(movement.q) || 0);
-      item.val = (Number(item.val) || 0) - (Number(movement.val) || 0);
+  if (includeMovements) {
+    const oldMovements = state.mv.filter(matches);
+    for (const movement of oldMovements) {
+      const item = itemsByExternalId.get(String(movement.iid));
+      if (item) {
+        if (!item.st || typeof item.st !== "object" || Array.isArray(item.st)) item.st = {};
+        item.st[movement.v] = (Number(item.st[movement.v]) || 0) - (Number(movement.q) || 0);
+        item.val = (Number(item.val) || 0) - (Number(movement.val) || 0);
+      }
     }
+    state.mv = state.mv.filter(row => !matches(row));
   }
-  state.L = state.L.filter(row => !matches(row));
-  state.mv = state.mv.filter(row => !matches(row));
+  if (includeLedger) state.L = state.L.filter(row => !matches(row));
 
-  for (const entry of ledgerRows) {
+  if (includeLedger) for (const entry of ledgerRows) {
     const row = entry.sourceRow, account = accountsByCode.get(entry.code);
     state.L.push({
       d: row.date || "", ts: Number(row.timestamp || 0), ref: String(row.reference || ""),
@@ -537,9 +539,8 @@ function applyCanonicalSourceEffect(state, effect) {
       fc: Number(row.foreignCurrencyAmount || 0)
     });
   }
-  for (const entry of movementRows) {
-    const row = entry.sourceRow;
-    const item = entry.item;
+  if (includeMovements) for (const entry of movementRows) {
+    const row = entry.sourceRow, item = entry.item;
     if (!item.st || typeof item.st !== "object" || Array.isArray(item.st)) item.st = {};
     const quantity = Number(row.quantity || 0), value = Number(row.value || 0), variant = String(row.variant || "-");
     item.st[variant] = (Number(item.st[variant]) || 0) + quantity;
@@ -550,7 +551,7 @@ function applyCanonicalSourceEffect(state, effect) {
       src: sourceType, rid: sourceId
     });
   }
-  return { applied: true, ledgerCount: ledgerRows.length, movementCount: movementRows.length };
+  return { applied: true, ledgerCount: ledgerRows.length, movementCount: movementRows.length, includeLedger, includeMovements };
 }
 
 function stableJson(value) {
