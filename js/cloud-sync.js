@@ -829,7 +829,10 @@ async function uploadToTables(showAlert = false) {
     }
 
     if (errors.length) {
-      syncState = (localStorage.getItem("mgr6-cloud-snapshot-conflict") || hasAccountingConflicts()) ? "conflict" : "idle"; drawAll();
+      Object.getPrototypeOf(localStorage).setItem.call(localStorage, "mgr6", JSON.stringify(S));
+      const hasMasterConflict = (S.partners || []).some(p => p?._cloudCustomersConflict || p?._cloudSuppliersConflict)
+        || (S.items || []).some(p => p?._cloudProductsConflict);
+      syncState = (localStorage.getItem("mgr6-cloud-snapshot-conflict") || hasAccountingConflicts() || hasMasterConflict) ? "conflict" : "idle"; drawAll();
       const msg = (snapshotError
         ? T("فشل حفظ النسخة الكاملة وبعض الجداول:\n", "Full backup and some table writes failed:\n")
         : T("بعض عمليات المزامنة فشلت:\n", "Some sync operations failed:\n")) + errors.join("\n");
