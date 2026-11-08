@@ -89,6 +89,16 @@ jobs:
             psql "$SUPABASE_DB_URL" -Atqc "select count(*) from storage.buckets" > /backup/storage-bucket-count.txt
             psql "$SUPABASE_DB_URL" -Atqc "select count(*) from auth.users" > /backup/auth-user-count.txt
             psql "$SUPABASE_DB_URL" -Atqc "select count(*) from supabase_migrations.schema_migrations" > /backup/migration-count.txt
+            : > /backup/auth-row-counts.txt
+            for table in users identities mfa_factors mfa_recovery_code_sets mfa_recovery_codes webauthn_credentials; do
+              count="$(psql "$SUPABASE_DB_URL" -Atqc "select count(*) from auth.\"$table\"")"
+              printf '%s=%s\\n' "$table" "$count" >> /backup/auth-row-counts.txt
+            done
+            : > /backup/public-row-counts.txt
+            for table in $(psql "$SUPABASE_DB_URL" -Atqc "select table_name from information_schema.tables where table_schema='public' and table_type='BASE TABLE' order by table_name"); do
+              count="$(psql "$SUPABASE_DB_URL" -Atqc "select count(*) from public.\"$table\"")"
+              printf '%s=%s\\n' "$table" "$count" >> /backup/public-row-counts.txt
+            done
           '
           if [ "$(cat storage-bucket-count.txt)" != "0" ]; then
             echo "::error::Supabase Storage buckets exist; object bytes are not included. Configure and test a separate object backup before enabling database backups."
@@ -103,17 +113,19 @@ jobs:
           test -s auth-users.sql
           test -s migration-history.sql
           test -s auth-trigger.sql
-          sha256sum roles.sql schema.sql data.sql auth-users.sql migration-history.sql auth-trigger.sql > database-files.sha256
+          test -s auth-row-counts.txt
+          test -s public-row-counts.txt
+          sha256sum roles.sql schema.sql data.sql auth-users.sql migration-history.sql auth-trigger.sql auth-row-counts.txt public-row-counts.txt > database-files.sha256
           cat > manifest.txt <<EOF
           project=ms-factory
           created_utc=$(date -u +%Y-%m-%dT%H:%M:%SZ)
           source=Supabase CLI db dump
-          includes=roles,schema,public-data,auth-users-identities-mfa-webauthn,migration-history,auth-trigger,migrations,edge-functions
+          includes=roles,schema,public-data,auth-users-identities-mfa-webauthn,migration-history,auth-trigger,auth-and-public-row-counts,migrations,edge-functions
           storage_bucket_count=$(cat storage-bucket-count.txt)
           auth_user_count=$(cat auth-user-count.txt)
           encryption=age public-key recipient
           EOF
-          tar -czf ms-factory-db-backup.tar.gz roles.sql schema.sql data.sql auth-users.sql migration-history.sql auth-trigger.sql backup-migrations backup-edge-functions database-files.sha256 manifest.txt storage-bucket-count.txt auth-user-count.txt migration-count.txt
+          tar -czf ms-factory-db-backup.tar.gz roles.sql schema.sql data.sql auth-users.sql migration-history.sql auth-trigger.sql auth-row-counts.txt public-row-counts.txt backup-migrations backup-edge-functions database-files.sha256 manifest.txt storage-bucket-count.txt auth-user-count.txt migration-count.txt
           sha256sum ms-factory-db-backup.tar.gz > ms-factory-db-backup.tar.gz.sha256
 
       - name: Encrypt backup before upload
@@ -165,5 +177,5 @@ jobs:
       - name: Remove plaintext database exports
         if: always()
         run: |
-          rm -rf roles.sql schema.sql data.sql auth-users.sql migration-history.sql auth-trigger.sql backup-migrations backup-edge-functions manifest.txt storage-bucket-count.txt auth-user-count.txt migration-count.txt r2-lock.json r2-lifecycle.json uploaded-object.json \
+          rm -rf roles.sql schema.sql data.sql auth-users.sql migration-history.sql auth-trigger.sql auth-row-counts.txt public-row-counts.txt backup-migrations backup-edge-functions manifest.txt storage-bucket-count.txt auth-user-count.txt migration-count.txt r2-lock.json r2-lifecycle.json uploaded-object.json \
             ms-factory-db-backup.tar.gz ms-factory-db-backup.tar.gz.sha256
