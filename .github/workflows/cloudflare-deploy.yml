@@ -1,10 +1,13 @@
 name: Cloudflare Workers deployment
 
 on:
-  push:
-    branches:
-      - main
   workflow_dispatch:
+    inputs:
+      deploy_confirmed:
+        description: "Deploy the tested production build to Cloudflare"
+        type: boolean
+        required: true
+        default: false
 
 permissions:
   contents: read
@@ -15,6 +18,7 @@ concurrency:
 
 jobs:
   deploy:
+    if: inputs.deploy_confirmed == true
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
