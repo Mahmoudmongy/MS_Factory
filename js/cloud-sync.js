@@ -167,7 +167,7 @@ function collectSourceEffects(state) {
     const sourceType = String(row.src || "");
     const hasSourceId = row.rid !== undefined && row.rid !== null && String(row.rid) !== "";
     // First-launch opening balances predate source IDs and are baseline state, not replayable deltas.
-    if (!sourceType && !hasSourceId && (row.desc === "رصيد افتتاحي" || row.ref === "رصيد افتتاحي")) {
+    if (!hasSourceId && (row.desc === "رصيد افتتاحي" || row.ref === "رصيد افتتاحي")) {
       ignored.push({ kind, index, reason: "opening_baseline" }); return;
     }
     if (!allowed.has(sourceType)) { invalid.push({ kind, index, reason: "unsupported_source", sourceType }); return; }
