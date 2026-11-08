@@ -36,6 +36,12 @@ The draft SQL RPCs were also tightened during review: privileged `SECURITY DEFIN
 
 These helpers are not yet wired into the live sync flow. The baseline must be published and versioned before employee devices use it; only then may post-baseline movement effects be applied as deltas.
 
+## Canonical master-record identity
+
+New inventory items and customer/supplier records now carry a `cloudId` while keeping their existing local numeric `id` for the UI and local references. Uploads use `cloudId` as the detail-table `external_id`; source-effect normalization maps local item/partner IDs to that canonical identity, and remote effect application resolves either the canonical ID or the local ID. Legacy rows without `cloudId` retain their existing external ID based on the original ID.
+
+When a device already has a legacy item/contact under a different local ID, the merge helper links it only when there is exactly one matching SKU/name (items) or name/phone (contacts). Ambiguous or mismatched matches are preserved as conflicts instead of silently creating duplicates or merging unrelated records. The database's per-factory unique SKU index is a final guard against two independently created items claiming the same operational SKU.
+
 ## Non-negotiable correctness requirements
 
 1. **Idempotency:** retrying an upload or download must not duplicate ledger rows, movements, balances, or costs.
