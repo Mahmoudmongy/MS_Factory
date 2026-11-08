@@ -256,6 +256,42 @@ async function syncAccountingSnapshots(S, profile, errors) {
 
 
 // ===== الرفع مرة واحدة على الجداول - الكاش هو الأساس =====
+
+window.resolveCloudAccountingConflict = async function(source) {
+  if (!ACCOUNTING_SOURCES.includes(source)) return "invalid source";
+  const profile = await getMyProfile();
+  if (!profile?.is_admin) {
+    alert(T("حل تعارض دفتر الأستاذ متاح لمدير النظام فقط. احتفظ بنسختك المحلية وأبلغ المدير.", "Only the administrator can resolve this accounting conflict. Keep your local copy and contact the administrator."));
+    return "not authorized";
+  }
+  const owner = await getOwnerId();
+  if (!owner) return "no owner";
+  const { data: remote, error } = await supabase.from("factory_accounting_state")
+    .select("source,payload,sync_version,updated_at")
+    .eq("user_id", owner).eq("source", source).maybeSingle();
+  if (error || !remote) {
+    alert(T("تعذر تحميل النسخة السحابية لحل التعارض. لم يتم حذف أي بيانات.", "Could not load the cloud copy. No data was deleted."));
+    return error?.message || "cloud copy missing";
+  }
+  const S = getCachedState();
+  const localPayload = accountingPayloadForSource(S, source);
+  try {
+    localStorage.setItem("mgr6-accounting-backup-" + source, JSON.stringify(localPayload));
+  } catch (e) {
+    alert(T("مساحة الجهاز لا تكفي لحفظ نسخة محلية قبل الحل. لم يتم تغيير البيانات.", "Not enough local storage for a safety copy. No data was changed."));
+    return "local backup failed";
+  }
+  replaceAccountingPayload(S, source, remote.payload);
+  recalcAccountingInventory(S);
+  Object.getPrototypeOf(localStorage).setItem.call(localStorage, "mgr6", JSON.stringify(S));
+  localStorage.setItem(accountingVersionKey(source), String(remote.sync_version));
+  localStorage.setItem(accountingHashKey(source), accountingHash(remote.payload));
+  localStorage.removeItem(accountingConflictKey(source));
+  drawAll();
+  alert(T("تم حفظ نسخة الجهاز في سجل النسخ المحلي واستعادة نسخة السحابة لهذا القسم. راجع الأرصدة والمخزون قبل متابعة العمل.", "The device copy was saved locally and the cloud copy restored for this section. Review balances and stock before continuing."));
+  return "resolved";
+};
+
 async function uploadToTables(showAlert = false) {
   if (uploadRunning) return "upload already running";
   uploadRunning = true;
