@@ -554,6 +554,106 @@ function applyCanonicalSourceEffect(state, effect) {
   return { applied: true, ledgerCount: ledgerRows.length, movementCount: movementRows.length, includeLedger, includeMovements };
 }
 
+// Absolute stock baseline helpers. These replace quantities; they never replay movements.
+function stockBaselineFingerprint(items) {
+  const input = stableJson(items);
+  let hash = 2166136261;
+  for (let i = 0; i < input.length; i++) {
+    hash ^= input.charCodeAt(i);
+    hash = Math.imul(hash, 16777619);
+  }
+  return "fnv1a32:" + (hash >>> 0).toString(16).padStart(8, "0");
+}
+
+function buildStockBaseline(state) {
+  const invalid = [];
+  if (!state || !Array.isArray(state.items)) {
+    return { baselineVersion: 1, items: [], fingerprint: null, invalid: [{ reason: "missing_items_array" }] };
+  }
+  const seen = new Set();
+  const items = [];
+  for (const item of state.items) {
+    if (!item || item.id == null || String(item.id).trim() === "") {
+      invalid.push({ reason: "missing_item_external_id" }); continue;
+    }
+    const id = String(item.id);
+    if (seen.has(id)) { invalid.push({ reason: "duplicate_item_external_id", itemExternalId: id }); continue; }
+    seen.add(id);
+    if (item.st != null && (typeof item.st !== "object" || Array.isArray(item.st))) {
+      invalid.push({ reason: "invalid_item_stock_map", itemExternalId: id }); continue;
+    }
+    const variants = [];
+    for (const [variant, rawQuantity] of Object.entries(item.st || {})) {
+      const quantity = Number(rawQuantity);
+      if (!Number.isFinite(quantity)) {
+        invalid.push({ reason: "invalid_stock_quantity", itemExternalId: id, variant }); continue;
+      }
+      variants.push({ variant: String(variant), quantity });
+    }
+    variants.sort((a, b) => a.variant.localeCompare(b.variant));
+    const value = Number(item.val || 0);
+    if (!Number.isFinite(value)) {
+      invalid.push({ reason: "invalid_item_stock_value", itemExternalId: id }); continue;
+    }
+    items.push({
+      itemExternalId: id,
+      sku: String(item.sku || ""),
+      name: String(item.name || ""),
+      unit: String(item.unit || ""),
+      warehouseName: (state.wh || []).find(w => String(w.id) === String(item.wh))?.name || "",
+      variants,
+      value
+    });
+  }
+  items.sort((a, b) => a.itemExternalId.localeCompare(b.itemExternalId));
+  return {
+    baselineVersion: 1,
+    items,
+    fingerprint: invalid.length ? null : stockBaselineFingerprint(items),
+    invalid
+  };
+}
+
+function applyStockBaseline(state, baseline) {
+  if (!state || typeof state !== "object" || !Array.isArray(state.items) ||
+      !baseline || baseline.baselineVersion !== 1 || !Array.isArray(baseline.items) ||
+      !baseline.fingerprint || baseline.fingerprint !== stockBaselineFingerprint(baseline.items)) {
+    return { applied: false, reason: "invalid_stock_baseline" };
+  }
+  const localById = new Map();
+  for (const item of state.items) {
+    if (!item || item.id == null) continue;
+    const id = String(item.id);
+    if (localById.has(id)) return { applied: false, reason: "duplicate_local_item_external_id", itemExternalId: id };
+    localById.set(id, item);
+  }
+  const seen = new Set(), plan = [];
+  for (const row of baseline.items) {
+    if (!row || row.itemExternalId == null || seen.has(String(row.itemExternalId)) ||
+        !Array.isArray(row.variants) || !Number.isFinite(Number(row.value))) {
+      return { applied: false, reason: "invalid_baseline_item" };
+    }
+    const id = String(row.itemExternalId), item = localById.get(id);
+    if (!item) return { applied: false, reason: "baseline_item_not_synced", itemExternalId: id };
+    seen.add(id);
+    const stock = {};
+    for (const variant of row.variants) {
+      if (!variant || variant.variant == null || Object.prototype.hasOwnProperty.call(stock, String(variant.variant)) ||
+          !Number.isFinite(Number(variant.quantity))) {
+        return { applied: false, reason: "invalid_baseline_variant", itemExternalId: id };
+      }
+      stock[String(variant.variant)] = Number(variant.quantity);
+    }
+    plan.push({ item, stock, value: Number(row.value) });
+  }
+  // Validation completes before any local state is changed.
+  for (const row of plan) {
+    row.item.st = row.stock;
+    row.item.val = row.value;
+  }
+  return { applied: true, itemCount: plan.length, fingerprint: baseline.fingerprint };
+}
+
 function stableJson(value) {
   if (Array.isArray(value)) return "[" + value.map(stableJson).join(",") + "]";
   if (value && typeof value === "object") {
