@@ -1,0 +1,187 @@
+name: Encrypted Supabase backup to Backblaze B2
+
+on:
+  schedule:
+    - cron: "35 1 * * *"
+  workflow_dispatch:
+    inputs:
+      run_backup:
+        description: "Upload a new encrypted production backup (requires BACKUP_ENABLED=true)"
+        type: boolean
+        required: true
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: encrypted-database-backup
+  cancel-in-progress: false
+
+jobs:
+  b2-preflight:
+    if: github.event_name == 'workflow_dispatch' || github.event_name == 'schedule'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Validate B2 configuration
+        env:
+          B2_KEY_ID: ${{ secrets.B2_KEY_ID }}
+          B2_APPLICATION_KEY: ${{ secrets.B2_APPLICATION_KEY }}
+          B2_BUCKET: ${{ vars.B2_BUCKET }}
+          B2_ENDPOINT: ${{ vars.B2_ENDPOINT }}
+        run: |
+          set -euo pipefail
+          for name in B2_KEY_ID B2_APPLICATION_KEY B2_BUCKET B2_ENDPOINT; do
+            if [ -z "${!name:-}" ]; then
+              echo "::error::Missing GitHub secret/variable: $name"
+              exit 1
+            fi
+          done
+          case "$B2_ENDPOINT" in https://s3.*.backblazeb2.com) ;; *) echo "::error::Unexpected B2 S3 endpoint"; exit 1;; esac
+          case "$B2_BUCKET" in *[!a-z0-9.-]*|'') echo "::error::Invalid B2 bucket name"; exit 1;; esac
+
+      - name: Verify Backblaze Object Lock and lifecycle before any database export
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.B2_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.B2_APPLICATION_KEY }}
+          B2_BUCKET: ${{ vars.B2_BUCKET }}
+          B2_ENDPOINT: ${{ vars.B2_ENDPOINT }}
+        run: |
+          set -euo pipefail
+          region="${B2_ENDPOINT#https://s3.}"
+          region="${region%.backblazeb2.com}"
+          export AWS_DEFAULT_REGION="$region"
+          aws s3api get-object-lock-configuration --bucket "$B2_BUCKET" --endpoint-url "$B2_ENDPOINT" > b2-lock.json
+          jq -e '.ObjectLockConfiguration.ObjectLockEnabled == "Enabled" and .ObjectLockConfiguration.Rule.DefaultRetention.Mode == "COMPLIANCE" and .ObjectLockConfiguration.Rule.DefaultRetention.Days == 90' b2-lock.json >/dev/null
+          aws s3api get-bucket-lifecycle-configuration --bucket "$B2_BUCKET" --endpoint-url "$B2_ENDPOINT" > b2-lifecycle.json
+          jq -e 'any(.Rules[]?; .Status == "Enabled" and ((.Filter.Prefix // .Prefix // "") == "backups/database/ms-factory/") and (.Expiration.Days // 0) >= 120)' b2-lifecycle.json >/dev/null
+          echo "B2 preflight passed: Object Lock Compliance 90 days and lifecycle >=120 days."
+
+      - name: Check managed backup prefix storage ceiling
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.B2_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.B2_APPLICATION_KEY }}
+          B2_BUCKET: ${{ vars.B2_BUCKET }}
+          B2_ENDPOINT: ${{ vars.B2_ENDPOINT }}
+        run: |
+          set -euo pipefail
+          region="${B2_ENDPOINT#https://s3.}"
+          region="${region%.backblazeb2.com}"
+          export AWS_DEFAULT_REGION="$region"
+          used_bytes="$(aws s3 ls "s3://$B2_BUCKET/backups/database/ms-factory/" --recursive --endpoint-url "$B2_ENDPOINT" | awk '$3 ~ /^[0-9]+$/ { total += $3 } END { print total + 0 }')"
+          echo "Existing MS Factory backup prefix bytes: $used_bytes"
+          if [ "$used_bytes" -gt 9000000000 ]; then
+            echo "::error::The managed backup prefix already exceeds the 9 GB safety ceiling."
+            exit 1
+          fi
+
+  backup:
+    needs: b2-preflight
+    if: needs.b2-preflight.result == 'success' && ((github.event_name == 'schedule' && vars.BACKUP_ENABLED == 'true') || (github.event_name == 'workflow_dispatch' && inputs.run_backup == true && vars.BACKUP_ENABLED == 'true'))
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Validate backup and encryption configuration
+        env:
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+          AGE_RECIPIENT: ${{ vars.AGE_RECIPIENT }}
+        run: |
+          set -euo pipefail
+          for name in SUPABASE_DB_URL AGE_RECIPIENT; do
+            if [ -z "${!name:-}" ]; then
+              echo "::error::Missing GitHub secret/variable: $name"
+              exit 1
+            fi
+          done
+          case "$AGE_RECIPIENT" in age1*) ;; *) echo "::error::AGE_RECIPIENT is not a valid age public recipient"; exit 1;; esac
+
+      - name: Install backup tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y age
+
+      - name: Export Supabase roles, schema, data and Auth metadata
+        env:
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+          SUPABASE_YES: "1"
+        run: |
+          set -euo pipefail
+          npx --yes supabase@3.0.0 db dump --remote "$SUPABASE_DB_URL" -f roles.sql --role-only
+          npx --yes supabase@3.0.0 db dump --remote "$SUPABASE_DB_URL" -f schema.sql
+          npx --yes supabase@3.0.0 db dump --remote "$SUPABASE_DB_URL" -f data.sql --use-copy --data-only
+          # Auth rows are exported separately; active sessions and refresh tokens are excluded.
+          docker run --rm -v "$PWD:/backup" -e SUPABASE_DB_URL postgres:17-alpine sh /backup/scripts/export-auth-and-counts.sh
+          if [ "$(cat storage-bucket-count.txt)" != "0" ]; then
+            echo "::error::Supabase Storage buckets exist. This workflow does not yet export Storage object bytes; refusing an incomplete backup."
+            exit 1
+          fi
+          cp supabase/restore/auth-trigger.sql auth-trigger.sql
+          cp -a supabase/migrations backup-migrations
+          if [ -d supabase/functions ]; then cp -a supabase/functions backup-edge-functions; else mkdir backup-edge-functions; fi
+          cp -a scripts backup-scripts
+          for file in roles.sql schema.sql data.sql auth-users.sql migration-history-schema.sql migration-history.sql auth-trigger.sql auth-row-counts.txt public-row-counts.txt; do
+            test -s "$file"
+          done
+          sha256sum roles.sql schema.sql data.sql auth-users.sql migration-history-schema.sql migration-history.sql auth-trigger.sql auth-row-counts.txt public-row-counts.txt > database-files.sha256
+          cat > manifest.txt <<EOF
+          project=ms-factory
+          created_utc=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+          source=Supabase CLI db dump
+          includes=roles,schema,public-data,auth-users-identities-mfa-webauthn,migration-history-schema,migration-history,auth-trigger,auth-and-public-row-counts,migrations,edge-functions
+          storage_bucket_count=$(cat storage-bucket-count.txt)
+          auth_user_count=$(cat auth-user-count.txt)
+          encryption=age public-key recipient
+          EOF
+          tar -czf ms-factory-db-backup.tar.gz roles.sql schema.sql data.sql auth-users.sql migration-history-schema.sql migration-history.sql auth-trigger.sql auth-row-counts.txt public-row-counts.txt backup-migrations backup-edge-functions backup-scripts database-files.sha256 manifest.txt storage-bucket-count.txt auth-user-count.txt migration-count.txt
+          sha256sum ms-factory-db-backup.tar.gz > ms-factory-db-backup.tar.gz.sha256
+
+      - name: Encrypt backup before upload
+        env:
+          AGE_RECIPIENT: ${{ vars.AGE_RECIPIENT }}
+        run: |
+          set -euo pipefail
+          age --encrypt --recipient "$AGE_RECIPIENT" --output ms-factory-db-backup.tar.gz.age ms-factory-db-backup.tar.gz
+          test -s ms-factory-db-backup.tar.gz.age
+          sha256sum ms-factory-db-backup.tar.gz.age > ms-factory-db-backup.tar.gz.age.sha256
+
+      - name: Upload encrypted backup to private Backblaze B2
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.B2_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.B2_APPLICATION_KEY }}
+          B2_BUCKET: ${{ vars.B2_BUCKET }}
+          B2_ENDPOINT: ${{ vars.B2_ENDPOINT }}
+        run: |
+          set -euo pipefail
+          region="${B2_ENDPOINT#https://s3.}"
+          region="${region%.backblazeb2.com}"
+          export AWS_DEFAULT_REGION="$region"
+          stamp="$(date -u +%Y/%m/%d/%H%M%S)"
+          key="backups/database/ms-factory/$stamp/ms-factory-db-backup.tar.gz.age"
+          archive_bytes="$(stat -c%s ms-factory-db-backup.tar.gz.age)"
+          sidecar_bytes="$(stat -c%s ms-factory-db-backup.tar.gz.age.sha256)"
+          used_bytes="$(aws s3 ls "s3://$B2_BUCKET/backups/database/ms-factory/" --recursive --endpoint-url "$B2_ENDPOINT" | awk '$3 ~ /^[0-9]+$/ { total += $3 } END { print total + 0 }')"
+          if [ "$((used_bytes + archive_bytes + sidecar_bytes))" -gt 9000000000 ]; then
+            echo "::error::The MS Factory backup prefix would exceed the 9 GB safety ceiling."
+            exit 1
+          fi
+          aws s3 cp ms-factory-db-backup.tar.gz.age "s3://$B2_BUCKET/$key" --endpoint-url "$B2_ENDPOINT" --only-show-errors --no-progress
+          aws s3api get-object-retention --bucket "$B2_BUCKET" --key "$key" --endpoint-url "$B2_ENDPOINT" > uploaded-retention.json
+          jq -e '.Retention.Mode == "COMPLIANCE" and (.Retention.RetainUntilDate | fromdateiso8601) >= (now + 89*86400)' uploaded-retention.json >/dev/null
+          aws s3api head-object --bucket "$B2_BUCKET" --key "$key" --endpoint-url "$B2_ENDPOINT" > uploaded-object.json
+          aws s3 cp "s3://$B2_BUCKET/$key" "$RUNNER_TEMP/ms-factory-backup-readback.age" --endpoint-url "$B2_ENDPOINT" --only-show-errors --no-progress
+          cmp --silent ms-factory-db-backup.tar.gz.age "$RUNNER_TEMP/ms-factory-backup-readback.age"
+          sidecar_key="$key.sha256"
+          aws s3 cp ms-factory-db-backup.tar.gz.age.sha256 "s3://$B2_BUCKET/$sidecar_key" --endpoint-url "$B2_ENDPOINT" --only-show-errors --no-progress
+          aws s3 cp "s3://$B2_BUCKET/$sidecar_key" "$RUNNER_TEMP/ms-factory-backup-readback.age.sha256" --endpoint-url "$B2_ENDPOINT" --only-show-errors --no-progress
+          cmp --silent ms-factory-db-backup.tar.gz.age.sha256 "$RUNNER_TEMP/ms-factory-backup-readback.age.sha256"
+          echo "Encrypted backup and checksum sidecar uploaded and read-back verified: s3://$B2_BUCKET/$key"
+          cat ms-factory-db-backup.tar.gz.age.sha256
+
+      - name: Remove plaintext exports and temporary metadata
+        if: always()
+        run: |
+          rm -rf roles.sql schema.sql data.sql auth-users.sql migration-history-schema.sql migration-history.sql auth-trigger.sql auth-row-counts.txt public-row-counts.txt backup-migrations backup-edge-functions backup-scripts manifest.txt storage-bucket-count.txt auth-user-count.txt migration-count.txt database-files.sha256 b2-lock.json b2-lifecycle.json uploaded-retention.json uploaded-object.json ms-factory-db-backup.tar.gz ms-factory-db-backup.tar.gz.sha256
