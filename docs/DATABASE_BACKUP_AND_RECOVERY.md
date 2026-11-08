@@ -9,7 +9,7 @@ The Supabase Free plan does not provide the automatic daily platform backups ava
 ## Architecture
 
 1. GitHub Actions runs once daily (01:35 UTC) and can also be started manually from the `main` branch.
-2. Supabase CLI exports roles, schema, and public database data. Because the CLI excludes managed Auth schemas, the workflow separately exports only `auth.users` and `auth.identities` using `pg_dump`; it does not export active sessions or refresh tokens.
+2. Supabase CLI exports roles, schema, and public database data. Because the CLI excludes managed Auth schemas, the workflow separately exports only `auth.users`, `auth.identities`, MFA recovery factors/codes, and WebAuthn credentials using `pg_dump`; it does not export active sessions, refresh tokens, or one-time login challenges.
 3. The archive is encrypted with an age public recipient before it leaves the runner.
 4. Only the encrypted archive is uploaded to a private Cloudflare R2 bucket over the S3-compatible API.
 5. The workflow verifies that the uploaded object exists and records its encrypted SHA-256 in the job log.
@@ -51,6 +51,7 @@ Recommended protection:
 Repository → Settings → Secrets and variables → Actions.
 
 **Variables**
+- `BACKUP_ENABLED`: keep `false` until the bucket, immutable retention rules, and all credentials have been configured and tested. Set to `true` only when ready to activate the schedule.
 - `AGE_RECIPIENT`: public age recipient only.
 - `R2_ACCOUNT_ID`: Cloudflare account ID.
 - `R2_BUCKET`: `ms-factory-db-backups`.
