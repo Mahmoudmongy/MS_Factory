@@ -702,6 +702,7 @@ async function loadFromTablesMerge(isAuto = false) {
 
     const emptyResult = { data: [], error: null };
     const inventoryRead = canRead("inventory");
+    const productionConfigRead = canRead("production") && !admin;
     const results = await Promise.all([
       canRead("customers") ? supabase.from("customers").select("*").eq("user_id", owner) : Promise.resolve(emptyResult),
       canRead("suppliers") ? supabase.from("suppliers").select("*").eq("user_id", owner) : Promise.resolve(emptyResult),
@@ -717,10 +718,13 @@ async function loadFromTablesMerge(isAuto = false) {
       (canRead("invoices") || canRead("production") || canRead("settings"))
         ? supabase.from("factory_accounting_state").select("source,payload,sync_version,updated_at").eq("user_id", owner)
         : Promise.resolve(emptyResult),
+      productionConfigRead
+        ? supabase.from("production_factory_config").select("user_id,accts,codes,curs,warehouses,factory_name").eq("user_id", owner)
+        : Promise.resolve(emptyResult),
     ]);
     const failed = results.find(r => r.error);
     if (failed) return isAuto ? "cloud read failed" : T("تعذر قراءة البيانات من السحابة: " + failed.error.message, "Cloud read failed: " + failed.error.message);
-    const [{ data: custs }, { data: supps }, { data: invs }, { data: prods }, { data: returns }, { data: vouchers }, { data: productionOrders }, { data: accountingStates }] = results;
+    const [{ data: custs }, { data: supps }, { data: invs }, { data: prods }, { data: returns }, { data: vouchers }, { data: productionOrders }, { data: accountingStates }, { data: productionConfigs }] = results;
     if (!custs?.length && !supps?.length && !invs?.length && !prods?.length && !returns?.length && !vouchers?.length && !productionOrders?.length && !accountingStates?.length && !localStorage.getItem("mgr6-cloud-snapshot-conflict")) {
       if (restoredSnapshot && isAuto) setTimeout(() => location.reload(), 500);
       return restoredSnapshot
@@ -791,6 +795,15 @@ async function loadFromTablesMerge(isAuto = false) {
       S.po = merged.arr; totalAdded += merged.added; recordConflicts += merged.conflicts;
     }
 
+
+    if (productionConfigs?.length && productionConfigs[0]) {
+      const config = productionConfigs[0];
+      if (Array.isArray(config.accts)) S.accts = config.accts;
+      if (Array.isArray(config.codes)) S.codes = config.codes;
+      if (Array.isArray(config.curs)) S.curs = config.curs;
+      if (Array.isArray(config.warehouses)) S.wh = config.warehouses;
+      if (typeof config.factory_name === "string" && config.factory_name) S.name = config.factory_name;
+    }
 
     if (prods?.length) {
       let cloudProducts;
