@@ -15,6 +15,11 @@ ok('app.js has no duplicate top-level function definitions',dup.length==0,dup);
 ok('conditional form values and descriptions are escaped, not inserted as HTML',/escapeHTML\(p\?p\.name/.test(app)&&/escapeHTML\(pre\.desc/.test(app)&&/escapeHTML\(v\.split/.test(app));
 ok('HTML text and attribute values are escaped before rendering user-controlled fields',/const escapeHTML =/.test(app)&&/escapeHTML\(p\.name\)/.test(app)&&/escapeHTML\(x\.name\)/.test(app)&&/escapeHTML\(S\.name\)/.test(app));
 ok('image URLs are restricted to safe image, HTTPS, relative or blob sources',/const safeImageSrc =/.test(app)&&/safeImageSrc\(s\)/.test(app));
+ok('governorate and city values are escaped before HTML insertion',/escapeHTML\(g\)/.test(app)&&/escapeHTML\(x\)<\\/option>/.test(app));
+ok('production colour/size labels and item names are escaped',/escapeHTML\(c\|\|"—"\)/.test(app)&&/escapeHTML\(z\|\|"الكمية"\)/.test(app)&&/escapeHTML\(it_\(m\.iid\)\.name\)/.test(app));
+ok('Excel sheet names and imported column headers are escaped',/escapeHTML\(WZ\.sheet\)/.test(app)&&/escapeHTML\(h\)<\\/option>/.test(app)&&/escapeHTML\(n\)/.test(app));
+ok('ledger account and partner labels are escaped before rendering',/escapeHTML\(an\(l\.a\)\)/.test(app)&&/escapeHTML\(pn\(l\.pid\)\)/.test(app));
+ok('persisted logo and uploaded document images pass through the safe image URL filter',/safeImageSrc\(S\.logo\)/.test(app)&&/safeImageSrc\(D\.img\)/.test(app));
 ok('customer/supplier rows expose permission-gated edit actions',app.includes('pForm(${c},${p.id})')&&app.includes('can("edit")'));
 ok('partner edit preserves the stable record ID and updates the existing object',app.includes('function saveP(id)')&&app.includes('if(old)Object.assign(old,data)'));
 ok('employee edit preserves the existing employee record',app.includes('function saveE(id)')&&app.includes('if(old)Object.assign(old,data)'));
@@ -101,6 +106,18 @@ ok('invoice sync fix qualifies child-row deletion columns',/DELETE FROM public\.
 /* ---------- B. app in a desktop context ---------- */
 const ctx=await browser.newContext({viewport:{width:1280,height:900},acceptDownloads:true}),p=await ctx.newPage(),errs=[];p.on('pageerror',e=>errs.push(e.message));
 await p.goto(BASE);await p.waitForTimeout(500);
+const xssGeo=await p.evaluate(()=>{
+  const badGov='<img src=x onerror="window.__xss=1">';
+  const badCity='<svg onload="window.__xss=2">';
+  S.geo[badGov]=[badCity];
+  const host=document.createElement('div');ACT.appendChild(host);host.innerHTML=addrF({gov:badGov});
+  host.querySelector('#gv').value=badGov;gvChg();
+  const injected=!!host.querySelector('img,svg,script');
+  const literal=host.textContent.includes(badGov)&&host.textContent.includes(badCity);
+  host.remove();delete S.geo[badGov];return {injected,literal};
+});
+ok('XSS payloads in governorate/city names remain inert text in the live DOM',!xssGeo.injected&&xssGeo.literal,xssGeo);
+
 const ev=(f,a)=>p.evaluate(()=>{SAVING=0}).then(()=>p.evaluate(f,a)),bal=()=>ev(()=>Math.abs(S.L.reduce((a,l)=>a+l.dr-l.cr,0))<.01);
 const scr=await ev(()=>allowed().map(t=>t[0]));for(const s of scr){await ev(x=>go(x),s)}ok(`all ${scr.length} screens render without errors`,errs.length==0,errs.slice(0,2));
 
