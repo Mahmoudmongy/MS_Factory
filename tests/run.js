@@ -71,6 +71,28 @@ const effectAgain=collectSourceEffects?collectSourceEffects(effectFixture):{effe
 ok('effect collection is deterministic and does not mutate source state',JSON.stringify(effectResult.effects)===JSON.stringify(effectAgain.effects)&&effectFixture.L.length===3&&effectFixture.mv.length===2);
 const invalidEffectResult=collectSourceEffects?collectSourceEffects({L:[{src:'doc',a:1}],mv:[{src:'unknown',rid:1}]}):{invalid:[]};
 ok('effect collector reports missing IDs and unsupported source types instead of silently dropping them',invalidEffectResult.invalid.length===2);
+const normalizeStart=cloud.indexOf('function normalizeSourceEffects(state)');
+const normalizeEnd=cloud.indexOf('function stableJson(value)',normalizeStart);
+let normalizeSourceEffects=null;
+try { normalizeSourceEffects=vm.runInNewContext('('+cloud.slice(normalizeStart,normalizeEnd).trim()+')'); } catch(e) {}
+const canonicalFixture={
+  accts:[{id:1,code:'1001',name:'الخزنة'},{id:2,code:'1100',name:'العملاء'}],
+  items:[{id:21,name:'قماش',sku:'FB021',wh:1,unit:'متر',st:{أبيض:10}}],
+  wh:[{id:1,name:'قماش'}],
+  partners:[{id:31,name:'عميل تجريبي'}],
+  L:[{src:'doc',rid:91,d:'2026-11-08',ts:1,ref:'S-1',desc:'بيع',a:1,dr:100,cr:0,pid:0,fc:0},
+     {src:'doc',rid:91,d:'2026-11-08',ts:1,ref:'S-1',desc:'عميل',a:2,dr:0,cr:100,pid:31,fc:0}],
+  mv:[{src:'doc',rid:91,d:'2026-11-08',ts:1,iid:21,v:'أبيض',q:-2,val:-20,ref:'S-1',pid:31}]
+};
+const normalized=normalizeSourceEffects?normalizeSourceEffects(canonicalFixture):{effects:[],invalid:[{reason:'normalizer_unavailable'}]};
+ok('normalizer maps local ledger account IDs to account codes and partner IDs to external IDs',normalized.invalid.length===0&&normalized.effects[0]?.ledger[0]?.accountCode==='1001'&&normalized.effects[0]?.ledger.some(x=>x.partnerExternalId==='31'));
+ok('normalizer maps stock movements to item external ID, SKU and warehouse identity',normalized.invalid.length===0&&normalized.effects[0]?.movements[0]?.itemExternalId==='21'&&normalized.effects[0]?.movements[0]?.warehouseName==='قماش');
+const unmapped=normalizeSourceEffects?normalizeSourceEffects({...canonicalFixture,L:[{src:'je',rid:92,a:999,dr:1,cr:0}],mv:[{src:'wo',rid:93,iid:999,q:-1,val:-5}]}):{invalid:[]};
+ok('normalizer rejects unmapped account and item references rather than guessing',unmapped.invalid.some(x=>x.reason==='unmapped_account')&&unmapped.invalid.some(x=>x.reason==='unmapped_item'));
+const duplicateCodes=normalizeSourceEffects?normalizeSourceEffects({...canonicalFixture,accts:[...canonicalFixture.accts,{id:3,code:'1001',name:'حساب مكرر'}],L:[]}):{invalid:[]};
+ok('normalizer rejects duplicate account codes',duplicateCodes.invalid.some(x=>x.reason==='duplicate_account_code'));
+const openingRows=collectSourceEffects?collectSourceEffects({L:[{desc:'رصيد افتتاحي',a:1,dr:10,cr:0}],mv:[{ref:'رصيد افتتاحي',iid:1,v:'-',q:10,val:10}]}):{ignored:[]};
+ok('legacy opening-balance baseline rows are not replayed as transaction effects',openingRows.ignored.length===2&&openingRows.effects.length===0);
 ok('production-only employees are allowed through the cloud upload permission gate',/!admin && !\["customers", "suppliers", "invoices", "inventory", "production"\]\.some\(canWrite\)/.test(cloud));
 ok('production-only employees are allowed through the cloud download permission gate',/!\["customers","suppliers","invoices","inventory","production","reports"\]\.some\(canRead\)/.test(cloud));
 ok('invoice cloud sync uses the atomic versioned RPC',/rpc\(["']sync_invoice["']/.test(cloud)&&/p_expected_version/.test(cloud)&&/sync_version/.test(cloud));
