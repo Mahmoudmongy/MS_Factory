@@ -9,6 +9,13 @@
 - No production database migration was applied during this QA pass. The new SQL migrations were exercised only against the isolated QA project.
 - No Cloudflare production deployment was performed.
 
+## Hosting and release protection
+
+- The Vercel production alias `ms-factory.vercel.app` remains READY on the previously verified production deployment from main commit `177a44d72bb20c828526950979b929f16e020970`. No new Vercel production deployment was made.
+- Preview deployments were disabled on both Vercel projects (`ms-factory` and `ms-factory-preview`) to stop extra Hobby build consumption; SSO protection is enabled for preview deployments on `ms-factory` and was already enabled on `ms-factory-preview`.
+- Cloudflare Worker `ms-factory` has one earlier uploaded deployment, but its `workers.dev` subdomain and previews remain disabled. The current branch has only passed Wrangler dry-run validation; it has not been published to a public Cloudflare URL.
+- The Cloudflare deploy workflow is manual-only and additionally requires the main branch plus the repository variable `CLOUDFLARE_RELEASE_APPROVED=true`. No release approval variable was enabled during this QA phase.
+
 ## Accounting and stock synchronization
 
 - The accounting RPC is intentionally `SECURITY DEFINER`: production/invoice employees must update a narrowly scoped accounting source and its shared inventory delta without receiving direct write access to the full accounting table or inventory table.
