@@ -50,13 +50,14 @@ ok('offline saves are durably queued and retried on reconnect, focus and visibil
 ok('sync toolbar is removed but conflict recovery remains reachable from the connection indicator',!app.includes('["🔄 حالة الاتصال والمزامنة","syncPage()"]')&&/id="net" onclick="syncPage\(\)"/.test(idx)&&/ms-logout-btn/.test(cloud)&&!/cloud-badge|رفع الآن|Upload Now|تحميل/.test(cloud.slice(cloud.indexOf('function drawAll()'))));
 
 const collectorStart=cloud.indexOf('function collectSourceEffects(state)');
-const collectorEnd=cloud.indexOf('function stableJson(value)',collectorStart);
+const collectorEnd=cloud.indexOf('// ===== الرفع مرة واحدة',collectorStart);
 const effectHelpersContext=vm.createContext({});
-let collectSourceEffects=null, normalizeSourceEffects=null;
+let collectSourceEffects=null, normalizeSourceEffects=null, planSourceEffectSync=null;
 try {
-  vm.runInContext(cloud.slice(collectorStart,collectorEnd)+';this.collectSourceEffects=collectSourceEffects;this.normalizeSourceEffects=normalizeSourceEffects;',effectHelpersContext);
+  vm.runInContext(cloud.slice(collectorStart,collectorEnd)+';this.collectSourceEffects=collectSourceEffects;this.normalizeSourceEffects=normalizeSourceEffects;this.planSourceEffectSync=planSourceEffectSync;',effectHelpersContext);
   collectSourceEffects=effectHelpersContext.collectSourceEffects;
   normalizeSourceEffects=effectHelpersContext.normalizeSourceEffects;
+  planSourceEffectSync=effectHelpersContext.planSourceEffectSync;
 } catch(e) {}
 const effectFixture={
   L:[
@@ -98,6 +99,23 @@ ok('normalizer rejects duplicate item SKUs that could map different local IDs to
 ok('normalizer rejects duplicate account codes',duplicateCodes.invalid.some(x=>x.reason==='duplicate_account_code'));
 const openingRows=collectSourceEffects?collectSourceEffects({L:[{src:'je',desc:'رصيد افتتاحي',a:1,dr:10,cr:0}],mv:[{ref:'رصيد افتتاحي',iid:1,v:'-',q:10,val:10}]}):{ignored:[]};
 ok('legacy opening-balance baseline rows are not replayed as transaction effects',openingRows.ignored.length===2&&openingRows.effects.length===0);
+const plannedNew=planSourceEffectSync?planSourceEffectSync(canonicalFixture,{},[],[]):{actions:[],conflicts:[{}]};
+ok('planner schedules a new source effect with expected version zero',plannedNew.actions.length===1&&plannedNew.actions[0].op==='upsert'&&plannedNew.actions[0].expectedVersion===0);
+const sameRemote={source_type:'doc',source_id:'91',sync_version:3,payload:normalized.effects[0],deleted_at:null};
+const adopted=planSourceEffectSync?planSourceEffectSync(canonicalFixture,[sameRemote],{},[]):{adoptedVersions:{}};
+ok('planner adopts a matching remote baseline without overwriting it',adopted.actions.length===0&&adopted.adoptedVersions['["doc","91"]']===3);
+const stale=planSourceEffectSync?planSourceEffectSync(canonicalFixture,[{...sameRemote,sync_version:4}],{'["doc","91"]':3},[]):{conflicts:[{}]};
+ok('planner preserves a newer remote version as a conflict',stale.actions.length===0&&stale.conflicts.some(x=>x.reason==='version_mismatch'));
+const changed=planSourceEffectSync?planSourceEffectSync({...canonicalFixture,L:[...canonicalFixture.L,{src:'doc',rid:91,a:1,dr:5,cr:5}]},[sameRemote],{'["doc","91"]':3},[]):{actions:[]};
+ok('planner replaces changed effects only against the exact known remote version',changed.actions.length===1&&changed.actions[0].op==='upsert'&&changed.actions[0].expectedVersion===3);
+const deleteNew=planSourceEffectSync?planSourceEffectSync({accts:[],items:[],partners:[],wh:[],L:[],mv:[]},[],{},[{sourceType:'doc',sourceId:'91'}]):{actions:[]};
+ok('planner emits a version-zero tombstone for a locally deleted unsynced source',deleteNew.actions.length===1&&deleteNew.actions[0].op==='delete'&&deleteNew.actions[0].expectedVersion===0);
+const deleteKnown=planSourceEffectSync?planSourceEffectSync({accts:[],items:[],partners:[],wh:[],L:[],mv:[]},[sameRemote],{'["doc","91"]':3},[{sourceType:'doc',sourceId:'91'}]):{actions:[]};
+ok('planner tombstones a known source using its exact current version',deleteKnown.actions.length===1&&deleteKnown.actions[0].op==='delete'&&deleteKnown.actions[0].expectedVersion===3);
+const deletedRemote=planSourceEffectSync?planSourceEffectSync({accts:[],items:[],partners:[],wh:[],L:[],mv:[]},[{...sameRemote,sync_version:4,deleted_at:'2026-11-08T00:00:00Z',payload:null}],{'["doc","91"]':3},[{sourceType:'doc',sourceId:'91'}]):{clearTombstones:[]};
+ok('planner adopts an existing remote tombstone instead of recreating it',deletedRemote.clearTombstones.length===1&&deletedRemote.adoptedVersions['["doc","91"]']===4);
+const resurrect=planSourceEffectSync?planSourceEffectSync(canonicalFixture,[{...sameRemote,deleted_at:'2026-11-08T00:00:00Z',payload:null}],{'["doc","91"]':3},[]):{conflicts:[{}]};
+ok('planner never resurrects a remotely deleted source automatically',resurrect.actions.length===0&&resurrect.conflicts.some(x=>x.reason==='remote_effect_deleted'));
 ok('production-only employees are allowed through the cloud upload permission gate',/!admin && !\["customers", "suppliers", "invoices", "inventory", "production"\]\.some\(canWrite\)/.test(cloud));
 ok('production-only employees are allowed through the cloud download permission gate',/!\["customers","suppliers","invoices","inventory","production","reports"\]\.some\(canRead\)/.test(cloud));
 ok('invoice cloud sync uses the atomic versioned RPC',/rpc\(["']sync_invoice["']/.test(cloud)&&/p_expected_version/.test(cloud)&&/sync_version/.test(cloud));
