@@ -1410,7 +1410,7 @@ async function uploadToTables(showAlert = false) {
 
 
     // Synchronize source-scoped ledger/stock effects only when this client can write both sections.
-    if (canWrite("inventory") && ["invoices", "production", "settings"].some(canWrite)) {
+    if (["inventory", "invoices", "production", "settings"].some(canWrite)) {
       const remoteResult = await supabase.rpc("get_source_effects");
       const missingEffectsRpc = remoteResult.error && ["PGRST202", "42883"].includes(String(remoteResult.error.code || ""));
       if (remoteResult.error && !missingEffectsRpc) errors.push("source effects read before write: " + remoteResult.error.message);
@@ -1429,9 +1429,16 @@ async function uploadToTables(showAlert = false) {
             const sourceType = action.effect?.sourceType || action.sourceType;
             const sourceId = action.effect?.sourceId || action.sourceId;
             const permission = ({ doc: "invoices", po: "production", vch: "invoices", je: "settings", wo: "inventory" })[sourceType];
-            if (!canWrite(permission)) continue;
+            const writeLedger = canWrite(permission);
+            const writeMovements = canWrite("inventory");
             const isDelete = action.op === "delete";
-            const payload = isDelete ? null : { ...action.effect, ledgerIncluded: true, movementsIncluded: true };
+            if (isDelete ? (!writeLedger || !writeMovements) : (!writeLedger && !writeMovements)) continue;
+            const payload = isDelete ? null : {
+              sourceType, sourceId: String(sourceId),
+              ledgerIncluded: writeLedger, movementsIncluded: writeMovements,
+              ledger: writeLedger ? action.effect.ledger : [],
+              movements: writeMovements ? action.effect.movements : []
+            };
             const saved = await supabase.rpc("sync_source_effect", {
               p_source_type: sourceType, p_source_id: sourceId,
               p_expected_version: action.expectedVersion, p_payload: payload, p_deleted: isDelete
