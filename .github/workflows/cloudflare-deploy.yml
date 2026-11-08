@@ -36,7 +36,7 @@ jobs:
         run: npm run build
         env:
           VITE_SUPABASE_URL: https://yvrislcbbhtruwdnuooz.supabase.co
-          VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
+          VITE_SUPABASE_ANON_KEY: sb_publishable_7y8sqUPYv4mCfmpjin3xRQ_1_X5QJfG
 
       - name: Deploy to Cloudflare Workers
         run: npx --yes wrangler@4 deploy
