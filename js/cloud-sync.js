@@ -1444,6 +1444,13 @@ async function uploadToTables(showAlert = false) {
             const writeMovements = canWrite("inventory");
             const isDelete = action.op === "delete";
             if (isDelete ? (!writeLedger || !writeMovements) : (!writeLedger && !writeMovements)) continue;
+            if (!isDelete && (
+              (action.effect.ledger.length > 0 && !writeLedger) ||
+              (action.effect.movements.length > 0 && !writeMovements)
+            )) {
+              conflicts.push({ sourceType, sourceId, reason: "complete_effect_requires_all_populated_section_permissions" });
+              continue;
+            }
             const payload = isDelete ? null : {
               sourceType, sourceId: String(sourceId),
               ledgerIncluded: writeLedger, movementsIncluded: writeMovements,
@@ -1464,6 +1471,7 @@ async function uploadToTables(showAlert = false) {
             if (isDelete) completedTombstones.add(JSON.stringify([sourceType, sourceId]));
           }
           if (conflicts.length) localStorage.setItem("mgr6-source-effect-conflicts", JSON.stringify(conflicts));
+          else localStorage.removeItem("mgr6-source-effect-conflicts");
           const remainingTombstones = queuedTombstones.filter(item =>
             !completedTombstones.has(JSON.stringify([String(item.sourceType), String(item.sourceId)]))
           );
@@ -1482,16 +1490,20 @@ async function uploadToTables(showAlert = false) {
       return msg;
     }
     const hasSnapshotConflict = snapshotConflict || !!localStorage.getItem("mgr6-cloud-snapshot-conflict");
+    const hasSourceEffectConflict = (() => { try { return (JSON.parse(localStorage.getItem("mgr6-source-effect-conflicts") || "[]") || []).length > 0; } catch(e) { return true; } })();
+    const hasAnyConflict = hasSnapshotConflict || hasSourceEffectConflict;
     const latestPend = Number(getCachedState().pend || 0);
-    if (!hasSnapshotConflict && latestPend === Number(S.pend || 0)) localStorage.removeItem(PENDING_SYNC_KEY);
-    else if (!hasSnapshotConflict) scheduleAutoSync(400);
+    if (!hasAnyConflict && latestPend === Number(S.pend || 0)) localStorage.removeItem(PENDING_SYNC_KEY);
+    else if (!hasAnyConflict) scheduleAutoSync(400);
     // Employee detail-only sync is deliberately not labelled fully synchronized.
-    syncState = hasSnapshotConflict ? "conflict" : (admin ? "synced" : "partial");
+    syncState = hasAnyConflict ? "conflict" : (admin ? "synced" : "partial");
     lastSyncTime = new Date().toLocaleTimeString(isEN() ? "en-US" : "ar-EG");
     drawAll();
     const msg = hasSnapshotConflict
       ? T("تمت مزامنة السجلات التفصيلية المتاحة، لكن النسخة الكاملة بها تعارض محفوظ ولم يتم استبدالها.", "Available detail records were synchronized; the full snapshot conflict was preserved without overwriting it.")
-      : admin
+      : hasSourceEffectConflict
+        ? T("تمت مزامنة البيانات المسموح بها، لكن توجد حركات محاسبية أو مخزنية تحتاج صلاحيات أو مراجعة تعارض.", "Allowed data was synchronized, but some accounting or inventory effects need permissions or conflict review.")
+        : admin
         ? T("تم حفظ نسخة المصنع الكاملة ومزامنة الجداول التفصيلية", "Full factory backup saved and detail tables synchronized")
         : T("تم رفع الجداول المسموح بها فقط. مزامنة القيود والحركات المحاسبية الكاملة لحساب الموظف لم تكتمل بعد.", "Only permitted detail tables were uploaded. Full accounting-ledger synchronization for employee accounts is not complete yet.");
     if (showAlert) alert(msg);
