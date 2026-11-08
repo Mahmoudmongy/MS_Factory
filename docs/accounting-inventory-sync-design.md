@@ -108,29 +108,24 @@ These paths remain dormant against Supabase until both draft migrations are revi
 
 ## Rollout sequence
 
-1. Add pure client helpers to collect and normalize effects by `(src,rid)`, without changing existing upload behavior.
-2. Add tests for every source category and for repeated collection, edit/replacement, deletion tombstones, and same `rid` under different `src` values.
-3. Finalize stable account/item/warehouse identity rules and the single stock-authority rule against the actual app data model.
-4. Add a migration and RPC with RLS/grants and server-side permission checks. Review against the live schema before applying anywhere.
-5. Add client upload/download behind a disabled feature flag. Preserve conflict copies and do not auto-apply unresolved effects.
-6. Test against a disposable, schema-matched QA restore with two independent clients. Verify ledger balances, stock by variant/warehouse, edit, delete, retries, and permission boundaries.
-7. Only after QA passes, consider enabling for a controlled employee role. Keep the admin snapshot path unchanged.
+1. Source-scoped effect collection, stable identities, baseline publication/read, section-specific local apply, normal upload/download wiring, optimistic versions, and conflict preservation are implemented on this isolated branch.
+2. The two feature migrations remain unapplied. Review them against the restored QA schema before applying them to QA.
+3. Run the new manual-only `restore-supabase-backup-to-qa.yml` workflow after a complete encrypted B2 backup with its checksum sidecar exists. It restores roles/schema/data through the Supabase logical-restore sequence, leaves Supabase-managed Auth/Storage schemas intact, restores durable Auth rows and the custom `auth.users` trigger separately, and restores migration history only when the target lacks that schema.
+4. The restore workflow refuses a non-empty target and hard-checks the QA project reference against the production reference. It verifies archive/file checksums, row counts, RLS coverage, Auth counts, migration counts, and the exact custom Auth trigger.
+5. Read-only preflight confirmed QA currently has zero public tables, zero Auth users, zero Storage buckets, and no `supabase_migrations` schema. Production and QA Auth table column sets match; production has no custom Auth/Storage policies and one custom `auth.users` trigger. The restore script recreates only the missing migration-history schema rather than replacing managed Auth/Storage schemas.
+6. The previous Run #36 archive is incomplete (no checksum sidecar), so the restore workflow will refuse it. The backup workflow now allows a one-time manual backup request while scheduled backups remain disabled by `BACKUP_ENABLED=false`.
+7. The restore workflow has not been run. It requires `QA_SUPABASE_DB_URL` and a secure way to make the external age identity available to the runner. The private age identity has not been copied into GitHub or requested in chat; no secret was created or changed.
+8. After a verified QA restore, apply both feature migrations to that restored QA copy only, then run two-device tests for baseline publication, section permissions, hidden-section preservation, create/edit/delete, tombstones, retries, offline/reconnect, idempotency, and version conflicts.
+9. Review results, then separately approve production migrations. Keep scheduled backup activation and deployment separately gated.
 
 ## Explicitly out of scope for this branch
 
 - No SQL execution or migration on the production Supabase project or QA.
 - No writes to production data.
 - No secrets, auth settings, or existing RLS policies changed.
-- No enabling automated backups or changing deployment settings.
+- No enabling scheduled backups or changing deployment settings.
 - No deployment or DNS changes.
 
-## Remaining gate — validate and roll out safely
-
-1. Review the two draft migrations together against the production schema; keep them unapplied until the restore pipeline is trustworthy.
-2. Complete the Supabase-managed Auth/schema restore pipeline. The isolated QA project is currently empty and is not a valid target for applying these feature migrations directly.
-3. Restore a production backup into QA using the corrected managed-schema-aware procedure, then apply the two migrations to that restored QA copy only.
-4. Test owner publication, inventory-only read/write, accounting-only read/write, reports-only denial, hidden-section preservation, tombstones, version conflicts, repeated sync, and two independent devices.
-5. Verify ledger balance and stock by item/variant after create, edit, delete, retry, offline/reconnect, and role-limited operations.
-6. Only after all QA checks pass, separately approve production migrations. Keep backup activation and deployment approvals separate.
+## Remaining gate — QA restore and verification
 
 The combined `applyFactoryBaseline` helper remains an administrator-only utility. Employee clients use only the section-specific apply helpers. The FNV fingerprint is a deterministic corruption check, not an authentication mechanism; authorization and database-side validation are the security boundary.
