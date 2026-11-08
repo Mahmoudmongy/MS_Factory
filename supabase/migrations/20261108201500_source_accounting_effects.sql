@@ -114,8 +114,8 @@ begin
   if coalesce(p_deleted, false) is false then
     if p_payload is null
        or pg_catalog.jsonb_typeof(p_payload) <> 'object'
-       or pg_catalog.jsonb_typeof(p_payload -> 'ledger') <> 'array'
-       or pg_catalog.jsonb_typeof(p_payload -> 'movements') <> 'array'
+       or pg_catalog.jsonb_typeof(p_payload -> 'ledger') is distinct from 'array'
+       or pg_catalog.jsonb_typeof(p_payload -> 'movements') is distinct from 'array'
        or p_payload ->> 'sourceType' is distinct from p_source_type
        or p_payload ->> 'sourceId' is distinct from p_source_id
        or (pg_catalog.jsonb_array_length(p_payload -> 'ledger') = 0
