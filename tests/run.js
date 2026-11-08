@@ -78,7 +78,7 @@ ok('sync toolbar is removed but conflict recovery remains reachable from the con
 ok('invoice cloud sync uses the atomic versioned RPC',/rpc\(["']sync_invoice["']/.test(cloud)&&/p_expected_version/.test(cloud)&&/sync_version/.test(cloud));
 ok('inventory sync uploads the actual S.items array used by the stock screens',/for \(const arr of \[S\.items, S\.products, S\.prods\]\)/.test(cloud));
 ok('inventory sync totals all colour/size variants instead of reading a missing qty field',/Object\.values\(variants\)\.reduce/.test(cloud)&&/const variants = pr\.st/.test(cloud));
-ok('inventory sync stores the full local item in products.raw for lossless restoration',/image_url:[\s\S]{0,500}raw: pr/.test(cloud));
+ok('inventory sync stores the complete local item in products.raw while excluding only internal cloud-version metadata',cloud.includes('raw: (() => { const raw = { ...pr };')&&cloud.includes('delete raw._cloudProductsVersion')&&cloud.includes('delete raw._cloudProductsUpdatedAt'));
 ok('inventory download restores records into S.items, the real inventory source used by the app',/if \(!Array\.isArray\(S\.items\)\) S\.items = \[\]/.test(cloud)&&/S\.items = m\.arr/.test(cloud));
 ok('employee detail-only sync remains marked partial in the background',/admin \? "synced" : "partial"/.test(cloud)&&/تم رفع الجداول وقيود الأستاذ وحركات المخزون المسموح بها حسب صلاحيات حسابك/.test(cloud));
 ok('RELEASE GATE: ledger and stock sync is wired to upload, pull, and the versioned RPC',/sync_factory_accounting/.test(cloud)&&/factory_accounting_state/.test(cloud)&&/await syncAccountingSnapshots\(S, profile, errors\)/.test(cloud)&&/replaceAccountingPayload\(S, source, remotePayload\)/.test(cloud)&&/state\.L/.test(core)&&/state\.mv/.test(core));
