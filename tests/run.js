@@ -20,8 +20,8 @@ ok('production colour/size labels and item names are escaped',/escapeHTML\(c\|\|
 ok('Excel sheet names and imported column headers are escaped',/escapeHTML\(WZ\.sheet\)/.test(app)&&/escapeHTML\(h\)/.test(app)&&/escapeHTML\(n\)/.test(app));
 ok('ledger account and partner labels are escaped before rendering',/escapeHTML\(an\(l\.a\)\)/.test(app)&&/escapeHTML\(pn\(l\.pid\)\)/.test(app));
 ok('persisted logo and uploaded document images pass through the safe image URL filter',/safeImageSrc\(S\.logo\)/.test(app)&&/safeImageSrc\(D\.img\)/.test(app));
-ok('report tables escape untrusted cells and only render explicitly marked internal links',/const cell=c=>c&&typeof c==="object"&&c.__msSafeHtml===true\?c.html:escapeHTML\(c\?\?"""\)/.test(app)&&/__msSafeHtml:true/.test(app));
-ok('print views sanitize the company logo, document image, invoice number and voucher account labels',/safeImageSrc\(S\.logo\)/.test(app)&&/safeImageSrc\(d\.img\)/.test(app)&&/escapeHTML\(no\|\|"""\)/.test(app)&&/escapeHTML\(an\(x\.a\)\)/.test(app));
+ok('report tables escape untrusted cells and only render explicitly marked internal links',app.includes('const cell=c=>c&&typeof c==="object"&&c.__msSafeHtml===true?c.html:escapeHTML(c??"")')&&app.includes('__msSafeHtml:true'));
+ok('print views sanitize the company logo, document image, invoice number and voucher account labels',/safeImageSrc\(S\.logo\)/.test(app)&&/safeImageSrc\(d\.img\)/.test(app)&&/escapeHTML\(no\|\|""\)/.test(app)&&/escapeHTML\(an\(x\.a\)\)/.test(app));
 ok('customer/supplier rows expose permission-gated edit actions',app.includes('pForm(${c},${p.id})')&&app.includes('can("edit")'));
 ok('partner edit preserves the stable record ID and updates the existing object',app.includes('function saveP(id)')&&app.includes('if(old)Object.assign(old,data)'));
 ok('employee edit preserves the existing employee record',app.includes('function saveE(id)')&&app.includes('if(old)Object.assign(old,data)'));
