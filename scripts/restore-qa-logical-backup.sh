@@ -61,7 +61,8 @@ psql_cmd=(psql --no-psqlrc --set=ON_ERROR_STOP=1 --dbname "$QA_SUPABASE_DB_URL")
 public_tables="$("${psql_cmd[@]}" --tuples-only --no-align --command="SELECT count(*) FROM information_schema.tables WHERE table_schema='public' AND table_type='BASE TABLE';" | tr -d '[:space:]')"
 auth_users="$("${psql_cmd[@]}" --tuples-only --no-align --command="SELECT count(*) FROM auth.users;" | tr -d '[:space:]')"
 migration_table="$("${psql_cmd[@]}" --tuples-only --no-align --command="SELECT to_regclass('supabase_migrations.schema_migrations') IS NOT NULL;" | tr -d '[:space:]')"
-if [[ "$public_tables" != "0" || "$auth_users" != "0" || "$migration_table" != "t" ]]; then
+storage_buckets="$("${psql_cmd[@]}" --tuples-only --no-align --command="SELECT count(*) FROM storage.buckets;" | tr -d '[:space:]')"
+if [[ "$public_tables" != "0" || "$auth_users" != "0" || "$migration_table" != "t" || "$storage_buckets" != "0" ]]; then
   echo "::error::QA is not an empty, compatible Supabase restore target. No data was changed."
   exit 1
 fi
@@ -157,14 +158,20 @@ rls_total = int(psql("SELECT count(*) FROM pg_class c JOIN pg_namespace n ON n.o
 if public_total != len(read_counts("public-row-counts.txt")) or rls_total != public_total:
     raise SystemExit(f"Public schema/RLS validation failed: tables={public_total}, backed-up={len(read_counts('public-row-counts.txt'))}, RLS-enabled={rls_total}.")
 
-trigger_count = int(psql("""
-SELECT count(*) FROM pg_trigger t
+trigger_source = Path("auth-trigger.sql").read_text()
+trigger_names = re.findall(
+    r'CREATE\\s+TRIGGER\\s+("(?:[^"]|"")*"|[A-Za-z_][A-Za-z0-9_$]*)\\s+.*?\\s+ON\\s+auth\\.users\\b',
+    trigger_source, flags=re.IGNORECASE | re.DOTALL
+)
+actual_trigger_names = set(filter(None, psql("""
+SELECT t.tgname FROM pg_trigger t
 JOIN pg_class c ON c.oid=t.tgrelid
 JOIN pg_namespace n ON n.oid=c.relnamespace
 WHERE n.nspname='auth' AND c.relname='users' AND NOT t.tgisinternal;
-"""))
-if trigger_count < 1:
-    raise SystemExit("The custom auth.users trigger is missing after restore.")
+""").splitlines()))
+expected_trigger_names = {name.strip('"').replace('""', '"') for name in trigger_names}
+if not expected_trigger_names or not expected_trigger_names.issubset(actual_trigger_names):
+    raise SystemExit("One or more exported custom auth.users triggers are missing after restore.")
 
-print(f"QA restore verified: {public_total} public tables, {actual_auth} Auth users, {actual_migrations} migrations, RLS enabled on all public tables.")
+print(f"QA restore verified: {public_total} public tables, {actual_auth} Auth users, {actual_migrations} migrations, RLS enabled on all public tables, and {len(expected_trigger_names)} custom Auth triggers.")
 PY
