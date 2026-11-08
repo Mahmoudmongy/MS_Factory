@@ -50,7 +50,7 @@ ok('offline saves are durably queued and retried on reconnect, focus and visibil
 ok('sync toolbar is removed but conflict recovery remains reachable from the connection indicator',!app.includes('["🔄 حالة الاتصال والمزامنة","syncPage()"]')&&/id="net" onclick="syncPage\(\)"/.test(idx)&&/ms-logout-btn/.test(cloud)&&!/cloud-badge|رفع الآن|Upload Now|تحميل/.test(cloud.slice(cloud.indexOf('function drawAll()'))));
 
 const collectorStart=cloud.indexOf('function collectSourceEffects(state)');
-const collectorEnd=cloud.indexOf('\\nfunction stableJson',collectorStart);
+const collectorEnd=cloud.indexOf('function stableJson(value)',collectorStart);
 let collectSourceEffects=null;
 try { collectSourceEffects=vm.runInNewContext('('+cloud.slice(collectorStart,collectorEnd).trim()+')'); } catch(e) {}
 const effectFixture={
