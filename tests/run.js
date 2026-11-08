@@ -52,15 +52,41 @@ ok('sync toolbar is removed but conflict recovery remains reachable from the con
 const collectorStart=cloud.indexOf('function collectSourceEffects(state)');
 const collectorEnd=cloud.indexOf('// ===== الرفع مرة واحدة',collectorStart);
 const effectHelpersContext=vm.createContext({});
-let collectSourceEffects=null, normalizeSourceEffects=null, planSourceEffectSync=null, applyCanonicalSourceEffect=null, planRemoteSourceEffectApply=null;
+let collectSourceEffects=null, normalizeSourceEffects=null, planSourceEffectSync=null, applyCanonicalSourceEffect=null, planRemoteSourceEffectApply=null, buildStockBaseline=null, applyStockBaseline=null;
 try {
-  vm.runInContext(cloud.slice(collectorStart,collectorEnd)+';this.collectSourceEffects=collectSourceEffects;this.normalizeSourceEffects=normalizeSourceEffects;this.planSourceEffectSync=planSourceEffectSync;this.applyCanonicalSourceEffect=applyCanonicalSourceEffect;this.planRemoteSourceEffectApply=planRemoteSourceEffectApply;',effectHelpersContext);
+  vm.runInContext(cloud.slice(collectorStart,collectorEnd)+';this.collectSourceEffects=collectSourceEffects;this.normalizeSourceEffects=normalizeSourceEffects;this.planSourceEffectSync=planSourceEffectSync;this.applyCanonicalSourceEffect=applyCanonicalSourceEffect;this.planRemoteSourceEffectApply=planRemoteSourceEffectApply;this.buildStockBaseline=buildStockBaseline;this.applyStockBaseline=applyStockBaseline;',effectHelpersContext);
   collectSourceEffects=effectHelpersContext.collectSourceEffects;
   normalizeSourceEffects=effectHelpersContext.normalizeSourceEffects;
   planSourceEffectSync=effectHelpersContext.planSourceEffectSync;
   applyCanonicalSourceEffect=effectHelpersContext.applyCanonicalSourceEffect;
   planRemoteSourceEffectApply=effectHelpersContext.planRemoteSourceEffectApply;
+  buildStockBaseline=effectHelpersContext.buildStockBaseline;
+  applyStockBaseline=effectHelpersContext.applyStockBaseline;
 } catch(e) {}
+const stockBaselineFixture={
+  wh:[{id:1,name:'المخزن الرئيسي'}],
+  items:[
+    {id:11,sku:'FB011',name:'قماش',unit:'متر',wh:1,st:{'أبيض':12,'كحلي':4},val:1600},
+    {id:12,sku:'ZIP012',name:'سوستة',unit:'قطعة',wh:1,st:{'-':50},val:250}
+  ]
+};
+const stockBaseline=buildStockBaseline?buildStockBaseline(stockBaselineFixture):{invalid:[{reason:'helper_unavailable'}]};
+ok('stock baseline captures absolute item/variant quantities and values',stockBaseline.invalid.length===0&&stockBaseline.items.length===2&&stockBaseline.items[0].variants.length===2);
+ok('stock baseline fingerprint is deterministic',!!buildStockBaseline&&stockBaseline.fingerprint===buildStockBaseline(stockBaselineFixture).fingerprint);
+ok('stock baseline rejects duplicate item identities',buildStockBaseline({...stockBaselineFixture,items:[...stockBaselineFixture.items,{...stockBaselineFixture.items[0]}]}).invalid.some(x=>x.reason==='duplicate_item_external_id'));
+ok('stock baseline rejects invalid quantities',buildStockBaseline({...stockBaselineFixture,items:[{...stockBaselineFixture.items[0],st:{'-':'not-a-number'}}]}).invalid.some(x=>x.reason==='invalid_stock_quantity'));
+const baselineTarget={items:[{id:11,st:{'أبيض':99},val:9999,keep:'unchanged'},{id:12,st:{'-':1},val:1},{id:13,st:{'-':7},val:70}]};
+const baselineApply1=applyStockBaseline?applyStockBaseline(baselineTarget,stockBaseline):{applied:false};
+const baselineApply2=applyStockBaseline?applyStockBaseline(baselineTarget,stockBaseline):{applied:false};
+ok('absolute stock baseline replaces quantities rather than adding movement deltas',baselineApply1.applied&&baselineTarget.items[0].st['أبيض']===12&&baselineTarget.items[0].val===1600);
+ok('reapplying the same stock baseline is idempotent',baselineApply2.applied&&baselineTarget.items[0].st['أبيض']===12&&baselineTarget.items[1].st['-']===50);
+ok('stock baseline preserves non-stock fields and local-only items',baselineTarget.items[0].keep==='unchanged'&&baselineTarget.items[2].st['-']===7);
+const baselineMissingTarget={items:[{id:11,st:{'-':4},val:4}]};
+const baselineBefore=JSON.stringify(baselineMissingTarget);
+const baselineMissing=applyStockBaseline?applyStockBaseline(baselineMissingTarget,stockBaseline):{applied:true};
+ok('stock baseline refuses partial application when an item is missing',!baselineMissing.applied&&JSON.stringify(baselineMissingTarget)===baselineBefore);
+const tamperedBaseline={...stockBaseline,items:stockBaseline.items.map(x=>({...x,value:x.value+1}))};
+ok('stock baseline rejects a modified manifest checksum',!applyStockBaseline(baselineTarget,tamperedBaseline).applied);
 const effectFixture={
   L:[
     {src:'doc',rid:7,a:1,dr:100,cr:0},
