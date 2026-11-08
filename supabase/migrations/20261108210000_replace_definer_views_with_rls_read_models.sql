@@ -1,5 +1,5 @@
 -- Narrow, RLS-protected production read models replace owner-executed views.
-DO $
+DO $do$
 BEGIN
  IF EXISTS (SELECT 1 FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname='public' AND c.relname='production_catalog' AND c.relkind='v') THEN
   EXECUTE 'DROP VIEW public.production_catalog';
@@ -7,7 +7,7 @@ BEGIN
  IF EXISTS (SELECT 1 FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname='public' AND c.relname='production_factory_config' AND c.relkind='v') THEN
   EXECUTE 'DROP VIEW public.production_factory_config';
  END IF;
-END $;
+END $do$;
 
 CREATE TABLE IF NOT EXISTS public.production_catalog (
  user_id uuid NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
