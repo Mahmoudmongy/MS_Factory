@@ -533,10 +533,13 @@ function planRemoteSourceEffectApply(state, remoteRows, versionMap) {
       conflicts.push({ key, reason: "invalid_remote_version" }); continue;
     }
     const localEffect = local.get(key);
+    const sourceFields = { doc: "docs", po: "po", vch: "vch", je: "je", wo: "wo" };
+    const localSourceDocument = (state[sourceFields[row.source_type]] || [])
+      .some(document => String(document?.id) === String(row.source_id));
     if (row.deleted_at) {
       if (localVersion >= remoteVersion && localVersion > 0) {
         conflicts.push({ key, reason: "remote_tombstone_is_stale", localVersion, remoteVersion });
-      } else if (localEffect && localVersion === 0) {
+      } else if (localVersion === 0 && (localEffect || localSourceDocument)) {
         conflicts.push({ key, reason: "untracked_local_effect_conflicts_with_remote_tombstone" });
       } else {
         actions.push({ op: "delete", sourceType: String(row.source_type),
