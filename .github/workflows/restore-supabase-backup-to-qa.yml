@@ -39,7 +39,7 @@ jobs:
           import pathlib, re, textwrap
           for name in [".github/workflows/restore-supabase-backup-to-qa.yml", "scripts/restore-qa-logical-backup.sh"]:
               text = pathlib.Path(name).read_text()
-              blocks = re.findall(r"python3 - <<'PY'\\n(.*?)\\n[ \\t]*PY", text, flags=re.DOTALL)
+              blocks = re.findall(r"python3 - <<'PY'\n(.*?)\n[ \t]*PY", text, flags=re.DOTALL)
               for index, block in enumerate(blocks):
                   compile(textwrap.dedent(block), f"{name}:python-block-{index}", "exec")
           print("Embedded Python blocks compile.")
