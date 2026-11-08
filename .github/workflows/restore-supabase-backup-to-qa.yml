@@ -60,21 +60,21 @@ jobs:
           echo "QA restore script syntax and destination guards validated."
           python3 - <<'PY'
           import re
-          source = """CREATE OR REPLACE FUNCTION auth.handle_created()
+          source = """CREATE OR REPLACE FUNCTION public.handle_created()
           RETURNS trigger LANGUAGE plpgsql AS $function$
           BEGIN RETURN NEW; END;
           $function$
 
           CREATE TRIGGER on_auth_user_created AFTER INSERT ON auth.users
-          FOR EACH ROW EXECUTE FUNCTION auth.handle_created();
+          FOR EACH ROW EXECUTE FUNCTION public.handle_created();
 
-          CREATE OR REPLACE FUNCTION auth.handle_updated()
+          CREATE OR REPLACE FUNCTION public.handle_updated()
           RETURNS trigger LANGUAGE plpgsql AS $function$
           BEGIN RETURN NEW; END;
           $function$;
 
           CREATE TRIGGER on_auth_user_updated AFTER UPDATE ON auth.users
-          FOR EACH ROW EXECUTE FUNCTION auth.handle_updated();
+          FOR EACH ROW EXECUTE FUNCTION public.handle_updated();
           """
           source, repaired = re.subn(
               r'(?im)(\r?\n[ \t]*CREATE\s+TRIGGER\b)',
