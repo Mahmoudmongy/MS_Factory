@@ -1,42 +1,44 @@
-# Critical release blocker — accounting and inventory synchronization
+# Accounting and stock synchronization — release gate
 
 Audit date: 2026-11-08
 
-## Verified current state
+## Status
 
-- The browser application stores accounting journal lines in `S.L` and inventory movement history in `S.mv`.
-- `js/cloud-sync.js` does not upload or download either collection. Its only references to these fields are in the local-empty check.
-- The current Supabase public schema has 11 tables: `customers`, `factory_state`, `inventory`, `invoice_items`, `invoices`, `production_orders`, `products`, `profiles`, `returns`, `suppliers`, and `vouchers`. There is no journal/ledger-line table and no stock-movement history table.
-- The full `factory_state` snapshot is administrator-only. A production-only employee cannot use it to send accounting or stock movement history.
-- Production orders are synchronized as detail records, but that is not equivalent to synchronizing the associated journal entries and stock movements.
+A source-scoped, versioned synchronization implementation is present on `migration/cloudflare-workers-hosting` and its database migrations have been applied to the isolated QA Supabase project. It has **not** been applied to production and has **not** been deployed to Cloudflare.
 
-## Consequence
+## Implemented in the branch
 
-A production-only employee can create/update an order in the cloud while the resulting local ledger entries and stock movements remain on that device. The manager may see the production order but not the complete accounting and inventory consequences. This can cause cloud/local balances and stock movement history to diverge.
+- `factory_accounting_state` stores independent `invoices`, `production`, and administrator-only `settings` snapshots.
+- `sync_factory_accounting` uses optimistic version checks; stale writes return SQLSTATE `40001`.
+- The RPC checks source permissions, account IDs against the factory chart, balanced debit/credit totals per source transaction, document/order references, product references, payload shape and a 5 MiB payload ceiling.
+- RLS exposes only the source categories granted to the signed-in profile. Manual journals/opening balances are administrator-only.
+- Production-only users receive a restricted `production_catalog` view with item identity, unit, warehouse, stock quantities and material buy cost. It omits retail/wholesale prices and raw product JSON.
+- Browser sync keeps per-source version/hash baselines, merges only the authorized source, recalculates stock from movement history, preserves local changes on conflicts, and offers an administrator restore-from-cloud action after saving a local conflict copy.
+- The service worker cache was bumped to `factory-v11` and now precaches the accounting sync module.
 
-## Release decision
+## QA SQL tests executed
 
-Cloudflare production deployment must remain blocked until this is fixed and verified. The CI suite now contains an explicit release-gate assertion for the missing accounting/movement sync path; it is expected to fail until implementation is complete.
+All QA tests ran inside explicit transactions and ended with `ROLLBACK`; no test rows were retained.
 
-## Required implementation shape
+- Administrator: creates and updates all three source snapshots.
+- Production-only employee: updates production source only; sees only the production accounting row; cannot write invoices or settings.
+- Invoice-only employee: updates invoice source only; sees only the invoice accounting row; cannot write production or settings.
+- Stale source versions are rejected.
+- Unknown account IDs are rejected.
+- Unbalanced ledger batches are rejected.
+- Ledger rows that do not reference a synchronized invoice or production order are rejected.
+- Movements that reference unknown products are rejected.
+- Production-only catalog returns allowed item and quantity fields; invoice-only account sees zero catalog rows.
 
-Do not let employees overwrite the full factory snapshot. Implement a permission-scoped, versioned synchronization path for the source records that create accounting and inventory effects.
+## Remaining release blockers
 
-Preferred design:
-1. Add a source-scoped accounting synchronization store or normalized append-only journal-line and stock-movement tables, keyed to the factory owner.
-2. Use a SECURITY INVOKER RPC with a strict source-to-permission map (invoice/voucher sources require invoices permission; production sources require production permission; manual journal sources require settings/admin permission).
-3. Apply optimistic version checks and atomic updates so stale devices cannot silently replace newer data.
-4. Pull only the source categories the signed-in employee is authorized to read. A production-only employee must not gain access to customer balances, bank balances, or unrelated accounting sources.
-5. Preserve local pending changes and surface conflicts instead of silently overwriting either copy.
-6. Keep the admin full snapshot consistent with the merged accounting and movement data after pull.
+1. The current browser test harness disables the authentication bootstrap and `js/cloud-sync.js`; therefore it does not prove a real login/session sync in Chromium. QA SQL role-claim tests are not a substitute for real Auth sign-in.
+2. No real two-device offline/reconnect and concurrent-edit cycle has yet been run against the browser app.
+3. Full end-to-end cycles still need verification for sales, purchases, returns, vouchers, production issue/receipt, waste, journal entries, reversals and their matching ledger/stock totals.
+4. The production database has not received the new migrations. Do not deploy the new frontend until backup and migration ordering are complete.
+5. The encrypted R2 backup workflow is prepared but inactive: R2 must be enabled, bucket retention configured, and GitHub secrets/variables set. A restore drill has not yet been completed.
+6. The app's shared browser-local state needs a final multi-account isolation review before declaring employee data confidentiality complete.
 
-## Mandatory acceptance tests
+## Release rule
 
-- Production-only employee creates a production order offline, reconnects, and the order plus its journal lines and stock movements appear for the manager.
-- Manager edits or reverses the order; the employee receives the correct version or an explicit conflict.
-- Retry after a lost response does not duplicate journal lines, stock movements, or quantities.
-- Two devices updating the same source concurrently cause a version conflict, not a lost update.
-- An employee with production-only permission cannot read or write invoices, vouchers, customer data, full snapshots, or other employees' accounting sources.
-- Invoice-only employee can synchronize invoice-related journal and stock effects but cannot synchronize production.
-- A complete sale, purchase, return, voucher, production, and reversal cycle yields matching local and cloud balances and stock movement totals.
-- Offline queue survives refresh/browser restart and clears only after all required writes succeed.
+Do not merge/deploy this branch to production until the remaining blockers are tested and documented. A green static build or unit suite alone is not production approval.
