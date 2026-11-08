@@ -35,6 +35,16 @@ jobs:
           set -euo pipefail
           bash -n scripts/restore-qa-logical-backup.sh
           bash -n scripts/export-auth-and-counts.sh
+          python3 - <<'PY'
+          import pathlib, re, textwrap
+          for name in [".github/workflows/restore-supabase-backup-to-qa.yml", "scripts/restore-qa-logical-backup.sh"]:
+              text = pathlib.Path(name).read_text()
+              blocks = re.findall(r"python3 - <<'PY'\\n(.*?)\\n[ \\t]*PY", text, flags=re.DOTALL)
+              for index, block in enumerate(blocks):
+                  compile(textwrap.dedent(block), f"{name}:python-block-{index}", "exec")
+          print("Embedded Python blocks compile.")
+          PY
+          ruby -e 'require "yaml"; ARGV.each { |f| YAML.load_file(f) }' .github/workflows/restore-supabase-backup-to-qa.yml
           grep -q 'session_replication_role = replica' scripts/restore-qa-logical-backup.sh
           grep -q 'EXPECTED_QA_PROJECT_REF' scripts/restore-qa-logical-backup.sh
           grep -q 'FORBIDDEN_PRODUCTION_PROJECT_REF' scripts/restore-qa-logical-backup.sh
