@@ -95,9 +95,16 @@ The RPC must validate source categories, ownership, payload shape/size, and perm
 - Deleting a source now persists an offline tombstone in `mgr6-cloud-effect-tombstones` before local reversal.
 - The draft migration creates versioned source-effect storage, a compare-and-swap write RPC, per-source locking, tombstones, and per-factory SKU uniqueness. Direct table reads are revoked; `get_source_effects()` returns role-redacted ledger/movement sections.
 
-Executed 26 focused helper/static checks directly against the branch files: **26/26 passed**. These checks are not a substitute for the full Playwright suite or a two-device QA restore.
+The branch now wires the baseline and source-effect helpers into normal client upload/download. The latest verified GitHub Actions run on the tested head passed **209/209 browser checks** and `npm run build`. Backup-code validation passed, while B2 preflight and backup remained skipped because `BACKUP_ENABLED=false`.
 
-**Not wired/enabled yet:** normal sync does not call the new RPCs or fetch/apply effect rows. The migration has not been executed against Supabase. Stock replay must wait until the full historical effect backfill is complete, because product raw records currently carry aggregate stock and replaying movements on top of that would double-count. The migration and helpers have no live effect on production or QA.
+**Implemented on this isolated branch (not applied to Supabase):**
+- New migration `20261108213000_factory_sync_baseline.sql` creates an immutable, one-time version-1 baseline and separate inventory/accounting read RPCs. Publication validates synchronized master references, balanced opening ledger, empty source-effect history, and uses a factory-level advisory lock shared with source writes.
+- Client upload syncs products/partners first, then publishes the baseline once. Client download applies the inventory section as absolute stock plus history-only opening movements, and applies accounting definitions/partners/opening ledger separately. Each section has its own version cursor and failure does not advance that cursor.
+- Source effects are now wired into upload/download with per-source optimistic versions, conflict preservation, and queued tombstones. SQL merges only the authorized section and preserves the hidden section atomically.
+- Reports-only access is explicitly excluded from inventory/accounting source-effect and baseline reads. Deleting a transaction requires both its module permission and inventory permission because a tombstone removes both effect sections.
+- A source effect with populated sections that the current role cannot write is not partially uploaded; it is retained as a permission conflict.
+
+These paths remain dormant against Supabase until both draft migrations are reviewed and applied. The migration has not been executed against production or QA. The existing production data preflight found only opening ledger/movement rows and no source-scoped transactions, so the initial baseline is eligible once the migrations are safely validated. No two-device QA test has been performed.
 
 ## Rollout sequence
 
@@ -111,24 +118,19 @@ Executed 26 focused helper/static checks directly against the branch files: **26
 
 ## Explicitly out of scope for this branch
 
-- No SQL execution or migration on the production Supabase project.
-- No writes to the production database.
-- No secrets, auth settings, or RLS policy changes.
-- No automatic application of remote ledger/movement effects to a local cache.
+- No SQL execution or migration on the production Supabase project or QA.
+- No writes to production data.
+- No secrets, auth settings, or existing RLS policies changed.
 - No enabling automated backups or changing deployment settings.
+- No deployment or DNS changes.
 
-## Next implementation gate — immutable, permission-split baseline RPC
+## Remaining gate — validate and roll out safely
 
-The pure `buildFactoryBaseline` / `applyFactoryBaseline` pair is a **full administrator bootstrap helper**, not a safe employee-facing API. Do not return its full object to a role-limited employee. The server contract must split the baseline into independently readable sections:
+1. Review the two draft migrations together against the production schema; keep them unapplied until the restore pipeline is trustworthy.
+2. Complete the Supabase-managed Auth/schema restore pipeline. The isolated QA project is currently empty and is not a valid target for applying these feature migrations directly.
+3. Restore a production backup into QA using the corrected managed-schema-aware procedure, then apply the two migrations to that restored QA copy only.
+4. Test owner publication, inventory-only read/write, accounting-only read/write, reports-only denial, hidden-section preservation, tombstones, version conflicts, repeated sync, and two independent devices.
+5. Verify ledger balance and stock by item/variant after create, edit, delete, retry, offline/reconnect, and role-limited operations.
+6. Only after all QA checks pass, separately approve production migrations. Keep backup activation and deployment approvals separate.
 
-- **Inventory section:** absolute stock manifest (`baseline.stock`) plus opening movement history. Reading requires `inventory` read access. Applying the absolute manifest replaces quantities; opening movement rows are imported as history only and must never be replayed as quantity deltas.
-- **Accounting section:** account definitions, partner identities, and opening ledger lines. Reading requires the finance/accounting permission selected by the actual permission model (currently `settings` is the only verified permission key for manual journal access). Do not infer finance access from inventory access. Opening ledger must remain balanced.
-- **Publication:** one immutable version-1 row per factory owner, inserted once by the owner/admin only. The RPC must require expected version 0, reject any existing baseline, validate all item/account/partner references against already-synced master records, reject source-scoped effects that have not been backfilled, and validate the opening journal debit/credit equality. No update or delete RPC is provided.
-- **Read:** one RPC returns only the requested authorized section and its section fingerprint/version. A caller with both permissions may make two calls; neither section may contain the other section's data. Do not use the combined `applyFactoryBaseline` helper on employee data.
-- **Integrity:** the existing FNV fingerprint is a deterministic corruption check only. Authorization, immutable publication, and database-side structural/reference validation are the security boundary. Never treat the fingerprint as authentication.
-- **Rollout order:** sync master products/partners first; owner publishes baseline once; authorized clients download and apply their section idempotently; only then enable post-baseline `source_effects` reads/writes. A failed or partial section apply must leave the local state unchanged and must not advance its section cursor.
-- **Concurrency:** baseline publication and each source effect use optimistic versions. A version conflict is retained as a conflict for reconciliation; never silently overwrite local work or retry with a newer expected version.
-
-### Current implementation status
-
-This RPC contract is specified here but **not implemented or applied**. The current PR migration only drafts source-effect RPCs; it does not create the immutable baseline store or publish/read RPCs. The current full baseline helper is not wired into `loadFromTablesMerge` or `uploadToTables`. The source-effect write RPC intentionally remains full-effect-only until server-side section merging exists. Keep PR #15 draft and do not deploy/apply its migration until these gaps and the role-separated tests are closed.
+The combined `applyFactoryBaseline` helper remains an administrator-only utility. Employee clients use only the section-specific apply helpers. The FNV fingerprint is a deterministic corruption check, not an authentication mechanism; authorization and database-side validation are the security boundary.
