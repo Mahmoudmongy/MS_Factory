@@ -18,7 +18,7 @@ concurrency:
 
 jobs:
   deploy:
-    if: inputs.deploy_confirmed == true
+    if: inputs.deploy_confirmed == true && github.ref == 'refs/heads/main' && vars.CLOUDFLARE_RELEASE_APPROVED == 'true'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
