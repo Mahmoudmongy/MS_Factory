@@ -114,7 +114,7 @@ ok('stock baseline resolves canonical identity on a device with a different loca
 ok('new inventory items receive a stable cloud identity at creation',/cloudId:String\(itemId\)/.test(app));
 ok('product uploads and ledger effects use canonical cloud identities',cloud.includes('pr.cloudId = String(pr.id)')&&cloud.includes('externalId: String(item.cloudId || id)'));
 const partnerMergeStart=cloud.indexOf('function mergeCloudPartners(existing, incoming)');
-const partnerMergeEnd=cloud.indexOf('function mergeCloudProducts(existing, incoming)',partnerMergeStart);
+const partnerMergeEnd=cloud.indexOf('function mergeCloudInvoices(existing, incoming)',partnerMergeStart);
 const partnerMergeContext=vm.createContext({});
 let mergeCloudPartners=null;
 try {
