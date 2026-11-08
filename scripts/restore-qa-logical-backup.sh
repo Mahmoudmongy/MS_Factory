@@ -241,14 +241,6 @@ if not expected_trigger_names or not expected_trigger_names.issubset(actual_trig
 
 print(f"QA restore verified: {public_total} public tables, {actual_auth} Auth users, {actual_migrations} migrations, RLS enabled on all public tables, and {len(expected_trigger_names)} custom Auth triggers.")
 PY
-,
-        '', text
-    )
-    text, n3 = re.subn(
-        r'(?im)^\s*(?:CREATE|ALTER)\s+ROLE\s+"?cli_login_postgres"?[^;]*;\s*
-    path.write_text(text)
-print(f"Removed {removed} source-project-only Supabase role ownership/grant statements.")
-PY
 
 # Prepare an idempotent form of the exported custom Auth trigger before touching QA.
 python3 - <<'PY'
