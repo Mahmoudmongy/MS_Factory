@@ -63,5 +63,6 @@ Coverage includes:
 Two defects were found by running the complete suite and corrected in follow-up migrations applied to QA only:
 1. The versioned delete RPC referenced `updated_by` on returns, vouchers and production orders although those columns were missing. Migration `20261108280000_add_detail_sync_audit_columns.sql` adds the columns and audit triggers.
 2. Updating an existing invoice used an ambiguous unqualified `invoice_id` reference because it collided with the RPC output variable. Migration `20261108290000_fix_invoice_item_delete_ambiguity.sql` qualifies the invoice_items table alias.
+3. The QA performance advisor found seven unindexed `updated_by` foreign keys. Migration `20261108300000_index_updated_by_foreign_keys.sql` adds covering indexes; a follow-up advisor run reports no remaining unindexed foreign keys. The remaining unused-index notices are informational on a small QA dataset and were not removed without real workload evidence.
 
 Production has not received these migrations. They must be included in the final migration sequence and reviewed before production rollout.
