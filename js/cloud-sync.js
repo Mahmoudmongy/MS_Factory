@@ -161,6 +161,66 @@ function mergeCloudProducts(existing, incoming) {
   return { arr: rows, added, linked, conflicts };
 }
 
+function mergeCloudPartners(existing, incoming) {
+  const rows = Array.isArray(existing) ? existing : [];
+  const byIdentity = new Map();
+  rows.forEach(local => {
+    if (!local || typeof local !== "object") return;
+    const identity = local.cloudId || local.id;
+    if (identity != null) byIdentity.set(String(identity), local);
+  });
+  let added = 0, linked = 0, conflicts = 0;
+  (Array.isArray(incoming) ? incoming : []).forEach(remote => {
+    if (!remote || typeof remote !== "object") return;
+    const identity = remote.cloudId || remote.id;
+    if (identity == null) return;
+    const key = String(identity);
+    const remoteIsCustomer = remote.kind === "customer" || remote.c === 1;
+    const remoteIsSupplier = remote.kind === "supplier" || remote.s === 1;
+    const local = byIdentity.get(key);
+    if (local) {
+      if (remoteIsCustomer) local.c = 1;
+      if (remoteIsSupplier) local.s = 1;
+      return;
+    }
+    const name = String(remote.name || "").trim().toLocaleLowerCase();
+    const phone = String(remote.phone || "").trim();
+    const matches = rows.filter(item => {
+      const sameName = name && String(item.name || "").trim().toLocaleLowerCase() === name;
+      const samePhone = phone && String(item.phone || "").trim() === phone;
+      return sameName || samePhone;
+    });
+    if (matches.length === 1) {
+      const candidate = matches[0];
+      const sameName = String(candidate.name || "").trim().toLocaleLowerCase() === name;
+      const samePhone = !phone || !candidate.phone || String(candidate.phone).trim() === phone;
+      if (sameName && samePhone && (!candidate.cloudId || String(candidate.cloudId) === key)) {
+        candidate.cloudId = key;
+        if (remoteIsCustomer) candidate.c = 1;
+        if (remoteIsSupplier) candidate.s = 1;
+        byIdentity.set(key, candidate);
+        linked++;
+      } else {
+        candidate._cloudConflict = { reason: "partner_identity_mismatch", serverCopy: remote };
+        conflicts++;
+      }
+      return;
+    }
+    if (matches.length > 1) {
+      matches.forEach(candidate => { candidate._cloudConflict = { reason: "ambiguous_partner_identity", serverCopy: remote }; });
+      conflicts++;
+      return;
+    }
+    const normalized = { ...remote, id: remote.id ?? key, cloudId: key,
+      c: remoteIsCustomer ? 1 : Number(remote.c || 0),
+      s: remoteIsSupplier ? 1 : Number(remote.s || 0) };
+    rows.push(normalized);
+    byIdentity.set(key, normalized);
+    added++;
+  });
+  return { arr: rows, added, linked, conflicts };
+}
+
 function mergeCloudInvoices(existing, incoming) {
   const map = new Map();
   (existing || []).forEach(it => { const k = it && (it.id || it.no); if (k) map.set(String(k), it); });
@@ -296,9 +356,11 @@ function normalizeSourceEffects(state) {
   }
   const partnerById = new Map();
   for (const partner of Array.isArray(state?.partners) ? state.partners : []) {
-    if (partner?.id != null) partnerById.set(String(partner.id), {
-      externalId: String(partner.id), name: String(partner.name || "")
-    });
+    if (partner?.id != null) {
+      const info = { externalId: String(partner.cloudId || partner.id), name: String(partner.name || "") };
+      partnerById.set(String(partner.id), info);
+      partnerById.set(info.externalId, info);
+    }
   }
   const effects = collected.effects.map(effect => {
     const ledger = effect.ledger.map(row => {
@@ -536,7 +598,11 @@ function applyCanonicalSourceEffect(state, effect) {
     if (item?.id != null) itemsByExternalId.set(String(item.id), item);
     if (item?.cloudId != null) itemsByExternalId.set(String(item.cloudId), item);
   }
-  const partnersByExternalId = new Map(state.partners.filter(x => x?.id != null).map(x => [String(x.id), x]));
+  const partnersByExternalId = new Map();
+  for (const partner of state.partners) {
+    if (partner?.id != null) partnersByExternalId.set(String(partner.id), partner);
+    if (partner?.cloudId != null) partnersByExternalId.set(String(partner.cloudId), partner);
+  }
   const accountPlans = new Map();
   const ledgerRows = [];
   const movementRows = [];
@@ -798,7 +864,8 @@ async function uploadToTables(showAlert = false) {
         const table = isSup ? "suppliers" : "customers";
         const row = {
           user_id: owner,
-          external_id: String(getField(p, ["id", "no", "code"]) || name),
+          ...(p.id != null && !p.cloudId ? { cloudId: String(p.id) } : {}),
+          external_id: String(p.cloudId || getField(p, ["id", "no", "code"]) || name),
           name,
           phone: String(getField(p, ["phone", "tel", "mobile", "ph"]) || "") || null,
           email: String(getField(p, ["email", "mail"]) || "") || null,
@@ -1109,12 +1176,12 @@ async function loadFromTablesMerge(isAuto = false) {
     if (!S || typeof S !== "object" || Array.isArray(S)) return "bad local";
     let totalAdded = 0;
     const cloudPartners = [
-      ...(custs || []).map(c => ({ id: c.external_id, name: c.name, phone: c.phone, email: c.email, addr: c.address, type: "customer" })),
-      ...(supps || []).map(s => ({ id: s.external_id, name: s.name, phone: s.phone, email: s.email, addr: s.address, type: "supplier" })),
+      ...(custs || []).map(c => ({ id: c.external_id, cloudId: c.external_id, name: c.name, phone: c.phone, email: c.email, addr: c.address, kind: "customer" })),
+      ...(supps || []).map(s => ({ id: s.external_id, cloudId: s.external_id, name: s.name, phone: s.phone, email: s.email, addr: s.address, kind: "supplier" })),
     ];
     if (cloudPartners.length) {
-      const m = mergeByKey(S.partners || [], cloudPartners, x => x.id || x.name);
-      S.partners = m.arr; totalAdded += m.added;
+      const m = mergeCloudPartners(S.partners || [], cloudPartners);
+      S.partners = m.arr; totalAdded += m.added; recordConflicts += m.conflicts;
     }
     let recordConflicts = 0;
     if (invs?.length) {
