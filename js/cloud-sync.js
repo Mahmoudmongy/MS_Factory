@@ -110,6 +110,57 @@ function mergeByKey(existing, incoming, keyFn) {
   (incoming || []).forEach(it => { try { const k = keyFn(it); if (k && !map.has(String(k))) { map.set(String(k), it); added++; } } catch(e){} });
   return { arr: [...map.values()], added };
 }
+function groupProductionCatalogRows(rows) {
+  const grouped = new Map();
+  for (const p of (rows || [])) {
+    const key = String(p.external_id || p.sku || p.name);
+    let item = grouped.get(key);
+    if (!item) {
+      item = {
+        id: p.external_id || p.id, name: p.name, sku: p.sku || p.external_id || "",
+        model: p.model || "", unit: p.unit || "قطعة", wh: Number(p.warehouse) || p.warehouse || null,
+        buy: Number(p.buy_price || 0) || 0, retail: 0, wholesale: 0,
+        img: p.image_url || "", st: {}, val: 0
+      };
+      grouped.set(key, item);
+    }
+    const variant = String(p.variant || "-");
+    const quantity = Number(p.quantity || 0) || 0;
+    item.st[variant] = quantity;
+    item.val += quantity * item.buy;
+  }
+  return Array.from(grouped.values());
+}
+function mergeProductionCatalog(existing, incoming, refreshExisting = false) {
+  const map = new Map();
+  (existing || []).forEach(item => {
+    const key = item && (item.id || item.sku || item.name);
+    if (key !== undefined && key !== null && key !== "") map.set(String(key), item);
+  });
+  let added = 0, refreshed = 0;
+  (incoming || []).forEach(remote => {
+    const key = remote && (remote.id || remote.sku || remote.name);
+    if (key === undefined || key === null || key === "") return;
+    const local = map.get(String(key));
+    if (!local) {
+      map.set(String(key), remote);
+      added++;
+      return;
+    }
+    if (!refreshExisting) return;
+    local.name = remote.name;
+    local.sku = remote.sku;
+    local.model = remote.model;
+    local.unit = remote.unit;
+    local.wh = remote.wh;
+    local.buy = remote.buy;
+    local.img = remote.img;
+    local.st = { ...(remote.st || {}) };
+    local.val = Number(remote.val || 0) || 0;
+    refreshed++;
+  });
+  return { arr: [...map.values()], added, refreshed };
+}
 function mergeCloudInvoices(existing, incoming) {
   const map = new Map();
   (existing || []).forEach(it => { const k = it && (it.id || it.no); if (k) map.set(String(k), it); });
@@ -310,6 +361,7 @@ async function uploadToTables(showAlert = false) {
     if (!profile) throw new Error("تعذر تحديد صلاحيات الحساب");
     const admin = profile.is_admin === true;
     const canWrite = key => admin || profile.permissions?.[key] === true;
+    const canRead = key => admin || profile.permissions?.[key] === true || profile.permissions?.reports === true;
     if (!admin && !["customers", "suppliers", "invoices", "inventory", "production", "settings"].some(canWrite)) {
       syncState = "idle"; drawAll();
       const msg = T("حسابك للعرض فقط أو لا توجد صلاحية مزامنة متاحة.", "This account is read-only or has no supported sync permission.");
@@ -600,6 +652,19 @@ async function uploadToTables(showAlert = false) {
       }
     }
 
+    if (!admin && canRead("production") && !canWrite("inventory") && !snapshotConflict && !accountingConflict && errors.length === 0) {
+      const { data: catalogRows, error: catalogError } = await supabase.from("production_catalog")
+        .select("user_id,external_id,name,sku,model,unit,warehouse,image_url,buy_price,variant,quantity")
+        .eq("user_id", owner);
+      if (catalogError) errors.push("production catalog refresh: " + catalogError.message);
+      else {
+        const refreshed = mergeProductionCatalog(S.items || [], groupProductionCatalogRows(catalogRows || []), true);
+        S.items = refreshed.arr;
+        Object.getPrototypeOf(localStorage).setItem.call(localStorage, "mgr6", JSON.stringify(S));
+        if (typeof window.applyFactoryCloudState === "function") window.applyFactoryCloudState(S);
+      }
+    }
+
     if (errors.length) {
       syncState = (localStorage.getItem("mgr6-cloud-snapshot-conflict") || hasAccountingConflicts()) ? "conflict" : "idle"; drawAll();
       const msg = (snapshotError
@@ -808,25 +873,7 @@ async function loadFromTablesMerge(isAuto = false) {
     if (prods?.length) {
       let cloudProducts;
       if (!inventoryRead) {
-        const grouped = new Map();
-        for (const p of prods) {
-          const key = String(p.external_id || p.sku || p.name);
-          let item = grouped.get(key);
-          if (!item) {
-            item = {
-              id: p.external_id || p.id, name: p.name, sku: p.sku || p.external_id || "",
-              model: p.model || "", unit: p.unit || "قطعة", wh: Number(p.warehouse) || p.warehouse || null,
-              buy: Number(p.buy_price || 0) || 0, retail: 0, wholesale: 0,
-              img: p.image_url || "", st: {}, val: 0
-            };
-            grouped.set(key, item);
-          }
-          const variant = String(p.variant || "-");
-          const quantity = Number(p.quantity || 0) || 0;
-          item.st[variant] = quantity;
-          item.val += quantity * item.buy;
-        }
-        cloudProducts = Array.from(grouped.values());
+        cloudProducts = groupProductionCatalogRows(prods);
       } else {
         cloudProducts = prods.map(p => {
           if (p.raw && typeof p.raw === "object" && !Array.isArray(p.raw)) {
@@ -846,8 +893,13 @@ async function loadFromTablesMerge(isAuto = false) {
         });
       }
       if (!Array.isArray(S.items)) S.items = [];
-      const m = mergeByKey(S.items, cloudProducts, x => x.id || x.sku || x.name);
-      S.items = m.arr; totalAdded += m.added;
+      if (!inventoryRead && canRead("production")) {
+        const m = mergeProductionCatalog(S.items, cloudProducts, !localStorage.getItem(PENDING_SYNC_KEY));
+        S.items = m.arr; totalAdded += m.added;
+      } else {
+        const m = mergeByKey(S.items, cloudProducts, x => x.id || x.sku || x.name);
+        S.items = m.arr; totalAdded += m.added;
+      }
     }
     let accountingChanged = false;
     for (const remote of (accountingStates || [])) {
@@ -910,9 +962,10 @@ async function loadFromTablesMerge(isAuto = false) {
         recordConflicts++;
       }
     }
-    if (accountingChanged) recalcAccountingInventory(S);
+    if (accountingChanged && admin) recalcAccountingInventory(S);
 
     Object.getPrototypeOf(localStorage).setItem.call(localStorage, "mgr6", JSON.stringify(S));
+    if (typeof window.applyFactoryCloudState === "function") window.applyFactoryCloudState(S);
     if (restoredSnapshot && isAuto) setTimeout(() => location.reload(), 500);
     if (recordConflicts) {
       return T("تم تحميل " + totalAdded + " سجل جديد. يوجد " + recordConflicts + " سجل بتعارض إصدار؛ احتفظنا بالنسختين ولم نستبدل بياناتك المحلية.", "Loaded " + totalAdded + " new records. " + recordConflicts + " cloud record conflict(s) were preserved without overwriting local data.");
