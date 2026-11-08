@@ -1289,9 +1289,33 @@ window.resolveCloudMasterConflict = async function(table, externalId, choice) {
   }
   if (choice === "cloud") {
     const stableId = local.id ?? String(externalId);
-    Object.assign(local, conflict.serverCopy, { id: stableId });
-    local[versionKey] = Number(conflict.serverVersion);
-    if (conflict.serverUpdatedAt) local[versionKey.replace("Version","UpdatedAt")] = conflict.serverUpdatedAt;
+    if (table === "customers") {
+      const keepSupplier = Number(local.s) === 1 || local.s === true;
+      const supplierVersion = local._cloudSuppliersVersion;
+      const supplierUpdatedAt = local._cloudSuppliersUpdatedAt;
+      Object.assign(local, conflict.serverCopy, { id: stableId, c: 1, s: keepSupplier ? 1 : 0 });
+      local._cloudCustomersVersion = Number(conflict.serverVersion);
+      if (conflict.serverUpdatedAt) local._cloudCustomersUpdatedAt = conflict.serverUpdatedAt;
+      if (keepSupplier) {
+        local._cloudSuppliersVersion = supplierVersion;
+        local._cloudSuppliersUpdatedAt = supplierUpdatedAt;
+      }
+    } else if (table === "suppliers") {
+      const keepCustomer = Number(local.c) === 1 || local.c === true;
+      const customerVersion = local._cloudCustomersVersion;
+      const customerUpdatedAt = local._cloudCustomersUpdatedAt;
+      Object.assign(local, conflict.serverCopy, { id: stableId, c: keepCustomer ? 1 : 0, s: 1 });
+      local._cloudSuppliersVersion = Number(conflict.serverVersion);
+      if (conflict.serverUpdatedAt) local._cloudSuppliersUpdatedAt = conflict.serverUpdatedAt;
+      if (keepCustomer) {
+        local._cloudCustomersVersion = customerVersion;
+        local._cloudCustomersUpdatedAt = customerUpdatedAt;
+      }
+    } else {
+      Object.assign(local, conflict.serverCopy, { id: stableId });
+      local._cloudProductsVersion = Number(conflict.serverVersion);
+      if (conflict.serverUpdatedAt) local._cloudProductsUpdatedAt = conflict.serverUpdatedAt;
+    }
     delete local[conflictKey];
     Object.getPrototypeOf(localStorage).setItem.call(localStorage, "mgr6", JSON.stringify(S));
     if (typeof window.applyFactoryCloudState === "function") window.applyFactoryCloudState(S);
