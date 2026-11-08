@@ -759,6 +759,28 @@ async function loadFromTablesMerge(isAuto = false) {
       S.po = merged.arr; totalAdded += merged.added; recordConflicts += merged.conflicts;
     }
 
+
+    if (prods?.length) {
+      const cloudProducts = prods.map(p => {
+        if (p.raw && typeof p.raw === "object" && !Array.isArray(p.raw)) {
+          const raw = { ...p.raw };
+          if (!raw.st || typeof raw.st !== "object" || Array.isArray(raw.st)) raw.st = {};
+          return raw;
+        }
+        const qty = Number(p.qty || 0) || 0;
+        const buy = Number(p.buy_price ?? p.price ?? 0) || 0;
+        return {
+          id: p.external_id || p.id, name: p.name, sku: p.sku || p.external_id || "",
+          unit: p.unit || "قطعة", wh: p.warehouse || null,
+          buy, retail: Number(p.retail_price || 0) || 0,
+          wholesale: Number(p.wholesale_price || 0) || 0,
+          img: p.image_url || "", st: qty ? { "-": qty } : {}, val: qty * buy
+        };
+      });
+      if (!Array.isArray(S.items)) S.items = [];
+      const m = mergeByKey(S.items, cloudProducts, x => x.id || x.sku || x.name);
+      S.items = m.arr; totalAdded += m.added;
+    }
     let accountingChanged = false;
     for (const remote of (accountingStates || [])) {
       const source = remote?.source;
@@ -819,27 +841,6 @@ async function loadFromTablesMerge(isAuto = false) {
     }
     if (accountingChanged) recalcAccountingInventory(S);
 
-    if (prods?.length) {
-      const cloudProducts = prods.map(p => {
-        if (p.raw && typeof p.raw === "object" && !Array.isArray(p.raw)) {
-          const raw = { ...p.raw };
-          if (!raw.st || typeof raw.st !== "object" || Array.isArray(raw.st)) raw.st = {};
-          return raw;
-        }
-        const qty = Number(p.qty || 0) || 0;
-        const buy = Number(p.buy_price ?? p.price ?? 0) || 0;
-        return {
-          id: p.external_id || p.id, name: p.name, sku: p.sku || p.external_id || "",
-          unit: p.unit || "قطعة", wh: p.warehouse || null,
-          buy, retail: Number(p.retail_price || 0) || 0,
-          wholesale: Number(p.wholesale_price || 0) || 0,
-          img: p.image_url || "", st: qty ? { "-": qty } : {}, val: qty * buy
-        };
-      });
-      if (!Array.isArray(S.items)) S.items = [];
-      const m = mergeByKey(S.items, cloudProducts, x => x.id || x.sku || x.name);
-      S.items = m.arr; totalAdded += m.added;
-    }
     Object.getPrototypeOf(localStorage).setItem.call(localStorage, "mgr6", JSON.stringify(S));
     if (restoredSnapshot && isAuto) setTimeout(() => location.reload(), 500);
     if (recordConflicts) {
