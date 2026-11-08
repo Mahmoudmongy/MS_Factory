@@ -252,12 +252,17 @@ function normalizeSourceEffects(state) {
     const movements = effect.movements.map(row => {
       const item = itemById.get(String(row.iid));
       if (!item) { invalid.push({ sourceType: effect.sourceType, sourceId: effect.sourceId, reason: "unmapped_item", itemId: String(row.iid) }); return null; }
+      let partner = null;
+      if (row.pid != null && Number(row.pid) !== 0) {
+        partner = partnerById.get(String(row.pid));
+        if (!partner) { invalid.push({ sourceType: effect.sourceType, sourceId: effect.sourceId, reason: "unmapped_movement_partner", partnerId: String(row.pid) }); return null; }
+      }
       return {
         date: row.d || null, timestamp: Number(row.ts || 0), itemExternalId: item.externalId,
         itemName: item.name, sku: item.sku, warehouseId: item.warehouseId,
         warehouseName: item.warehouseName, variant: String(row.v || "-"),
         quantity: Number(row.q || 0), value: Number(row.val || 0),
-        reference: String(row.ref || ""), partnerExternalId: row.pid ? String(row.pid) : null
+        reference: String(row.ref || ""), partnerExternalId: partner?.externalId || null
       };
     }).filter(Boolean);
     return { sourceType: effect.sourceType, sourceId: effect.sourceId, ledger, movements };
