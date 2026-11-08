@@ -90,7 +90,7 @@ jobs:
       - name: Validate backup and encryption configuration
         env:
           SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
-          AGE_RECIPIENT: ${{ vars.AGE_RECIPIENT }}
+          AGE_RECIPIENT: age1quewf7qnwl64vw7nplmvp9ckhnv76g738fegc47hh5sm7sgss92sxm8fge
         run: |
           set -euo pipefail
           for name in SUPABASE_DB_URL AGE_RECIPIENT; do
