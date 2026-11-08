@@ -83,8 +83,12 @@ jobs:
               --table=auth.mfa_factors --table=auth.mfa_recovery_code_sets \
               --table=auth.mfa_recovery_codes --table=auth.webauthn_credentials \
               --file=/backup/auth-users.sql
+            pg_dump "$SUPABASE_DB_URL" --data-only --no-owner --no-privileges \
+              --table=supabase_migrations.schema_migrations \
+              --file=/backup/migration-history.sql
             psql "$SUPABASE_DB_URL" -Atqc "select count(*) from storage.buckets" > /backup/storage-bucket-count.txt
             psql "$SUPABASE_DB_URL" -Atqc "select count(*) from auth.users" > /backup/auth-user-count.txt
+            psql "$SUPABASE_DB_URL" -Atqc "select count(*) from supabase_migrations.schema_migrations" > /backup/migration-count.txt
           '
           if [ "$(cat storage-bucket-count.txt)" != "0" ]; then
             echo "::error::Supabase Storage buckets exist; object bytes are not included. Configure and test a separate object backup before enabling database backups."
