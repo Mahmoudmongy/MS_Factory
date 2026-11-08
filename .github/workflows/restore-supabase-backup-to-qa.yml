@@ -71,17 +71,17 @@ jobs:
           FOR EACH ROW EXECUTE FUNCTION auth.handle_updated();
           """
           source, repaired = re.subn(
-              r'(?im)(\\r?\\n[ \\t]*CREATE\\s+TRIGGER\\b)',
+              r'(?im)(\r?\n[ \t]*CREATE\s+TRIGGER\b)',
               lambda match: ";" + match.group(0),
               source
           )
           names = re.findall(
-              r'CREATE\\s+TRIGGER\\s+("(?:[^"]|"")*"|[A-Za-z_][A-Za-z0-9_$]*)\\s+.*?\\s+ON\\s+auth\\.users\\b',
+              r'CREATE\s+TRIGGER\s+("(?:[^"]|"")*"|[A-Za-z_][A-Za-z0-9_$]*)\s+.*?\s+ON\s+auth\.users\b',
               source, flags=re.IGNORECASE | re.DOTALL
           )
           assert repaired == 2, f"Expected 2 trigger boundaries repaired, got {repaired}"
           assert names == ["on_auth_user_created", "on_auth_user_updated"], names
-          assert all(source[:m.start()].rstrip().endswith(";") for m in re.finditer(r'(?im)CREATE\\s+TRIGGER\\b', source))
+          assert all(source[:m.start()].rstrip().endswith(";") for m in re.finditer(r'(?im)CREATE\s+TRIGGER\b', source))
           print("Auth trigger SQL normalization fixture passed (2 functions, 2 triggers).")
           PY
 
