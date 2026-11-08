@@ -188,8 +188,7 @@ begin
     v_owner_id, 1, p_inventory_section, p_accounting_section,
     v_inventory_fp, v_accounting_fp, v_actor_id
   )
-  returning public.factory_sync_baselines.published_at
-    into v_published_at;
+  returning published_at into v_published_at;
 
   baseline_version := 1;
   inventory_fingerprint := v_inventory_fp;
