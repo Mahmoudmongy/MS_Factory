@@ -22,6 +22,9 @@ ok('ledger account and partner labels are escaped before rendering',/escapeHTML\
 ok('persisted logo and uploaded document images pass through the safe image URL filter',/safeImageSrc\(S\.logo\)/.test(app)&&/safeImageSrc\(D\.img\)/.test(app));
 ok('stored logo preview is sanitized and date-filter/journal values are escaped before HTML insertion',app.includes('<img src="${safeImageSrc(S.logo)}" width="80">')&&app.includes('escapeHTML(p.from||"")')&&app.includes('escapeHTML(TL.from||"")')&&app.includes('escapeHTML(pre.date||td())')&&app.includes('escapeHTML(R.from||"")'));
 ok('dynamic account, partner, product, warehouse and document identifiers are escaped in option/data attributes',/value="${escapeHTML\(a\.id\)}"/.test(app)&&/value="${escapeHTML\(p\.id\)}"/.test(app)&&/value="${escapeHTML\(i\.id\)}"/.test(app)&&/value="${escapeHTML\(w\.id\)}"/.test(app)&&/data-d="${escapeHTML\(d\.id\)}"/.test(app));
+ok('formatted dates and transaction counterparties are escaped in HTML text contexts',app.includes('escapeHTML(dfm(p.idate))')&&app.includes('escapeHTML(dfm(d.date))')&&app.includes('escapeHTML(sd(j))')&&app.includes('escapeHTML(x.w||"")'));
+ok('custom currency labels are escaped in account and balance views',app.includes('<td>${escapeHTML(cur_(a))}</td>')&&app.includes('${escapeHTML(cur_(a))})</th>')&&app.includes('${escapeHTML(c)}'));
+
 
 ok('report tables escape untrusted cells and only render explicitly marked internal links',app.includes('const cell=c=>c&&typeof c==="object"&&c.__msSafeHtml===true?c.html:escapeHTML(c??"")')&&app.includes('__msSafeHtml:true'));
 ok('print views sanitize the company logo, document image, invoice number and voucher account labels',/safeImageSrc\(S\.logo\)/.test(app)&&/safeImageSrc\(d\.img\)/.test(app)&&/escapeHTML\(no\|\|""\)/.test(app)&&/escapeHTML\(an\(x\.a\)\)/.test(app));
