@@ -1,6 +1,8 @@
 name: Encrypted Supabase backup to Backblaze B2
 
 on:
+  pull_request:
+    branches: [main]
   schedule:
     - cron: "35 1 * * *"
   workflow_dispatch:
@@ -20,7 +22,7 @@ concurrency:
 
 jobs:
   b2-preflight:
-    if: github.event_name == 'workflow_dispatch' || github.event_name == 'schedule'
+    if: github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch' || github.event_name == 'schedule'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
