@@ -133,6 +133,24 @@ function mergeByKey(existing, incoming, keyFn) {
   (incoming || []).forEach(it => { try { const k = keyFn(it); if (k && !map.has(String(k))) { map.set(String(k), it); added++; } } catch(e){} });
   return { arr: [...map.values()], added };
 }
+function mergeCloudProducts(existing, incoming, refreshExisting = false) {
+  const map = new Map();
+  (Array.isArray(existing) ? existing : []).forEach(item => {
+    const key = item && (item.id || item.sku || item.name);
+    if (key !== undefined && key !== null && key !== "") map.set(String(key), item);
+  });
+  let added = 0, refreshed = 0;
+  (Array.isArray(incoming) ? incoming : []).forEach(remote => {
+    const key = remote && (remote.id || remote.sku || remote.name);
+    if (key === undefined || key === null || key === "") return;
+    const local = map.get(String(key));
+    if (!local) { map.set(String(key), remote); added++; return; }
+    if (!refreshExisting) return;
+    Object.assign(local, remote, { id: local.id ?? remote.id });
+    refreshed++;
+  });
+  return { arr: [...map.values()], added, refreshed };
+}
 function groupProductionCatalogRows(rows) {
   const grouped = new Map();
   for (const p of (rows || [])) {
@@ -985,7 +1003,7 @@ async function loadFromTablesMerge(isAuto = false) {
         const m = mergeProductionCatalog(S.items, cloudProducts, !localStorage.getItem(PENDING_SYNC_KEY));
         S.items = m.arr; totalAdded += m.added;
       } else {
-        const m = mergeByKey(S.items, cloudProducts, x => x.id || x.sku || x.name);
+        const m = mergeCloudProducts(S.items, cloudProducts, !localStorage.getItem(PENDING_SYNC_KEY));
         S.items = m.arr; totalAdded += m.added;
       }
     }
