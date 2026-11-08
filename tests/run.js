@@ -83,7 +83,7 @@ ok('returns are not misclassified as sale/purchase invoices',/\["sale", "pur"\]\
 ok('cloud invoice merge preserves newer remote copies as explicit conflicts',/mergeCloudInvoices/.test(cloud)&&/serverCopy: remote/.test(cloud));
 ok('online reconnect pulls remote changes before uploading local cache',/const pulled = await loadFromTablesMerge\(true\)/.test(cloud)&&cloud.indexOf('const pulled = await loadFromTablesMerge(true)')<cloud.indexOf('const pushed = await uploadToTables(false)'));
 ok('online startup sync runs even when local cache already has data',/if \(navigator\.onLine\) \{\s*\/\/ Always refresh remote data on launch/.test(cloud)&&/scheduleAutoSync\(1200\)/.test(cloud));
-ok('offline boot permits only a previously verified cached profile for the same user',idx.includes('factory-profile:'+ 'userId')&&idx.includes('cached.id===userId')&&idx.includes('if(!navigator.onLine)'));
+ok('offline boot permits only a previously verified cached profile for the same user',idx.includes('factory-profile:')&&idx.includes('cached.id===userId')&&idx.includes('if(!navigator.onLine)'));
 ok('reconnect refreshes the profile before using permissions for cloud sync',/myProfile = null; ownerIdCache = null; window\.__factoryAuthProfile = null;/.test(cloud)&&/const freshProfile = await getMyProfile\(\)/.test(cloud));
 
 ok('offline shell precaches the stable production app and first-login password page',/auth\.html/.test(sw)&&/change-password\.html/.test(sw)&&/js\/change-password\.js/.test(sw)&&/js\/app\.js/.test(sw)&&/factory-v12/.test(sw));
