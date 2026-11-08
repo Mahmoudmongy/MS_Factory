@@ -193,7 +193,7 @@ jobs:
           fi
           aws s3 cp ms-factory-db-backup.tar.gz.age "s3://$B2_BUCKET/$key" --endpoint-url "$B2_ENDPOINT" --only-show-errors --no-progress
           aws s3api get-object-retention --bucket "$B2_BUCKET" --key "$key" --endpoint-url "$B2_ENDPOINT" > uploaded-retention.json
-          jq -e '.Retention.Mode == "COMPLIANCE" and (.Retention.RetainUntilDate | fromdateiso8601) >= (now + 89*86400)' uploaded-retention.json >/dev/null
+          python3 -c 'import datetime,json; r=json.load(open("uploaded-retention.json")); until=datetime.datetime.fromisoformat(r["Retention"]["RetainUntilDate"].replace("Z","+00:00")); assert r["Retention"]["Mode"] == "COMPLIANCE" and until >= datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(days=89), "Object Lock retention is not COMPLIANCE for at least 89 days"'
           aws s3api head-object --bucket "$B2_BUCKET" --key "$key" --endpoint-url "$B2_ENDPOINT" > uploaded-object.json
           aws s3 cp "s3://$B2_BUCKET/$key" "$RUNNER_TEMP/ms-factory-backup-readback.age" --endpoint-url "$B2_ENDPOINT" --only-show-errors --no-progress
           cmp --silent ms-factory-db-backup.tar.gz.age "$RUNNER_TEMP/ms-factory-backup-readback.age"
