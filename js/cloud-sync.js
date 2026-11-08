@@ -1379,6 +1379,35 @@ async function uploadToTables(showAlert = false) {
       }
     }
 
+
+    // Publish the immutable opening baseline only after master records were synced.
+    // Missing RPC means the draft migration has not been applied yet; keep legacy sync operational.
+    if (admin) {
+      const existingBaseline = await supabase.rpc("get_factory_baseline", { p_section: "inventory" });
+      const baselineRpcMissing = existingBaseline.error &&
+        ["PGRST202", "42883"].includes(String(existingBaseline.error.code || ""));
+      if (existingBaseline.error && !baselineRpcMissing) {
+        errors.push("factory baseline read: " + existingBaseline.error.message);
+      } else if (!baselineRpcMissing && !(Array.isArray(existingBaseline.data) && existingBaseline.data.length)) {
+        const baseline = buildFactoryBaseline(S);
+        if (baseline.invalid.length) {
+          errors.push("factory baseline not publishable: " + baseline.invalid.map(x => x.reason).join(", "));
+        } else {
+          const inventorySection = { baselineVersion: 1, stock: baseline.stock,
+            openingMovements: baseline.openingMovements };
+          const accountingSection = { baselineVersion: 1, accounts: baseline.accounts,
+            partners: baseline.partners, openingLedger: baseline.openingLedger };
+          const published = await supabase.rpc("publish_factory_baseline", {
+            p_expected_version: 0, p_inventory_section: inventorySection,
+            p_accounting_section: accountingSection
+          });
+          if (published.error && published.error.code !== "23505") {
+            errors.push("factory baseline publish: " + published.error.message);
+          }
+        }
+      }
+    }
+
     if (errors.length) {
       syncState = localStorage.getItem("mgr6-cloud-snapshot-conflict") ? "conflict" : "idle"; drawAll();
       const msg = (snapshotError
@@ -1491,8 +1520,20 @@ async function loadFromTablesMerge(isAuto = false) {
     ]);
     const failed = results.find(r => r.error);
     if (failed) return isAuto ? "cloud read failed" : T("تعذر قراءة البيانات من السحابة: " + failed.error.message, "Cloud read failed: " + failed.error.message);
+
+    const baselineMissing = error => error && ["PGRST202", "42883"].includes(String(error.code || ""));
+    const [inventoryBaselineResult, accountingBaselineResult] = await Promise.all([
+      canRead("inventory") ? supabase.rpc("get_factory_baseline", { p_section: "inventory" }) : Promise.resolve(emptyResult),
+      canRead("settings") ? supabase.rpc("get_factory_baseline", { p_section: "accounting" }) : Promise.resolve(emptyResult)
+    ]);
+    if (inventoryBaselineResult.error && !baselineMissing(inventoryBaselineResult.error))
+      return isAuto ? "cloud baseline read failed" : T("تعذر قراءة أساس المخزون: " + inventoryBaselineResult.error.message, "Inventory baseline read failed: " + inventoryBaselineResult.error.message);
+    if (accountingBaselineResult.error && !baselineMissing(accountingBaselineResult.error))
+      return isAuto ? "cloud baseline read failed" : T("تعذر قراءة الأساس المحاسبي: " + accountingBaselineResult.error.message, "Accounting baseline read failed: " + accountingBaselineResult.error.message);
+    const inventoryBaselineRow = !inventoryBaselineResult.error && Array.isArray(inventoryBaselineResult.data) ? inventoryBaselineResult.data[0] : null;
+    const accountingBaselineRow = !accountingBaselineResult.error && Array.isArray(accountingBaselineResult.data) ? accountingBaselineResult.data[0] : null;
     const [{ data: custs }, { data: supps }, { data: invs }, { data: prods }, { data: returns }, { data: vouchers }, { data: productionOrders }] = results;
-    if (!custs?.length && !supps?.length && !invs?.length && !prods?.length && !returns?.length && !vouchers?.length && !productionOrders?.length) {
+    if (!custs?.length && !supps?.length && !invs?.length && !prods?.length && !returns?.length && !vouchers?.length && !productionOrders?.length && !inventoryBaselineRow && !accountingBaselineRow) {
       if (restoredSnapshot && isAuto) setTimeout(() => location.reload(), 500);
       return restoredSnapshot
         ? T("تمت استعادة نسخة المصنع الكاملة من السحابة", "Full factory backup restored from cloud")
@@ -1502,6 +1543,7 @@ async function loadFromTablesMerge(isAuto = false) {
     const S = getCachedState();
     if (!S || typeof S !== "object" || Array.isArray(S)) return "bad local";
     let totalAdded = 0;
+    let recordConflicts = 0;
     const cloudPartners = [
       ...(custs || []).map(c => ({ id: c.external_id, cloudId: c.external_id, name: c.name, phone: c.phone, email: c.email, addr: c.address, kind: "customer" })),
       ...(supps || []).map(s => ({ id: s.external_id, cloudId: s.external_id, name: s.name, phone: s.phone, email: s.email, addr: s.address, kind: "supplier" })),
@@ -1510,7 +1552,6 @@ async function loadFromTablesMerge(isAuto = false) {
       const m = mergeCloudPartners(S.partners || [], cloudPartners);
       S.partners = m.arr; totalAdded += m.added; recordConflicts += m.conflicts;
     }
-    let recordConflicts = 0;
     if (invs?.length) {
       const cloudDocs = invs
         .filter(inv => inv.raw && ["sale", "pur"].includes(inv.raw.t))
@@ -1573,6 +1614,35 @@ async function loadFromTablesMerge(isAuto = false) {
       if (!Array.isArray(S.items)) S.items = [];
       const m = mergeCloudProducts(S.items, cloudProducts);
       S.items = m.arr; totalAdded += m.added; recordConflicts += m.conflicts;
+    }
+
+    // Apply each authorized baseline section independently. A failed section does not advance its cursor.
+    for (const [sectionName, row, applySection] of [
+      ["inventory", inventoryBaselineRow, applyInventoryBaselineSection],
+      ["accounting", accountingBaselineRow, applyAccountingBaselineSection]
+    ]) {
+      if (!row) continue;
+      const cursorKey = "mgr6-cloud-baseline-" + sectionName + "-version";
+      const localVersion = Number(localStorage.getItem(cursorKey) || 0);
+      const remoteVersion = Number(row.baseline_version || 0);
+      if (remoteVersion < localVersion) {
+        recordConflicts++;
+        continue;
+      }
+      if (remoteVersion === localVersion) continue;
+      if (remoteVersion !== 1 || !row.section_payload || !applySection) {
+        recordConflicts++;
+        continue;
+      }
+      const applied = applySection(S, { ...row.section_payload, baselineVersion: remoteVersion,
+        fingerprint: row.fingerprint });
+      if (!applied.applied) {
+        recordConflicts++;
+        console.warn("Factory baseline section was not applied:", sectionName, applied.reason);
+        continue;
+      }
+      localStorage.setItem(cursorKey, String(remoteVersion));
+      totalAdded += Number(applied.movementsAdded || applied.accountsAdded || 0);
     }
     Object.getPrototypeOf(localStorage).setItem.call(localStorage, "mgr6", JSON.stringify(S));
     if (restoredSnapshot && isAuto) setTimeout(() => location.reload(), 500);
