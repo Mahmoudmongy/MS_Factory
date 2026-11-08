@@ -62,7 +62,6 @@ begin
      or pg_catalog.jsonb_typeof(p_inventory_section -> 'stock') <> 'object'
      or pg_catalog.jsonb_typeof(p_inventory_section #> '{stock,items}') <> 'array'
      or nullif(p_inventory_section #>> '{stock,fingerprint}', '') is null
-     or (p_inventory_section #> '{stock,invalid}' is not null and pg_catalog.jsonb_array_length(p_inventory_section #> '{stock,invalid}') > 0)
      or pg_catalog.jsonb_typeof(p_inventory_section -> 'openingMovements') <> 'array'
      or pg_catalog.jsonb_typeof(p_accounting_section -> 'accounts') <> 'array'
      or pg_catalog.jsonb_typeof(p_accounting_section -> 'partners') <> 'array'
