@@ -128,20 +128,33 @@ BEGIN
 END $$;
 SELECT * FROM public.sync_factory_detail('vouchers','qa-voucher-cas',0,
  '{"voucher_no":"QA-VCH","direction":"in","account":"qa-cash","amount":20,"raw":{"qa":true}}'::jsonb);
+SELECT * FROM public.sync_factory_detail('vouchers','qa-payment-cas',0,
+ '{"voucher_no":"QA-PAY","direction":"out","account":"qa-cash","amount":5,"raw":{"qa":true}}'::jsonb);
 SELECT * FROM public.sync_factory_detail('returns','qa-return-cas',0,
  '{"return_no":"QA-RET","return_type":"sale_return","total":20,"raw":{"qa":true}}'::jsonb);
+SELECT * FROM public.sync_invoice('qa-purchase-invoice-cas','QA-PUR','purchase',CURRENT_DATE,80,0,'QA purchase',
+ '{"supplier_name":"QA Supplier"}'::jsonb,0,
+ '[{"name":"QA Fabric","qty":4,"price":20,"total":80}]'::jsonb);
+SELECT * FROM public.sync_factory_detail('returns','qa-purchase-return-cas',0,
+ '{"return_no":"QA-PRET","return_type":"purchase_return","total":40,"raw":{"qa":true}}'::jsonb);
 SELECT * FROM public.sync_factory_accounting('invoices',0,
  '{"ledger":[
   {"a":"qa-cash","src":"doc","rid":"qa-invoice-cas","dr":60,"cr":0},{"a":"qa-wip","src":"doc","rid":"qa-invoice-cas","dr":0,"cr":60},
   {"a":"qa-cash","src":"vch","rid":"qa-voucher-cas","dr":20,"cr":0},{"a":"qa-wip","src":"vch","rid":"qa-voucher-cas","dr":0,"cr":20},
-  {"a":"qa-cash","src":"doc","rid":"qa-return-cas","dr":20,"cr":0},{"a":"qa-wip","src":"doc","rid":"qa-return-cas","dr":0,"cr":20}],
- "movements":[{"iid":"qa-sync-item","v":"-","q":-3,"src":"doc","rid":"qa-invoice-cas","d":"2026-11-09"}],
+  {"a":"qa-cash","src":"doc","rid":"qa-return-cas","dr":20,"cr":0},{"a":"qa-wip","src":"doc","rid":"qa-return-cas","dr":0,"cr":20},
+  {"a":"qa-wip","src":"doc","rid":"qa-purchase-invoice-cas","dr":80,"cr":0},{"a":"qa-cash","src":"doc","rid":"qa-purchase-invoice-cas","dr":0,"cr":80},
+  {"a":"qa-cash","src":"doc","rid":"qa-purchase-return-cas","dr":40,"cr":0},{"a":"qa-wip","src":"doc","rid":"qa-purchase-return-cas","dr":0,"cr":40},
+  {"a":"qa-wip","src":"vch","rid":"qa-payment-cas","dr":5,"cr":0},{"a":"qa-cash","src":"vch","rid":"qa-payment-cas","dr":0,"cr":5}],
+ "movements":[
+  {"iid":"qa-sync-item","v":"-","q":-3,"src":"doc","rid":"qa-invoice-cas","d":"2026-11-09"},
+  {"iid":"qa-sync-item","v":"-","q":4,"src":"doc","rid":"qa-purchase-invoice-cas","d":"2026-11-09"},
+  {"iid":"qa-sync-item","v":"-","q":-2,"src":"doc","rid":"qa-purchase-return-cas","d":"2026-11-09"}],
  "work_orders":[],"journal_entries":[]}'::jsonb);
 DO $$
 DECLARE q numeric;
 BEGIN
  SELECT i.quantity INTO q FROM public.inventory i JOIN public.products p ON p.id=i.product_id WHERE p.external_id='qa-sync-item' AND i.variant='-';
- IF q<>-10 THEN RAISE EXCEPTION 'Invoice stock delta expected -10 total, got %',q; END IF;
+ IF q<>-8 THEN RAISE EXCEPTION 'Purchase/sale/return stock net expected -8, got %',q; END IF;
  BEGIN
   PERFORM * FROM public.sync_factory_accounting('production',0,'{"ledger":[],"movements":[],"work_orders":[],"journal_entries":[]}'::jsonb);
   RAISE EXCEPTION 'Invoice-only user wrote production accounting';
@@ -245,9 +258,9 @@ BEGIN
   RAISE EXCEPTION 'Negative product price accepted';
  EXCEPTION WHEN SQLSTATE '22023' THEN NULL; END;
  SELECT * INTO r FROM public.sync_factory_accounting('settings',0,
-  '{"ledger":[],"movements":[{"iid":"qa-sync-item","v":"-","q":10,"src":"je","rid":"qa-opening","d":"2026-11-09"}],"work_orders":[],"journal_entries":[{"id":"qa-opening"}]}'::jsonb);
+  '{"ledger":[],"movements":[{"iid":"qa-sync-item","v":"-","q":8,"src":"je","rid":"qa-opening","d":"2026-11-09"}],"work_orders":[],"journal_entries":[{"id":"qa-opening"}]}'::jsonb);
  SELECT i.quantity INTO q FROM public.inventory i JOIN public.products p ON p.id=i.product_id WHERE p.external_id='qa-sync-item' AND i.variant='-';
- IF q<>0 THEN RAISE EXCEPTION 'Admin opening stock expected zero after production and sale, got %',q; END IF;
+ IF q<>0 THEN RAISE EXCEPTION 'Admin opening stock expected zero after purchase/sale/returns, got %',q; END IF;
  IF EXISTS(SELECT 1 FROM public.production_catalog WHERE external_id='qa-sync-item' AND quantity<>0) THEN RAISE EXCEPTION 'Production catalog not refreshed after admin stock movement'; END IF;
 END $$;
 RESET ROLE;
