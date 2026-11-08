@@ -156,6 +156,11 @@ ok('source-effect SQL merges authorized sections and preserves the hidden sectio
   sourceEffectMigration.includes("else coalesce(v_existing_payload -> 'ledger', '[]'::jsonb)")&&sourceEffectMigration.includes("else coalesce(v_existing_payload -> 'movements', '[]'::jsonb)")&&sourceEffectMigration.includes("v_write_ledger and not v_can_write_ledger")&&sourceEffectMigration.includes("v_write_movements and not v_can_write_movements"));
 ok('source-effect client sends only the sections allowed by the employee permission set',
   cloud.includes('ledgerIncluded: writeLedger, movementsIncluded: writeMovements')&&cloud.includes('ledger: writeLedger ? action.effect.ledger : []')&&cloud.includes('movements: writeMovements ? action.effect.movements : []'));
+ok('inventory-only and finance-only clients can upload their authorized effect section while SQL preserves the hidden section',
+  cloud.includes('ledgerIncluded: writeLedger, movementsIncluded: writeMovements')&&
+  !cloud.includes('complete_effect_requires_all_populated_section_permissions')&&
+  sourceEffectMigration.includes("else coalesce(v_existing_payload -> 'ledger', '[]'::jsonb)")&&
+  sourceEffectMigration.includes("else coalesce(v_existing_payload -> 'movements', '[]'::jsonb)"));
 ok('source-effect deletion uses queued tombstones and requires both sections before clearing',
   cloud.includes('mgr6-cloud-effect-tombstones')&&cloud.includes('if (isDelete && (!writeLedger || !writeMovements))')&&sourceEffectMigration.includes('Deleting a complete source effect requires ledger and inventory write permissions'));
 ok('source effects are downloaded after master data and opening baseline application',
