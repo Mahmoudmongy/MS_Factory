@@ -160,7 +160,7 @@ if public_total != len(read_counts("public-row-counts.txt")) or rls_total != pub
 
 trigger_source = Path("auth-trigger.sql").read_text()
 trigger_names = re.findall(
-    r'CREATE\s+TRIGGER\s+("(?:[^"]|"")*"|[A-Za-z_][A-Za-z0-9_$]*)\s+.*?\s+ON\s+auth\.users\\b',
+    r'CREATE\s+TRIGGER\s+("(?:[^"]|"")*"|[A-Za-z_][A-Za-z0-9_$]*)\s+.*?\s+ON\s+auth\.users\b',
     trigger_source, flags=re.IGNORECASE | re.DOTALL
 )
 actual_trigger_names = set(filter(None, psql("""
