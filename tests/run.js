@@ -1,7 +1,7 @@
 /* Real browser tests: they load the actual index.html / js/app.js / sw.js through a local static server
  * and exercise the real functions. No mocks of app logic. Exit code != 0 if any check fails.
  * Run: npm test   (requires: npm install  -> playwright)                                         */
-const http=require('http'),fs=require('fs'),path=require('path');let pw;try{pw=require('playwright')}catch(e){console.error('playwright is not installed. Run: npm install && npx playwright install chromium');process.exit(2)}
+const http=require('http'),fs=require('fs'),path=require('path'),vm=require('vm');let pw;try{pw=require('playwright')}catch(e){console.error('playwright is not installed. Run: npm install && npx playwright install chromium');process.exit(2)}
 const ROOT=path.join(__dirname,'..'),MIME={'.html':'text/html','.js':'text/javascript','.css':'text/css','.json':'application/json','.png':'image/png','.svg':'image/svg+xml','.md':'text/plain'};
 const server=http.createServer((q,r)=>{let u=decodeURIComponent(q.url.split('?')[0]);if(u.endsWith('/'))u+='index.html';if(u==='/index.html'){let html=fs.readFileSync(path.join(ROOT,'index.html'),'utf8');html=html.replace('<style>html{visibility:hidden}</style>','');html=html.replace(/<script type="module">[\s\S]*?<\/script>/,'');html=html.replace('<script type="module" src="./js/cloud-sync.js"></script>','');r.writeHead(200,{'Content-Type':'text/html'});r.end(html);return}const f=path.join(ROOT,u);if(!f.startsWith(ROOT)||!fs.existsSync(f)||fs.statSync(f).isDirectory()){r.writeHead(404);r.end('nf');return}r.writeHead(200,{'Content-Type':MIME[path.extname(f)]||'application/octet-stream'});fs.createReadStream(f).pipe(r)});
 const R=[];let fails=0;const ok=(n,c,x)=>{R.push(`${c?'PASS':'FAIL'}  ${n}${x!==undefined?'  => '+(typeof x=='object'?JSON.stringify(x):x):''}`);if(!c)fails++};
@@ -49,6 +49,28 @@ const syncPageStart=app.indexOf('function syncPage(){'),syncPageEnd=app.indexOf(
 ok('offline saves are durably queued and retried on reconnect, focus and visibility',/mgr6-sync-pending/.test(cloud)&&/function markPendingSync/.test(cloud)&&/function scheduleAutoSync/.test(cloud)&&/addEventListener\("online", \(\) => \{ retryCount = 0; scheduleAutoSync\(500\); \}\)/.test(cloud)&&/addEventListener\("focus"/.test(cloud)&&/visibilitychange/.test(cloud)&&/scheduleAutoSync\(1500\)/.test(cloud));
 ok('sync toolbar is removed but conflict recovery remains reachable from the connection indicator',!app.includes('["🔄 حالة الاتصال والمزامنة","syncPage()"]')&&/id="net" onclick="syncPage\(\)"/.test(idx)&&/ms-logout-btn/.test(cloud)&&!/cloud-badge|رفع الآن|Upload Now|تحميل/.test(cloud.slice(cloud.indexOf('function drawAll()'))));
 
+const collectorStart=cloud.indexOf('function collectSourceEffects(state)');
+const collectorEnd=cloud.indexOf('\\nfunction stableJson',collectorStart);
+let collectSourceEffects=null;
+try { collectSourceEffects=vm.runInNewContext('('+cloud.slice(collectorStart,collectorEnd).trim()+')'); } catch(e) {}
+const effectFixture={
+  L:[
+    {src:'doc',rid:7,a:1,dr:100,cr:0},
+    {src:'doc',rid:7,a:2,dr:0,cr:100},
+    {src:'je',rid:7,a:3,dr:50,cr:50}
+  ],
+  mv:[
+    {src:'doc',rid:7,iid:11,v:'أزرق / M',q:-2,val:-40},
+    {src:'po',rid:7,iid:12,v:'-',q:3,val:30}
+  ]
+};
+const effectResult=collectSourceEffects?collectSourceEffects(effectFixture):{effects:[],invalid:[{reason:'collector_unavailable'}]};
+ok('effect collector groups ledger and stock rows by source type plus source ID',effectResult.effects.length===3&&effectResult.effects.find(x=>x.sourceType==='doc'&&x.sourceId==='7')?.ledger.length===2&&effectResult.effects.find(x=>x.sourceType==='doc'&&x.sourceId==='7')?.movements.length===1);
+ok('effect collector keeps identical source IDs separate across source categories',effectResult.effects.some(x=>x.sourceType==='je'&&x.sourceId==='7')&&effectResult.effects.some(x=>x.sourceType==='po'&&x.sourceId==='7'));
+const effectAgain=collectSourceEffects?collectSourceEffects(effectFixture):{effects:[]};
+ok('effect collection is deterministic and does not mutate source state',JSON.stringify(effectResult.effects)===JSON.stringify(effectAgain.effects)&&effectFixture.L.length===3&&effectFixture.mv.length===2);
+const invalidEffectResult=collectSourceEffects?collectSourceEffects({L:[{src:'doc',a:1}],mv:[{src:'unknown',rid:1}]}):{invalid:[]};
+ok('effect collector reports missing IDs and unsupported source types instead of silently dropping them',invalidEffectResult.invalid.length===2);
 ok('production-only employees are allowed through the cloud upload permission gate',/!admin && !\["customers", "suppliers", "invoices", "inventory", "production"\]\.some\(canWrite\)/.test(cloud));
 ok('production-only employees are allowed through the cloud download permission gate',/!\["customers","suppliers","invoices","inventory","production","reports"\]\.some\(canRead\)/.test(cloud));
 ok('invoice cloud sync uses the atomic versioned RPC',/rpc\(["']sync_invoice["']/.test(cloud)&&/p_expected_version/.test(cloud)&&/sync_version/.test(cloud));
