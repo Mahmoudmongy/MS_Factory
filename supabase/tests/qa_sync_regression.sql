@@ -125,7 +125,16 @@ BEGIN
   '[{"name":"QA Fabric","qty":3,"price":20,"total":60}]'::jsonb);
  IF r.sync_version<>2 THEN RAISE EXCEPTION 'Invoice update version incorrect'; END IF;
  IF (SELECT count(*) FROM public.invoice_items WHERE invoice_id=inv)<>1 THEN RAISE EXCEPTION 'Invoice child replacement failed'; END IF;
-END $$;
+ BEGIN
+  PERFORM * FROM public.sync_invoice('qa-invoice-cas','QA-INV','sale',CURRENT_DATE,999,0,'stale',
+   '{"customer_name":"QA Customer","stale":true}'::jsonb,1,
+   '[{"name":"QA Fabric","qty":99,"price":99,"total":9801}]'::jsonb);
+  RAISE EXCEPTION 'Stale invoice writer accepted';
+ EXCEPTION WHEN SQLSTATE '40001' THEN NULL; END;
+ IF NOT EXISTS(SELECT 1 FROM public.invoices WHERE external_id='qa-invoice-cas' AND total=60 AND sync_version=2) THEN
+  RAISE EXCEPTION 'Stale invoice writer changed the accepted invoice';
+ END IF;
+END $;
 SELECT * FROM public.sync_factory_detail('vouchers','qa-voucher-cas',0,
  '{"voucher_no":"QA-VCH","direction":"in","account":"qa-cash","amount":20,"raw":{"qa":true}}'::jsonb);
 SELECT * FROM public.sync_factory_detail('vouchers','qa-payment-cas',0,
