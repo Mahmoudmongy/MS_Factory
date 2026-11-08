@@ -75,6 +75,10 @@ The browser suite intentionally runs without live Auth/cloud modules; the separa
 
 The QA SQL tests ran as the `authenticated` database role with controlled JWT claims for administrator, production-only employee, and invoice-only employee profiles. This exercises RLS, RPC authorization, source isolation, version conflicts, and inventory effects. The browser regression suite deliberately disables live Auth/cloud modules; it does not prove a real password sign-in session. A final live login test with actual QA Auth credentials remains a release gate.
 
+## Remaining synchronization release blocker
+
+Invoice, return, voucher, production-order, accounting-source, and stock-movement writes now use versioned compare-and-swap RPCs. Customer, supplier, and product master records are now round-tripped with their full profile fields and existing records refresh from cloud when the device has no pending local edits. However, these three master-data paths still use table upserts without a per-record compare-and-swap version. Two devices editing the same customer, supplier, or product while offline can therefore still produce last-write-wins behavior. This must be upgraded to versioned master-record RPCs with explicit conflict resolution before calling multi-device synchronization fully conflict-safe.
+
 ## Release decision
 
 Do not merge to production or deploy the Cloudflare worker until:
@@ -83,6 +87,7 @@ Do not merge to production or deploy the Cloudflare worker until:
 3. R2 is enabled and a full backup plus QA restore drill succeeds;
 4. real administrator and employee password logins are tested in QA;
 5. Android device printing is checked on a physical device.
+6. Customer/supplier/product master records receive versioned compare-and-swap synchronization and conflict-resolution tests.
 
 ## Edge Function source verification
 
