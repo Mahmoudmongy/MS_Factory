@@ -280,6 +280,91 @@ function normalizeSourceEffects(state) {
   return { effects, invalid, ignored: collected.ignored };
 }
 
+
+// Pure optimistic-concurrency planner. It never calls Supabase or mutates local state.
+function planSourceEffectSync(state, remoteRows, versionMap, tombstones) {
+  const normalized = normalizeSourceEffects(state);
+  const invalid = [...normalized.invalid];
+  const actions = [];
+  const conflicts = [];
+  const adoptedVersions = {};
+  const clearTombstones = [];
+  const keyOf = (type, id) => JSON.stringify([String(type), String(id)]);
+  const versions = versionMap && typeof versionMap === "object" ? versionMap : {};
+  const remote = new Map();
+  for (const row of Array.isArray(remoteRows) ? remoteRows : []) {
+    if (!row || !row.source_type || row.source_id == null) continue;
+    const key = keyOf(row.source_type, row.source_id);
+    if (remote.has(key)) conflicts.push({ key, reason: "duplicate_remote_effect" });
+    else remote.set(key, row);
+  }
+  const queued = new Map();
+  for (const item of Array.isArray(tombstones) ? tombstones : []) {
+    if (!item || !item.sourceType || item.sourceId == null) {
+      invalid.push({ reason: "invalid_tombstone" }); continue;
+    }
+    const key = keyOf(item.sourceType, item.sourceId);
+    if (queued.has(key)) continue;
+    queued.set(key, item);
+  }
+  const currentKeys = new Set(normalized.effects.map(e => keyOf(e.sourceType, e.sourceId)));
+  for (const key of currentKeys) {
+    if (queued.has(key)) conflicts.push({ key, reason: "source_present_and_tombstoned_locally" });
+  }
+  if (invalid.length) return { actions: [], conflicts, adoptedVersions, clearTombstones, invalid };
+
+  for (const effect of normalized.effects) {
+    const key = keyOf(effect.sourceType, effect.sourceId);
+    const localVersion = Number(versions[key] || 0);
+    const row = remote.get(key);
+    if (!row) {
+      if (localVersion > 0) conflicts.push({ key, reason: "remote_effect_missing", localVersion });
+      else actions.push({ op: "upsert", effect, expectedVersion: 0 });
+      continue;
+    }
+    const remoteVersion = Number(row.sync_version || 0);
+    if (!Number.isInteger(remoteVersion) || remoteVersion < 1) {
+      conflicts.push({ key, reason: "invalid_remote_version" }); continue;
+    }
+    if (row.deleted_at) {
+      conflicts.push({ key, reason: "remote_effect_deleted", localVersion, remoteVersion }); continue;
+    }
+    const samePayload = stableJson(row.payload) === stableJson(effect);
+    if (localVersion === 0) {
+      if (samePayload) adoptedVersions[key] = remoteVersion;
+      else conflicts.push({ key, reason: "unknown_remote_baseline", remoteVersion });
+      continue;
+    }
+    if (remoteVersion !== localVersion) {
+      conflicts.push({ key, reason: "version_mismatch", localVersion, remoteVersion }); continue;
+    }
+    if (!samePayload) actions.push({ op: "upsert", effect, expectedVersion: localVersion });
+  }
+
+  for (const [key, item] of queued) {
+    if (currentKeys.has(key)) continue;
+    const localVersion = Number(versions[key] || 0);
+    const row = remote.get(key);
+    if (!row) {
+      if (localVersion > 0) conflicts.push({ key, reason: "remote_effect_missing_for_delete", localVersion });
+      else actions.push({ op: "delete", sourceType: String(item.sourceType), sourceId: String(item.sourceId), expectedVersion: 0 });
+      continue;
+    }
+    const remoteVersion = Number(row.sync_version || 0);
+    if (row.deleted_at) {
+      if (remoteVersion > 0) adoptedVersions[key] = remoteVersion;
+      clearTombstones.push(key);
+    } else if (!localVersion) {
+      conflicts.push({ key, reason: "unknown_remote_baseline_for_delete", remoteVersion });
+    } else if (remoteVersion !== localVersion) {
+      conflicts.push({ key, reason: "version_mismatch_for_delete", localVersion, remoteVersion });
+    } else {
+      actions.push({ op: "delete", sourceType: String(item.sourceType), sourceId: String(item.sourceId), expectedVersion: localVersion });
+    }
+  }
+  return { actions, conflicts, adoptedVersions, clearTombstones, invalid };
+}
+
 function stableJson(value) {
   if (Array.isArray(value)) return "[" + value.map(stableJson).join(",") + "]";
   if (value && typeof value === "object") {
