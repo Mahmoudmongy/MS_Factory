@@ -24,7 +24,6 @@ This checklist is deliberately separate from the database archive. Never commit 
 Variables:
 - `B2_BUCKET` — `ms-factory-backups-2026`
 - `B2_ENDPOINT` — `https://s3.us-east-005.backblazeb2.com`
-- `AGE_RECIPIENT` — public age recipient only.
 - `BACKUP_ENABLED` — keep `false` until a QA restore drill succeeds.
 
 Secrets:
@@ -32,7 +31,7 @@ Secrets:
 - `B2_APPLICATION_KEY`
 - `SUPABASE_DB_URL` — dedicated Session Pooler connection string.
 
-The restore machine needs `AGE_IDENTITY_FILE` and `RESTORE_SUPABASE_DB_URL` supplied locally at run time; do not store either in the online backup archive.
+The workflow pins the public age recipient in its YAML file. The restore machine needs `AGE_IDENTITY_FILE` and `RESTORE_SUPABASE_DB_URL` supplied locally at run time; do not store either in the online backup archive.
 
 ## Compromise response
 
