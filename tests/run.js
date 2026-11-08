@@ -116,6 +116,7 @@ const deletedRemote=planSourceEffectSync?planSourceEffectSync({accts:[],items:[]
 ok('planner adopts an existing remote tombstone instead of recreating it',deletedRemote.clearTombstones.length===1&&deletedRemote.adoptedVersions['["doc","91"]']===4);
 const resurrect=planSourceEffectSync?planSourceEffectSync(canonicalFixture,[{...sameRemote,deleted_at:'2026-11-08T00:00:00Z',payload:null}],{'["doc","91"]':3},[]):{conflicts:[{}]};
 ok('planner never resurrects a remotely deleted source automatically',resurrect.actions.length===0&&resurrect.conflicts.some(x=>x.reason==='remote_effect_deleted'));
+ok('editing and deleting transactions reverses only matching source type plus ID',/function rev\\(rid,src\\)/.test(app)&&/rev\\(id,src\\)/.test(app)&&/rev\\(old\\.id,"doc"\\)/.test(app)&&/rev\\(old\\.id,"vch"\\)/.test(app)&&/rev\\(old\\.id,"po"\\)/.test(app)&&/rev\\(old\\.id,"je"\\)/.test(app));
 ok('production-only employees are allowed through the cloud upload permission gate',/!admin && !\["customers", "suppliers", "invoices", "inventory", "production"\]\.some\(canWrite\)/.test(cloud));
 ok('production-only employees are allowed through the cloud download permission gate',/!\["customers","suppliers","invoices","inventory","production","reports"\]\.some\(canRead\)/.test(cloud));
 ok('invoice cloud sync uses the atomic versioned RPC',/rpc\(["']sync_invoice["']/.test(cloud)&&/p_expected_version/.test(cloud)&&/sync_version/.test(cloud));
