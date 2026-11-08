@@ -58,19 +58,16 @@ psql_cmd=(psql --no-psqlrc --set=ON_ERROR_STOP=1 --dbname "$QA_SUPABASE_DB_URL")
 # Never overwrite an existing QA dataset. The destination must be empty before restore.
 public_tables="$("${psql_cmd[@]}" --tuples-only --no-align --command="SELECT count(*) FROM information_schema.tables WHERE table_schema='public' AND table_type='BASE TABLE';" | tr -d '[:space:]')"
 auth_users="$("${psql_cmd[@]}" --tuples-only --no-align --command="SELECT count(*) FROM auth.users;" | tr -d '[:space:]')"
-auth_identities="$(${psql_cmd[@]} --tuples-only --no-align --command="SELECT count(*) FROM auth.identities;" | tr -d '[:space:]')"
-auth_mfa_factors="$(${psql_cmd[@]} --tuples-only --no-align --command="SELECT count(*) FROM auth.mfa_factors;" | tr -d '[:space:]')"
-auth_mfa_recovery_sets="$(${psql_cmd[@]} --tuples-only --no-align --command="SELECT count(*) FROM auth.mfa_recovery_code_sets;" | tr -d '[:space:]')"
-auth_mfa_recovery_codes="$(${psql_cmd[@]} --tuples-only --no-align --command="SELECT count(*) FROM auth.mfa_recovery_codes;" | tr -d '[:space:]')"
-auth_webauthn_credentials="$(${psql_cmd[@]} --tuples-only --no-align --command="SELECT count(*) FROM auth.webauthn_credentials;" | tr -d '[:space:]')"
+auth_identities="$("${psql_cmd[@]}" --tuples-only --no-align --command="SELECT count(*) FROM auth.identities;" | tr -d '[:space:]')"
+auth_mfa_factors="$("${psql_cmd[@]}" --tuples-only --no-align --command="SELECT count(*) FROM auth.mfa_factors;" | tr -d '[:space:]')"
+auth_mfa_recovery_sets="$("${psql_cmd[@]}" --tuples-only --no-align --command="SELECT count(*) FROM auth.mfa_recovery_code_sets;" | tr -d '[:space:]')"
+auth_mfa_recovery_codes="$("${psql_cmd[@]}" --tuples-only --no-align --command="SELECT count(*) FROM auth.mfa_recovery_codes;" | tr -d '[:space:]')"
+auth_webauthn_credentials="$("${psql_cmd[@]}" --tuples-only --no-align --command="SELECT count(*) FROM auth.webauthn_credentials;" | tr -d '[:space:]')"
 migration_schema="$("${psql_cmd[@]}" --tuples-only --no-align --command="SELECT to_regnamespace('supabase_migrations') IS NOT NULL;" | tr -d '[:space:]')"
 migration_table="$("${psql_cmd[@]}" --tuples-only --no-align --command="SELECT to_regclass('supabase_migrations.schema_migrations') IS NOT NULL;" | tr -d '[:space:]')"
 storage_buckets="$("${psql_cmd[@]}" --tuples-only --no-align --command="SELECT count(*) FROM storage.buckets;" | tr -d '[:space:]')"
 
-if [[ "$public_tables" != "0" || "$auth_users" != "0" || "$auth_identities" != "0" || \\
-      "$auth_mfa_factors" != "0" || "$auth_mfa_recovery_sets" != "0" || \\
-      "$auth_mfa_recovery_codes" != "0" || "$auth_webauthn_credentials" != "0" || \\
-      "$storage_buckets" != "0" ]]; then
+if [[ "$public_tables" != "0" || "$auth_users" != "0" || "$auth_identities" != "0" || "$auth_mfa_factors" != "0" || "$auth_mfa_recovery_sets" != "0" || "$auth_mfa_recovery_codes" != "0" || "$auth_webauthn_credentials" != "0" || "$storage_buckets" != "0" ]]; then
   echo "::error::QA is not an empty Supabase restore target. No data was changed."
   exit 1
 fi
