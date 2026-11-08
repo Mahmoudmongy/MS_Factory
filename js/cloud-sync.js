@@ -367,6 +367,111 @@ function stableJson(value) {
   return JSON.stringify(value);
 }
 
+const CLOUD_DELETE_QUEUE_KEY = "mgr6-cloud-deletions";
+const CLOUD_DELETE_CONFLICT_KEY = "mgr6-cloud-deletion-conflicts";
+function readCloudDeleteQueue() {
+  try {
+    const rows = JSON.parse(localStorage.getItem(CLOUD_DELETE_QUEUE_KEY) || "[]");
+    return Array.isArray(rows) ? rows : [];
+  } catch(e) { return []; }
+}
+function writeCloudDeleteQueue(rows) {
+  localStorage.setItem(CLOUD_DELETE_QUEUE_KEY, JSON.stringify(rows));
+}
+window.queueCloudDeletion = function(table, externalId, expectedVersion = 0, localCopy = null) {
+  if (!["invoices","returns","vouchers","production_orders"].includes(table) || externalId == null || String(externalId) === "") return false;
+  const rows = readCloudDeleteQueue();
+  const key = String(externalId);
+  const existing = rows.find(x => x.table === table && String(x.externalId) === key);
+  const item = {
+    table, externalId: key, expectedVersion: Math.max(0, Number(expectedVersion) || 0),
+    localCopy: localCopy && typeof localCopy === "object" ? JSON.parse(JSON.stringify(localCopy)) : null,
+    queuedAt: new Date().toISOString()
+  };
+  if (existing) Object.assign(existing, item);
+  else rows.push(item);
+  writeCloudDeleteQueue(rows.slice(-1000));
+  return true;
+};
+async function syncQueuedDeletions(owner, profile, errors) {
+  const admin = profile.is_admin === true;
+  const canWrite = key => admin || profile.permissions?.[key] === true;
+  let queue = readCloudDeleteQueue();
+  if (!queue.length) return false;
+  let conflicts;
+  try {
+    conflicts = JSON.parse(localStorage.getItem(CLOUD_DELETE_CONFLICT_KEY) || "[]");
+    if (!Array.isArray(conflicts)) conflicts = [];
+  } catch(e) { conflicts = []; }
+  let changed = false;
+  const keep = [];
+  for (const item of queue) {
+    const permission = item.table === "production_orders" ? "production" : "invoices";
+    if (!canWrite(permission)) { keep.push(item); continue; }
+    const { data, error } = await supabase.rpc("delete_factory_detail", {
+      p_table_name: item.table,
+      p_external_id: String(item.externalId),
+      p_expected_version: Number(item.expectedVersion || 0)
+    });
+    if (!error) { changed = true; continue; }
+    if (error.code === "40001") {
+      const { data: remote, error: readError } = await supabase.from(item.table)
+        .select("*").eq("user_id", owner).eq("external_id", String(item.externalId)).maybeSingle();
+      if (!readError && (!remote || remote.is_deleted === true)) { changed = true; continue; }
+      if (readError) errors.push("delete " + item.table + " " + item.externalId + ": " + readError.message);
+      else {
+        const old = conflicts.find(x => x.table === item.table && String(x.externalId) === String(item.externalId));
+        const conflict = {
+          table: item.table, externalId: String(item.externalId),
+          serverVersion: Number(remote.sync_version || 1),
+          serverUpdatedAt: remote.updated_at || null,
+          localCopy: item.localCopy || null,
+          serverCopy: remote.raw && typeof remote.raw === "object" ? remote.raw : remote
+        };
+        if (old) Object.assign(old, conflict); else conflicts.push(conflict);
+        errors.push("delete " + item.table + " " + item.externalId + ": version conflict; newer cloud record preserved");
+      }
+      keep.push(item);
+      continue;
+    }
+    errors.push("delete " + item.table + " " + item.externalId + ": " + error.message);
+    keep.push(item);
+  }
+  writeCloudDeleteQueue(keep);
+  localStorage.setItem(CLOUD_DELETE_CONFLICT_KEY, JSON.stringify(conflicts.slice(-1000)));
+  return changed;
+}
+
+window.resolveCloudDeletionConflict = async function(table, externalId, choice) {
+  if (!["cloud","delete"].includes(choice)) return;
+  const profile = await getMyProfile();
+  if (!profile?.is_admin) return alert(T("حل تعارض الحذف متاح لمدير النظام فقط", "Only the administrator can resolve deletion conflicts"));
+  let conflicts = [];
+  try { conflicts = JSON.parse(localStorage.getItem(CLOUD_DELETE_CONFLICT_KEY) || "[]"); } catch(e) {}
+  if (!Array.isArray(conflicts)) conflicts = [];
+  const conflict = conflicts.find(x => x.table === table && String(x.externalId) === String(externalId));
+  if (!conflict) return alert(T("لم يعد تعارض الحذف موجودًا", "This deletion conflict no longer exists"));
+  let queue = readCloudDeleteQueue();
+  if (choice === "cloud") {
+    queue = queue.filter(x => !(x.table === table && String(x.externalId) === String(externalId)));
+    conflicts = conflicts.filter(x => !(x.table === table && String(x.externalId) === String(externalId)));
+    writeCloudDeleteQueue(queue);
+    localStorage.setItem(CLOUD_DELETE_CONFLICT_KEY, JSON.stringify(conflicts));
+    await loadFromTablesMerge(false);
+    if (typeof drawAll === "function") drawAll();
+    return T("تم إلغاء الحذف واعتماد النسخة السحابية", "Deletion cancelled; cloud copy retained");
+  }
+  const queued = queue.find(x => x.table === table && String(x.externalId) === String(externalId));
+  if (!queued) return alert(T("طلب الحذف الأصلي غير موجود", "Original deletion request is missing"));
+  queued.expectedVersion = Number(conflict.serverVersion);
+  writeCloudDeleteQueue(queue);
+  conflicts = conflicts.filter(x => !(x.table === table && String(x.externalId) === String(externalId)));
+  localStorage.setItem(CLOUD_DELETE_CONFLICT_KEY, JSON.stringify(conflicts));
+  const result = await uploadToTables(true);
+  if (String(result).includes("version conflict") || String(result).includes("تعارض")) return alert(String(result));
+  return T("تم اعتماد الحذف بعد تحديث رقم إصدار السحابة", "Deletion accepted against the latest cloud version");
+};
+
 async function syncAccountingSnapshots(S, profile, errors) {
   const admin = profile.is_admin === true;
   const canWrite = source => admin || (source !== "settings" && profile.permissions?.[source] === true);
@@ -482,6 +587,7 @@ async function uploadToTables(showAlert = false) {
     const S = getCachedState();
     if (!S || typeof S !== "object" || Array.isArray(S)) throw new Error("بيانات المصنع المحلية غير صالحة؛ لم يتم رفع أي شيء");
     const errors = [];
+    await syncQueuedDeletions(owner, profile, errors);
     let snapshotError = null;
     let snapshotConflict = !!localStorage.getItem("mgr6-cloud-snapshot-conflict");
 
@@ -938,15 +1044,15 @@ async function loadFromTablesMerge(isAuto = false) {
     const results = await Promise.all([
       canRead("customers") ? supabase.from("customers").select("*").eq("user_id", owner) : Promise.resolve(emptyResult),
       canRead("suppliers") ? supabase.from("suppliers").select("*").eq("user_id", owner) : Promise.resolve(emptyResult),
-      canRead("invoices") ? supabase.from("invoices").select("*").eq("user_id", owner) : Promise.resolve(emptyResult),
+      canRead("invoices") ? supabase.from("invoices").select("*").eq("user_id", owner).eq("is_deleted", false) : Promise.resolve(emptyResult),
       inventoryRead
         ? supabase.from("products").select("*").eq("user_id", owner)
         : productionCatalogRead
           ? supabase.from("production_catalog").select("user_id,external_id,name,sku,model,unit,warehouse,image_url,buy_price,variant,quantity").eq("user_id", owner)
           : Promise.resolve(emptyResult),
-      canRead("invoices") ? supabase.from("returns").select("*").eq("user_id", owner) : Promise.resolve(emptyResult),
-      canRead("invoices") ? supabase.from("vouchers").select("*").eq("user_id", owner) : Promise.resolve(emptyResult),
-      productionCatalogRead ? supabase.from("production_orders").select("*").eq("user_id", owner) : Promise.resolve(emptyResult),
+      canRead("invoices") ? supabase.from("returns").select("*").eq("user_id", owner).eq("is_deleted", false) : Promise.resolve(emptyResult),
+      canRead("invoices") ? supabase.from("vouchers").select("*").eq("user_id", owner).eq("is_deleted", false) : Promise.resolve(emptyResult),
+      productionCatalogRead ? supabase.from("production_orders").select("*").eq("user_id", owner).eq("is_deleted", false) : Promise.resolve(emptyResult),
       (canRead("invoices") || canRead("production") || canRead("settings"))
         ? supabase.from("factory_accounting_state").select("source,payload,sync_version,updated_at").eq("user_id", owner)
         : Promise.resolve(emptyResult),
