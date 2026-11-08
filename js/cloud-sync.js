@@ -1794,13 +1794,18 @@ async function loadFromTablesMerge(isAuto = false) {
         recordConflicts += plan.invalid.length;
       } else {
         for (const action of plan.actions) {
-          const applied = applyCanonicalSourceEffect(S, action.effect);
+          const sourceType = action.effect?.sourceType || action.sourceType;
+          const sourceId = String(action.effect?.sourceId ?? action.sourceId);
+          const applied = action.op === "delete"
+            ? (action.effect ? removeCanonicalSourceEffect(S, action.effect) : { applied: true })
+            : applyCanonicalSourceEffect(S, action.effect);
           if (!applied.applied) {
             recordConflicts++;
-            console.warn("Source effect was not applied:", action.effect.sourceType, action.effect.sourceId, applied.reason);
+            console.warn("Source effect was not applied:", sourceType, sourceId, applied.reason);
             continue;
           }
-          versions[JSON.stringify([action.effect.sourceType, action.effect.sourceId])] = Number(action.version);
+          if (action.op === "delete") removeSourceDocument(S, sourceType, sourceId);
+          versions[JSON.stringify([sourceType, sourceId])] = Number(action.version);
         }
         Object.assign(versions, plan.adoptedVersions);
         if (plan.conflicts.length) {
