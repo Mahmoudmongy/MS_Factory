@@ -9,7 +9,7 @@ const R=[];let fails=0;const ok=(n,c,x)=>{R.push(`${c?'PASS':'FAIL'}  ${n}${x!==
 await new Promise(r=>server.listen(0,r));const BASE='http://localhost:'+server.address().port+'/';
 const browser=await pw.chromium.launch();
 /* ---------- A. static checks on the real files ---------- */
-const app=fs.readFileSync(path.join(ROOT,'js/app.js'),'utf8'),idx=fs.readFileSync(path.join(ROOT,'index.html'),'utf8'),cloud=fs.readFileSync(path.join(ROOT,'js/cloud-sync.js'),'utf8'),css=fs.readFileSync(path.join(ROOT,'css/style.css'),'utf8');
+const app=fs.readFileSync(path.join(ROOT,'js/app.js'),'utf8'),idx=fs.readFileSync(path.join(ROOT,'index.html'),'utf8'),cloud=fs.readFileSync(path.join(ROOT,'js/cloud-sync.js'),'utf8'),core=fs.readFileSync(path.join(ROOT,'js/accounting-sync-core.js'),'utf8'),css=fs.readFileSync(path.join(ROOT,'css/style.css'),'utf8');
 const names=[...app.matchAll(/^(?:async )?function ([A-Za-z0-9_$]+)\(/gm)].map(m=>m[1]),dup=[...new Set(names.filter((n,i)=>names.indexOf(n)!==i))];
 ok('app.js has no duplicate top-level function definitions',dup.length==0,dup);
 ok('conditional form values and descriptions are escaped, not inserted as HTML',/escapeHTML\(p\?p\.name/.test(app)&&/escapeHTML\(pre\.desc/.test(app)&&/escapeHTML\(v\.split/.test(app));
@@ -65,7 +65,7 @@ ok('inventory sync totals all colour/size variants instead of reading a missing 
 ok('inventory sync stores the full local item in products.raw for lossless restoration',/image_url:[\s\S]{0,500}raw: pr/.test(cloud));
 ok('inventory download restores records into S.items, the real inventory source used by the app',/if \(!Array\.isArray\(S\.items\)\) S\.items = \[\]/.test(cloud)&&/S\.items = m\.arr/.test(cloud));
 ok('employee detail-only sync remains marked partial in the background',/admin \? "synced" : "partial"/.test(cloud)&&/مزامنة القيود والحركات المحاسبية الكاملة لحساب الموظف لم تكتمل بعد/.test(cloud));
-ok('RELEASE GATE: versioned cloud synchronization exists for the accounting ledger and stock movements',/sync_factory_accounting/.test(cloud)&&/factory_accounting_state/.test(cloud)&&/S\\.L/.test(cloud)&&/S\\.mv/.test(cloud));
+ok('RELEASE GATE: versioned cloud synchronization exists for the accounting ledger and stock movements',/sync_factory_accounting/.test(cloud)&&/factory_accounting_state/.test(cloud)&&/accountingPayloadForSource/.test(cloud)&&/state\\.L/.test(core)&&/state\\.mv/.test(core));
 ok('production-only employees can upload and pull their production orders',/if \(!admin && !\["customers", "suppliers", "invoices", "inventory", "production"\]\.some\(canWrite\)\)/.test(cloud)&&/if \(canWrite\("production"\)\)/.test(cloud)&&/if \(!\["customers","suppliers","invoices","inventory","production","reports"\]\.some\(canRead\)\)/.test(cloud));
 const detailSyncMigration=fs.readFileSync(path.join(ROOT,'supabase/migrations/20261108000100_atomic_versioned_factory_detail_sync.sql'),'utf8');
 ok('returns, vouchers and production orders use the atomic versioned detail RPC',/rpc\(["']sync_factory_detail["']/.test(cloud)&&/p_expected_version/.test(cloud)&&/sync_version/.test(cloud));
@@ -120,6 +120,43 @@ const xssGeo=await p.evaluate(()=>{
   host.remove();delete S.geo[badGov];return {injected,literal};
 });
 ok('XSS payloads in governorate/city names remain inert text in the live DOM',!xssGeo.injected&&xssGeo.literal,xssGeo);
+
+const accountingUnit=await p.evaluate(async()=>{
+ const m=await import('/js/accounting-sync-core.js');
+ const state={
+  L:[{src:'doc',id:'d1'},{src:'vch',id:'v1'},{src:'po',id:'p1'},{src:'wo',id:'w1'},{src:'je',id:'j1'}],
+  mv:[{src:'doc',iid:1,v:'M',q:1,val:10},{src:'po',iid:1,v:'L',q:-1,val:-5}],
+  wo:[{id:'w1'}],je:[{id:'j1'}],items:[{id:1,st:{},val:0}]
+ };
+ const production=m.accountingPayloadForSource(state,'production');
+ const invoices=m.accountingPayloadForSource(state,'invoices');
+ const settings=m.accountingPayloadForSource(state,'settings');
+ const mapped=m.accountingSourceForRow({src:'doc'})==='invoices'
+  &&m.accountingSourceForRow({src:'vch'})==='invoices'
+  &&m.accountingSourceForRow({src:'po'})==='production'
+  &&m.accountingSourceForRow({src:'wo'})==='production'
+  &&m.accountingSourceForRow({src:'je'})==='settings';
+ const sourcePayloads=production.ledger.length===2&&production.movements.length===1
+  &&production.work_orders.length===1&&production.journal_entries.length===0
+  &&invoices.ledger.length===2&&invoices.movements.length===1
+  &&settings.ledger.length===1&&settings.journal_entries.length===1;
+ const target={L:[{src:'doc',id:'keep'}],mv:[{src:'doc',iid:2,v:'-',q:4,val:40}],wo:[{id:'old'}],je:[{id:'old'}],items:[]};
+ m.replaceAccountingPayload(target,'production',production);
+ const preserve=target.L.some(x=>x.id==='keep')&&target.L.some(x=>x.id==='p1')
+  &&target.mv.some(x=>x.iid===2)&&target.mv.some(x=>x.src==='po')
+  &&target.wo[0].id==='w1';
+ target.items=[{id:1,st:{},val:0}];
+ m.recalcAccountingInventory(target);
+ const stock=target.items[0].st.M===0&&target.items[0].st.L===-1&&target.items[0].val===-5;
+ const hashStable=m.accountingHash({b:2,a:1})===m.accountingHash({a:1,b:2});
+ const hashChanges=m.accountingHash(production)!==m.accountingHash({...production,movements:[{src:'po',iid:1,v:'L',q:999,val:-5}]});
+ return {mapped,sourcePayloads,preserve,stock,hashStable,hashChanges};
+});
+ok('accounting sync core maps invoice, production and journal sources to the correct permission scopes',accountingUnit.mapped,accountingUnit);
+ok('accounting sync payloads include the correct ledger, stock, waste and journal records per source',accountingUnit.sourcePayloads,accountingUnit);
+ok('replacing a production snapshot preserves invoice/settings rows while replacing production rows',accountingUnit.preserve,accountingUnit);
+ok('recalculation rebuilds stock quantities and inventory value from merged movement history',accountingUnit.stock,accountingUnit);
+ok('accounting payload hashes are key-order stable and change when movement values change',accountingUnit.hashStable&&accountingUnit.hashChanges,accountingUnit);
 const xssTables=await p.evaluate(()=>{
  const bad='<img src=x onerror="window.__xss=3">';
  const host=document.createElement('div');host.innerHTML=tb2(['field'],[[bad],[lk(bad,'void(0)')]]);
