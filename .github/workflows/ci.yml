@@ -26,6 +26,13 @@ jobs:
       - run: npm run build
       - name: Validate Cloudflare Workers bundle without deploying
         run: npx --yes wrangler@4 deploy --dry-run
+      - name: Validate pinned Supabase CLI backup flags without connecting to production
+        run: |
+          npx --yes supabase@3.0.0 db dump --help > supabase-dump-help.txt
+          grep -q -- '--remote' supabase-dump-help.txt
+          grep -q -- '--role-only' supabase-dump-help.txt
+          grep -q -- '--data-only' supabase-dump-help.txt
+          grep -q -- '--file' supabase-dump-help.txt
       - name: Parse application and recovery scripts
         run: |
           node --check js/app.js
