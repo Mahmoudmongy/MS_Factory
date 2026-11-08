@@ -49,7 +49,7 @@ Do not merge/deploy this branch to production until the remaining blockers are t
 The complete `supabase/tests/qa_sync_regression.sql` script was executed successfully against the isolated `ms-factory-qa` Supabase project. The script runs inside one transaction and ends with `ROLLBACK`; a follow-up count query confirmed zero retained QA fixture rows in customers, suppliers, products, invoices, returns, vouchers, production orders and accounting snapshots.
 
 Coverage includes:
-- Administrator, production-only employee and invoice-only employee JWT/RLS contexts.
+- Administrator, production-only employee and invoice-only employee JWT/RLS contexts, including full factory snapshot version increment and stale snapshot rejection.
 - Production order create/update, stale update rejection, soft-delete, idempotent delete retry and restore.
 - Sale invoice create/update and invoice line replacement; purchase invoice create.
 - Sale return and purchase return creation.
