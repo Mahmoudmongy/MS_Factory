@@ -125,14 +125,14 @@ drops = "".join(f"DROP TRIGGER IF EXISTS {name} ON auth.users;\n" for name in di
 Path("auth-trigger-qa-idempotent.sql").write_text(drops + "\n" + source)
 PY
 
-# Supabase's documented roles/schema/data restore. Keep platform-managed auth/storage
-# schemas intact; import durable Auth rows separately and restore the custom trigger
-# inside the same transaction so any failure rolls the entire QA restore back.
+# Supabase's managed postgres role is not a PostgreSQL superuser and cannot SET
+# session_replication_role. It already has BYPASSRLS; keep constraints/triggers active
+# and load the pg_dump-ordered data inside one transaction. Restore the custom Auth
+# trigger only after importing users, so it cannot create duplicate profile rows.
 if [[ "$migration_schema" == "t" ]]; then
   "${psql_cmd[@]}" --single-transaction \
     --file roles.sql \
     --file schema.sql \
-    --command 'SET session_replication_role = replica' \
     --file data.sql \
     --file auth-users.sql \
     --file migration-history.sql \
