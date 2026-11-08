@@ -57,6 +57,7 @@ Passed checks:
 - The administrator could synchronize the manual settings source.
 - The production configuration projection was tested with sentinel cash/balance values; the new allowlist migration removed those fields before the employee could read the projection.
 - The production catalog projection was also exercised with a QA product carrying retail price 250, wholesale price 190, buy cost 12, and stock 7. The production-only user saw only the allowed product/variant quantity and buy-cost projection; the full `products` row and retail/wholesale/raw columns were not exposed.
+- A further end-to-end review found a missing path: the accounting RPC applied inventory deltas for employees but skipped administrator-originated invoice/production/manual-journal movements. That meant a manager's stock changes could leave the production-only catalog stale. Migration `20261108230000_apply_admin_stock_deltas_to_production_catalog.sql` now applies the versioned movement delta for manager sources too. In QA, manager stock went 10 → 7 after a sale, 7 → 6 after editing the sale, and 6 → 8 after a manual stock journal; the production catalog reflected 8. A stale retry did not alter the quantity. This migration is applied to QA only, not production.
 
 These are live Postgres/RLS/RPC integration tests against the QA project, not merely static mocks. They do not replace a real browser password-login test or a full restore drill.
 
