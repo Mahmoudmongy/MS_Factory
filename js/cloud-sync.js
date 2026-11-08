@@ -1408,6 +1408,44 @@ async function uploadToTables(showAlert = false) {
       }
     }
 
+
+    // Synchronize source-scoped ledger/stock effects only when this client can write both sections.
+    if (canWrite("inventory") && ["invoices", "production", "settings"].some(canWrite)) {
+      const remoteResult = await supabase.rpc("get_source_effects");
+      const missingEffectsRpc = remoteResult.error && ["PGRST202", "42883"].includes(String(remoteResult.error.code || ""));
+      if (remoteResult.error && !missingEffectsRpc) errors.push("source effects read before write: " + remoteResult.error.message);
+      else if (!missingEffectsRpc) {
+        let versions = {};
+        try { versions = JSON.parse(localStorage.getItem("mgr6-source-effect-versions") || "{}") || {}; } catch(e) {}
+        const plan = planSourceEffectSync(S, remoteResult.data || [], versions, []);
+        if (plan.invalid.length) errors.push("source effects invalid: " + plan.invalid.map(x => x.reason).join(", "));
+        else {
+          if (plan.conflicts.length) localStorage.setItem("mgr6-source-effect-conflicts", JSON.stringify(plan.conflicts));
+          for (const action of plan.actions) {
+            if (action.op !== "upsert") continue;
+            const permission = ({ doc: "invoices", po: "production", vch: "invoices", je: "settings", wo: "inventory" })[action.effect.sourceType];
+            if (!canWrite(permission)) continue;
+            const payload = { ...action.effect, ledgerIncluded: true, movementsIncluded: true };
+            const saved = await supabase.rpc("sync_source_effect", {
+              p_source_type: action.effect.sourceType, p_source_id: action.effect.sourceId,
+              p_expected_version: action.expectedVersion, p_payload: payload, p_deleted: false
+            });
+            if (saved.error) {
+              if (saved.error.code === "40001") {
+                const conflicts = JSON.parse(localStorage.getItem("mgr6-source-effect-conflicts") || "[]");
+                conflicts.push({ sourceType: action.effect.sourceType, sourceId: action.effect.sourceId, reason: "write_version_conflict" });
+                localStorage.setItem("mgr6-source-effect-conflicts", JSON.stringify(conflicts));
+              } else errors.push("source effect " + action.effect.sourceType + "/" + action.effect.sourceId + ": " + saved.error.message);
+              continue;
+            }
+            const row = Array.isArray(saved.data) ? saved.data[0] : saved.data;
+            if (row?.sync_version) versions[JSON.stringify([action.effect.sourceType, action.effect.sourceId])] = Number(row.sync_version);
+          }
+          localStorage.setItem("mgr6-source-effect-versions", JSON.stringify(versions));
+        }
+      }
+    }
+
     if (errors.length) {
       syncState = localStorage.getItem("mgr6-cloud-snapshot-conflict") ? "conflict" : "idle"; drawAll();
       const msg = (snapshotError
@@ -1643,6 +1681,37 @@ async function loadFromTablesMerge(isAuto = false) {
       }
       localStorage.setItem(cursorKey, String(remoteVersion));
       totalAdded += Number(applied.movementsAdded || applied.accountsAdded || 0);
+    }
+
+    // Download role-redacted source effects after master records and baseline sections are ready.
+    const effectsResult = await supabase.rpc("get_source_effects");
+    const effectsRpcMissing = effectsResult.error && ["PGRST202", "42883"].includes(String(effectsResult.error.code || ""));
+    if (effectsResult.error && !effectsRpcMissing) {
+      return isAuto ? "cloud source effects read failed" : T("تعذر قراءة حركات المستندات: " + effectsResult.error.message, "Source effects read failed: " + effectsResult.error.message);
+    }
+    if (!effectsRpcMissing && Array.isArray(effectsResult.data) && effectsResult.data.length) {
+      let versions = {};
+      try { versions = JSON.parse(localStorage.getItem("mgr6-source-effect-versions") || "{}") || {}; } catch(e) {}
+      const plan = planRemoteSourceEffectApply(S, effectsResult.data, versions);
+      if (plan.invalid.length) {
+        recordConflicts += plan.invalid.length;
+      } else {
+        for (const action of plan.actions) {
+          const applied = applyCanonicalSourceEffect(S, action.effect);
+          if (!applied.applied) {
+            recordConflicts++;
+            console.warn("Source effect was not applied:", action.effect.sourceType, action.effect.sourceId, applied.reason);
+            continue;
+          }
+          versions[JSON.stringify([action.effect.sourceType, action.effect.sourceId])] = Number(action.version);
+        }
+        Object.assign(versions, plan.adoptedVersions);
+        if (plan.conflicts.length) {
+          recordConflicts += plan.conflicts.length;
+          localStorage.setItem("mgr6-source-effect-conflicts", JSON.stringify(plan.conflicts));
+        }
+        localStorage.setItem("mgr6-source-effect-versions", JSON.stringify(versions));
+      }
     }
     Object.getPrototypeOf(localStorage).setItem.call(localStorage, "mgr6", JSON.stringify(S));
     if (restoredSnapshot && isAuto) setTimeout(() => location.reload(), 500);
