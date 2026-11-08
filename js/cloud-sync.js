@@ -372,7 +372,7 @@ function normalizeSourceEffects(state) {
         if (!partner) { invalid.push({ sourceType: effect.sourceType, sourceId: effect.sourceId, reason: "unmapped_partner", partnerId: String(row.pid) }); return null; }
       }
       return {
-        date: row.d || null, timestamp, reference: String(row.ref || ""),
+        date: row.d || null, timestamp: Number(row.ts || 0), reference: String(row.ref || ""),
         description: String(row.desc || ""), accountCode: account.code, accountName: account.name,
         accountType: account.type, accountKey: account.key, accountIsCash: account.cash,
         accountCurrency: account.currency,
@@ -864,7 +864,7 @@ function buildFactoryBaseline(state) {
     }
     debitTotal += debit; creditTotal += credit;
     openingLedger.push({
-      date: row.d || null, timestamp: Number(row.ts || 0), reference: String(row.ref || ""),
+      date: row.d || null, timestamp, reference: String(row.ref || ""),
       description: String(row.desc || ""), accountCode: account.code, debit, credit,
       partnerExternalId: partner?.externalId || null, foreignCurrencyAmount: foreign
     });
