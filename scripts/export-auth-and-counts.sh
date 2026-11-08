@@ -9,8 +9,25 @@ pg_dump "$SUPABASE_DB_URL" --data-only --no-owner --no-privileges \
   --table=auth.mfa_recovery_codes --table=auth.webauthn_credentials \
   --file=/backup/auth-users.sql
 
-pg_dump "$SUPABASE_DB_URL" --schema-only --no-owner --no-privileges \
-  --schema=supabase_migrations --file=/backup/migration-history-schema.sql
+cat > /backup/migration-history-schema.sql <<'SQL'
+CREATE SCHEMA IF NOT EXISTS supabase_migrations;
+CREATE TABLE IF NOT EXISTS supabase_migrations.schema_migrations (
+  version text NOT NULL PRIMARY KEY,
+  statements text[],
+  name text,
+  created_by text,
+  idempotency_key text,
+  rollback text[]
+);
+ALTER TABLE supabase_migrations.schema_migrations ADD COLUMN IF NOT EXISTS statements text[];
+ALTER TABLE supabase_migrations.schema_migrations ADD COLUMN IF NOT EXISTS name text;
+ALTER TABLE supabase_migrations.schema_migrations ADD COLUMN IF NOT EXISTS created_by text;
+ALTER TABLE supabase_migrations.schema_migrations ADD COLUMN IF NOT EXISTS idempotency_key text;
+ALTER TABLE supabase_migrations.schema_migrations ADD COLUMN IF NOT EXISTS rollback text[];
+CREATE UNIQUE INDEX IF NOT EXISTS schema_migrations_idempotency_key_key
+  ON supabase_migrations.schema_migrations(idempotency_key);
+SQL
+
 
 pg_dump "$SUPABASE_DB_URL" --data-only --no-owner --no-privileges \
   --table=supabase_migrations.schema_migrations \
