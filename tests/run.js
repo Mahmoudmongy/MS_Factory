@@ -51,8 +51,13 @@ ok('sync toolbar is removed but conflict recovery remains reachable from the con
 
 const collectorStart=cloud.indexOf('function collectSourceEffects(state)');
 const collectorEnd=cloud.indexOf('function stableJson(value)',collectorStart);
-let collectSourceEffects=null;
-try { collectSourceEffects=vm.runInNewContext('('+cloud.slice(collectorStart,collectorEnd).trim()+')'); } catch(e) {}
+const effectHelpersContext=vm.createContext({});
+let collectSourceEffects=null, normalizeSourceEffects=null;
+try {
+  vm.runInContext(cloud.slice(collectorStart,collectorEnd)+';this.collectSourceEffects=collectSourceEffects;this.normalizeSourceEffects=normalizeSourceEffects;',effectHelpersContext);
+  collectSourceEffects=effectHelpersContext.collectSourceEffects;
+  normalizeSourceEffects=effectHelpersContext.normalizeSourceEffects;
+} catch(e) {}
 const effectFixture={
   L:[
     {src:'doc',rid:7,a:1,dr:100,cr:0},
@@ -71,10 +76,6 @@ const effectAgain=collectSourceEffects?collectSourceEffects(effectFixture):{effe
 ok('effect collection is deterministic and does not mutate source state',JSON.stringify(effectResult.effects)===JSON.stringify(effectAgain.effects)&&effectFixture.L.length===3&&effectFixture.mv.length===2);
 const invalidEffectResult=collectSourceEffects?collectSourceEffects({L:[{src:'doc',a:1}],mv:[{src:'unknown',rid:1}]}):{invalid:[]};
 ok('effect collector reports missing IDs and unsupported source types instead of silently dropping them',invalidEffectResult.invalid.length===2);
-const normalizeStart=cloud.indexOf('function normalizeSourceEffects(state)');
-const normalizeEnd=cloud.indexOf('function stableJson(value)',normalizeStart);
-let normalizeSourceEffects=null;
-try { normalizeSourceEffects=vm.runInNewContext('('+cloud.slice(normalizeStart,normalizeEnd).trim()+')'); } catch(e) {}
 const canonicalFixture={
   accts:[{id:1,code:'1001',name:'الخزنة'},{id:2,code:'1100',name:'العملاء'}],
   items:[{id:21,name:'قماش',sku:'FB021',wh:1,unit:'متر',st:{أبيض:10}}],
