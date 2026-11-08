@@ -316,7 +316,7 @@ const remoteDeletedAbsent=planRemoteSourceEffectApply?planRemoteSourceEffectAppl
 ok('remote planner adopts tombstones when the local source is already absent',remoteDeletedAbsent.actions.length===1&&remoteDeletedAbsent.actions[0].op==='delete'&&remoteDeletedAbsent.actions[0].version===3);
 const remoteDeletePlan=planRemoteSourceEffectApply?planRemoteSourceEffectApply(canonicalFixture,[{...sameRemote,sync_version:4,deleted_at:'2026-11-08T00:00:00Z',payload:null}],{'["doc","91"]':3}):{actions:[],conflicts:[{}]};
 ok('remote tombstone schedules a safe reversal when the local effect version is known',
-  remoteDeletePlan.actions.length===1&&remoteDeletePlan.actions[0].op==='delete'&&remoteDeletePlan.actions[0].version===3);
+  remoteDeletePlan.actions.length===1&&remoteDeletePlan.actions[0].op==='delete'&&remoteDeletePlan.actions[0].version===4);
 const remoteDeleteState={...canonicalFixture,docs:[{id:91,no:'S-1'}],L:canonicalFixture.L.map(x=>({...x})),mv:canonicalFixture.mv.map(x=>({...x})),items:canonicalFixture.items.map(x=>({...x,st:{...x.st}}))};
 const remoteDeleteReversal=removeCanonicalSourceEffect?removeCanonicalSourceEffect(remoteDeleteState,normalized.effects[0]):{applied:false};
 const remoteDeleteDocument=removeSourceDocument?removeSourceDocument(remoteDeleteState,'doc','91'):{applied:false};
