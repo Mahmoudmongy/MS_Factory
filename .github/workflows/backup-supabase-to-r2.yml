@@ -4,6 +4,12 @@ on:
   schedule:
     - cron: "35 1 * * *"
   workflow_dispatch:
+    inputs:
+      run_confirmed:
+        description: "Run a backup now (only after the private R2 bucket, retention rules and secrets are configured)"
+        type: boolean
+        required: true
+        default: false
 
 permissions:
   contents: read
@@ -14,7 +20,7 @@ concurrency:
 
 jobs:
   backup:
-    if: github.ref == 'refs/heads/main'
+    if: github.ref == 'refs/heads/main' && vars.BACKUP_ENABLED == 'true' && (github.event_name != 'workflow_dispatch' || inputs.run_confirmed)
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
@@ -75,6 +81,8 @@ jobs:
           docker run --rm -v "$PWD:/backup" postgres:17 pg_dump "$SUPABASE_DB_URL" \
             --data-only --no-owner --no-privileges \
             --table=auth.users --table=auth.identities \
+            --table=auth.mfa_factors --table=auth.mfa_recovery_code_sets \
+            --table=auth.mfa_recovery_codes --table=auth.webauthn_credentials \
             --file=/backup/auth-users.sql
           test -s roles.sql
           test -s schema.sql
