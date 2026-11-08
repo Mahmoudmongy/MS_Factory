@@ -2,17 +2,57 @@
  * and exercise the real functions. No mocks of app logic. Exit code != 0 if any check fails.
  * Run: npm test   (requires: npm install  -> playwright)                                         */
 const http=require('http'),fs=require('fs'),path=require('path');let pw;try{pw=require('playwright')}catch(e){console.error('playwright is not installed. Run: npm install && npx playwright install chromium');process.exit(2)}
-const ROOT=path.join(__dirname,'..'),MIME={'.html':'text/html','.js':'text/javascript','.css':'text/css','.json':'application/json','.png':'image/png','.svg':'image/svg+xml','.md':'text/plain'};
-const server=http.createServer((q,r)=>{let u=decodeURIComponent(q.url.split('?')[0]);if(u.endsWith('/'))u+='index.html';if(u==='/index.html'){let html=fs.readFileSync(path.join(ROOT,'index.html'),'utf8');html=html.replace('<style>html{visibility:hidden}</style>','');html=html.replace(/<script type="module">[\s\S]*?<\/script>/,'');html=html.replace('<script type="module" src="./js/cloud-sync.js"></script>','');r.writeHead(200,{'Content-Type':'text/html'});r.end(html);return}const f=path.join(ROOT,u);if(!f.startsWith(ROOT)||!fs.existsSync(f)||fs.statSync(f).isDirectory()){r.writeHead(404);r.end('nf');return}r.writeHead(200,{'Content-Type':MIME[path.extname(f)]||'application/octet-stream'});fs.createReadStream(f).pipe(r)});
+const ROOT=path.join(__dirname,'..'),qaSql=fs.readFileSync(path.join(ROOT,'supabase/tests/qa_sync_regression.sql'),'utf8'),MIME={'.html':'text/html','.js':'text/javascript','.css':'text/css','.json':'application/json','.png':'image/png','.svg':'image/svg+xml','.md':'text/plain'};
+const server=http.createServer((q,r)=>{let u=decodeURIComponent(q.url.split('?')[0]);if(u.endsWith('/'))u+='index.html';if(u==='/index.html'){let html=fs.readFileSync(path.join(ROOT,'index.html'),'utf8');html=html.replace('<style>html{visibility:hidden}</style>','');html=html.replace(/<script type="module">[\s\S]*?<\/script>/,'');html=html.replace('<script type="module" src="./js/cloud-sync.js"></script>','');html=html.replace('</body>','<script src="./js/app.js"></script></body>');r.writeHead(200,{'Content-Type':'text/html'});r.end(html);return}const f=path.join(ROOT,u);if(!f.startsWith(ROOT)||!fs.existsSync(f)||fs.statSync(f).isDirectory()){r.writeHead(404);r.end('nf');return}r.writeHead(200,{'Content-Type':MIME[path.extname(f)]||'application/octet-stream'});fs.createReadStream(f).pipe(r)});
 const R=[];let fails=0;const ok=(n,c,x)=>{R.push(`${c?'PASS':'FAIL'}  ${n}${x!==undefined?'  => '+(typeof x=='object'?JSON.stringify(x):x):''}`);if(!c)fails++};
 (async()=>{
 await new Promise(r=>server.listen(0,r));const BASE='http://localhost:'+server.address().port+'/';
 const browser=await pw.chromium.launch();
 /* ---------- A. static checks on the real files ---------- */
-const app=fs.readFileSync(path.join(ROOT,'js/app.js'),'utf8'),idx=fs.readFileSync(path.join(ROOT,'index.html'),'utf8'),cloud=fs.readFileSync(path.join(ROOT,'js/cloud-sync.js'),'utf8'),css=fs.readFileSync(path.join(ROOT,'css/style.css'),'utf8');
+const app=fs.readFileSync(path.join(ROOT,'js/app.js'),'utf8'),idx=fs.readFileSync(path.join(ROOT,'index.html'),'utf8'),storage=fs.readFileSync(path.join(ROOT,'js/user-storage.js'),'utf8'),cloud=fs.readFileSync(path.join(ROOT,'js/cloud-sync.js'),'utf8'),core=fs.readFileSync(path.join(ROOT,'js/accounting-sync-core.js'),'utf8'),catalogMigration=fs.readFileSync(path.join(ROOT,'supabase/migrations/20261108090000_production_catalog_view.sql'),'utf8'),catalogGrantMigration=fs.readFileSync(path.join(ROOT,'supabase/migrations/20261108120000_restrict_production_catalog_grants.sql'),'utf8'),backupWorkflow=fs.readFileSync(path.join(ROOT,'.github/workflows/backup-supabase-to-b2.yml'),'utf8'),restoreScript=fs.readFileSync(path.join(ROOT,'scripts/restore-supabase-from-backup.sh'),'utf8'),backupExportScript=fs.readFileSync(path.join(ROOT,'scripts/export-auth-and-counts.sh'),'utf8'),cloudflareDeployWorkflow=fs.readFileSync(path.join(ROOT,'.github/workflows/cloudflare-deploy.yml'),'utf8'),productionConfigMigration=fs.readFileSync(path.join(ROOT,'supabase/migrations/20261108130000_production_factory_config_view.sql'),'utf8'),returnAccountingMigration=fs.readFileSync(path.join(ROOT,'supabase/migrations/20261108140000_allow_returns_in_accounting_sync.sql'),'utf8'),authSecurityMigration=fs.readFileSync(path.join(ROOT,'supabase/migrations/20261107225000_harden_auth_trigger_and_owner_functions.sql'),'utf8'),accountingRpcHardeningMigration=fs.readFileSync(path.join(ROOT,'supabase/migrations/20261108190000_secure_accounting_rpc_and_apply_inventory_deltas.sql'),'utf8'),productionReadModelMigration=fs.readFileSync(path.join(ROOT,'supabase/migrations/20261108210000_replace_definer_views_with_rls_read_models.sql'),'utf8'),accountRedactionMigration=fs.readFileSync(path.join(ROOT,'supabase/migrations/20261108220000_redact_account_balances_from_production_config.sql'),'utf8'),partnerProfileMigration=fs.readFileSync(path.join(ROOT,'supabase/migrations/20261108240000_preserve_customer_supplier_profile_fields.sql'),'utf8'),masterSyncMigration=fs.readFileSync(path.join(ROOT,'supabase/migrations/20261108250000_version_master_data_sync.sql'),'utf8'),masterSyncHardeningMigration=fs.readFileSync(path.join(ROOT,'supabase/migrations/20261108260000_allow_negative_stock_and_validate_master_raw.sql'),'utf8'),softDeleteMigration=fs.readFileSync(path.join(ROOT,'supabase/migrations/20261108270000_versioned_soft_delete_business_records.sql'),'utf8'),detailAuditMigration=fs.readFileSync(path.join(ROOT,'supabase/migrations/20261108280000_add_detail_sync_audit_columns.sql'),'utf8'),invoiceAmbiguityMigration=fs.readFileSync(path.join(ROOT,'supabase/migrations/20261108290000_fix_invoice_item_delete_ambiguity.sql'),'utf8'),updatedByIndexMigration=fs.readFileSync(path.join(ROOT,'supabase/migrations/20261108300000_index_updated_by_foreign_keys.sql'),'utf8'),adminStockSyncMigration=fs.readFileSync(path.join(ROOT,'supabase/migrations/20261108230000_apply_admin_stock_deltas_to_production_catalog.sql'),'utf8'),css=fs.readFileSync(path.join(ROOT,'css/style.css'),'utf8');
 const names=[...app.matchAll(/^(?:async )?function ([A-Za-z0-9_$]+)\(/gm)].map(m=>m[1]),dup=[...new Set(names.filter((n,i)=>names.indexOf(n)!==i))];
 ok('app.js has no duplicate top-level function definitions',dup.length==0,dup);
+ok('conditional form values and descriptions are escaped, not inserted as HTML',/escapeHTML\(p\?p\.name/.test(app)&&/escapeHTML\(pre\.desc/.test(app)&&/escapeHTML\(v\.split/.test(app));
+ok('HTML text and attribute values are escaped before rendering user-controlled fields',/const escapeHTML =/.test(app)&&/escapeHTML\(p\.name\)/.test(app)&&/escapeHTML\(x\.name\)/.test(app)&&/escapeHTML\(S\.name\)/.test(app));
+ok('image URLs are restricted to safe image, HTTPS, relative or blob sources',/const safeImageSrc =/.test(app)&&/safeImageSrc\(s\)/.test(app));
+ok('governorate and city values are escaped before HTML insertion',/escapeHTML\(g\)/.test(app)&&app.includes('escapeHTML(x)}</option>'));
+ok('production colour/size labels and item names are escaped',/escapeHTML\(c\|\|"—"\)/.test(app)&&/escapeHTML\(z\|\|"الكمية"\)/.test(app)&&/escapeHTML\(it_\(m\.iid\)\.name\)/.test(app));
+ok('Excel sheet names and imported column headers are escaped',/escapeHTML\(WZ\.sheet\)/.test(app)&&/escapeHTML\(h\)/.test(app)&&/escapeHTML\(n\)/.test(app));
+ok('ledger account and partner labels are escaped before rendering',/escapeHTML\(an\(l\.a\)\)/.test(app)&&/escapeHTML\(pn\(l\.pid\)\)/.test(app));
+ok('persisted logo and uploaded document images pass through the safe image URL filter',/safeImageSrc\(S\.logo\)/.test(app)&&/safeImageSrc\(D\.img\)/.test(app));
+ok('stored logo preview is sanitized and date-filter/journal values are escaped before HTML insertion',app.includes('<img src="${safeImageSrc(S.logo)}" width="80">')&&app.includes('escapeHTML(p.from||"")')&&app.includes('escapeHTML(TL.from||"")')&&app.includes('escapeHTML(pre.date||td())')&&app.includes('escapeHTML(R.from||"")'));
+ok('dynamic account, partner, product, warehouse and document identifiers are escaped in option/data attributes',app.includes('value="\${escapeHTML(a.id)}"')&&app.includes('value="\${escapeHTML(p.id)}"')&&app.includes('value="\${escapeHTML(i.id)}"')&&app.includes('value="\${escapeHTML(w.id)}"')&&app.includes('data-d="\${escapeHTML(d.id)}"'));
+ok('formatted dates and transaction counterparties are escaped in HTML text contexts',app.includes('escapeHTML(dfm(p.idate))')&&app.includes('escapeHTML(dfm(d.date))')&&app.includes('escapeHTML(sd(j))')&&app.includes('escapeHTML(x.w||"")'));
+ok('custom currency labels are escaped in account and balance views',app.includes('<td>${escapeHTML(cur_(a))}</td>')&&app.includes('${escapeHTML(cur_(a))})</th>')&&app.includes('${escapeHTML(c)}'));
+
+
+ok('report tables escape untrusted cells and only render explicitly marked internal links',app.includes('const cell=c=>c&&typeof c==="object"&&c.__msSafeHtml===true?c.html:escapeHTML(c??"")')&&app.includes('__msSafeHtml:true'));
+ok('print views sanitize the company logo, document image, invoice number and voucher account labels',/safeImageSrc\(S\.logo\)/.test(app)&&/safeImageSrc\(d\.img\)/.test(app)&&/escapeHTML\(no\|\|""\)/.test(app)&&/escapeHTML\(an\(x\.a\)\)/.test(app));
 ok('customer/supplier rows expose permission-gated edit actions',app.includes('pForm(${c},${p.id})')&&app.includes('can("edit")'));
+ok('customer and supplier sync preserves both roles, wholesale/retail type, governorate, city, email, address and raw profile',cloud.includes('customer_type: p.type === "w"')&&cloud.includes('governorate: String(getField(p, ["gov", "governorate"])')&&cloud.includes('city: String(getField(p, ["city"])')&&cloud.includes('raw')&&cloud.includes('entry.isCustomer')&&cloud.includes('entry.isSupplier'));
+ok('partner download restores customer/supplier flags and retail/wholesale classification instead of type=customer/supplier',cloud.includes('c: 1')&&cloud.includes('s: 1')&&cloud.includes('type: c.customer_type === "wholesale" ? "w" : "r"')&&cloud.includes('mergeCloudPartners'));
+ok('partner and product pulls refresh existing records only when no local changes are pending',cloud.includes('mergeCloudPartners(S.partners || [], cloudPartners, refreshPartners)')&&cloud.includes('function mergeCloudProducts(')&&cloud.includes('mergeCloudProducts(S.items, cloudProducts, !localStorage.getItem(PENDING_SYNC_KEY))'));
+ok('customer, supplier and product master writes use versioned compare-and-swap RPCs rather than direct upserts',cloud.includes('syncVersionedMasterRecord("customers"')&&cloud.includes('syncVersionedMasterRecord("suppliers"')&&cloud.includes('syncVersionedMasterRecord("products"')&&cloud.includes('sync_factory_master_record')&&!/supabase\.from\("(customers|suppliers|products)"\)\.upsert/.test(cloud));
+ok('master-data conflicts preserve the cloud copy and are counted instead of silently overwriting offline edits',cloud.includes('_cloudCustomersConflict')&&cloud.includes('_cloudSuppliersConflict')&&cloud.includes('_cloudProductsConflict')&&cloud.includes('masterConflicts += m.conflicts'));
+ok('master-data conflicts can be resolved by an administrator from the sync screen with both copies backed up first',cloud.includes('window.resolveCloudMasterConflict')&&cloud.includes('mgr6-master-conflict-backups')&&cloud.includes('localCopy: clone(local)')&&cloud.includes('cloudCopy: clone(conflict.serverCopy)')&&app.includes('masterConflicts.length?')&&app.includes('اعتماد نسخة الجهاز')&&app.includes('اعتماد السحابة'));
+ok('master conflict recovery only supports the three approved master tables and admin accounts',cloud.includes('["customers","suppliers","products"].includes(table)')&&cloud.includes('if (!profile?.is_admin)')&&cloud.includes('syncVersionedMasterRecord("products"'));
+ok('QA database regression suite includes purchase, purchase-return and outgoing-payment cycles',qaSql.includes("'purchase'")&&qaSql.includes('"return_type":"purchase_return"')&&qaSql.includes('"direction":"out"')&&qaSql.includes("qa-purchase-invoice-cas")&&qaSql.includes("qa-purchase-return-cas")&&qaSql.includes('sync_factory_state(1')&&qaSql.includes('Stale administrator snapshot writer accepted')&&qaSql.includes('Stale invoice writer accepted'));
+ok('QA database regression suite uses valid dollar quoting and always rolls back fixtures',qaSql.trim().endsWith('ROLLBACK;')&&!/DO \$(?!\$)/.test(qaSql)&&!/END \$;/.test(qaSql));
+ok('deleting synced invoices, returns, vouchers and production orders queues versioned cloud tombstones',app.includes('window.queueCloudDeletion(table,record.id,record._cloudVersion||0,record)')&&cloud.includes('CLOUD_DELETE_QUEUE_KEY')&&cloud.includes('rpc("delete_factory_detail"')&&cloud.includes('p_expected_version: Number(item.expectedVersion || 0)'));
+ok('cloud pulls exclude tombstoned documents and versioned upserts can explicitly restore a deleted record',cloud.includes('.from("invoices").select("*").eq("user_id", owner).eq("is_deleted", false)')&&cloud.includes('.from("returns").select("*").eq("user_id", owner).eq("is_deleted", false)')&&cloud.includes('.from("vouchers").select("*").eq("user_id", owner).eq("is_deleted", false)')&&cloud.includes('.from("production_orders").select("*").eq("user_id", owner).eq("is_deleted", false)')&&softDeleteMigration.includes('is_deleted = false'));
+ok('detail delete audit migration adds updated_by and timestamp triggers for returns vouchers and production orders',detailAuditMigration.includes('public.returns')&&detailAuditMigration.includes('public.vouchers')&&detailAuditMigration.includes('public.production_orders')&&detailAuditMigration.includes('updated_by uuid')&&detailAuditMigration.includes('set_detail_sync_audit_fields'));
+ok('updated_by foreign keys on all versioned master and detail tables have covering indexes',["customers","factory_accounting_state","production_orders","products","returns","suppliers","vouchers"].every(t=>updatedByIndexMigration.includes("idx_"+t+"_updated_by")));
+ok('invoice sync migration qualifies invoice_items alias to avoid output-variable ambiguity',invoiceAmbiguityMigration.includes('DELETE FROM public.invoice_items AS ii WHERE ii.invoice_id = v_invoice_id AND ii.user_id = v_owner_id'));
+ok('soft-delete RPC enforces module permissions, expected versions, idempotent retries and authenticated-only execution',softDeleteMigration.includes('public.delete_factory_detail')&&softDeleteMigration.includes('private.can_access_factory_owner')&&softDeleteMigration.includes('ERRCODE=\'40001\'')&&softDeleteMigration.includes('GRANT EXECUTE ON FUNCTION public.delete_factory_detail')&&softDeleteMigration.includes('IF v_deleted THEN'));
+ok('deletion conflicts are not auto-retried or discarded and require an explicit admin decision',cloud.includes('unresolved cloud deletion conflict')&&cloud.includes('window.resolveCloudDeletionConflict')&&cloud.includes('localStorage.setItem(CLOUD_DELETE_CONFLICT_KEY')&&app.includes('deletionConflicts.length?')&&app.includes('تأكيد الحذف'));
+
+
+ok('master-data SQL RPC enforces owner/module permissions, payload validation and optimistic versions',masterSyncMigration.includes('SECURITY DEFINER')&&masterSyncMigration.includes('private.can_access_factory_owner')&&masterSyncMigration.includes('p_expected_version')&&masterSyncMigration.includes('ERRCODE=\'40001\'')&&masterSyncMigration.includes('sync_version='));
+ok('master-data sync permits negative on-hand stock but rejects malformed raw JSON and negative prices',masterSyncHardeningMigration.includes('Raw master-data record must be a JSON object')&&!masterSyncHardeningMigration.includes("p_payload->>'qty','')::numeric,0)<0")&&masterSyncHardeningMigration.includes("p_payload->>'buy_price','')::numeric,0)<0"));
+
+
+ok('customer/supplier profile columns retain raw JSON for lossless restore',partnerProfileMigration.includes('ALTER TABLE public.customers')&&partnerProfileMigration.includes('ADD COLUMN IF NOT EXISTS raw jsonb')&&partnerProfileMigration.includes('ALTER TABLE public.suppliers')&&partnerProfileMigration.includes("'gov', governorate")&&partnerProfileMigration.includes("'city', city"));
+
 ok('partner edit preserves the stable record ID and updates the existing object',app.includes('function saveP(id)')&&app.includes('if(old)Object.assign(old,data)'));
 ok('employee edit preserves the existing employee record',app.includes('function saveE(id)')&&app.includes('if(old)Object.assign(old,data)'));
 ok('warehouse names can be edited without replacing warehouse IDs',app.includes('function saveWh(id)')&&app.includes('w.name=n'));
@@ -36,7 +76,7 @@ const createEmployeeFn=fs.readFileSync(path.join(ROOT,'supabase/functions/create
 const changePasswordFn=fs.readFileSync(path.join(ROOT,'supabase/functions/change-initial-password/index.ts'),'utf8');
 const changePasswordPage=fs.readFileSync(path.join(ROOT,'change-password.html'),'utf8')+fs.readFileSync(path.join(ROOT,'js/change-password.js'),'utf8');
 ok('new employee accounts require a first-login password change',/must_change_password:\s*true/.test(createEmployeeFn));
-ok('online and cached profile gates redirect flagged employees before opening the app',/profile\.must_change_password === true/.test(idx)&&/cachedProfile\.must_change_password === true/.test(idx)&&/change-password\.html/.test(idx));
+ok('online and cached profile gates redirect flagged employees before opening the app',idx.includes('profile.must_change_password===true')&&idx.includes('cached.must_change_password===true')&&idx.includes('change-password.html'));
 ok('first-login password endpoint verifies the signed-in user before privileged password update',/caller\.auth\.getUser\(\)/.test(changePasswordFn)&&/admin\.auth\.admin\.updateUserById\(\s*authData\.user\.id,\s*\{\s*password\s*\}\s*,\s*\)/.test(changePasswordFn));
 ok('first-login password endpoint only clears the flag for the authenticated employee',/profile\.must_change_password !== true/.test(changePasswordFn)&&/\.eq\("id", authData\.user\.id\)/.test(changePasswordFn)&&/must_change_password: false/.test(changePasswordFn));
 ok('first-login page validates the new password and invokes the protected Supabase function',/password\.length < 10/.test(changePasswordPage)&&/functions\.invoke\(['"]change-initial-password['"]/.test(changePasswordPage));
@@ -52,46 +92,199 @@ ok('sync toolbar is removed but conflict recovery remains reachable from the con
 ok('invoice cloud sync uses the atomic versioned RPC',/rpc\(["']sync_invoice["']/.test(cloud)&&/p_expected_version/.test(cloud)&&/sync_version/.test(cloud));
 ok('inventory sync uploads the actual S.items array used by the stock screens',/for \(const arr of \[S\.items, S\.products, S\.prods\]\)/.test(cloud));
 ok('inventory sync totals all colour/size variants instead of reading a missing qty field',/Object\.values\(variants\)\.reduce/.test(cloud)&&/const variants = pr\.st/.test(cloud));
-ok('inventory sync stores the full local item in products.raw for lossless restoration',/image_url:[\s\S]{0,500}raw: pr/.test(cloud));
+ok('inventory sync stores the complete local item in products.raw while excluding only internal cloud-version metadata',cloud.includes('raw: (() => { const raw = { ...pr };')&&cloud.includes('delete raw._cloudProductsVersion')&&cloud.includes('delete raw._cloudProductsUpdatedAt'));
 ok('inventory download restores records into S.items, the real inventory source used by the app',/if \(!Array\.isArray\(S\.items\)\) S\.items = \[\]/.test(cloud)&&/S\.items = m\.arr/.test(cloud));
-ok('employee detail-only sync remains marked partial in the background',/admin \? "synced" : "partial"/.test(cloud)&&/مزامنة القيود والحركات المحاسبية الكاملة لحساب الموظف لم تكتمل بعد/.test(cloud));
+ok('employee detail-only sync remains marked partial in the background',/admin \? "synced" : "partial"/.test(cloud)&&/تم رفع الجداول وقيود الأستاذ وحركات المخزون المسموح بها حسب صلاحيات حسابك/.test(cloud));
+ok('RELEASE GATE: ledger and stock sync is wired to upload, pull, and the versioned RPC',/sync_factory_accounting/.test(cloud)&&/factory_accounting_state/.test(cloud)&&/await syncAccountingSnapshots\(S, profile, errors\)/.test(cloud)&&/replaceAccountingPayload\(S, source, remotePayload\)/.test(cloud)&&/state\.L/.test(core)&&/state\.mv/.test(core));
+ok('sales and purchase returns are accepted as accounting sources in both ledger and movement validation', (returnAccountingMigration.split('public.returns AS ret').length-1)===2 && returnAccountingMigration.includes('public.invoices AS inv'));
+ok('owner lookup runs as invoker with empty search_path while only the Auth trigger remains SECURITY DEFINER',authSecurityMigration.includes('SECURITY INVOKER')&&authSecurityMigration.includes('SET search_path = \'\'')&&authSecurityMigration.includes('SECURITY DEFINER')&&authSecurityMigration.includes('REVOKE ALL ON FUNCTION public.handle_new_user() FROM PUBLIC, anon, authenticated'));
+ok('production-only catalog exposes quantities and material cost but not retail prices, wholesale prices or raw records',/from\("production_catalog"\)/.test(cloud)&&/buy_price,variant,quantity/.test(cloud)&&/private\.can_access_factory_owner\(p\.user_id, 'production', false\)/.test(catalogMigration)&&!/retail_price|wholesale_price|raw/.test(catalogMigration));
+ok('production catalog is read-only for authenticated users and has no anonymous access',/REVOKE ALL ON TABLE public\.production_catalog FROM authenticated, PUBLIC, anon/.test(catalogGrantMigration)&&/GRANT SELECT ON TABLE public\.production_catalog TO authenticated/.test(catalogGrantMigration));
+ok('production-only employees receive safe factory chart, warehouse and barcode configuration without accounting balances',/from\("production_factory_config"\)/.test(cloud)&&/S\.accts = config\.accts/.test(cloud)&&/S\.wh = config\.warehouses/.test(cloud)&&/!productionConfigs\?\.length/.test(cloud)&&/private\.can_access_factory_owner\(fs\.user_id, 'production', false\)/.test(productionConfigMigration)&&!/state->'L'|state->'mv'|state->'docs'|state->'partners'/.test(productionConfigMigration));
+ok('accounting RPC is SECURITY DEFINER with an empty search_path and authenticated users cannot write its table directly',/SECURITY DEFINER/.test(accountingRpcHardeningMigration)&&/SET search_path = ''/.test(accountingRpcHardeningMigration)&&/REVOKE INSERT, UPDATE, DELETE ON TABLE public\.factory_accounting_state FROM authenticated/.test(accountingRpcHardeningMigration));
+ok('invoice and production RPCs apply atomic stock deltas from versioned old/new movement snapshots',/v_previous_payload/.test(accountingRpcHardeningMigration)&&/movement_delta AS/.test(accountingRpcHardeningMigration)&&/ON CONFLICT\(product_id,variant\)/.test(accountingRpcHardeningMigration)&&/NOT v_is_admin AND p_source IN/.test(accountingRpcHardeningMigration));
+ok('administrator invoice/production/manual-journal snapshots also update normalized stock for production employees',adminStockSyncMigration.includes("IF p_source IN ('invoices','production') OR (v_is_admin AND p_source='settings') THEN")&&adminStockSyncMigration.includes('movement_delta AS')&&adminStockSyncMigration.includes('ON CONFLICT(product_id,variant)'));
+
+ok('partial-permission employees never rebuild stock from incomplete movement history',cloud.includes('if (accountingChanged && admin) recalcAccountingInventory(S);')&&cloud.includes('mergeProductionCatalog(S.items, cloudProducts, !localStorage.getItem(PENDING_SYNC_KEY))')&&cloud.includes('mergeProductionCatalog(S.items || [], groupProductionCatalogRows(catalogRows || []), true)'));
+ok('production catalog access requires the explicit production permission and cloud state refresh preserves open forms',cloud.includes('profile.permissions?.production === true')&&app.includes('window.applyFactoryCloudState=function(state)')&&app.includes('keepOpenForm')&&cloud.includes('window.applyFactoryCloudState(S)'));
+ok('production data and factory config are RLS-protected tables, not owner-executed views',productionReadModelMigration.includes('CREATE TABLE IF NOT EXISTS public.production_catalog')&&productionReadModelMigration.includes('CREATE TABLE IF NOT EXISTS public.production_factory_config')&&productionReadModelMigration.includes('ALTER TABLE public.production_catalog ENABLE ROW LEVEL SECURITY')&&productionReadModelMigration.includes('ALTER TABLE public.production_factory_config ENABLE ROW LEVEL SECURITY')&&!productionReadModelMigration.includes('CREATE OR REPLACE VIEW'));
+ok('private triggers keep the production read models synchronized without exposing write functions',productionReadModelMigration.includes('private.sync_production_catalog_from_product')&&productionReadModelMigration.includes('private.sync_production_catalog_from_inventory')&&productionReadModelMigration.includes('private.sync_production_factory_config')&&productionReadModelMigration.includes('REVOKE ALL ON FUNCTION private.'));
+ok('production employee account projection allowlists identifiers only and removes cash/balance fields',accountRedactionMigration.includes("'id', account.value->'id'")&&accountRedactionMigration.includes("'code', account.value->'code'")&&accountRedactionMigration.includes("'name', account.value->'name'")&&!accountRedactionMigration.includes("'cash', account.value")&&!accountRedactionMigration.includes("'balance', account.value")&&accountRedactionMigration.includes('Rebuild existing projections'));
+
+ok('legacy JSON stock balances backfill each missing normalized inventory variant without overwriting newer stock',productionReadModelMigration.includes("jsonb_array_elements(COALESCE(fs.state->'items'")&&productionReadModelMigration.includes("jsonb_each_text(CASE WHEN jsonb_typeof(item.value->'st')='object'")&&productionReadModelMigration.includes('ON CONFLICT (product_id,variant) DO NOTHING'));
+
+
+
+ok('database backups are encrypted before B2 upload and plaintext exports are removed',/age --encrypt/.test(backupWorkflow)&&/aws s3 cp ms-factory-db-backup\.tar\.gz\.age/.test(backupWorkflow)&&/Remove plaintext exports/.test(backupWorkflow)&&!/aws s3 cp ms-factory-db-backup\.tar\.gz\"/.test(backupWorkflow));
+ok('backup workflow requires 90-day Compliance Object Lock and 120-day lifecycle expiry',/DefaultRetention\.Mode == \"COMPLIANCE\"/.test(backupWorkflow)&&/DefaultRetention\.Days == 90/.test(backupWorkflow)&&/Expiration\.Days/.test(backupWorkflow)&&/>= 120/.test(backupWorkflow)&&/backups\/database\/ms-factory\//.test(backupWorkflow));
+ok('backup workflow stops before exceeding the 9 GB B2 prefix safety ceiling',/9000000000/.test(backupWorkflow)&&/used_bytes/.test(backupWorkflow)&&/archive_bytes/.test(backupWorkflow)&&/sidecar_bytes/.test(backupWorkflow));
+ok('backup job remains disabled until explicitly enabled and manually confirmed',backupWorkflow.includes("vars.BACKUP_ENABLED == 'true'")&&backupWorkflow.includes('inputs.run_backup == true')&&backupWorkflow.includes('default: false'));
+ok('backup workflow uses Supabase CLI v3 remote URL equals syntax and verifies all SQL exports inside the encrypted archive',backupWorkflow.includes('npx --yes supabase@3.0.0 db dump --remote="$SUPABASE_DB_URL"')&&!backupWorkflow.includes('--remote "$SUPABASE_DB_URL"')&&!backupWorkflow.includes('supabase@latest')&&!backupWorkflow.includes('npm install --global supabase')&&backupWorkflow.includes('database-files.sha256')&&backupWorkflow.includes('sha256sum roles.sql schema.sql data.sql auth-users.sql migration-history-schema.sql migration-history.sql auth-trigger.sql auth-row-counts.txt public-row-counts.txt'));
+ok('backup exports the actual Supabase migration history table and its row count',backupExportScript.includes('CREATE SCHEMA IF NOT EXISTS supabase_migrations')&&backupExportScript.includes('CREATE TABLE IF NOT EXISTS supabase_migrations.schema_migrations')&&backupExportScript.includes('--table=supabase_migrations.schema_migrations')&&backupWorkflow.includes('migration-history-schema.sql')&&backupWorkflow.includes('migration-count.txt')&&backupWorkflow.includes('test -s "$file"')&&backupWorkflow.includes('migration-history.sql'));
+ok('encrypted backup records row counts for every public and included Auth table, and the restore script verifies each count',backupWorkflow.includes('public-row-counts.txt')&&backupWorkflow.includes('auth-row-counts.txt')&&restoreScript.includes('done < public-row-counts.txt')&&restoreScript.includes('done < auth-row-counts.txt')&&restoreScript.includes('restored public.$table row count')&&restoreScript.includes('restored auth.$table row count'));
+ok('backup export helper writes newline-delimited Auth and public row-count manifests and is syntax-checked in CI',backupWorkflow.includes('sh /backup/scripts/export-auth-and-counts.sh')&&backupWorkflow.includes('backup-scripts')&&backupExportScript.includes("printf '%s=%s\\n'")&&backupExportScript.includes('webauthn_credentials')&&backupExportScript.includes('mfa_recovery_codes'));
+
+ok('B2 backup workflow enforces a 9 GB ceiling across the dedicated backup prefix before upload',backupWorkflow.includes('aws s3api list-objects-v2 --bucket "$B2_BUCKET" --prefix "backups/database/ms-factory/"')&&backupWorkflow.includes("jq '[.Contents[]?.Size] | add // 0'")&&backupWorkflow.includes('9000000000')&&backupWorkflow.includes('used_bytes + archive_bytes + sidecar_bytes'));
+
+
+ok('encrypted backup contains MFA recovery data and Auth trigger restoration files',backupExportScript.includes('mfa_factors')&&backupExportScript.includes('mfa_recovery_codes')&&backupExportScript.includes('webauthn_credentials')&&backupWorkflow.includes('auth-trigger.sql'));
+ok('backup refuses unsupported Storage objects and verifies encrypted B2 read-back',backupWorkflow.includes('storage-bucket-count.txt')&&backupWorkflow.includes('Storage buckets exist')&&backupWorkflow.includes('cmp --silent')&&backupWorkflow.includes('get-object-retention')&&backupWorkflow.includes('Retention.Mode == \"COMPLIANCE\"')&&backupWorkflow.includes('head-object'));
+ok('encrypted backup checksum sidecar is uploaded and read-back verified with the archive',backupWorkflow.includes('sidecar_key="$key.sha256"')&&backupWorkflow.includes('cmp --silent ms-factory-db-backup.tar.gz.age.sha256'));
+ok('offline restore refuses production, requires the matching QA ref and verifies encrypted plus SQL checksums',restoreScript.includes('PRODUCTION_PROJECT_REF="yvrislcbbhtruwdnuooz"')&&restoreScript.includes('RESTORE_TARGET_PROJECT_REF')&&restoreScript.includes('sha256sum -c "$checksum_name"')&&restoreScript.includes('sha256sum -c database-files.sha256'));
+ok('offline restore refuses non-empty Auth, application and Storage targets before applying SQL',restoreScript.includes('target_users')&&restoreScript.includes('target_buckets')&&restoreScript.includes('Restore refused')&&restoreScript.includes('SELECT count(*) FROM public.$table'));
+ok('restore revokes Supabase default table grants before schema import and creates migration history before data',restoreScript.indexOf('ALTER DEFAULT PRIVILEGES IN SCHEMA public REVOKE ALL ON TABLES')<restoreScript.indexOf('-f schema.sql')&&restoreScript.indexOf('-f migration-history-schema.sql')<restoreScript.indexOf('-f migration-history.sql'));
+ok('Auth backup preserves users, identities and MFA factors but excludes live sessions and bearer tokens',backupExportScript.includes('for table in users identities mfa_factors')&&backupExportScript.includes('"--table=auth.$table"')&&backupExportScript.includes('auth.users')&&backupExportScript.includes('auth.identities')&&!backupExportScript.includes('sessions')&&!backupExportScript.includes('refresh_tokens')&&!backupExportScript.includes('one_time_tokens'));
+ok('offline restore imports Auth before public data, restores exact migration history, then recreates the Auth trigger last',restoreScript.indexOf('-f schema.sql')<restoreScript.indexOf('-f migration-history-schema.sql')&&restoreScript.indexOf('-f migration-history-schema.sql')<restoreScript.indexOf('-f auth-users.sql')&&restoreScript.indexOf('-f auth-users.sql')<restoreScript.indexOf('-f data.sql')&&restoreScript.indexOf('-f data.sql')<restoreScript.indexOf('-f migration-history.sql')&&restoreScript.indexOf('-f migration-history.sql')<restoreScript.indexOf('-f auth-trigger.sql')&&restoreScript.includes('supabase_migrations.schema_migrations'));
+ok('Cloudflare production deployment is manual-only and requires an explicit confirmation checkbox',cloudflareDeployWorkflow.includes('workflow_dispatch:')&&cloudflareDeployWorkflow.includes('deploy_confirmed')&&cloudflareDeployWorkflow.includes('if: inputs.deploy_confirmed == true')&&!cloudflareDeployWorkflow.includes('push:'));
+
+
+ok('production-only employees can upload and pull their production orders',/if \(!admin && !\["customers", "suppliers", "invoices", "inventory", "production", "settings"\]\.some\(canWrite\)\)/.test(cloud)&&/if \(canWrite\("production"\)\)/.test(cloud)&&/if \(!\["customers","suppliers","invoices","inventory","production","settings","reports"\]\.some\(canRead\)\)/.test(cloud));
+const detailSyncMigration=fs.readFileSync(path.join(ROOT,'supabase/migrations/20261108000100_atomic_versioned_factory_detail_sync.sql'),'utf8');
+ok('returns, vouchers and production orders use the atomic versioned detail RPC',/rpc\(["']sync_factory_detail["']/.test(cloud)&&/p_expected_version/.test(cloud)&&/sync_version/.test(cloud));
+ok('detail sync reads server versions and preserves stale-cloud copies as explicit conflicts',/remoteVersion > localVersion/.test(cloud)&&/serverCopy: remote/.test(cloud)&&/d\._cloudVersion = Number\(result\.row\.sync_version\)/.test(cloud)&&/v\._cloudVersion = Number\(result\.row\.sync_version\)/.test(cloud)&&/o\._cloudVersion = Number\(result\.row\.sync_version\)/.test(cloud));
+ok('detail sync SQL enforces compare-and-swap and module-specific permissions',/SECURITY INVOKER/.test(detailSyncMigration)&&/FOR UPDATE/.test(detailSyncMigration)&&/40001/.test(detailSyncMigration)&&/private\.can_access_factory_owner\(v_owner_id, v_permission, true\)/.test(detailSyncMigration));
+
 ok('invoice sync does not delete invoice items through separate client requests',!/from\(["']invoice_items["']\)\.delete/.test(cloud));
 ok('returns are not misclassified as sale/purchase invoices',/\["sale", "pur"\]\.includes\(d\.t\)/.test(cloud));
 ok('cloud invoice merge preserves newer remote copies as explicit conflicts',/mergeCloudInvoices/.test(cloud)&&/serverCopy: remote/.test(cloud));
 ok('online reconnect pulls remote changes before uploading local cache',/const pulled = await loadFromTablesMerge\(true\)/.test(cloud)&&cloud.indexOf('const pulled = await loadFromTablesMerge(true)')<cloud.indexOf('const pushed = await uploadToTables(false)'));
 ok('online startup sync runs even when local cache already has data',/if \(navigator\.onLine\) \{\s*\/\/ Always refresh remote data on launch/.test(cloud)&&/scheduleAutoSync\(1200\)/.test(cloud));
-ok('offline boot permits only a previously verified cached profile for the same user',/factory-profile:/.test(idx)&&/cachedProfile\.id === data\.session\.user\.id/.test(idx)&&/if \(!navigator\.onLine\)/.test(idx));
+ok('offline boot permits only a previously verified cached profile for the same user',idx.includes('factory-profile:')&&idx.includes('cached.id===userId')&&idx.includes('if(!navigator.onLine)'));
 ok('reconnect refreshes the profile before using permissions for cloud sync',/myProfile = null; ownerIdCache = null; window\.__factoryAuthProfile = null;/.test(cloud)&&/const freshProfile = await getMyProfile\(\)/.test(cloud));
 
-ok('offline shell precaches the stable production app and first-login password page',/auth\.html/.test(sw)&&/change-password\.html/.test(sw)&&/js\/change-password\.js/.test(sw)&&/js\/app\.js/.test(sw)&&/factory-v10/.test(sw));
+ok('offline shell precaches the stable production app and first-login password page',/auth\.html/.test(sw)&&/change-password\.html/.test(sw)&&/js\/change-password\.js/.test(sw)&&/js\/app\.js/.test(sw)&&/factory-v12/.test(sw));
 ok('mobile and desktop usability includes visible keyboard focus and safe-area spacing',/focus-visible/.test(css)&&/safe-area-inset-bottom/.test(css));
-ok('offline-created detail records are uploaded even when the full snapshot has a preserved conflict',/if \(admin && !snapshotConflict\)/.test(cloud)&&/for \(const \{ key, arr \} of partnerArrays\)/.test(cloud)&&/hasSnapshotConflict/.test(cloud));
+ok('offline-created detail records are uploaded even when the full snapshot has a preserved conflict',/if \(admin && !snapshotConflict && !accountingConflict && errors\.length === 0\)/.test(cloud)&&/for \(const \{ key, arr \} of partnerArrays\)/.test(cloud)&&/hasSnapshotConflict/.test(cloud));
 ok('local save writes a durable pending-sync marker before network recovery',/mgr6-sync-pending/.test(app)&&/localStorage\.setItem\("mgr6-sync-pending"/.test(app));
 ok('sync indicator is a separate small icon and turns blue while syncing',/id="sync-icon"/.test(idx)&&/syncIcon\.classList\.toggle\('syncing', syncState === 'saving'\)/.test(cloud)&&/#sync-icon\.syncing\{color:#38bdf8/.test(css));
 ok('header uses an icon-only light/dark toggle and language stays out of the header',/<button id="thb"/.test(idx)&&!idx.includes('id="lgb"')&&/togLang\(\)/.test(app)&&/التبديل إلى الوضع الداكن/.test(app));
+ok('authenticated bootstrap scopes mgr6 local data by user before loading the app',idx.includes('activateUserStorage(profile)')&&idx.indexOf('activateUserStorage(profile)')<idx.indexOf("loadClassicScript('./js/app.js')")&&idx.includes("await loadClassicScript('./js/app.js')")&&!idx.includes('<script src="./js/app.js"></script>'));
+ok('per-user storage helper is included in the offline shell cache',/js\/user-storage\.js/.test(sw)&&/factory-v12/.test(sw));
+ok('cloud synchronization starts only after the authenticated app shell has loaded',/await import\('\.\/js\/cloud-sync\.js'\)/.test(idx)&&idx.indexOf('await loadClassicScript')<idx.indexOf('await import'));
 ok('admin selector is labelled Admin in Arabic and English',/الأدمن \/ Admin/.test(app));
 ok('search filters update while typing and restore cursor focus after filtering',/function fbarType\(/.test(app)&&/oninput="fbarType\(/.test(app)&&/setSelectionRange\(start,end\)/.test(app));
 ok('opening an existing screen in a separate tab activates it instead of duplicating it',/let x=TB\.find\(y=>y\.kind=="screen"&&y\.sid==t\)/.test(app));
 ok('Excel export splits currency labels into a separate adjacent cell and keeps amounts numeric',/function exportCurrencyCell/.test(app)&&/\[h\+" \(قيمة\)","العملة"\]/.test(app));
 ok('legacy Excel importer supports multiple named sheets for customers, suppliers and inventory',/function impSheet\(/.test(app)&&/function templateExcel\(/.test(app)&&/customers:\[/.test(app)&&/suppliers:\[/.test(app)&&/WZ\.sheetNames/.test(app));
 ok('module navigation uses consistent purpose-specific SVG icons',/const APP_ICONS=/.test(app)&&/ico\("customer"\)/.test(app)&&/ico\("inventory"\)/.test(app));
-ok('offline service worker pre-caches Vite module assets discovered from the HTML shell',/matchAll\(\/\(\?:src\|href\)/.test(sw)&&/modulepreload/.test(idx+sw)&&/factory-v10/.test(sw));
+ok('offline service worker pre-caches Vite module assets discovered from the HTML shell',/matchAll\(\/\(\?:src\|href\)/.test(sw)&&/modulepreload/.test(idx+sw)&&/factory-v12/.test(sw));
 
 
 ok('invoice sync migration uses optimistic version checks and invoker security',/sync_version/.test(fs.readFileSync(path.join(ROOT,'supabase/migrations/20261107090901_20261107111000_atomic_invoice_sync.sql'),'utf8'))&&/SECURITY INVOKER/.test(fs.readFileSync(path.join(ROOT,'supabase/migrations/20261107090901_20261107111000_atomic_invoice_sync.sql'),'utf8'))&&/40001/.test(fs.readFileSync(path.join(ROOT,'supabase/migrations/20261107090901_20261107111000_atomic_invoice_sync.sql'),'utf8')));
 ok('full factory snapshots use optimistic versioned RPC writes instead of blind upserts',/rpc\(["']sync_factory_state["']/.test(cloud)&&/p_expected_version/.test(cloud)&&/40001/.test(fs.readFileSync(path.join(ROOT,'supabase/migrations/20261107155417_version_factory_state_snapshot.sql'),'utf8')));
 ok('internal snapshot and trigger RPC helpers explicitly revoke anonymous execution',/REVOKE ALL ON FUNCTION public\.sync_factory_state\(integer, jsonb\) FROM anon/.test(fs.readFileSync(path.join(ROOT,'supabase/migrations/20261107160145_revoke_anon_rpc_execute.sql'),'utf8'))&&/REVOKE ALL ON FUNCTION public\.touch_transaction_detail_updated_at\(\) FROM anon/.test(fs.readFileSync(path.join(ROOT,'supabase/migrations/20261107160145_revoke_anon_rpc_execute.sql'),'utf8')));
 ok('cross-device snapshot conflicts preserve local data and offer an explicit backed-up cloud restore',/mgr6-cloud-snapshot-conflict/.test(cloud)&&/window\.resolveCloudSnapshotConflict/.test(cloud)&&/resolveCloudSnapshotConflict\(\)/.test(app));
-ok('return invoices are uploaded and restored with stable IDs and conflict timestamps',/from\(["']returns["']\)[\s\S]{0,500}onConflict: "user_id,external_id"/.test(cloud)&&/cloudReturns/.test(cloud)&&/mergeCloudRecords/.test(cloud));
-ok('cash receipt/payment vouchers are uploaded and restored with full raw details',/from\(["']vouchers["']\)[\s\S]{0,500}onConflict: "user_id,external_id"/.test(cloud)&&/cloudVouchers/.test(cloud));
-ok('production orders are uploaded and restored with breakdown, cost and status',/from\(["']production_orders["']\)[\s\S]{0,600}onConflict: "user_id,external_id"/.test(cloud)&&/cloudOrders/.test(cloud));
-ok('return, voucher and production cloud records preserve update timestamps for conflict detection',/function mergeCloudRecords/.test(cloud)&&/serverCopy: remote/.test(cloud)&&/data\?\.updated_at/.test(cloud));
+ok('return invoices are uploaded and restored through the atomic versioned RPC',/syncVersionedDetail\(["']returns["']/.test(cloud)&&/cloudReturns/.test(cloud)&&/mergeCloudRecords/.test(cloud));
+ok('cash receipt/payment vouchers are uploaded and restored with full raw details through the atomic versioned RPC',/syncVersionedDetail\(["']vouchers["']/.test(cloud)&&/cloudVouchers/.test(cloud));
+ok('production orders are uploaded and restored with breakdown, cost and status through the atomic versioned RPC',/syncVersionedDetail\(["']production_orders["']/.test(cloud)&&/cloudOrders/.test(cloud));
+ok('return, voucher and production records preserve server versions and timestamps for conflict detection',/function mergeCloudRecords/.test(cloud)&&/remoteVersion > localVersion/.test(cloud)&&/result\.row\.updated_at/.test(cloud)&&/copy\._cloudVersion = Number\(remote\.sync_version/.test(cloud));
 ok('stale local returns, vouchers and production orders cannot overwrite newer cloud records',/d\._cloudConflict[\s\S]{0,180}resolve before uploading/.test(cloud)&&/v\._cloudConflict[\s\S]{0,180}resolve before uploading/.test(cloud)&&/o\._cloudConflict[\s\S]{0,180}resolve before uploading/.test(cloud));
 ok('transaction-detail migration adds raw JSON, stable IDs and unique per-factory keys',/ADD COLUMN IF NOT EXISTS external_id text/.test(fs.readFileSync(path.join(ROOT,'supabase/migrations/20261107155152_sync_transaction_detail_records.sql'),'utf8'))&&/production_orders_user_external_id_uidx/.test(fs.readFileSync(path.join(ROOT,'supabase/migrations/20261107155152_sync_transaction_detail_records.sql'),'utf8')));
 ok('invoice sync fix qualifies child-row deletion columns',/DELETE FROM public\.invoice_items AS ii/.test(fs.readFileSync(path.join(ROOT,'supabase/migrations/20261107090923_sync_invoice_delete_alias_fix.sql'),'utf8')));
 /* ---------- B. app in a desktop context ---------- */
 const ctx=await browser.newContext({viewport:{width:1280,height:900},acceptDownloads:true}),p=await ctx.newPage(),errs=[];p.on('pageerror',e=>errs.push(e.message));
 await p.goto(BASE);await p.waitForTimeout(500);
+const storageIsolation=await p.evaluate(async()=>{
+ const raw={get:Storage.prototype.getItem,set:Storage.prototype.setItem,remove:Storage.prototype.removeItem};
+ const oldState=raw.get.call(localStorage,'mgr6');
+ raw.set.call(localStorage,'mgr6','legacy-admin-state');
+ const {activateUserStorage}=await import('/js/user-storage.js');
+ activateUserStorage({id:'qa-admin-storage',is_admin:true});
+ const adminMigrated=localStorage.getItem('mgr6')==='legacy-admin-state';
+ localStorage.setItem('mgr6','admin-private-state');
+ activateUserStorage({id:'qa-worker-storage',is_admin:false});
+ const workerInitiallyEmpty=localStorage.getItem('mgr6')===null;
+ localStorage.setItem('mgr6','worker-private-state');
+ activateUserStorage({id:'qa-admin-storage',is_admin:true});
+ const adminIsolated=localStorage.getItem('mgr6')==='admin-private-state';
+ activateUserStorage({id:'qa-worker-storage',is_admin:false});
+ const workerIsolated=localStorage.getItem('mgr6')==='worker-private-state';
+ activateUserStorage({id:'__test',is_admin:true});
+ if(oldState!==null)localStorage.setItem('mgr6',oldState);
+ for(const key of ['factory-user:qa-admin-storage:mgr6','factory-user:qa-worker-storage:mgr6'])raw.remove.call(localStorage,key);
+ return {adminMigrated,workerInitiallyEmpty,adminIsolated,workerIsolated};
+});
+ok('offline local state is migrated to the admin account and isolated between admin and employee accounts',storageIsolation.adminMigrated&&storageIsolation.workerInitiallyEmpty&&storageIsolation.adminIsolated&&storageIsolation.workerIsolated,storageIsolation);
+const xssGeo=await p.evaluate(()=>{
+  const badGov='<img src=x onerror="window.__xss=1">';
+  const badCity='<svg onload="window.__xss=2">';
+  S.geo[badGov]=[badCity];
+  const host=document.createElement('div');ACT.appendChild(host);host.innerHTML=addrF({gov:badGov});
+  host.querySelector('#gv').value=badGov;gvChg();
+  const injected=!!host.querySelector('img,svg,script');
+  const literal=host.textContent.includes(badGov)&&host.textContent.includes(badCity);
+  host.remove();delete S.geo[badGov];return {injected,literal};
+});
+ok('XSS payloads in governorate/city names remain inert text in the live DOM',!xssGeo.injected&&xssGeo.literal,xssGeo);
+const xssForms=await p.evaluate(()=>{
+ const bad='<img src=x onerror="window.__xss=4">';
+ const partner={id:987654321,name:bad,phone:'',c:1,s:0,type:'r',gov:'',city:''};
+ const item={id:987654322,name:bad,model:'',sku:'QA-XSS',unit:'قطعة',wh:0,buy:0,retail:0,wholesale:0,st:{},img:''};
+ S.partners.push(partner);S.items.push(item);
+ pForm(1,partner.id);
+ const partnerInput=document.querySelector('#b1');
+ const partnerSafe=!!partnerInput&&partnerInput.value===bad&&!document.querySelector('#b1 img');
+ cl();
+ itemForm(item.id);
+ const itemInput=document.querySelector('#a1');
+ const itemSafe=!!itemInput&&itemInput.value===bad&&!document.querySelector('#a1 img');
+ cl();
+ S.partners=S.partners.filter(x=>x.id!==partner.id);S.items=S.items.filter(x=>x.id!==item.id);
+ return {partnerSafe,itemSafe};
+});
+ok('XSS payloads in customer and inventory item names stay inside form values',xssForms.partnerSafe&&xssForms.itemSafe,xssForms);
+
+
+const accountingUnit=await p.evaluate(async()=>{
+ const m=await import('/js/accounting-sync-core.js');
+ const state={
+  L:[{src:'doc',id:'d1'},{src:'vch',id:'v1'},{src:'po',id:'p1'},{src:'wo',id:'w1'},{src:'je',id:'j1'}],
+  mv:[{src:'doc',iid:1,v:'M',q:1,val:10},{src:'po',iid:1,v:'L',q:-1,val:-5}],
+  wo:[{id:'w1'}],je:[{id:'j1'}],items:[{id:1,st:{},val:0}]
+ };
+ const production=m.accountingPayloadForSource(state,'production');
+ const invoices=m.accountingPayloadForSource(state,'invoices');
+ const settings=m.accountingPayloadForSource(state,'settings');
+ const mapped=m.accountingSourceForRow({src:'doc'})==='invoices'
+  &&m.accountingSourceForRow({src:'vch'})==='invoices'
+  &&m.accountingSourceForRow({src:'po'})==='production'
+  &&m.accountingSourceForRow({src:'wo'})==='production'
+  &&m.accountingSourceForRow({src:'je'})==='settings';
+ const sourcePayloads=production.ledger.length===2&&production.movements.length===1
+  &&production.work_orders.length===1&&production.journal_entries.length===0
+  &&invoices.ledger.length===2&&invoices.movements.length===1
+  &&settings.ledger.length===1&&settings.journal_entries.length===1;
+ const target={L:[{src:'doc',id:'keep'}],mv:[{src:'doc',iid:2,v:'-',q:4,val:40}],wo:[{id:'old'}],je:[{id:'old'}],items:[]};
+ m.replaceAccountingPayload(target,'production',production);
+ const preserve=target.L.some(x=>x.id==='keep')&&target.L.some(x=>x.id==='p1')
+  &&target.mv.some(x=>x.iid===2)&&target.mv.some(x=>x.src==='po')
+  &&target.wo[0].id==='w1';
+ target.items=[{id:1,st:{},val:0}];
+ m.recalcAccountingInventory(target);
+ const stock=(Number(target.items[0].st.M)||0)===0&&target.items[0].st.L===-1&&target.items[0].val===-5;
+ const hashStable=m.accountingHash({b:2,a:1})===m.accountingHash({a:1,b:2});
+ const hashChanges=m.accountingHash(production)!==m.accountingHash({...production,movements:[{src:'po',iid:1,v:'L',q:999,val:-5}]});
+ return {mapped,sourcePayloads,preserve,stock,hashStable,hashChanges};
+});
+ok('accounting sync core maps invoice, production and journal sources to the correct permission scopes',accountingUnit.mapped,accountingUnit);
+ok('accounting sync payloads include the correct ledger, stock, waste and journal records per source',accountingUnit.sourcePayloads,accountingUnit);
+ok('replacing a production snapshot preserves invoice/settings rows while replacing production rows',accountingUnit.preserve,accountingUnit);
+ok('recalculation rebuilds stock quantities and inventory value from merged movement history',accountingUnit.stock,accountingUnit);
+ok('accounting payload hashes are key-order stable and change when movement values change',accountingUnit.hashStable&&accountingUnit.hashChanges,accountingUnit);
+const xssTables=await p.evaluate(()=>{
+ const bad='<img src=x onerror="window.__xss=3">';
+ const host=document.createElement('div');host.innerHTML=tb2(['field'],[[bad],[lk(bad,'void(0)')]]);
+ const tableInjected=!!host.querySelector('img');
+ const tableLiteral=(host.textContent.match(/<img/g)||[]).length===2;
+ const print=document.createElement('div');print.innerHTML=pw('sale',bad,bad,'');
+ const printInjected=!!print.querySelector('img');
+ const printLiteral=print.textContent.includes(bad);
+ return {tableInjected,tableLiteral,printInjected,printLiteral};
+});
+ok('XSS payloads in reports and print metadata remain inert text',!xssTables.tableInjected&&xssTables.tableLiteral&&!xssTables.printInjected&&xssTables.printLiteral,xssTables);
+ok('inline ledger actions whitelist source codes, safe numeric IDs and supported handlers only',app.includes('const safeSourceKey = value => ["doc","vch","po","wo","je"].includes(String(value))')&&app.includes('const safeNumericId = value =>')&&app.includes('const safeLinkHandler = value =>')&&app.includes('openRetainedEarnings()')&&app.includes('function openRetainedEarnings()')&&app.includes('go\\(\\x27bank\\x27\\)')&&app.includes('onclick="\${escapeHTML(safeLinkHandler(fn))}"')&&app.includes('openRef(\'\${safeSourceKey(l.src)}\',\${safeNumericId(l.rid)})')&&app.includes('editRef(\'\${safeSourceKey(m.src)}\',\${safeNumericId(m.rid)})'));
+
+
 const ev=(f,a)=>p.evaluate(()=>{SAVING=0}).then(()=>p.evaluate(f,a)),bal=()=>ev(()=>Math.abs(S.L.reduce((a,l)=>a+l.dr-l.cr,0))<.01);
 const scr=await ev(()=>allowed().map(t=>t[0]));for(const s of scr){await ev(x=>go(x),s)}ok(`all ${scr.length} screens render without errors`,errs.length==0,errs.slice(0,2));
 
@@ -216,13 +409,13 @@ await ctx.close();
 /* ---------- C. PWA: service worker + offline shell ---------- */
 const c2=await browser.newContext({viewport:{width:1280,height:800}}),q=await c2.newPage(),swConsole=[];q.on('console',m=>swConsole.push(m.type()+': '+m.text()));q.on('pageerror',e=>swConsole.push('pageerror: '+e.message));await q.goto(BASE);const swReg=await q.evaluate(async()=>{try{const reg=await navigator.serviceWorker.register('./sw.js');return {ok:true,scope:reg.scope,installing:reg.installing?.state,waiting:reg.waiting?.state,active:reg.active?.state}}catch(e){return {ok:false,error:e.message}}});const swReady=await q.evaluate(()=>Promise.race([navigator.serviceWorker.ready.then(()=>true),new Promise(resolve=>setTimeout(()=>resolve(false),15000))]));if(!swReady){const diag=await q.evaluate(async()=>{const r=await navigator.serviceWorker.getRegistration();return r?{installing:r.installing?.state,waiting:r.waiting?.state,active:r.active?.state,scope:r.scope}:null});await c2.close();throw new Error('Service Worker did not become ready: '+JSON.stringify({swReg,diag,console:swConsole.slice(-20)}))}await q.reload();await q.waitForTimeout(600);
 const swi=await q.evaluate(async()=>({ctl:!!navigator.serviceWorker.controller,keys:await caches.keys(),cached:(await (await caches.open((await caches.keys())[0])).keys()).map(r=>new URL(r.url).pathname)}));
-ok('service worker installed and controlling the page; single versioned cache',swi.ctl&&swi.keys.length==1&&/^factory-v10$/.test(swi.keys[0]),swi.keys);
+ok('service worker installed and controlling the page; single versioned cache',swi.ctl&&swi.keys.length==1&&/^factory-v12$/.test(swi.keys[0]),swi.keys);
 ok('stable app shell files are precached; linked CSS and scripts are cached on first request',['/index.html','/auth.html','/change-password.html','/js/change-password.js','/','/js/app.js','/css/style.css'].every(f=>swi.cached.includes(f)),swi.cached);
 ok('offline cache does not include authenticated API responses or user records',swi.cached.every(f=>!f.includes('/rest/v1/')&&!f.includes('/auth/v1/')&&!f.includes('/storage/v1/')));
 await q.evaluate(()=>{const s=JSON.parse(localStorage.getItem('mgr6')||'null');localStorage.setItem('mgr6',JSON.stringify(s))});
 await c2.setOffline(true);await q.reload();await q.waitForTimeout(500);const off=await q.evaluate(()=>({ok:!!document.querySelector('#sb a'),tabs:document.querySelectorAll('#sb a').length}));
 ok('app loads and works with the network switched off (from the service-worker cache)',off.ok&&off.tabs>=15,off);
-const none=await q.evaluate(async()=>{const c=await caches.open('factory-v5');return (await c.keys()).every(r=>new URL(r.url).origin==location.origin&&!r.url.includes('/api/'))});ok('cache holds only same-origin app files (no cross-origin / API / user data)',none);
+const none=await q.evaluate(async()=>{const c=await caches.open('factory-v12');const keys=await c.keys();return keys.length>0&&keys.every(r=>new URL(r.url).origin==location.origin&&!r.url.includes('/rest/v1/')&&!r.url.includes('/auth/v1/')&&!r.url.includes('/storage/v1/'))});ok('active factory-v12 cache holds only same-origin app files (no authenticated API or user data)',none);
 await c2.setOffline(false);await c2.close();
 /* ---------- D. mobile ---------- */
 const mc=await browser.newContext({viewport:{width:390,height:800},isMobile:true,hasTouch:true}),m=await mc.newPage(),merr=[];m.on('pageerror',e=>merr.push(e.message));await m.goto(BASE);await m.waitForTimeout(400);

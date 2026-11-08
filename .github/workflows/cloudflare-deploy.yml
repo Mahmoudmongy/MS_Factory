@@ -1,0 +1,48 @@
+name: Cloudflare Workers deployment
+
+on:
+  workflow_dispatch:
+    inputs:
+      deploy_confirmed:
+        description: "Deploy the tested production build to Cloudflare"
+        type: boolean
+        required: true
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cloudflare-production
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    if: inputs.deploy_confirmed == true && github.ref == 'refs/heads/main' && vars.CLOUDFLARE_RELEASE_APPROVED == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run application tests
+        run: npm test
+
+      - name: Build production assets
+        run: npm run build
+        env:
+          VITE_SUPABASE_URL: https://yvrislcbbhtruwdnuooz.supabase.co
+          VITE_SUPABASE_ANON_KEY: sb_publishable_7y8sqUPYv4mCfmpjin3xRQ_1_X5QJfG
+
+      - name: Deploy to Cloudflare Workers
+        run: npx --yes wrangler@4 deploy
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}

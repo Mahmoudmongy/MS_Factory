@@ -1,3 +1,4 @@
+import { ACCOUNTING_SOURCES, accountingVersionKey, accountingHashKey, accountingConflictKey, accountingSourceForRow, accountingPayloadForSource, accountingHash, replaceAccountingPayload, recalcAccountingInventory } from "./accounting-sync-core.js";
 // js/cloud-sync.js - V28 - إصلاح الشاشة البيضا + إخفاء شريط مسجل الدخول صح + تحميل تلقائي آمن
 import { supabase } from './supabase.js';
 
@@ -102,12 +103,129 @@ function isLocalEmpty() {
     return !(hasSavedEdits || hasTransactions || hasAddedMasterData);
   } catch(e){ return true; }
 }
+function mergeCloudPartners(existing, incoming, refreshExisting = false) {
+  const map = new Map();
+  (Array.isArray(existing) ? existing : []).forEach(item => {
+    const key = item && (item.id || item.no);
+    if (key !== undefined && key !== null && key !== "") map.set(String(key), item);
+  });
+  let added = 0, conflicts = 0;
+  (Array.isArray(incoming) ? incoming : []).forEach(remote => {
+    const key = remote && (remote.id || remote.no);
+    if (key === undefined || key === null || key === "") return;
+    const local = map.get(String(key));
+    if (!local) { map.set(String(key), remote); added++; return; }
+    if (!refreshExisting) {
+      for (const [flag, versionKey, conflictKey] of [
+        ["c", "_cloudCustomersVersion", "_cloudCustomersConflict"],
+        ["s", "_cloudSuppliersVersion", "_cloudSuppliersConflict"]
+      ]) {
+        if ((Number(remote[flag]) === 1 || remote[flag] === true)
+            && Number(remote[versionKey] || 0) > Number(local[versionKey] || 0)) {
+          local[conflictKey] = { serverVersion: Number(remote[versionKey]), serverUpdatedAt: remote[versionKey.replace("Version","UpdatedAt")] || null, serverCopy: remote };
+          conflicts++;
+        }
+      }
+      return;
+    }
+    const customerFlag = Number(local.c) === 1 || local.c === true || Number(remote.c) === 1 || remote.c === true;
+    const supplierFlag = Number(local.s) === 1 || local.s === true || Number(remote.s) === 1 || remote.s === true;
+    Object.assign(local, remote, {
+      id: local.id ?? remote.id,
+      c: customerFlag ? 1 : 0,
+      s: supplierFlag ? 1 : 0
+    });
+    delete local._cloudCustomersConflict;
+    delete local._cloudSuppliersConflict;
+  });
+  return { arr: [...map.values()], added, conflicts };
+}
 function mergeByKey(existing, incoming, keyFn) {
   const map = new Map();
   (existing || []).forEach(it => { try { const k = keyFn(it); if (k) map.set(String(k), it); } catch(e){} });
   let added = 0;
   (incoming || []).forEach(it => { try { const k = keyFn(it); if (k && !map.has(String(k))) { map.set(String(k), it); added++; } } catch(e){} });
   return { arr: [...map.values()], added };
+}
+function mergeCloudProducts(existing, incoming, refreshExisting = false) {
+  const map = new Map();
+  (Array.isArray(existing) ? existing : []).forEach(item => {
+    const key = item && (item.id || item.sku || item.name);
+    if (key !== undefined && key !== null && key !== "") map.set(String(key), item);
+  });
+  let added = 0, refreshed = 0, conflicts = 0;
+  (Array.isArray(incoming) ? incoming : []).forEach(remote => {
+    const key = remote && (remote.id || remote.sku || remote.name);
+    if (key === undefined || key === null || key === "") return;
+    const local = map.get(String(key));
+    if (!local) { map.set(String(key), remote); added++; return; }
+    if (!refreshExisting) {
+      if (Number(remote._cloudProductsVersion || 0) > Number(local._cloudProductsVersion || 0)) {
+        local._cloudProductsConflict = {
+          serverVersion: Number(remote._cloudProductsVersion),
+          serverUpdatedAt: remote._cloudProductsUpdatedAt || null,
+          serverCopy: remote
+        };
+        conflicts++;
+      }
+      return;
+    }
+    Object.assign(local, remote, { id: local.id ?? remote.id });
+    delete local._cloudProductsConflict;
+    refreshed++;
+  });
+  return { arr: [...map.values()], added, refreshed, conflicts };
+}
+function groupProductionCatalogRows(rows) {
+  const grouped = new Map();
+  for (const p of (rows || [])) {
+    const key = String(p.external_id || p.sku || p.name);
+    let item = grouped.get(key);
+    if (!item) {
+      item = {
+        id: p.external_id || p.id, name: p.name, sku: p.sku || p.external_id || "",
+        model: p.model || "", unit: p.unit || "قطعة", wh: Number(p.warehouse) || p.warehouse || null,
+        buy: Number(p.buy_price || 0) || 0, retail: 0, wholesale: 0,
+        img: p.image_url || "", st: {}, val: 0
+      };
+      grouped.set(key, item);
+    }
+    const variant = String(p.variant || "-");
+    const quantity = Number(p.quantity || 0) || 0;
+    item.st[variant] = quantity;
+    item.val += quantity * item.buy;
+  }
+  return Array.from(grouped.values());
+}
+function mergeProductionCatalog(existing, incoming, refreshExisting = false) {
+  const map = new Map();
+  (existing || []).forEach(item => {
+    const key = item && (item.id || item.sku || item.name);
+    if (key !== undefined && key !== null && key !== "") map.set(String(key), item);
+  });
+  let added = 0, refreshed = 0;
+  (incoming || []).forEach(remote => {
+    const key = remote && (remote.id || remote.sku || remote.name);
+    if (key === undefined || key === null || key === "") return;
+    const local = map.get(String(key));
+    if (!local) {
+      map.set(String(key), remote);
+      added++;
+      return;
+    }
+    if (!refreshExisting) return;
+    local.name = remote.name;
+    local.sku = remote.sku;
+    local.model = remote.model;
+    local.unit = remote.unit;
+    local.wh = remote.wh;
+    local.buy = remote.buy;
+    local.img = remote.img;
+    local.st = { ...(remote.st || {}) };
+    local.val = Number(remote.val || 0) || 0;
+    refreshed++;
+  });
+  return { arr: [...map.values()], added, refreshed };
 }
 function mergeCloudInvoices(existing, incoming) {
   const map = new Map();
@@ -142,16 +260,102 @@ function mergeCloudRecords(existing, incoming) {
     if (key === undefined || key === null || key === "") return;
     const local = map.get(String(key));
     if (!local) { map.set(String(key), remote); added++; return; }
+    const localVersion = Number(local._cloudVersion || 0);
+    const remoteVersion = Number(remote._cloudVersion || 0);
     const localTime = Date.parse(local._cloudUpdatedAt || "") || 0;
     const remoteTime = Date.parse(remote._cloudUpdatedAt || "") || 0;
-    if (remoteTime > localTime) {
-      local._cloudConflict = { serverUpdatedAt: remote._cloudUpdatedAt || null, serverCopy: remote };
+    // A higher cloud version is authoritative metadata, but never silently
+    // overwrites a local record. Preserve both copies for explicit resolution.
+    if (remoteVersion > localVersion || (!remoteVersion && remoteTime > localTime)) {
+      local._cloudConflict = {
+        serverVersion: remoteVersion || null,
+        serverUpdatedAt: remote._cloudUpdatedAt || null,
+        serverCopy: remote
+      };
       conflicts++;
-    } else if (remoteTime && remoteTime === localTime) {
+    } else if (remoteVersion > 0 && remoteVersion === localVersion) {
       delete local._cloudConflict;
     }
   });
   return { arr: [...map.values()], added, conflicts };
+}
+
+async function syncVersionedDetail(table, owner, externalId, expectedVersion, payload) {
+  const { data, error } = await supabase.rpc("sync_factory_detail", {
+    p_table_name: table,
+    p_external_id: externalId,
+    p_expected_version: Number(expectedVersion || 0),
+    p_payload: payload
+  });
+  if (!error) {
+    const row = Array.isArray(data) ? data[0] : data;
+    return row?.sync_version
+      ? { row }
+      : { error: new Error("The server returned no detail synchronization version") };
+  }
+  if (error.code === "40001" || error.code === "23505") {
+    const { data: remote, error: readError } = await supabase.from(table)
+      .select("*").eq("user_id", owner).eq("external_id", externalId).maybeSingle();
+    if (readError) return { error: readError };
+    if (remote) {
+      const copy = remote.raw && typeof remote.raw === "object" ? { ...remote.raw } : {};
+      copy._cloudVersion = Number(remote.sync_version || 1);
+      copy._cloudUpdatedAt = remote.updated_at || null;
+      return {
+        conflict: {
+          serverVersion: copy._cloudVersion,
+          serverUpdatedAt: copy._cloudUpdatedAt,
+          serverCopy: copy
+        }
+      };
+    }
+  }
+  return { error };
+}
+
+async function syncVersionedMasterRecord(table, owner, externalId, expectedVersion, payload) {
+  const { data, error } = await supabase.rpc("sync_factory_master_record", {
+    p_table_name: table,
+    p_external_id: externalId,
+    p_expected_version: Number(expectedVersion || 0),
+    p_payload: payload
+  });
+  if (!error) {
+    const row = Array.isArray(data) ? data[0] : data;
+    return row?.sync_version ? { row } : { error: new Error("The server returned no master-data synchronization version") };
+  }
+  if (error.code === "40001" || error.code === "23505") {
+    const { data: remote, error: readError } = await supabase.from(table)
+      .select("*").eq("user_id", owner).eq("external_id", externalId).maybeSingle();
+    if (readError) return { error: readError };
+    if (remote) {
+      const copy = remote.raw && typeof remote.raw === "object" ? { ...remote.raw } : {};
+      Object.assign(copy, {
+        id: remote.external_id || remote.id,
+        name: remote.name,
+        phone: remote.phone || "",
+        email: remote.email || "",
+        addr: remote.address || "",
+        gov: remote.governorate || "",
+        city: remote.city || ""
+      });
+      if (table === "customers") {
+        copy.c = 1;
+        copy.type = remote.customer_type === "wholesale" ? "w" : "r";
+        copy._cloudCustomersVersion = Number(remote.sync_version || 1);
+        copy._cloudCustomersUpdatedAt = remote.updated_at || null;
+      } else if (table === "suppliers") {
+        copy.s = 1;
+        copy._cloudSuppliersVersion = Number(remote.sync_version || 1);
+        copy._cloudSuppliersUpdatedAt = remote.updated_at || null;
+      } else {
+        copy._cloudProductsVersion = Number(remote.sync_version || 1);
+        copy._cloudProductsUpdatedAt = remote.updated_at || null;
+      }
+      return { conflict: { serverVersion: Number(remote.sync_version || 1), serverUpdatedAt: remote.updated_at || null, serverCopy: copy } };
+    }
+  }
+  return { error };
 }
 
 function stableJson(value) {
@@ -163,8 +367,205 @@ function stableJson(value) {
   return JSON.stringify(value);
 }
 
+const CLOUD_DELETE_QUEUE_KEY = "mgr6-cloud-deletions";
+const CLOUD_DELETE_CONFLICT_KEY = "mgr6-cloud-deletion-conflicts";
+function readCloudDeleteQueue() {
+  try {
+    const rows = JSON.parse(localStorage.getItem(CLOUD_DELETE_QUEUE_KEY) || "[]");
+    return Array.isArray(rows) ? rows : [];
+  } catch(e) { return []; }
+}
+function writeCloudDeleteQueue(rows) {
+  localStorage.setItem(CLOUD_DELETE_QUEUE_KEY, JSON.stringify(rows));
+}
+window.queueCloudDeletion = function(table, externalId, expectedVersion = 0, localCopy = null) {
+  if (!["invoices","returns","vouchers","production_orders"].includes(table) || externalId == null || String(externalId) === "") return false;
+  const rows = readCloudDeleteQueue();
+  const key = String(externalId);
+  const existing = rows.find(x => x.table === table && String(x.externalId) === key);
+  const item = {
+    table, externalId: key, expectedVersion: Math.max(0, Number(expectedVersion) || 0),
+    localCopy: localCopy && typeof localCopy === "object" ? JSON.parse(JSON.stringify(localCopy)) : null,
+    queuedAt: new Date().toISOString()
+  };
+  if (existing) Object.assign(existing, item);
+  else rows.push(item);
+  writeCloudDeleteQueue(rows.slice(-1000));
+  return true;
+};
+async function syncQueuedDeletions(owner, profile, errors) {
+  const admin = profile.is_admin === true;
+  const canWrite = key => admin || profile.permissions?.[key] === true;
+  let queue = readCloudDeleteQueue();
+  if (!queue.length) return false;
+  let conflicts;
+  try {
+    conflicts = JSON.parse(localStorage.getItem(CLOUD_DELETE_CONFLICT_KEY) || "[]");
+    if (!Array.isArray(conflicts)) conflicts = [];
+  } catch(e) { conflicts = []; }
+  let changed = false;
+  const keep = [];
+  for (const item of queue) {
+    const existingConflict = conflicts.find(x => x.table === item.table && String(x.externalId) === String(item.externalId));
+    if (existingConflict) {
+      keep.push(item);
+      errors.push("delete " + item.table + " " + item.externalId + ": unresolved cloud deletion conflict");
+      continue;
+    }
+    const permission = item.table === "production_orders" ? "production" : "invoices";
+    if (!canWrite(permission)) { keep.push(item); continue; }
+    const { data, error } = await supabase.rpc("delete_factory_detail", {
+      p_table_name: item.table,
+      p_external_id: String(item.externalId),
+      p_expected_version: Number(item.expectedVersion || 0)
+    });
+    if (!error) { changed = true; continue; }
+    if (error.code === "40001") {
+      const { data: remote, error: readError } = await supabase.from(item.table)
+        .select("*").eq("user_id", owner).eq("external_id", String(item.externalId)).maybeSingle();
+      if (!readError && (!remote || remote.is_deleted === true)) { changed = true; continue; }
+      if (readError) errors.push("delete " + item.table + " " + item.externalId + ": " + readError.message);
+      else {
+        const old = conflicts.find(x => x.table === item.table && String(x.externalId) === String(item.externalId));
+        const conflict = {
+          table: item.table, externalId: String(item.externalId),
+          serverVersion: Number(remote.sync_version || 1),
+          serverUpdatedAt: remote.updated_at || null,
+          localCopy: item.localCopy || null,
+          serverCopy: remote.raw && typeof remote.raw === "object" ? remote.raw : remote
+        };
+        if (old) Object.assign(old, conflict); else conflicts.push(conflict);
+        errors.push("delete " + item.table + " " + item.externalId + ": version conflict; newer cloud record preserved");
+      }
+      keep.push(item);
+      continue;
+    }
+    errors.push("delete " + item.table + " " + item.externalId + ": " + error.message);
+    keep.push(item);
+  }
+  writeCloudDeleteQueue(keep);
+  localStorage.setItem(CLOUD_DELETE_CONFLICT_KEY, JSON.stringify(conflicts.slice(-1000)));
+  return changed;
+}
+
+window.resolveCloudDeletionConflict = async function(table, externalId, choice) {
+  if (!["cloud","delete"].includes(choice)) return;
+  const profile = await getMyProfile();
+  if (!profile?.is_admin) return alert(T("حل تعارض الحذف متاح لمدير النظام فقط", "Only the administrator can resolve deletion conflicts"));
+  let conflicts = [];
+  try { conflicts = JSON.parse(localStorage.getItem(CLOUD_DELETE_CONFLICT_KEY) || "[]"); } catch(e) {}
+  if (!Array.isArray(conflicts)) conflicts = [];
+  const conflict = conflicts.find(x => x.table === table && String(x.externalId) === String(externalId));
+  if (!conflict) return alert(T("لم يعد تعارض الحذف موجودًا", "This deletion conflict no longer exists"));
+  let queue = readCloudDeleteQueue();
+  if (choice === "cloud") {
+    queue = queue.filter(x => !(x.table === table && String(x.externalId) === String(externalId)));
+    conflicts = conflicts.filter(x => !(x.table === table && String(x.externalId) === String(externalId)));
+    writeCloudDeleteQueue(queue);
+    localStorage.setItem(CLOUD_DELETE_CONFLICT_KEY, JSON.stringify(conflicts));
+    await loadFromTablesMerge(false);
+    if (typeof drawAll === "function") drawAll();
+    return T("تم إلغاء الحذف واعتماد النسخة السحابية", "Deletion cancelled; cloud copy retained");
+  }
+  const queued = queue.find(x => x.table === table && String(x.externalId) === String(externalId));
+  if (!queued) return alert(T("طلب الحذف الأصلي غير موجود", "Original deletion request is missing"));
+  queued.expectedVersion = Number(conflict.serverVersion);
+  writeCloudDeleteQueue(queue);
+  conflicts = conflicts.filter(x => !(x.table === table && String(x.externalId) === String(externalId)));
+  localStorage.setItem(CLOUD_DELETE_CONFLICT_KEY, JSON.stringify(conflicts));
+  const result = await uploadToTables(true);
+  if (String(result).includes("version conflict") || String(result).includes("تعارض")) return alert(String(result));
+  return T("تم اعتماد الحذف بعد تحديث رقم إصدار السحابة", "Deletion accepted against the latest cloud version");
+};
+
+async function syncAccountingSnapshots(S, profile, errors) {
+  const admin = profile.is_admin === true;
+  const canWrite = source => admin || (source !== "settings" && profile.permissions?.[source] === true);
+  let hasConflict = false;
+  const errorsBefore = errors.length;
+  for (const source of ACCOUNTING_SOURCES.filter(canWrite)) {
+    const payload = accountingPayloadForSource(S, source);
+    const hash = accountingHash(payload);
+    const version = Number(localStorage.getItem(accountingVersionKey(source)) || 0);
+    const baseline = localStorage.getItem(accountingHashKey(source));
+    const conflictKey = accountingConflictKey(source);
+    if (localStorage.getItem(conflictKey)) {
+      hasConflict = true;
+      errors.push(source + ": accounting/stock sync conflict; resolve before uploading");
+      continue;
+    }
+    if (version > 0 && baseline === hash) continue;
+    const { data, error } = await supabase.rpc("sync_factory_accounting", {
+      p_source: source,
+      p_expected_version: version,
+      p_payload: payload
+    });
+    if (error) {
+      if (error.code === "40001" || error.code === "23505") {
+        localStorage.setItem(conflictKey, JSON.stringify({
+          reason: "stale_accounting_snapshot",
+          source,
+          localVersion: version,
+          at: new Date().toISOString()
+        }));
+        hasConflict = true;
+        errors.push(source + ": version conflict; cloud ledger and stock movements were not overwritten");
+      } else {
+        errors.push(source + ": " + error.message);
+      }
+      continue;
+    }
+    const row = Array.isArray(data) ? data[0] : data;
+    if (!row?.sync_version) {
+      errors.push(source + ": server returned no accounting sync version");
+      continue;
+    }
+    localStorage.setItem(accountingVersionKey(source), String(row.sync_version));
+    localStorage.setItem(accountingHashKey(source), hash);
+    localStorage.removeItem(conflictKey);
+  }
+  return hasConflict || hasAccountingConflicts() || errors.length > errorsBefore;
+}
+
 
 // ===== الرفع مرة واحدة على الجداول - الكاش هو الأساس =====
+
+window.resolveCloudAccountingConflict = async function(source) {
+  if (!ACCOUNTING_SOURCES.includes(source)) return "invalid source";
+  const profile = await getMyProfile();
+  if (!profile?.is_admin) {
+    alert(T("حل تعارض دفتر الأستاذ متاح لمدير النظام فقط. احتفظ بنسختك المحلية وأبلغ المدير.", "Only the administrator can resolve this accounting conflict. Keep your local copy and contact the administrator."));
+    return "not authorized";
+  }
+  const owner = await getOwnerId();
+  if (!owner) return "no owner";
+  const { data: remote, error } = await supabase.from("factory_accounting_state")
+    .select("source,payload,sync_version,updated_at")
+    .eq("user_id", owner).eq("source", source).maybeSingle();
+  if (error || !remote) {
+    alert(T("تعذر تحميل النسخة السحابية لحل التعارض. لم يتم حذف أي بيانات.", "Could not load the cloud copy. No data was deleted."));
+    return error?.message || "cloud copy missing";
+  }
+  const S = getCachedState();
+  const localPayload = accountingPayloadForSource(S, source);
+  try {
+    localStorage.setItem("mgr6-accounting-backup-" + source, JSON.stringify(localPayload));
+  } catch (e) {
+    alert(T("مساحة الجهاز لا تكفي لحفظ نسخة محلية قبل الحل. لم يتم تغيير البيانات.", "Not enough local storage for a safety copy. No data was changed."));
+    return "local backup failed";
+  }
+  replaceAccountingPayload(S, source, remote.payload);
+  recalcAccountingInventory(S);
+  Object.getPrototypeOf(localStorage).setItem.call(localStorage, "mgr6", JSON.stringify(S));
+  localStorage.setItem(accountingVersionKey(source), String(remote.sync_version));
+  localStorage.setItem(accountingHashKey(source), accountingHash(remote.payload));
+  localStorage.removeItem(accountingConflictKey(source));
+  const syncResult = await uploadToTables(false);
+  drawAll();
+  alert(T("تم حفظ نسخة الجهاز محليًا واستعادة نسخة السحابة لهذا القسم. نتيجة المزامنة: ", "The device copy was saved locally and the cloud copy restored for this section. Sync result: ") + syncResult);
+  return "resolved";
+};
+
 async function uploadToTables(showAlert = false) {
   if (uploadRunning) return "upload already running";
   uploadRunning = true;
@@ -182,7 +583,8 @@ async function uploadToTables(showAlert = false) {
     if (!profile) throw new Error("تعذر تحديد صلاحيات الحساب");
     const admin = profile.is_admin === true;
     const canWrite = key => admin || profile.permissions?.[key] === true;
-    if (!admin && !["customers", "suppliers", "invoices", "inventory"].some(canWrite)) {
+    const canRead = key => admin || profile.permissions?.[key] === true || profile.permissions?.reports === true;
+    if (!admin && !["customers", "suppliers", "invoices", "inventory", "production", "settings"].some(canWrite)) {
       syncState = "idle"; drawAll();
       const msg = T("حسابك للعرض فقط أو لا توجد صلاحية مزامنة متاحة.", "This account is read-only or has no supported sync permission.");
       if (showAlert) alert(msg);
@@ -191,58 +593,104 @@ async function uploadToTables(showAlert = false) {
     const S = getCachedState();
     if (!S || typeof S !== "object" || Array.isArray(S)) throw new Error("بيانات المصنع المحلية غير صالحة؛ لم يتم رفع أي شيء");
     const errors = [];
+    await syncQueuedDeletions(owner, profile, errors);
     let snapshotError = null;
     let snapshotConflict = !!localStorage.getItem("mgr6-cloud-snapshot-conflict");
 
-    // Snapshot conflicts must not block independent, idempotent detail-table writes.
-    if (admin && !snapshotConflict) {
-      const expectedVersion = Number(localStorage.getItem("mgr6-cloud-snapshot-version") || 0);
-      const result = await supabase.rpc("sync_factory_state", {
-        p_expected_version: expectedVersion,
+    // A new factory must publish its account chart before source ledger validation can run.
+    if (admin && !snapshotConflict && Number(localStorage.getItem("mgr6-cloud-snapshot-version") || 0) === 0) {
+      const seedResult = await supabase.rpc("sync_factory_state", {
+        p_expected_version: 0,
         p_state: S
       });
-      snapshotError = result.error;
-      if (snapshotError?.code === "40001") {
-        snapshotConflict = true;
-        localStorage.setItem("mgr6-cloud-snapshot-conflict", JSON.stringify({ reason: "stale_snapshot", at: new Date().toISOString() }));
-      } else if (snapshotError) {
-        errors.push("factory_state: " + snapshotError.message);
-      } else {
-        const snapshotRow = Array.isArray(result.data) ? result.data[0] : result.data;
-        if (!snapshotRow?.sync_version) errors.push("factory_state: server returned no snapshot version");
-        else {
-          localStorage.setItem("mgr6-cloud-snapshot-version", String(snapshotRow.sync_version));
+      if (seedResult.error?.code === "40001") {
+        const remote = await supabase.from("factory_state").select("state,sync_version").eq("user_id", owner).maybeSingle();
+        if (!remote.error && remote.data && stableJson(remote.data.state) === stableJson(S)) {
+          localStorage.setItem("mgr6-cloud-snapshot-version", String(remote.data.sync_version));
           localStorage.setItem("mgr6-cloud-snapshot-pend", String(Number(S.pend || 0)));
-          localStorage.removeItem("mgr6-cloud-snapshot-conflict");
-          snapshotConflict = false;
+        } else {
+          snapshotConflict = true;
+          localStorage.setItem("mgr6-cloud-snapshot-conflict", JSON.stringify({ reason: "initial_snapshot_already_exists", at: new Date().toISOString() }));
+        }
+      } else if (seedResult.error) {
+        errors.push("factory_state initial sync: " + seedResult.error.message);
+      } else {
+        const seedRow = Array.isArray(seedResult.data) ? seedResult.data[0] : seedResult.data;
+        if (!seedRow?.sync_version) errors.push("factory_state initial sync: server returned no snapshot version");
+        else {
+          localStorage.setItem("mgr6-cloud-snapshot-version", String(seedRow.sync_version));
+          localStorage.setItem("mgr6-cloud-snapshot-pend", String(Number(S.pend || 0)));
         }
       }
     }
-
     const partnerArrays = [];
     if (Array.isArray(S.partners)) partnerArrays.push({ key: "partners", arr: S.partners });
     if (Array.isArray(S.customers)) partnerArrays.push({ key: "customers", arr: S.customers });
     if (Array.isArray(S.suppliers)) partnerArrays.push({ key: "suppliers", arr: S.suppliers });
     if (Array.isArray(S.clients)) partnerArrays.push({ key: "clients", arr: S.clients });
+    const partnerMap = new Map();
     for (const { key, arr } of partnerArrays) {
       for (const p of arr) {
+        if (!p || typeof p !== "object") continue;
         const name = String(getField(p, ["name", "nm", "title"]) || "");
         if (!name || isAccountName(name)) continue;
+        const externalId = String(getField(p, ["id", "no", "code"]) || name);
         const typeStr = String(getField(p, ["type", "kind", "cat", "category"]) || "").toLowerCase();
         if (typeStr.includes("account") || typeStr.includes("coa") || typeStr.includes("chart") || typeStr.includes("حساب")) continue;
-        const isSup = typeStr.includes("supp") || typeStr.includes("مورد") || p.isSupplier === true || key === "suppliers";
-        if (!canWrite(isSup ? "suppliers" : "customers")) continue;
-        const table = isSup ? "suppliers" : "customers";
-        const row = {
-          user_id: owner,
-          external_id: String(getField(p, ["id", "no", "code"]) || name),
-          name,
-          phone: String(getField(p, ["phone", "tel", "mobile", "ph"]) || "") || null,
-          email: String(getField(p, ["email", "mail"]) || "") || null,
-          address: String(getField(p, ["addr", "address", "add"]) || "") || null
-        };
-        const { error } = await supabase.from(table).upsert(row, { onConflict: "user_id,external_id" });
-        if (error) errors.push(table + ": " + error.message);
+        const isCustomer = key === "customers" || Number(p.c) === 1 || p.c === true || typeStr.includes("customer") || typeStr.includes("عميل") || (key === "partners" && !p.s && !p.isSupplier && !typeStr.includes("supp") && !typeStr.includes("مورد"));
+        const isSupplier = key === "suppliers" || Number(p.s) === 1 || p.s === true || p.isSupplier === true || typeStr.includes("supp") || typeStr.includes("مورد");
+        const existing = partnerMap.get(externalId) || { p, isCustomer: false, isSupplier: false };
+        existing.isCustomer = existing.isCustomer || isCustomer;
+        existing.isSupplier = existing.isSupplier || isSupplier;
+        if (key === "partners" || !existing.p) existing.p = p;
+        partnerMap.set(externalId, existing);
+      }
+    }
+    for (const [externalId, entry] of partnerMap) {
+      const p = entry.p;
+      const name = String(getField(p, ["name", "nm", "title"]) || "");
+      const typeStr = String(getField(p, ["type", "kind", "cat", "category"]) || "").toLowerCase();
+      const raw = { ...p };
+      delete raw._cloudVersion; delete raw._cloudUpdatedAt; delete raw._cloudConflict;
+      delete raw._cloudCustomersVersion; delete raw._cloudCustomersUpdatedAt; delete raw._cloudCustomersConflict;
+      delete raw._cloudSuppliersVersion; delete raw._cloudSuppliersUpdatedAt; delete raw._cloudSuppliersConflict;
+      const common = {
+        user_id: owner,
+        external_id: externalId,
+        name,
+        phone: String(getField(p, ["phone", "tel", "mobile", "ph"]) || "") || null,
+        email: String(getField(p, ["email", "mail"]) || "") || null,
+        address: String(getField(p, ["addr", "address", "add"]) || "") || null,
+        governorate: String(getField(p, ["gov", "governorate"]) || "") || null,
+        city: String(getField(p, ["city"]) || "") || null,
+        raw
+      };
+      if (entry.isCustomer && canWrite("customers")) {
+        const result = await syncVersionedMasterRecord("customers", owner, externalId, p._cloudCustomersVersion, {
+          ...common,
+          customer_type: p.type === "w" || typeStr.includes("wholesale") || typeStr.includes("جملة") ? "wholesale" : "retail"
+        });
+        if (result.error) errors.push("customer " + externalId + ": " + result.error.message);
+        else if (result.conflict) {
+          p._cloudCustomersConflict = result.conflict;
+          errors.push("customer " + externalId + ": version conflict; newer cloud copy preserved");
+        } else {
+          p._cloudCustomersVersion = Number(result.row.sync_version);
+          p._cloudCustomersUpdatedAt = result.row.updated_at || null;
+          delete p._cloudCustomersConflict;
+        }
+      }
+      if (entry.isSupplier && canWrite("suppliers")) {
+        const result = await syncVersionedMasterRecord("suppliers", owner, externalId, p._cloudSuppliersVersion, common);
+        if (result.error) errors.push("supplier " + externalId + ": " + result.error.message);
+        else if (result.conflict) {
+          p._cloudSuppliersConflict = result.conflict;
+          errors.push("supplier " + externalId + ": version conflict; newer cloud copy preserved");
+        } else {
+          p._cloudSuppliersVersion = Number(result.row.sync_version);
+          p._cloudSuppliersUpdatedAt = result.row.updated_at || null;
+          delete p._cloudSuppliersConflict;
+        }
       }
     }
 
@@ -306,19 +754,26 @@ async function uploadToTables(showAlert = false) {
         if (d._cloudConflict) { errors.push("return " + String(d.no || d.id) + ": conflict with a newer cloud copy; resolve before uploading"); continue; }
         const externalId = String(getField(d, ["id", "no"]) || "");
         if (!externalId) { errors.push("return skipped: missing stable ID"); continue; }
-        const raw = { ...d }; delete raw._cloudUpdatedAt; delete raw._cloudConflict;
-        const row = {
-          user_id: owner, external_id: externalId,
+        const raw = { ...d };
+        delete raw._cloudUpdatedAt; delete raw._cloudVersion; delete raw._cloudConflict;
+        const payload = {
           return_no: String(d.no || externalId),
           return_type: d.t === "sret" ? "sale_return" : "purchase_return",
           return_date: String(d.date || new Date().toISOString()).slice(0, 10),
-          total: Number(d.total || 0) || 0, note: d.note || null,
-          raw, updated_at: new Date().toISOString()
+          total: Number(d.total || 0) || 0,
+          note: d.note || null,
+          raw
         };
-        const { data, error } = await supabase.from("returns")
-          .upsert(row, { onConflict: "user_id,external_id" }).select("updated_at").single();
-        if (error) errors.push("returns " + externalId + ": " + error.message);
-        else if (data?.updated_at) { d._cloudUpdatedAt = data.updated_at; detailVersionsChanged = true; }
+        const result = await syncVersionedDetail("returns", owner, externalId, d._cloudVersion, payload);
+        if (result.error) errors.push("returns " + externalId + ": " + result.error.message);
+        else if (result.conflict) {
+          d._cloudConflict = result.conflict;
+          errors.push("returns " + externalId + ": version conflict; newer cloud copy preserved");
+        } else {
+          d._cloudVersion = Number(result.row.sync_version);
+          d._cloudUpdatedAt = result.row.updated_at || null;
+          detailVersionsChanged = true;
+        }
       }
 
       for (const v of (Array.isArray(S.vch) ? S.vch : [])) {
@@ -326,20 +781,27 @@ async function uploadToTables(showAlert = false) {
         if (v._cloudConflict) { errors.push("voucher " + String(v.no || v.id) + ": conflict with a newer cloud copy; resolve before uploading"); continue; }
         const externalId = String(getField(v, ["id", "no"]) || "");
         if (!externalId) { errors.push("voucher skipped: missing stable ID"); continue; }
-        const raw = { ...v }; delete raw._cloudUpdatedAt; delete raw._cloudConflict;
-        const row = {
-          user_id: owner, external_id: externalId,
+        const raw = { ...v };
+        delete raw._cloudUpdatedAt; delete raw._cloudVersion; delete raw._cloudConflict;
+        const payload = {
           voucher_no: String(v.no || externalId),
           direction: v.dir === "in" ? "in" : "out",
           account: String(v.title || v.desc || "سند"),
           voucher_date: String(v.date || new Date().toISOString()).slice(0, 10),
           amount: Number(v.total || 0) || 0,
-          note: v.desc || null, raw, updated_at: new Date().toISOString()
+          note: v.desc || null,
+          raw
         };
-        const { data, error } = await supabase.from("vouchers")
-          .upsert(row, { onConflict: "user_id,external_id" }).select("updated_at").single();
-        if (error) errors.push("vouchers " + externalId + ": " + error.message);
-        else if (data?.updated_at) { v._cloudUpdatedAt = data.updated_at; detailVersionsChanged = true; }
+        const result = await syncVersionedDetail("vouchers", owner, externalId, v._cloudVersion, payload);
+        if (result.error) errors.push("vouchers " + externalId + ": " + result.error.message);
+        else if (result.conflict) {
+          v._cloudConflict = result.conflict;
+          errors.push("vouchers " + externalId + ": version conflict; newer cloud copy preserved");
+        } else {
+          v._cloudVersion = Number(result.row.sync_version);
+          v._cloudUpdatedAt = result.row.updated_at || null;
+          detailVersionsChanged = true;
+        }
       }
     }
 
@@ -349,13 +811,13 @@ async function uploadToTables(showAlert = false) {
         if (o._cloudConflict) { errors.push("production order " + String(o.no || o.id) + ": conflict with a newer cloud copy; resolve before uploading"); continue; }
         const externalId = String(getField(o, ["id", "no"]) || "");
         if (!externalId) { errors.push("production order skipped: missing stable ID"); continue; }
-        const raw = { ...o }; delete raw._cloudUpdatedAt; delete raw._cloudConflict;
+        const raw = { ...o };
+        delete raw._cloudUpdatedAt; delete raw._cloudVersion; delete raw._cloudConflict;
         const extraCost = (Array.isArray(o.x) ? o.x : []).reduce((sum, item) => sum + (Number(item?.amt) || 0), 0);
         const purchaseCost = (Array.isArray(S.docs) ? S.docs : [])
           .filter(d => d?.t === "pur" && String(d.dest) === String(o.id))
           .reduce((sum, d) => sum + (Number(d.total) || 0), 0);
-        const row = {
-          user_id: owner, external_id: externalId,
+        const payload = {
           order_no: String(o.no || externalId),
           item_name: String(o.iname || o.name || "أمر إنتاج"),
           description: o.desc || null,
@@ -363,12 +825,18 @@ async function uploadToTables(showAlert = false) {
           breakdown: { subs: o.subs || [], received: o.rec || [], materials: o.mats || [], extra_costs: o.x || [], stage: Number(o.st) || 0, warehouse: o.wh ?? null },
           total_cost: (Number(o.matCost) || 0) + (Number(o.wc) || 0) + extraCost + purchaseCost,
           order_date: String(o.date || new Date().toISOString()).slice(0, 10),
-          raw, updated_at: new Date().toISOString()
+          raw
         };
-        const { data, error } = await supabase.from("production_orders")
-          .upsert(row, { onConflict: "user_id,external_id" }).select("updated_at").single();
-        if (error) errors.push("production_orders " + externalId + ": " + error.message);
-        else if (data?.updated_at) { o._cloudUpdatedAt = data.updated_at; detailVersionsChanged = true; }
+        const result = await syncVersionedDetail("production_orders", owner, externalId, o._cloudVersion, payload);
+        if (result.error) errors.push("production_orders " + externalId + ": " + result.error.message);
+        else if (result.conflict) {
+          o._cloudConflict = result.conflict;
+          errors.push("production_orders " + externalId + ": version conflict; newer cloud copy preserved");
+        } else {
+          o._cloudVersion = Number(result.row.sync_version);
+          o._cloudUpdatedAt = result.row.updated_at || null;
+          detailVersionsChanged = true;
+        }
       }
     }
 
@@ -414,15 +882,71 @@ async function uploadToTables(showAlert = false) {
           qty,
           price: buyPrice,
           image_url: String(getField(pr, ["img", "image_url"]) || "") || null,
-          raw: pr
+          raw: (() => { const raw = { ...pr }; delete raw._cloudProductsVersion; delete raw._cloudProductsUpdatedAt; delete raw._cloudProductsConflict; return raw; })()
         };
-        const { error } = await supabase.from("products").upsert(row, { onConflict: "user_id,external_id" });
-        if (error) errors.push("products " + externalId + ": " + error.message);
+        const result = await syncVersionedMasterRecord("products", owner, externalId, pr._cloudProductsVersion, row);
+        if (result.error) errors.push("product " + externalId + ": " + result.error.message);
+        else if (result.conflict) {
+          pr._cloudProductsConflict = result.conflict;
+          errors.push("product " + externalId + ": version conflict; newer cloud copy preserved");
+        } else {
+          pr._cloudProductsVersion = Number(result.row.sync_version);
+          pr._cloudProductsUpdatedAt = result.row.updated_at || null;
+          delete pr._cloudProductsConflict;
+        }
+      }
+    }
+
+    // Commit detail rows first. Only then commit their source-scoped ledger and stock effects.
+    let accountingConflict = false;
+    if (errors.length === 0 && !snapshotConflict) accountingConflict = await syncAccountingSnapshots(S, profile, errors);
+    else accountingConflict = hasAccountingConflicts();
+
+    // The administrator snapshot is the final aggregate commit after detail and accounting sync.
+    if (admin && !snapshotConflict && !accountingConflict && errors.length === 0) {
+      const expectedVersion = Number(localStorage.getItem("mgr6-cloud-snapshot-version") || 0);
+      const result = await supabase.rpc("sync_factory_state", {
+        p_expected_version: expectedVersion,
+        p_state: S
+      });
+      snapshotError = result.error;
+      if (snapshotError?.code === "40001") {
+        snapshotConflict = true;
+        localStorage.setItem("mgr6-cloud-snapshot-conflict", JSON.stringify({ reason: "stale_snapshot", at: new Date().toISOString() }));
+      } else if (snapshotError) {
+        errors.push("factory_state: " + snapshotError.message);
+      } else {
+        const snapshotRow = Array.isArray(result.data) ? result.data[0] : result.data;
+        if (!snapshotRow?.sync_version) errors.push("factory_state: server returned no snapshot version");
+        else {
+          localStorage.setItem("mgr6-cloud-snapshot-version", String(snapshotRow.sync_version));
+          localStorage.setItem("mgr6-cloud-snapshot-pend", String(Number(S.pend || 0)));
+          localStorage.removeItem("mgr6-cloud-snapshot-conflict");
+          snapshotConflict = false;
+        }
+      }
+    }
+
+    if (!admin && profile.permissions?.production === true && !canWrite("inventory") && !snapshotConflict && !accountingConflict && errors.length === 0) {
+      const { data: catalogRows, error: catalogError } = await supabase.from("production_catalog")
+        .select("user_id,external_id,name,sku,model,unit,warehouse,image_url,buy_price,variant,quantity")
+        .eq("user_id", owner);
+      if (catalogError) errors.push("production catalog refresh: " + catalogError.message);
+      else {
+        const refreshed = mergeProductionCatalog(S.items || [], groupProductionCatalogRows(catalogRows || []), true);
+        S.items = refreshed.arr;
+        Object.getPrototypeOf(localStorage).setItem.call(localStorage, "mgr6", JSON.stringify(S));
+        if (typeof window.applyFactoryCloudState === "function") window.applyFactoryCloudState(S);
       }
     }
 
     if (errors.length) {
-      syncState = localStorage.getItem("mgr6-cloud-snapshot-conflict") ? "conflict" : "idle"; drawAll();
+      Object.getPrototypeOf(localStorage).setItem.call(localStorage, "mgr6", JSON.stringify(S));
+      const hasMasterConflict = (S.partners || []).some(p => p?._cloudCustomersConflict || p?._cloudSuppliersConflict)
+        || (S.items || []).some(p => p?._cloudProductsConflict);
+      let hasDeleteConflict = false;
+      try { hasDeleteConflict = JSON.parse(localStorage.getItem(CLOUD_DELETE_CONFLICT_KEY) || "[]").length > 0; } catch(e) {}
+      syncState = (localStorage.getItem("mgr6-cloud-snapshot-conflict") || hasAccountingConflicts() || hasMasterConflict || hasDeleteConflict) ? "conflict" : "idle"; drawAll();
       const msg = (snapshotError
         ? T("فشل حفظ النسخة الكاملة وبعض الجداول:\n", "Full backup and some table writes failed:\n")
         : T("بعض عمليات المزامنة فشلت:\n", "Some sync operations failed:\n")) + errors.join("\n");
@@ -430,18 +954,18 @@ async function uploadToTables(showAlert = false) {
       return msg;
     }
     const hasSnapshotConflict = snapshotConflict || !!localStorage.getItem("mgr6-cloud-snapshot-conflict");
+    const hasAccountingConflictNow = accountingConflict || hasAccountingConflicts();
     const latestPend = Number(getCachedState().pend || 0);
-    if (!hasSnapshotConflict && latestPend === Number(S.pend || 0)) localStorage.removeItem(PENDING_SYNC_KEY);
-    else if (!hasSnapshotConflict) scheduleAutoSync(400);
-    // Employee detail-only sync is deliberately not labelled fully synchronized.
-    syncState = hasSnapshotConflict ? "conflict" : (admin ? "synced" : "partial");
+    if (!hasSnapshotConflict && !hasAccountingConflictNow && latestPend === Number(S.pend || 0)) localStorage.removeItem(PENDING_SYNC_KEY);
+    else if (!hasSnapshotConflict && !hasAccountingConflictNow) scheduleAutoSync(400);
+    syncState = (hasSnapshotConflict || hasAccountingConflictNow) ? "conflict" : (admin ? "synced" : "partial");
     lastSyncTime = new Date().toLocaleTimeString(isEN() ? "en-US" : "ar-EG");
     drawAll();
-    const msg = hasSnapshotConflict
-      ? T("تمت مزامنة السجلات التفصيلية المتاحة، لكن النسخة الكاملة بها تعارض محفوظ ولم يتم استبدالها.", "Available detail records were synchronized; the full snapshot conflict was preserved without overwriting it.")
+    const msg = hasSnapshotConflict || hasAccountingConflictNow
+      ? T("تم حفظ البيانات التي لا يوجد بها تعارض. توجد نسخة أستاذ/مخزون أو نسخة مصنع أقدم؛ لم نستبدل البيانات المتعارضة.", "Non-conflicting data was saved. A ledger/stock or factory snapshot conflict remains; no conflicting data was overwritten.")
       : admin
-        ? T("تم حفظ نسخة المصنع الكاملة ومزامنة الجداول التفصيلية", "Full factory backup saved and detail tables synchronized")
-        : T("تم رفع الجداول المسموح بها فقط. مزامنة القيود والحركات المحاسبية الكاملة لحساب الموظف لم تكتمل بعد.", "Only permitted detail tables were uploaded. Full accounting-ledger synchronization for employee accounts is not complete yet.");
+        ? T("تم حفظ نسخة المصنع الكاملة ومزامنة دفتر الأستاذ وحركات المخزون والجداول التفصيلية", "Full factory snapshot, ledger, stock movements and detail tables synchronized")
+        : T("تم رفع الجداول وقيود الأستاذ وحركات المخزون المسموح بها حسب صلاحيات حسابك.", "Permitted detail tables, ledger entries and stock movements were synchronized for your account.");
     if (showAlert) alert(msg);
     return msg;
   } catch(e) {
@@ -497,7 +1021,7 @@ async function loadFromTablesMerge(isAuto = false) {
             reason: "concurrent_snapshot", remoteVersion, remoteUpdatedAt: snapshot.updated_at || null
           }));
           syncState = "conflict"; drawAll();
-          return "cloud snapshot conflict";
+          // Continue merging independent detail and source-scoped accounting rows.
         }
         if (restoreRemote) {
           try { localStorage.setItem("mgr6-backup-before-cloud-restore", localStorage.getItem("mgr6") || ""); }
@@ -515,26 +1039,39 @@ async function loadFromTablesMerge(isAuto = false) {
       }
     }
 
-    if (!["customers","suppliers","invoices","inventory","reports"].some(canRead)) {
+    if (!["customers","suppliers","invoices","inventory","production","settings","reports"].some(canRead)) {
       return T("لا توجد صلاحيات لقراءة بيانات السحابة", "No permission to read cloud data");
     }
     // Preserve a rollback copy, then merge remote records without replacing local master data.
     try { localStorage.setItem("mgr6-backup-before-cloud-restore", localStorage.getItem("mgr6") || ""); } catch(e){}
 
     const emptyResult = { data: [], error: null };
+    const inventoryRead = canRead("inventory");
+    const productionCatalogRead = admin || profile.permissions?.production === true;
+    const productionConfigRead = productionCatalogRead && !admin;
     const results = await Promise.all([
       canRead("customers") ? supabase.from("customers").select("*").eq("user_id", owner) : Promise.resolve(emptyResult),
       canRead("suppliers") ? supabase.from("suppliers").select("*").eq("user_id", owner) : Promise.resolve(emptyResult),
-      canRead("invoices") ? supabase.from("invoices").select("*").eq("user_id", owner) : Promise.resolve(emptyResult),
-      canRead("inventory") ? supabase.from("products").select("*").eq("user_id", owner) : Promise.resolve(emptyResult),
-      canRead("invoices") ? supabase.from("returns").select("*").eq("user_id", owner) : Promise.resolve(emptyResult),
-      canRead("invoices") ? supabase.from("vouchers").select("*").eq("user_id", owner) : Promise.resolve(emptyResult),
-      canRead("production") ? supabase.from("production_orders").select("*").eq("user_id", owner) : Promise.resolve(emptyResult),
+      canRead("invoices") ? supabase.from("invoices").select("*").eq("user_id", owner).eq("is_deleted", false) : Promise.resolve(emptyResult),
+      inventoryRead
+        ? supabase.from("products").select("*").eq("user_id", owner)
+        : productionCatalogRead
+          ? supabase.from("production_catalog").select("user_id,external_id,name,sku,model,unit,warehouse,image_url,buy_price,variant,quantity").eq("user_id", owner)
+          : Promise.resolve(emptyResult),
+      canRead("invoices") ? supabase.from("returns").select("*").eq("user_id", owner).eq("is_deleted", false) : Promise.resolve(emptyResult),
+      canRead("invoices") ? supabase.from("vouchers").select("*").eq("user_id", owner).eq("is_deleted", false) : Promise.resolve(emptyResult),
+      productionCatalogRead ? supabase.from("production_orders").select("*").eq("user_id", owner).eq("is_deleted", false) : Promise.resolve(emptyResult),
+      (canRead("invoices") || canRead("production") || canRead("settings"))
+        ? supabase.from("factory_accounting_state").select("source,payload,sync_version,updated_at").eq("user_id", owner)
+        : Promise.resolve(emptyResult),
+      productionConfigRead
+        ? supabase.from("production_factory_config").select("user_id,accts,codes,curs,warehouses,factory_name").eq("user_id", owner)
+        : Promise.resolve(emptyResult),
     ]);
     const failed = results.find(r => r.error);
     if (failed) return isAuto ? "cloud read failed" : T("تعذر قراءة البيانات من السحابة: " + failed.error.message, "Cloud read failed: " + failed.error.message);
-    const [{ data: custs }, { data: supps }, { data: invs }, { data: prods }, { data: returns }, { data: vouchers }, { data: productionOrders }] = results;
-    if (!custs?.length && !supps?.length && !invs?.length && !prods?.length && !returns?.length && !vouchers?.length && !productionOrders?.length) {
+    const [{ data: custs }, { data: supps }, { data: invs }, { data: prods }, { data: returns }, { data: vouchers }, { data: productionOrders }, { data: accountingStates }, { data: productionConfigs }] = results;
+    if (!custs?.length && !supps?.length && !invs?.length && !prods?.length && !returns?.length && !vouchers?.length && !productionOrders?.length && !accountingStates?.length && !productionConfigs?.length && !localStorage.getItem("mgr6-cloud-snapshot-conflict")) {
       if (restoredSnapshot && isAuto) setTimeout(() => location.reload(), 500);
       return restoredSnapshot
         ? T("تمت استعادة نسخة المصنع الكاملة من السحابة", "Full factory backup restored from cloud")
@@ -543,16 +1080,54 @@ async function loadFromTablesMerge(isAuto = false) {
 
     const S = getCachedState();
     if (!S || typeof S !== "object" || Array.isArray(S)) return "bad local";
-    let totalAdded = 0;
-    const cloudPartners = [
-      ...(custs || []).map(c => ({ id: c.external_id, name: c.name, phone: c.phone, email: c.email, addr: c.address, type: "customer" })),
-      ...(supps || []).map(s => ({ id: s.external_id, name: s.name, phone: s.phone, email: s.email, addr: s.address, type: "supplier" })),
-    ];
-    if (cloudPartners.length) {
-      const m = mergeByKey(S.partners || [], cloudPartners, x => x.id || x.name);
-      S.partners = m.arr; totalAdded += m.added;
+    let totalAdded = 0, masterConflicts = 0;
+    let recordConflicts = localStorage.getItem("mgr6-cloud-snapshot-conflict") ? 1 : 0;
+    const cloudPartnerMap = new Map();
+    for (const c of (custs || [])) {
+      const raw = c.raw && typeof c.raw === "object" && !Array.isArray(c.raw) ? { ...c.raw } : {};
+      const id = String(c.external_id || c.id);
+      const local = cloudPartnerMap.get(id) || raw;
+      Object.assign(local, {
+        id,
+        name: c.name,
+        phone: c.phone || "",
+        email: c.email || "",
+        addr: c.address || "",
+        gov: c.governorate || "",
+        city: c.city || "",
+        c: 1,
+        type: c.customer_type === "wholesale" ? "w" : "r",
+        _cloudCustomersVersion: Number(c.sync_version || 1),
+        _cloudCustomersUpdatedAt: c.updated_at || null
+      });
+      cloudPartnerMap.set(id, local);
     }
-    let recordConflicts = 0;
+    for (const supplier of (supps || [])) {
+      const raw = supplier.raw && typeof supplier.raw === "object" && !Array.isArray(supplier.raw) ? { ...supplier.raw } : {};
+      const id = String(supplier.external_id || supplier.id);
+      const local = cloudPartnerMap.get(id) || raw;
+      Object.assign(local, {
+        id,
+        name: supplier.name,
+        phone: supplier.phone || "",
+        email: supplier.email || "",
+        addr: supplier.address || "",
+        gov: supplier.governorate || "",
+        city: supplier.city || "",
+        s: 1,
+        _cloudSuppliersVersion: Number(supplier.sync_version || 1),
+        _cloudSuppliersUpdatedAt: supplier.updated_at || null
+      });
+      if (local.c === undefined) local.c = 0;
+      if (!local.type) local.type = "w";
+      cloudPartnerMap.set(id, local);
+    }
+    const cloudPartners = [...cloudPartnerMap.values()];
+    if (cloudPartners.length) {
+      const refreshPartners = !localStorage.getItem(PENDING_SYNC_KEY);
+      const m = mergeCloudPartners(S.partners || [], cloudPartners, refreshPartners);
+      S.partners = m.arr; totalAdded += m.added; masterConflicts += m.conflicts || 0;
+    }
     if (invs?.length) {
       const cloudDocs = invs
         .filter(inv => inv.raw && ["sale", "pur"].includes(inv.raw.t))
@@ -562,25 +1137,33 @@ async function loadFromTablesMerge(isAuto = false) {
       S.docs = m.arr; totalAdded += m.added; recordConflicts += m.conflicts;
     }
     if (returns?.length) {
-      const cloudReturns = returns.map(row => row.raw && typeof row.raw === "object" ? ({ ...row.raw, _cloudUpdatedAt: row.updated_at }) : ({
+      const cloudReturns = returns.map(row => row.raw && typeof row.raw === "object" ? ({
+        ...row.raw, _cloudVersion: Number(row.sync_version || 1), _cloudUpdatedAt: row.updated_at || null
+      }) : ({
         id: row.external_id || row.id, no: row.return_no,
         t: row.return_type === "sale_return" ? "sret" : "pret",
-        date: row.return_date, total: Number(row.total || 0), note: row.note || ""
+        date: row.return_date, total: Number(row.total || 0), note: "",
+        _cloudVersion: Number(row.sync_version || 1), _cloudUpdatedAt: row.updated_at || null
       }));
       const merged = mergeCloudRecords(S.docs || [], cloudReturns);
       S.docs = merged.arr; totalAdded += merged.added; recordConflicts += merged.conflicts;
     }
     if (vouchers?.length) {
-      const cloudVouchers = vouchers.map(row => row.raw && typeof row.raw === "object" ? ({ ...row.raw, _cloudUpdatedAt: row.updated_at }) : ({
+      const cloudVouchers = vouchers.map(row => row.raw && typeof row.raw === "object" ? ({
+        ...row.raw, _cloudVersion: Number(row.sync_version || 1), _cloudUpdatedAt: row.updated_at || null
+      }) : ({
         id: row.external_id || row.id, no: row.voucher_no, dir: row.direction,
-        date: row.voucher_date, title: row.account, desc: row.note || "", total: Number(row.amount || 0), ac: [], ln: []
+        date: row.voucher_date, title: row.account, desc: row.note || "", total: Number(row.amount || 0), ac: [], ln: [],
+        _cloudVersion: Number(row.sync_version || 1), _cloudUpdatedAt: row.updated_at || null
       }));
       const merged = mergeCloudRecords(S.vch || [], cloudVouchers);
       S.vch = merged.arr; totalAdded += merged.added; recordConflicts += merged.conflicts;
     }
     if (productionOrders?.length) {
       const cloudOrders = productionOrders.map(row => {
-        if (row.raw && typeof row.raw === "object") return { ...row.raw, _cloudUpdatedAt: row.updated_at };
+        if (row.raw && typeof row.raw === "object") return {
+          ...row.raw, _cloudVersion: Number(row.sync_version || 1), _cloudUpdatedAt: row.updated_at || null
+        };
         const breakdown = row.breakdown && typeof row.breakdown === "object" ? row.breakdown : {};
         return {
           id: row.external_id || row.id, no: row.order_no, iname: row.item_name,
@@ -588,34 +1171,125 @@ async function loadFromTablesMerge(isAuto = false) {
           st: row.status === "delivered" ? 2 : row.status === "in_progress" ? 1 : 0,
           subs: breakdown.subs || [], rec: breakdown.received || [],
           mats: breakdown.materials || [], x: breakdown.extra_costs || [],
-          wh: breakdown.warehouse || null, matCost: Number(row.total_cost || 0), wc: 0
+          wh: breakdown.warehouse || null, matCost: Number(row.total_cost || 0), wc: 0,
+          _cloudVersion: Number(row.sync_version || 1), _cloudUpdatedAt: row.updated_at || null
         };
       });
       const merged = mergeCloudRecords(S.po || [], cloudOrders);
       S.po = merged.arr; totalAdded += merged.added; recordConflicts += merged.conflicts;
     }
-    if (prods?.length) {
-      const cloudProducts = prods.map(p => {
-        if (p.raw && typeof p.raw === "object" && !Array.isArray(p.raw)) {
-          const raw = { ...p.raw };
-          if (!raw.st || typeof raw.st !== "object" || Array.isArray(raw.st)) raw.st = {};
-          return raw;
-        }
-        const qty = Number(p.qty || 0) || 0;
-        const buy = Number(p.buy_price ?? p.price ?? 0) || 0;
-        return {
-          id: p.external_id || p.id, name: p.name, sku: p.sku || p.external_id || "",
-          unit: p.unit || "قطعة", wh: p.warehouse || null,
-          buy, retail: Number(p.retail_price || 0) || 0,
-          wholesale: Number(p.wholesale_price || 0) || 0,
-          img: p.image_url || "", st: qty ? { "-": qty } : {}, val: qty * buy
-        };
-      });
-      if (!Array.isArray(S.items)) S.items = [];
-      const m = mergeByKey(S.items, cloudProducts, x => x.id || x.sku || x.name);
-      S.items = m.arr; totalAdded += m.added;
+
+
+    if (productionConfigs?.length && productionConfigs[0]) {
+      const config = productionConfigs[0];
+      if (Array.isArray(config.accts)) S.accts = config.accts;
+      if (Array.isArray(config.codes)) S.codes = config.codes;
+      if (Array.isArray(config.curs)) S.curs = config.curs;
+      if (Array.isArray(config.warehouses)) S.wh = config.warehouses;
+      if (typeof config.factory_name === "string" && config.factory_name) S.name = config.factory_name;
     }
+
+    if (prods?.length) {
+      let cloudProducts;
+      if (!inventoryRead) {
+        cloudProducts = groupProductionCatalogRows(prods);
+      } else {
+        cloudProducts = prods.map(p => {
+          if (p.raw && typeof p.raw === "object" && !Array.isArray(p.raw)) {
+            const raw = { ...p.raw };
+            if (!raw.st || typeof raw.st !== "object" || Array.isArray(raw.st)) raw.st = {};
+            raw._cloudProductsVersion = Number(p.sync_version || 1);
+            raw._cloudProductsUpdatedAt = p.updated_at || null;
+            return raw;
+          }
+          const qty = Number(p.qty || 0) || 0;
+          const buy = Number(p.buy_price ?? p.price ?? 0) || 0;
+          return {
+            id: p.external_id || p.id, name: p.name, sku: p.sku || p.external_id || "",
+            unit: p.unit || "قطعة", wh: p.warehouse || null,
+            buy, retail: Number(p.retail_price || 0) || 0,
+            wholesale: Number(p.wholesale_price || 0) || 0,
+            img: p.image_url || "", st: qty ? { "-": qty } : {}, val: qty * buy,
+            _cloudProductsVersion: Number(p.sync_version || 1),
+            _cloudProductsUpdatedAt: p.updated_at || null
+          };
+        });
+      }
+      if (!Array.isArray(S.items)) S.items = [];
+      if (!inventoryRead && productionCatalogRead) {
+        const m = mergeProductionCatalog(S.items, cloudProducts, !localStorage.getItem(PENDING_SYNC_KEY));
+        S.items = m.arr; totalAdded += m.added;
+      } else {
+        const m = mergeCloudProducts(S.items, cloudProducts, !localStorage.getItem(PENDING_SYNC_KEY));
+        S.items = m.arr; totalAdded += m.added; masterConflicts += m.conflicts || 0;
+      }
+    }
+    recordConflicts += masterConflicts;
+    let accountingChanged = false;
+    for (const remote of (accountingStates || [])) {
+      const source = remote?.source;
+      if (!ACCOUNTING_SOURCES.includes(source) || !remote.payload || typeof remote.payload !== "object") continue;
+      const remotePayload = remote.payload;
+      const remoteVersion = Number(remote.sync_version || 1);
+      const localVersion = Number(localStorage.getItem(accountingVersionKey(source)) || 0);
+      const baseline = localStorage.getItem(accountingHashKey(source));
+      const snapshotBaselinePend = localStorage.getItem("mgr6-cloud-snapshot-pend");
+      const localUnchangedFromSnapshot = snapshotBaselinePend !== null
+        && String(Number(S.pend || 0)) === snapshotBaselinePend;
+      const localPayload = accountingPayloadForSource(S, source);
+      const localHash = accountingHash(localPayload);
+      const remoteHash = accountingHash(remotePayload);
+      const emptyLocal = !localPayload.ledger.length && !localPayload.movements.length
+        && !localPayload.work_orders.length && !localPayload.journal_entries.length;
+      let replaceRemote = false;
+      let conflict = false;
+
+      if (remoteVersion < localVersion) {
+        conflict = true;
+      } else if (remoteVersion === localVersion) {
+        if (localHash === remoteHash) {
+          localStorage.setItem(accountingVersionKey(source), String(remoteVersion));
+          localStorage.setItem(accountingHashKey(source), remoteHash);
+          localStorage.removeItem(accountingConflictKey(source));
+        } else if (baseline && localHash === baseline) {
+          conflict = true;
+        } else if (localVersion === 0 && emptyLocal) {
+          replaceRemote = true;
+        } else {
+          conflict = true;
+        }
+      } else if (localVersion === 0) {
+        if (emptyLocal || localHash === remoteHash || localUnchangedFromSnapshot) replaceRemote = true;
+        else conflict = true;
+      } else if (baseline && localHash === baseline) {
+        replaceRemote = true;
+      } else {
+        conflict = true;
+      }
+
+      if (replaceRemote) {
+        replaceAccountingPayload(S, source, remotePayload);
+        localStorage.setItem(accountingVersionKey(source), String(remoteVersion));
+        localStorage.setItem(accountingHashKey(source), remoteHash);
+        localStorage.removeItem(accountingConflictKey(source));
+        accountingChanged = true;
+        totalAdded += (remotePayload.ledger?.length || 0) + (remotePayload.movements?.length || 0)
+          + (remotePayload.work_orders?.length || 0) + (remotePayload.journal_entries?.length || 0);
+      } else if (conflict) {
+        localStorage.setItem(accountingConflictKey(source), JSON.stringify({
+          reason: "concurrent_accounting_snapshot",
+          source,
+          localVersion,
+          remoteVersion,
+          remoteUpdatedAt: remote.updated_at || null
+        }));
+        recordConflicts++;
+      }
+    }
+    if (accountingChanged && admin) recalcAccountingInventory(S);
+
     Object.getPrototypeOf(localStorage).setItem.call(localStorage, "mgr6", JSON.stringify(S));
+    if (typeof window.applyFactoryCloudState === "function") window.applyFactoryCloudState(S);
     if (restoredSnapshot && isAuto) setTimeout(() => location.reload(), 500);
     if (recordConflicts) {
       return T("تم تحميل " + totalAdded + " سجل جديد. يوجد " + recordConflicts + " سجل بتعارض إصدار؛ احتفظنا بالنسختين ولم نستبدل بياناتك المحلية.", "Loaded " + totalAdded + " new records. " + recordConflicts + " cloud record conflict(s) were preserved without overwriting local data.");
@@ -693,6 +1367,85 @@ window.resolveCloudSnapshotConflict = async function() {
   localStorage.setItem("mgr6-cloud-snapshot-pend", String(Number(snapshot.state.pend || 0)));
   localStorage.removeItem("mgr6-cloud-snapshot-conflict");
   location.reload();
+};
+window.resolveCloudMasterConflict = async function(table, externalId, choice) {
+  if (!["customers","suppliers","products"].includes(table) || !["cloud","local"].includes(choice)) return;
+  if (!navigator.onLine || !supabase) return alert(T("يلزم اتصال بالإنترنت لحل التعارض", "Internet connection is required to resolve this conflict"));
+  const profile = await getMyProfile();
+  if (!profile?.is_admin) return alert(T("حل تعارض البيانات الرئيسية متاح لمدير النظام فقط", "Only the administrator can resolve master-data conflicts"));
+  const S = getCachedState();
+  const isProduct = table === "products";
+  const local = isProduct
+    ? (S.items || []).find(x => String(x.id || x.sku || "") === String(externalId))
+    : (S.partners || []).find(x => String(x.id || x.no || "") === String(externalId));
+  const conflictKey = table === "customers" ? "_cloudCustomersConflict"
+    : table === "suppliers" ? "_cloudSuppliersConflict" : "_cloudProductsConflict";
+  const versionKey = table === "customers" ? "_cloudCustomersVersion"
+    : table === "suppliers" ? "_cloudSuppliersVersion" : "_cloudProductsVersion";
+  const conflict = local?.[conflictKey];
+  if (!local || !conflict?.serverCopy || !Number(conflict.serverVersion)) {
+    return alert(T("لم يعد هذا التعارض موجودًا؛ حدّث حالة المزامنة", "This conflict is no longer available; refresh sync status"));
+  }
+  const clone = value => JSON.parse(JSON.stringify(value));
+  const backupKey = "mgr6-master-conflict-backups";
+  let backups;
+  try {
+    backups = JSON.parse(localStorage.getItem(backupKey) || "[]");
+    if (!Array.isArray(backups)) backups = [];
+    backups.push({
+      table, externalId: String(externalId), choice, at: new Date().toISOString(),
+      localCopy: clone(local), cloudCopy: clone(conflict.serverCopy)
+    });
+    if (backups.length > 50) backups = backups.slice(-50);
+    localStorage.setItem(backupKey, JSON.stringify(backups));
+  } catch(e) {
+    return alert(T("تعذر حفظ النسختين الاحتياطيتين؛ لم يتم تغيير أي بيانات", "Could not back up both copies; no data was changed"));
+  }
+  if (choice === "cloud") {
+    const stableId = local.id ?? String(externalId);
+    if (table === "customers") {
+      const keepSupplier = Number(local.s) === 1 || local.s === true;
+      const supplierVersion = local._cloudSuppliersVersion;
+      const supplierUpdatedAt = local._cloudSuppliersUpdatedAt;
+      Object.assign(local, conflict.serverCopy, { id: stableId, c: 1, s: keepSupplier ? 1 : 0 });
+      local._cloudCustomersVersion = Number(conflict.serverVersion);
+      if (conflict.serverUpdatedAt) local._cloudCustomersUpdatedAt = conflict.serverUpdatedAt;
+      if (keepSupplier) {
+        local._cloudSuppliersVersion = supplierVersion;
+        local._cloudSuppliersUpdatedAt = supplierUpdatedAt;
+      }
+    } else if (table === "suppliers") {
+      const keepCustomer = Number(local.c) === 1 || local.c === true;
+      const customerVersion = local._cloudCustomersVersion;
+      const customerUpdatedAt = local._cloudCustomersUpdatedAt;
+      Object.assign(local, conflict.serverCopy, { id: stableId, c: keepCustomer ? 1 : 0, s: 1 });
+      local._cloudSuppliersVersion = Number(conflict.serverVersion);
+      if (conflict.serverUpdatedAt) local._cloudSuppliersUpdatedAt = conflict.serverUpdatedAt;
+      if (keepCustomer) {
+        local._cloudCustomersVersion = customerVersion;
+        local._cloudCustomersUpdatedAt = customerUpdatedAt;
+      }
+    } else {
+      Object.assign(local, conflict.serverCopy, { id: stableId });
+      local._cloudProductsVersion = Number(conflict.serverVersion);
+      if (conflict.serverUpdatedAt) local._cloudProductsUpdatedAt = conflict.serverUpdatedAt;
+    }
+    delete local[conflictKey];
+    Object.getPrototypeOf(localStorage).setItem.call(localStorage, "mgr6", JSON.stringify(S));
+    if (typeof window.applyFactoryCloudState === "function") window.applyFactoryCloudState(S);
+    if (typeof drawAll === "function") drawAll();
+    return T("تم اعتماد نسخة السحابة وحفظ النسختين في سجل التعارضات المحلي", "Cloud copy accepted; both copies were saved in the local conflict archive");
+  }
+  local[versionKey] = Number(conflict.serverVersion);
+  if (conflict.serverUpdatedAt) local[versionKey.replace("Version","UpdatedAt")] = conflict.serverUpdatedAt;
+  delete local[conflictKey];
+  Object.getPrototypeOf(localStorage).setItem.call(localStorage, "mgr6", JSON.stringify(S));
+  if (typeof window.applyFactoryCloudState === "function") window.applyFactoryCloudState(S);
+  const result = await uploadToTables(true);
+  if (String(result).includes("تعارض") || String(result).includes("conflict") || String(result).includes("فشل")) {
+    return alert(String(result));
+  }
+  return T("تم اعتماد نسخة الجهاز ورفعها بإصدار جديد بعد حفظ نسخة السحابة القديمة", "Local copy accepted and uploaded as a new version after backing up the previous cloud copy");
 };
 window.backupNowManual = function() { uploadToTables(true); };
 window.testSync = async function() { const r = await uploadToTables(true); alert(r); return r; };
