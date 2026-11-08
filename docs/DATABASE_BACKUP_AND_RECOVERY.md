@@ -44,7 +44,7 @@ Recommended protection:
 - Add an R2 bucket-lock rule for prefix `database/ms-factory/` with a 90-day age retention. This prevents deletion and overwriting during the retention period, including by a compromised upload token.
 - Configure lifecycle expiry after 120 days. Bucket-lock retention takes precedence, so objects remain locked for at least 90 days and then expire after the retention window.
 - The workflow checks both settings before starting a backup. Create a separate Cloudflare API token with R2 Storage Read permission and store it as `CLOUDFLARE_R2_LOCK_TOKEN`; it is used only to verify the lock configuration.
-- The workflow sums every object in the dedicated R2 bucket and refuses a new upload if it would exceed a 9 GB bucket-wide safety ceiling, leaving 1 GB headroom under the 10 GB-month R2 free storage allowance. It also uses the 120-day lifecycle rule to prevent indefinite accumulation. Monitor Class A and Class B operation usage as well; if the account approaches any free allowance, stop the job or reduce retention rather than incur charges.
+- The workflow checks Cloudflare account-level Standard storage metrics (including metadata and in-progress uploads), cross-checks the dedicated bucket size, and refuses a new upload if it would exceed a 9 GB account-wide safety ceiling, leaving 1 GB headroom under the 10 GB-month R2 free storage allowance. It also refuses to proceed if any Infrequent Access objects exist, because that class has no free-tier allowance. It also uses the 120-day lifecycle rule to prevent indefinite accumulation. Monitor Class A and Class B operation usage as well; if the account approaches any free allowance, stop the job or reduce retention rather than incur charges.
 
 ### C. Add GitHub Actions configuration
 
