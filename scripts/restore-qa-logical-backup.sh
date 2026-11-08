@@ -127,10 +127,11 @@ drops = "".join(f"DROP TRIGGER IF EXISTS {name} ON auth.users;\n" for name in di
 Path("auth-trigger-qa-idempotent.sql").write_text(drops + "\n" + source)
 PY
 
-# The production logical dump includes internal rows from Supabase-managed Storage
-# tables (for example storage.buckets_vectors). These are owned by Supabase and
-# must never be imported into another project's managed schema. The backup gate
-# above guarantees there are no user Storage buckets/objects to transfer.
+# Supabase-managed schemas are not application data. Storage rows belong to
+# the target project's managed Storage service, while Auth rows are exported
+# separately in auth-users.sql. Importing Auth twice caused duplicate auth.users
+# primary keys in restore run #42. Strip complete COPY blocks and sequence state
+# from BOTH managed schemas before importing data.sql.
 python3 - <<'PY'
 from pathlib import Path
 import re
@@ -138,15 +139,15 @@ import re
 path = Path("data.sql")
 lines = path.read_text().splitlines(keepends=True)
 out = []
-skipped = []
+skipped = {"auth": [], "storage": []}
 i = 0
 while i < len(lines):
     line = lines[i]
-    # Supabase-managed Storage table data is not customer data. Drop the complete
-    # pg_dump COPY block, including its mandatory \. terminator.
-    if re.match(r'^COPY\s+(?:"?storage"?\.)', line, flags=re.IGNORECASE):
+    match = re.match(r'^COPY\s+(?:"?(auth|storage)"?\.)', line, flags=re.IGNORECASE)
+    if match:
+        schema = match.group(1).lower()
         table = line.split()[1]
-        skipped.append(table)
+        skipped[schema].append(table)
         i += 1
         while i < len(lines) and lines[i].strip() != r'\.':
             i += 1
@@ -154,17 +155,21 @@ while i < len(lines):
             raise SystemExit(f"Unterminated pg_dump COPY block for {table}.")
         i += 1
         continue
-    # Sequence state for managed Storage tables is likewise Supabase-owned.
-    if re.match(r"^SELECT pg_catalog\.setval\('storage\.", line, flags=re.IGNORECASE):
+    # Sequence state for Supabase-managed schemas is not portable to QA.
+    if re.match(r"^SELECT pg_catalog\.setval\('(auth|storage)\.", line, flags=re.IGNORECASE):
         i += 1
         continue
     out.append(line)
     i += 1
 
-if not skipped:
-    raise SystemExit("Expected Supabase-managed storage COPY block was not found; refusing an unverified restore input.")
-path.write_text("".join(out))
-print("Excluded Supabase-managed Storage data blocks: " + ", ".join(skipped))
+cleaned = "".join(out)
+if re.search(r'^COPY\s+(?:"?(?:auth|storage)"?\.)', cleaned, flags=re.IGNORECASE | re.MULTILINE):
+    raise SystemExit("Managed Auth/Storage COPY data remains in data.sql; refusing restore.")
+if not skipped["storage"]:
+    raise SystemExit("Expected Supabase-managed Storage COPY block was not found; refusing an unverified restore input.")
+path.write_text(cleaned)
+for schema in ("auth", "storage"):
+    print(f"Excluded {schema} COPY blocks: " + (", ".join(skipped[schema]) if skipped[schema] else "(none present)"))
 PY
 
 # Supabase's managed postgres role is not a PostgreSQL superuser and cannot SET
