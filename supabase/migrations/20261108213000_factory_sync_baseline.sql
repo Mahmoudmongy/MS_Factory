@@ -74,6 +74,11 @@ begin
       using errcode = '22023';
   end if;
 
+  -- Share the factory lock with source-effect writes so baseline publication cannot race a transaction.
+  perform pg_catalog.pg_advisory_xact_lock(
+    pg_catalog.hashtextextended(v_owner_id::text || ':factory-opening-baseline', 0)
+  );
+
   -- Baseline is a one-time bootstrap. Transactional effects must be backfilled first.
   if exists (select 1 from public.source_effects se where se.user_id = v_owner_id) then
     raise exception 'Source effects exist; backfill them before baseline publication'
@@ -235,10 +240,7 @@ begin
   v_inventory_fp := pg_catalog.md5(p_inventory_section::text);
   v_accounting_fp := pg_catalog.md5(p_accounting_section::text);
 
-  -- Serialize publish attempts, then enforce insert-only version zero.
-  perform pg_catalog.pg_advisory_xact_lock(
-    pg_catalog.hashtextextended(v_owner_id::text || ':factory-opening-baseline', 0)
-  );
+  -- The factory lock above serializes concurrent first-publication attempts.
 
   if exists (select 1 from public.factory_sync_baselines b where b.user_id = v_owner_id) then
     raise exception 'Opening baseline is already published and immutable'
