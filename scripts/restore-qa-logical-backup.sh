@@ -127,6 +127,46 @@ drops = "".join(f"DROP TRIGGER IF EXISTS {name} ON auth.users;\n" for name in di
 Path("auth-trigger-qa-idempotent.sql").write_text(drops + "\n" + source)
 PY
 
+# The production logical dump includes internal rows from Supabase-managed Storage
+# tables (for example storage.buckets_vectors). These are owned by Supabase and
+# must never be imported into another project's managed schema. The backup gate
+# above guarantees there are no user Storage buckets/objects to transfer.
+python3 - <<'PY'
+from pathlib import Path
+import re
+
+path = Path("data.sql")
+lines = path.read_text().splitlines(keepends=True)
+out = []
+skipped = []
+i = 0
+while i < len(lines):
+    line = lines[i]
+    # Supabase-managed Storage table data is not customer data. Drop the complete
+    # pg_dump COPY block, including its mandatory \\. terminator.
+    if re.match(r'^COPY\\s+(?:"?storage"?\\.)', line, flags=re.IGNORECASE):
+        table = line.split()[1]
+        skipped.append(table)
+        i += 1
+        while i < len(lines) and lines[i].strip() != r'\\.':
+            i += 1
+        if i >= len(lines):
+            raise SystemExit(f"Unterminated pg_dump COPY block for {table}.")
+        i += 1
+        continue
+    # Sequence state for managed Storage tables is likewise Supabase-owned.
+    if re.match(r"^SELECT pg_catalog\\.setval\\('storage\\.", line, flags=re.IGNORECASE):
+        i += 1
+        continue
+    out.append(line)
+    i += 1
+
+if not skipped:
+    raise SystemExit("Expected Supabase-managed storage COPY block was not found; refusing an unverified restore input.")
+path.write_text("".join(out))
+print("Excluded Supabase-managed Storage data blocks: " + ", ".join(skipped))
+PY
+
 # Supabase's managed postgres role is not a PostgreSQL superuser and cannot SET
 # session_replication_role. It already has BYPASSRLS; keep constraints/triggers active
 # and load the pg_dump-ordered data inside one transaction. Restore the custom Auth
