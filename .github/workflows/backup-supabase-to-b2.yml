@@ -8,7 +8,7 @@ on:
   workflow_dispatch:
     inputs:
       run_backup:
-        description: "Upload a new encrypted production backup (requires BACKUP_ENABLED=true)"
+        description: "Run one explicitly requested encrypted backup. Scheduled backups remain controlled by BACKUP_ENABLED."
         type: boolean
         required: true
         default: false
@@ -99,7 +99,7 @@ jobs:
 
   backup:
     needs: b2-preflight
-    if: needs.b2-preflight.result == 'success' && ((github.event_name == 'schedule' && vars.BACKUP_ENABLED == 'true') || (github.event_name == 'workflow_dispatch' && inputs.run_backup == true && vars.BACKUP_ENABLED == 'true'))
+    if: needs.b2-preflight.result == 'success' && ((github.event_name == 'schedule' && vars.BACKUP_ENABLED == 'true') || (github.event_name == 'workflow_dispatch' && inputs.run_backup == true))
     runs-on: ubuntu-latest
     timeout-minutes: 45
     steps:
