@@ -279,6 +279,7 @@ function normalizeSourceEffects(state) {
       invalid.push({ reason: "duplicate_item_sku", sku });
     } else if (sku) itemSkuToId.set(sku, id);
     const itemInfo = {
+      localId: id,
       externalId: String(item.cloudId || id),
       name: String(item.name || ""),
       sku,
@@ -286,8 +287,12 @@ function normalizeSourceEffects(state) {
       warehouseName: (state.wh || []).find(w => String(w.id) === String(item.wh))?.name || "",
       unit: String(item.unit || "")
     };
-    itemById.set(id, itemInfo);
-    itemById.set(itemInfo.externalId, itemInfo);
+    for (const alias of new Set([id, itemInfo.externalId])) {
+      const previous = itemById.get(alias);
+      if (previous && previous.localId !== id) {
+        invalid.push({ reason: "ambiguous_item_identity_alias", alias });
+      } else itemById.set(alias, itemInfo);
+    }
   }
   const partnerById = new Map();
   for (const partner of Array.isArray(state?.partners) ? state.partners : []) {
@@ -946,7 +951,7 @@ async function uploadToTables(showAlert = false) {
           const name = String(getField(pr, ["name", "title", "product"]) || "");
           if (!name || isAccountName(name)) continue;
           if (pr.id != null && !pr.cloudId) pr.cloudId = String(pr.id);
-        const externalId = String(pr.cloudId || getField(pr, ["id", "code", "sku"]) || name);
+          const externalId = String(pr.cloudId || getField(pr, ["id", "code", "sku"]) || name);
           if (!productMap.has(externalId)) productMap.set(externalId, pr);
         }
       }
