@@ -52,13 +52,14 @@ ok('sync toolbar is removed but conflict recovery remains reachable from the con
 const collectorStart=cloud.indexOf('function collectSourceEffects(state)');
 const collectorEnd=cloud.indexOf('// ===== الرفع مرة واحدة',collectorStart);
 const effectHelpersContext=vm.createContext({});
-let collectSourceEffects=null, normalizeSourceEffects=null, planSourceEffectSync=null, applyCanonicalSourceEffect=null;
+let collectSourceEffects=null, normalizeSourceEffects=null, planSourceEffectSync=null, applyCanonicalSourceEffect=null, planRemoteSourceEffectApply=null;
 try {
-  vm.runInContext(cloud.slice(collectorStart,collectorEnd)+';this.collectSourceEffects=collectSourceEffects;this.normalizeSourceEffects=normalizeSourceEffects;this.planSourceEffectSync=planSourceEffectSync;this.applyCanonicalSourceEffect=applyCanonicalSourceEffect;',effectHelpersContext);
+  vm.runInContext(cloud.slice(collectorStart,collectorEnd)+';this.collectSourceEffects=collectSourceEffects;this.normalizeSourceEffects=normalizeSourceEffects;this.planSourceEffectSync=planSourceEffectSync;this.applyCanonicalSourceEffect=applyCanonicalSourceEffect;this.planRemoteSourceEffectApply=planRemoteSourceEffectApply;',effectHelpersContext);
   collectSourceEffects=effectHelpersContext.collectSourceEffects;
   normalizeSourceEffects=effectHelpersContext.normalizeSourceEffects;
   planSourceEffectSync=effectHelpersContext.planSourceEffectSync;
   applyCanonicalSourceEffect=effectHelpersContext.applyCanonicalSourceEffect;
+  planRemoteSourceEffectApply=effectHelpersContext.planRemoteSourceEffectApply;
 } catch(e) {}
 const effectFixture={
   L:[
@@ -129,6 +130,15 @@ ok('reapplying the same source effect is idempotent for stock and ledger rows',a
 const missingItemState={accts:[{id:1,code:'1001',name:'الخزنة'}],items:[],partners:[],L:[],mv:[]};
 const missingItemApply=applyCanonicalSourceEffect?applyCanonicalSourceEffect(missingItemState,replacementEffect):{applied:true};
 ok('effect application refuses missing item mappings before mutating the local ledger',!missingItemApply.applied&&missingItemState.L.length===0);
+const localWithoutEffect={...canonicalFixture,L:[],mv:[]};
+const remoteNew=planRemoteSourceEffectApply?planRemoteSourceEffectApply(localWithoutEffect,[sameRemote],{}):{actions:[]};
+ok('remote planner downloads a source absent from the local device',remoteNew.actions.length===1&&remoteNew.actions[0].op==='apply'&&remoteNew.actions[0].version===3);
+const localSame=planRemoteSourceEffectApply?planRemoteSourceEffectApply(canonicalFixture,[sameRemote],{}):{adoptedVersions:{}};
+ok('remote planner adopts an identical local effect without applying it twice',localSame.actions.length===0&&localSame.adoptedVersions['["doc","91"]']===3);
+const localDiff=planRemoteSourceEffectApply?planRemoteSourceEffectApply({...canonicalFixture,L:[...canonicalFixture.L,{src:'doc',rid:91,a:1,dr:1,cr:1}]},[sameRemote],{}):{conflicts:[{}]};
+ok('remote planner preserves local edits as conflicts instead of overwriting them',localDiff.actions.length===0&&localDiff.conflicts.some(x=>x.reason==='local_effect_differs_from_remote'));
+const remoteDeletedAbsent=planRemoteSourceEffectApply?planRemoteSourceEffectApply(localWithoutEffect,[{...sameRemote,deleted_at:'2026-11-08T00:00:00Z',payload:null}],{}):{adoptedVersions:{}};
+ok('remote planner adopts tombstones when the local source is already absent',remoteDeletedAbsent.adoptedVersions['["doc","91"]']===3&&remoteDeletedAbsent.actions.length===0);
 ok('production-only employees are allowed through the cloud upload permission gate',/!admin && !\["customers", "suppliers", "invoices", "inventory", "production"\]\.some\(canWrite\)/.test(cloud));
 ok('production-only employees are allowed through the cloud download permission gate',/!\["customers","suppliers","invoices","inventory","production","reports"\]\.some\(canRead\)/.test(cloud));
 ok('invoice cloud sync uses the atomic versioned RPC',/rpc\(["']sync_invoice["']/.test(cloud)&&/p_expected_version/.test(cloud)&&/sync_version/.test(cloud));
