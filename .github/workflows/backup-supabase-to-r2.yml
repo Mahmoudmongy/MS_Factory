@@ -49,9 +49,9 @@ jobs:
           SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
         run: |
           set -euo pipefail
-          supabase db dump --db-url "$SUPABASE_DB_URL" --file roles.sql --role-only
-          supabase db dump --db-url "$SUPABASE_DB_URL" --file schema.sql
-          supabase db dump --db-url "$SUPABASE_DB_URL" --file data.sql --use-copy --data-only
+          supabase db dump --db-url "$SUPABASE_DB_URL" -f roles.sql --role-only
+          supabase db dump --db-url "$SUPABASE_DB_URL" -f schema.sql
+          supabase db dump --db-url "$SUPABASE_DB_URL" -f data.sql --use-copy --data-only
           # Supabase CLI deliberately excludes managed auth/storage schemas.
           # Export only Auth users and identities separately; never export sessions/tokens.
           docker run --rm -v "$PWD:/backup" postgres:17 pg_dump "$SUPABASE_DB_URL" \
