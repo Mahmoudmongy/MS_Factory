@@ -858,6 +858,33 @@ function checkWhiteScreen() {
 setInterval(checkWhiteScreen, 3000);
 setTimeout(checkWhiteScreen, 4000);
 
+
+window.downloadDatabaseBackup = async function() {
+  try {
+    const profile = await getMyProfile();
+    if (!profile || profile.is_admin !== true) throw new Error(T("النسخ الاحتياطي متاح لمدير النظام فقط", "Database backup is available to the administrator only"));
+    if (!supabase) throw new Error(T("الاتصال بقاعدة البيانات غير متاح", "Database connection is unavailable"));
+    const { data, error } = await supabase.functions.invoke("export-factory-backup", { method: "POST" });
+    if (error) throw error;
+    if (!data || data.format !== "ms-factory-database-backup-v1" || !data.tables) {
+      throw new Error(T("ملف النسخة الاحتياطية غير مكتمل", "The backup file is incomplete"));
+    }
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json;charset=utf-8" });
+    const href = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = href;
+    link.download = "MS_Factory_Backup_" + new Date().toISOString().replace(/[:.]/g, "-") + ".json";
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    setTimeout(() => URL.revokeObjectURL(href), 1500);
+    alert(T("تم تنزيل نسخة احتياطية من قاعدة البيانات. احتفظ بالملف خارج الجهاز أيضًا.", "Database backup downloaded. Keep a copy somewhere outside this device too."));
+  } catch (e) {
+    console.error("Database backup failed:", e);
+    alert(T("فشل إنشاء النسخة الاحتياطية: ", "Database backup failed: ") + (e?.message || String(e)));
+  }
+};
+
 function drawAll() {
   purgeLoggedInText();
   const en = isEN();
