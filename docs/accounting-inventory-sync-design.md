@@ -95,7 +95,7 @@ The RPC must validate source categories, ownership, payload shape/size, and perm
 - Deleting a source now persists an offline tombstone in `mgr6-cloud-effect-tombstones` before local reversal.
 - The draft migration creates versioned source-effect storage, a compare-and-swap write RPC, per-source locking, tombstones, and per-factory SKU uniqueness. Direct table reads are revoked; `get_source_effects()` returns role-redacted ledger/movement sections.
 
-The branch now wires the baseline and source-effect helpers into normal client upload/download. The latest verified GitHub Actions run on the tested head passed **209/209 browser checks** and `npm run build`. Backup-code validation passed, while B2 preflight and backup remained skipped because `BACKUP_ENABLED=false`.
+The branch now wires the baseline and source-effect helpers into normal client upload/download. The latest verified GitHub Actions run on the tested head passed **213/213 browser checks** and `npm run build`. Backup-code validation passed, while B2 preflight and backup remained skipped because `BACKUP_ENABLED=false`.
 
 **Implemented on this isolated branch (not applied to Supabase):**
 - New migration `20261108213000_factory_sync_baseline.sql` creates an immutable, one-time version-1 baseline and separate inventory/accounting read RPCs. Publication validates synchronized master references, balanced opening ledger, empty source-effect history, and uses a factory-level advisory lock shared with source writes.
