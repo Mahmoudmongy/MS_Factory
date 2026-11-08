@@ -1587,9 +1587,11 @@ async function loadFromTablesMerge(isAuto = false) {
     if (failed) return isAuto ? "cloud read failed" : T("تعذر قراءة البيانات من السحابة: " + failed.error.message, "Cloud read failed: " + failed.error.message);
 
     const baselineMissing = error => error && ["PGRST202", "42883"].includes(String(error.code || ""));
+    const canReadInventoryBaseline = admin || profile.permissions?.inventory === true;
+    const canReadAccountingBaseline = admin || profile.permissions?.settings === true;
     const [inventoryBaselineResult, accountingBaselineResult] = await Promise.all([
-      canRead("inventory") ? supabase.rpc("get_factory_baseline", { p_section: "inventory" }) : Promise.resolve(emptyResult),
-      canRead("settings") ? supabase.rpc("get_factory_baseline", { p_section: "accounting" }) : Promise.resolve(emptyResult)
+      canReadInventoryBaseline ? supabase.rpc("get_factory_baseline", { p_section: "inventory" }) : Promise.resolve(emptyResult),
+      canReadAccountingBaseline ? supabase.rpc("get_factory_baseline", { p_section: "accounting" }) : Promise.resolve(emptyResult)
     ]);
     if (inventoryBaselineResult.error && !baselineMissing(inventoryBaselineResult.error))
       return isAuto ? "cloud baseline read failed" : T("تعذر قراءة أساس المخزون: " + inventoryBaselineResult.error.message, "Inventory baseline read failed: " + inventoryBaselineResult.error.message);
