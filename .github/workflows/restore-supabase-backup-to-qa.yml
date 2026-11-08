@@ -81,6 +81,28 @@ jobs:
               lambda match: ";" + match.group(0),
               source
           )
+          function_defs = re.findall(
+              r'(?is)\bCREATE\s+(?:OR\s+REPLACE\s+)?FUNCTION\s+'
+              r'((?:"(?:[^"]|"")*"|[A-Za-z_][A-Za-z0-9_$]*)'
+              r'(?:\s*\.\s*(?:"(?:[^"]|"")*"|[A-Za-z_][A-Za-z0-9_$]*))?)\s*\(',
+              source
+          )
+          function_map = {}
+          for qualified in function_defs:
+              parts = re.split(r'\s*\.\s*', qualified)
+              schema, fn = parts if len(parts) == 2 else ("public", parts[0])
+              function_map[fn.lower()] = f"{schema}.{fn}"
+          source = re.sub(
+              r'(?i)(EXECUTE\s+(?:FUNCTION|PROCEDURE)\s+)'
+              r'("(?:[^"]|"")*"|[A-Za-z_][A-Za-z0-9_$]*)\s*\(',
+              lambda m: m.group(1) + (
+                  m.group(2) + "(" if "." in m.group(2)
+                  else function_map.get(m.group(2).lower(), "UNRESOLVED") + "("
+              ),
+              source
+          )
+          assert "EXECUTE FUNCTION public.handle_created()" in source
+          assert "EXECUTE FUNCTION public.handle_updated()" in source
           names = re.findall(
               r'CREATE\s+TRIGGER\s+("(?:[^"]|"")*"|[A-Za-z_][A-Za-z0-9_$]*)\s+.*?\s+ON\s+auth\.users\b',
               source, flags=re.IGNORECASE | re.DOTALL

@@ -125,12 +125,41 @@ source, repaired_boundaries = re.subn(
     lambda match: ";" + match.group(0),
     source
 )
-names = re.findall(
-    r'CREATE\s+TRIGGER\s+("(?:[^"]|"")*"|[A-Za-z_][A-Za-z0-9_$]*)\s+.*?\s+ON\s+auth\.users\b',
-    source, flags=re.IGNORECASE | re.DOTALL
+# Qualify trigger function references using the schema of the exported function.
+# Restore search_path is not guaranteed to include public.
+function_defs = re.findall(
+    r'(?is)\bCREATE\s+(?:OR\s+REPLACE\s+)?FUNCTION\s+'
+    r'((?:"(?:[^"]|"")*"|[A-Za-z_][A-Za-z0-9_$]*)'
+    r'(?:\s*\.\s*(?:"(?:[^"]|"")*"|[A-Za-z_][A-Za-z0-9_$]*))?)\s*\(',
+    source
 )
-if not names:
-    raise SystemExit("No custom auth.users trigger definition found in backup.")
+function_map = {}
+for qualified in function_defs:
+    parts = re.split(r'\s*\.\s*', qualified)
+    schema_name, function_name = parts if len(parts) == 2 else ("public", parts[0])
+    function_map[function_name.lower()] = f"{schema_name}.{function_name}"
+
+def qualify_trigger_function(match):
+    name = match.group(2)
+    if "." in name:
+        return match.group(0)
+    qualified = function_map.get(name.lower())
+    if not qualified:
+        raise SystemExit(f"Trigger references {name}(), but its exported function definition is missing.")
+    return match.group(1) + qualified + "("
+
+source = re.sub(
+    r'(?i)(EXECUTE\s+(?:FUNCTION|PROCEDURE)\s+)'
+    r'("(?:[^"]|"")*"|[A-Za-z_][A-Za-z0-9_$]*)\s*\(',
+    qualify_trigger_function,
+    source
+)
+if re.search(
+    r'(?i)EXECUTE\s+(?:FUNCTION|PROCEDURE)\s+[A-Za-z_][A-Za-z0-9_$]*\s*\(',
+    source
+):
+    raise SystemExit("An Auth trigger function reference remains unqualified.")
+
 # Ensure every trigger follows a terminated SQL statement.
 for match in re.finditer(r'(?im)CREATE\s+TRIGGER\b', source):
     prefix = source[:match.start()].rstrip()
