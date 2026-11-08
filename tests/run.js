@@ -52,9 +52,9 @@ ok('sync toolbar is removed but conflict recovery remains reachable from the con
 const collectorStart=cloud.indexOf('function collectSourceEffects(state)');
 const collectorEnd=cloud.indexOf('// ===== الرفع مرة واحدة',collectorStart);
 const effectHelpersContext=vm.createContext({});
-let collectSourceEffects=null, normalizeSourceEffects=null, planSourceEffectSync=null, applyCanonicalSourceEffect=null, planRemoteSourceEffectApply=null, buildStockBaseline=null, applyStockBaseline=null, buildFactoryBaseline=null, applyFactoryBaseline=null;
+let collectSourceEffects=null, normalizeSourceEffects=null, planSourceEffectSync=null, applyCanonicalSourceEffect=null, planRemoteSourceEffectApply=null, buildStockBaseline=null, applyStockBaseline=null, buildFactoryBaseline=null, applyFactoryBaseline=null, applyInventoryBaselineSection=null, applyAccountingBaselineSection=null;
 try {
-  vm.runInContext(cloud.slice(collectorStart,collectorEnd)+';this.collectSourceEffects=collectSourceEffects;this.normalizeSourceEffects=normalizeSourceEffects;this.planSourceEffectSync=planSourceEffectSync;this.applyCanonicalSourceEffect=applyCanonicalSourceEffect;this.planRemoteSourceEffectApply=planRemoteSourceEffectApply;this.buildStockBaseline=buildStockBaseline;this.applyStockBaseline=applyStockBaseline;this.buildFactoryBaseline=buildFactoryBaseline;this.applyFactoryBaseline=applyFactoryBaseline;',effectHelpersContext);
+  vm.runInContext(cloud.slice(collectorStart,collectorEnd)+';this.collectSourceEffects=collectSourceEffects;this.normalizeSourceEffects=normalizeSourceEffects;this.planSourceEffectSync=planSourceEffectSync;this.applyCanonicalSourceEffect=applyCanonicalSourceEffect;this.planRemoteSourceEffectApply=planRemoteSourceEffectApply;this.buildStockBaseline=buildStockBaseline;this.applyStockBaseline=applyStockBaseline;this.buildFactoryBaseline=buildFactoryBaseline;this.applyFactoryBaseline=applyFactoryBaseline;this.applyInventoryBaselineSection=applyInventoryBaselineSection;this.applyAccountingBaselineSection=applyAccountingBaselineSection;',effectHelpersContext);
   collectSourceEffects=effectHelpersContext.collectSourceEffects;
   normalizeSourceEffects=effectHelpersContext.normalizeSourceEffects;
   planSourceEffectSync=effectHelpersContext.planSourceEffectSync;
@@ -64,6 +64,8 @@ try {
   applyStockBaseline=effectHelpersContext.applyStockBaseline;
   buildFactoryBaseline=effectHelpersContext.buildFactoryBaseline;
   applyFactoryBaseline=effectHelpersContext.applyFactoryBaseline;
+  applyInventoryBaselineSection=effectHelpersContext.applyInventoryBaselineSection;
+  applyAccountingBaselineSection=effectHelpersContext.applyAccountingBaselineSection;
 } catch(e) {}
 const stockBaselineFixture={
   wh:[{id:1,name:'المخزن الرئيسي'}],
@@ -119,6 +121,32 @@ const missingFactoryTarget={accts:[],partners:[],items:[],L:[],mv:[]};
 const missingFactoryBefore=JSON.stringify(missingFactoryTarget);
 const missingFactoryApply=applyFactoryBaseline?applyFactoryBaseline(missingFactoryTarget,factoryBaseline):{applied:true};
 ok('factory baseline refuses partial restore when a product is missing',!missingFactoryApply.applied&&JSON.stringify(missingFactoryTarget)===missingFactoryBefore);
+
+const inventorySectionState={
+  items:[{id:11,cloudId:'item-11',st:{'-':0},val:0}],
+  mv:[]
+};
+const inventorySection={baselineVersion:1,stock:buildStockBaseline({items:[{id:11,cloudId:'item-11',st:{'-':8},val:80}],wh:[]}),
+  openingMovements:[{date:'2026-11-01',timestamp:1,itemExternalId:'item-11',variant:'-',quantity:8,value:80,reference:'رصيد افتتاحي'}]};
+const inventorySectionApply=applyInventoryBaselineSection?applyInventoryBaselineSection(inventorySectionState,inventorySection):{applied:false};
+const inventorySectionApplyAgain=applyInventoryBaselineSection?applyInventoryBaselineSection(inventorySectionState,inventorySection):{applied:false};
+ok('inventory-only baseline applies absolute stock and imports opening history without replaying quantities',
+  inventorySectionApply.applied&&inventorySectionState.items[0].st['-']===8&&inventorySectionState.mv.length===1&&inventorySectionApplyAgain.applied&&inventorySectionState.mv.length===1);
+const inventorySectionBadState={items:[{id:11,cloudId:'item-11',st:{'-':2},val:20}],mv:[]};
+const inventorySectionBefore=JSON.stringify(inventorySectionBadState);
+const inventorySectionBad=applyInventoryBaselineSection?applyInventoryBaselineSection(inventorySectionBadState,{...inventorySection,openingMovements:[...inventorySection.openingMovements,{itemExternalId:'missing',variant:'-',quantity:1,value:1}]}):{applied:true};
+ok('inventory-only baseline preflights all history before mutation',!inventorySectionBad.applied&&JSON.stringify(inventorySectionBadState)===inventorySectionBefore);
+const accountingSectionState={accts:[],partners:[],items:[{id:11,cloudId:'item-11',st:{'-':4},val:40}],L:[],mv:[]};
+const accountingSection={baselineVersion:1,accounts:factoryBaseline.accounts,partners:factoryBaseline.partners,openingLedger:factoryBaseline.openingLedger};
+const accountingSectionApply=applyAccountingBaselineSection?applyAccountingBaselineSection(accountingSectionState,accountingSection):{applied:false};
+const accountingSectionApplyAgain=applyAccountingBaselineSection?applyAccountingBaselineSection(accountingSectionState,accountingSection):{applied:false};
+ok('accounting-only baseline restores accounts, partners and balanced opening ledger without exposing inventory section',
+  accountingSectionApply.applied&&accountingSectionState.accts.length===2&&accountingSectionState.partners.length===1&&accountingSectionState.L.length===2&&accountingSectionState.items[0].st['-']===4&&accountingSectionApplyAgain.applied&&accountingSectionState.L.length===2);
+const baselineMigration=fs.readFileSync(path.join(ROOT,'supabase/migrations/20261108213000_factory_sync_baseline.sql'),'utf8');
+ok('baseline SQL provides immutable one-time publication and independently authorized section reads',
+  /p_expected_version is distinct from 0/.test(baselineMigration)&&/Opening baseline is already published and immutable/.test(baselineMigration)&&/p_section = 'inventory'/.test(baselineMigration)&&/p_section = 'accounting'/.test(baselineMigration)&&/can_access_factory_owner\(v_owner_id, 'inventory', false\)/.test(baselineMigration)&&/can_access_factory_owner\(v_owner_id, 'settings', false\)/.test(baselineMigration));
+ok('baseline SQL validates synced item/partner references, source-effect backfill and balanced opening ledger',
+  /Source effects exist; backfill them before baseline publication/.test(baselineMigration)&&/Opening ledger is not balanced/.test(baselineMigration)&&/products pr/.test(baselineMigration)&&/public\.customers c/.test(baselineMigration)&&/public\.suppliers s/.test(baselineMigration));
 const productMergeStart=cloud.indexOf('function mergeCloudProducts(existing, incoming)');
 const productMergeEnd=cloud.indexOf('function mergeCloudInvoices(existing, incoming)',productMergeStart);
 const productMergeContext=vm.createContext({});
