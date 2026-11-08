@@ -97,18 +97,19 @@ jobs:
           test -s schema.sql
           test -s data.sql
           test -s auth-users.sql
+          test -s migration-history.sql
           test -s auth-trigger.sql
-          sha256sum roles.sql schema.sql data.sql auth-users.sql auth-trigger.sql > database-files.sha256
+          sha256sum roles.sql schema.sql data.sql auth-users.sql migration-history.sql auth-trigger.sql > database-files.sha256
           cat > manifest.txt <<EOF
           project=ms-factory
           created_utc=$(date -u +%Y-%m-%dT%H:%M:%SZ)
           source=Supabase CLI db dump
-          includes=roles,schema,public-data,auth-users-identities-mfa-webauthn,auth-trigger,migrations,edge-functions
+          includes=roles,schema,public-data,auth-users-identities-mfa-webauthn,migration-history,auth-trigger,migrations,edge-functions
           storage_bucket_count=$(cat storage-bucket-count.txt)
           auth_user_count=$(cat auth-user-count.txt)
           encryption=age public-key recipient
           EOF
-          tar -czf ms-factory-db-backup.tar.gz roles.sql schema.sql data.sql auth-users.sql auth-trigger.sql backup-migrations backup-edge-functions database-files.sha256 manifest.txt storage-bucket-count.txt auth-user-count.txt
+          tar -czf ms-factory-db-backup.tar.gz roles.sql schema.sql data.sql auth-users.sql migration-history.sql auth-trigger.sql backup-migrations backup-edge-functions database-files.sha256 manifest.txt storage-bucket-count.txt auth-user-count.txt migration-count.txt
           sha256sum ms-factory-db-backup.tar.gz > ms-factory-db-backup.tar.gz.sha256
 
       - name: Encrypt backup before upload
@@ -160,5 +161,5 @@ jobs:
       - name: Remove plaintext database exports
         if: always()
         run: |
-          rm -rf roles.sql schema.sql data.sql auth-users.sql auth-trigger.sql backup-migrations backup-edge-functions manifest.txt storage-bucket-count.txt auth-user-count.txt r2-lock.json r2-lifecycle.json uploaded-object.json \
+          rm -rf roles.sql schema.sql data.sql auth-users.sql migration-history.sql auth-trigger.sql backup-migrations backup-edge-functions manifest.txt storage-bucket-count.txt auth-user-count.txt migration-count.txt r2-lock.json r2-lifecycle.json uploaded-object.json \
             ms-factory-db-backup.tar.gz ms-factory-db-backup.tar.gz.sha256
