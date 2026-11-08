@@ -205,7 +205,20 @@ RESET ROLE;
 SET LOCAL ROLE authenticated;
 SELECT set_config('request.jwt.claim.sub','66666666-6666-4666-8666-666666666666',true);
 SELECT set_config('request.jwt.claims','{"sub":"66666666-6666-4666-8666-666666666666","role":"authenticated"}',true);
-DO $$
+SELECT * FROM public.sync_factory_state(1,
+ '{"accts":[{"id":"qa-cash","name":"QA Cash","type":"asset"}],"items":[],"wh":[],"codes":[],"curs":[],"name":"QA Factory Snapshot Updated"}'::jsonb);
+DO $
+BEGIN
+ BEGIN
+  PERFORM * FROM public.sync_factory_state(1,
+   '{"accts":[],"items":[],"wh":[],"codes":[],"curs":[],"name":"Stale Snapshot"}'::jsonb);
+  RAISE EXCEPTION 'Stale administrator snapshot writer accepted';
+ EXCEPTION WHEN SQLSTATE '40001' THEN NULL; END;
+ IF NOT EXISTS(SELECT 1 FROM public.factory_state WHERE user_id='66666666-6666-4666-8666-666666666666' AND sync_version=2 AND state->>'name'='QA Factory Snapshot Updated') THEN
+  RAISE EXCEPTION 'Administrator snapshot update was not committed inside the test transaction';
+ END IF;
+END $;
+DO $
 DECLARE r record; q numeric;
 BEGIN
  SELECT * INTO r FROM public.sync_factory_master_record('customers','qa-customer-cas',0,
