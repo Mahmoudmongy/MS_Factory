@@ -147,6 +147,16 @@ ok('baseline SQL provides immutable one-time publication and independently autho
   /p_expected_version is distinct from 0/.test(baselineMigration)&&/Opening baseline is already published and immutable/.test(baselineMigration)&&/p_section = 'inventory'/.test(baselineMigration)&&/p_section = 'accounting'/.test(baselineMigration)&&baselineMigration.includes("can_access_factory_owner(v_owner_id, 'inventory', false)")&&baselineMigration.includes("can_access_factory_owner(v_owner_id, 'settings', false)"));
 ok('baseline SQL validates synced item/partner references, source-effect backfill and balanced opening ledger',
   /Source effects exist; backfill them before baseline publication/.test(baselineMigration)&&/Opening ledger is not balanced/.test(baselineMigration)&&/products pr/.test(baselineMigration)&&/public\.customers c/.test(baselineMigration)&&/public\.suppliers s/.test(baselineMigration));
+
+const sourceEffectMigration=fs.readFileSync(path.join(ROOT,'supabase/migrations/20261108201500_source_accounting_effects.sql'),'utf8');
+ok('source-effect SQL merges authorized sections and preserves the hidden section atomically',
+  sourceEffectMigration.includes("else coalesce(v_existing_payload -> 'ledger', '[]'::jsonb)")&&sourceEffectMigration.includes("else coalesce(v_existing_payload -> 'movements', '[]'::jsonb)")&&sourceEffectMigration.includes("v_write_ledger and not v_can_write_ledger")&&sourceEffectMigration.includes("v_write_movements and not v_can_write_movements"));
+ok('source-effect client sends only the sections allowed by the employee permission set',
+  cloud.includes('ledgerIncluded: writeLedger, movementsIncluded: writeMovements')&&cloud.includes('ledger: writeLedger ? action.effect.ledger : []')&&cloud.includes('movements: writeMovements ? action.effect.movements : []'));
+ok('source-effect deletion uses queued tombstones and requires both sections before clearing',
+  cloud.includes('mgr6-cloud-effect-tombstones')&&cloud.includes('if (isDelete ? (!writeLedger || !writeMovements)')&&sourceEffectMigration.includes('Deleting a complete source effect requires ledger and inventory write permissions'));
+ok('source effects are downloaded after master data and opening baseline application',
+  cloud.indexOf('const effectsResult = await supabase.rpc("get_source_effects")')>cloud.indexOf('applyInventoryBaselineSection(S')&&cloud.indexOf('applyInventoryBaselineSection(S')>cloud.indexOf('mergeCloudProducts(S.items'));
 const productMergeStart=cloud.indexOf('function mergeCloudProducts(existing, incoming)');
 const productMergeEnd=cloud.indexOf('function mergeCloudInvoices(existing, incoming)',productMergeStart);
 const productMergeContext=vm.createContext({});
