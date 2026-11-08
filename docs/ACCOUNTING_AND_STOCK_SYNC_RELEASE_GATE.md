@@ -14,7 +14,7 @@ A source-scoped, versioned synchronization implementation is present on `migrati
 - RLS exposes only the source categories granted to the signed-in profile. Manual journals/opening balances are administrator-only.
 - Production-only users receive a restricted `production_catalog` view with item identity, unit, warehouse, stock quantities and material buy cost. It omits retail/wholesale prices and raw product JSON.
 - Browser sync keeps per-source version/hash baselines, merges only the authorized source, recalculates stock from movement history, preserves local changes on conflicts, and offers an administrator restore-from-cloud action after saving a local conflict copy.
-- The service worker cache was bumped to `factory-v11` and now precaches the accounting sync module.
+- The service worker cache was bumped to `factory-v12` and now precaches the accounting sync module.
 
 ## QA SQL tests executed
 
@@ -42,3 +42,26 @@ All QA tests ran inside explicit transactions and ended with `ROLLBACK`; no test
 ## Release rule
 
 Do not merge/deploy this branch to production until the remaining blockers are tested and documented. A green static build or unit suite alone is not production approval.
+
+
+## Additional full QA regression run — 2026-11-08
+
+The complete `supabase/tests/qa_sync_regression.sql` script was executed successfully against the isolated `ms-factory-qa` Supabase project. The script runs inside one transaction and ends with `ROLLBACK`; a follow-up count query confirmed zero retained QA fixture rows in customers, suppliers, products, invoices, returns, vouchers, production orders and accounting snapshots.
+
+Coverage includes:
+- Administrator, production-only employee and invoice-only employee JWT/RLS contexts.
+- Production order create/update, stale update rejection, soft-delete, idempotent delete retry and restore.
+- Sale invoice create/update and invoice line replacement; purchase invoice create.
+- Sale return and purchase return creation.
+- Receipt voucher and outgoing payment voucher.
+- Source-scoped ledger batches with per-source debit/credit balancing.
+- Production/sale/purchase/return stock movement netting and manager opening-stock adjustment.
+- Duplicate retry does not double-apply movement quantity; stale version does not alter inventory.
+- Master-data create/update/stale-write tests for customers, suppliers and products, including custom raw fields and permitted negative stock.
+- Cross-permission denial for production-only and invoice-only profiles, and checks that production users cannot read full factory state, canonical products, customer invoices, cash balances or retail/wholesale prices.
+
+Two defects were found by running the complete suite and corrected in follow-up migrations applied to QA only:
+1. The versioned delete RPC referenced `updated_by` on returns, vouchers and production orders although those columns were missing. Migration `20261108280000_add_detail_sync_audit_columns.sql` adds the columns and audit triggers.
+2. Updating an existing invoice used an ambiguous unqualified `invoice_id` reference because it collided with the RPC output variable. Migration `20261108290000_fix_invoice_item_delete_ambiguity.sql` qualifies the invoice_items table alias.
+
+Production has not received these migrations. They must be included in the final migration sequence and reviewed before production rollout.
