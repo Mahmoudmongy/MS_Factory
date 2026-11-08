@@ -204,6 +204,111 @@ function stableJson(value) {
   return JSON.stringify(value);
 }
 
+const ACCOUNTING_SOURCES = ["invoices", "production", "settings"];
+const accountingVersionKey = source => "mgr6-accounting-version-" + source;
+const accountingHashKey = source => "mgr6-accounting-hash-" + source;
+const accountingConflictKey = source => "mgr6-accounting-conflict-" + source;
+
+function accountingSourceForRow(row) {
+  const src = String(row?.src || "");
+  if (src === "doc" || src === "vch") return "invoices";
+  if (src === "po" || src === "wo") return "production";
+  return "settings";
+}
+
+function accountingPayloadForSource(S, source) {
+  const belongs = row => accountingSourceForRow(row) === source;
+  return {
+    ledger: (Array.isArray(S.L) ? S.L : []).filter(belongs),
+    movements: (Array.isArray(S.mv) ? S.mv : []).filter(belongs),
+    work_orders: source === "production" && Array.isArray(S.wo) ? S.wo : [],
+    journal_entries: source === "settings" && Array.isArray(S.je) ? S.je : []
+  };
+}
+
+function accountingHash(payload) {
+  const value = stableJson(payload);
+  let hash = 2166136261;
+  for (let i = 0; i < value.length; i++) {
+    hash ^= value.charCodeAt(i);
+    hash = Math.imul(hash, 16777619);
+  }
+  return (hash >>> 0).toString(16);
+}
+
+function replaceAccountingPayload(S, source, payload) {
+  const ledger = Array.isArray(payload?.ledger) ? payload.ledger : [];
+  const movements = Array.isArray(payload?.movements) ? payload.movements : [];
+  S.L = (Array.isArray(S.L) ? S.L : []).filter(row => accountingSourceForRow(row) !== source).concat(ledger);
+  S.mv = (Array.isArray(S.mv) ? S.mv : []).filter(row => accountingSourceForRow(row) !== source).concat(movements);
+  if (source === "production") S.wo = Array.isArray(payload?.work_orders) ? payload.work_orders : [];
+  if (source === "settings") S.je = Array.isArray(payload?.journal_entries) ? payload.journal_entries : [];
+}
+
+function recalcAccountingInventory(S) {
+  if (!Array.isArray(S.items)) return;
+  S.items.forEach(item => { item.st = {}; item.val = 0; });
+  (Array.isArray(S.mv) ? S.mv : []).forEach(move => {
+    const item = S.items.find(candidate => String(candidate.id) === String(move.iid));
+    if (!item) return;
+    const variant = String(move.v || "-");
+    item.st[variant] = (Number(item.st[variant]) || 0) + (Number(move.q) || 0);
+    item.val = (Number(item.val) || 0) + (Number(move.val) || 0);
+  });
+}
+
+function hasAccountingConflicts() {
+  return ACCOUNTING_SOURCES.some(source => !!localStorage.getItem(accountingConflictKey(source)));
+}
+
+async function syncAccountingSnapshots(S, profile, errors) {
+  const admin = profile.is_admin === true;
+  const canWrite = source => admin || profile.permissions?.[source] === true;
+  let hasConflict = false;
+  for (const source of ACCOUNTING_SOURCES.filter(canWrite)) {
+    const payload = accountingPayloadForSource(S, source);
+    const hash = accountingHash(payload);
+    const version = Number(localStorage.getItem(accountingVersionKey(source)) || 0);
+    const baseline = localStorage.getItem(accountingHashKey(source));
+    const conflictKey = accountingConflictKey(source);
+    if (localStorage.getItem(conflictKey)) {
+      hasConflict = true;
+      errors.push(source + ": accounting/stock sync conflict; resolve before uploading");
+      continue;
+    }
+    if (version > 0 && baseline === hash) continue;
+    const { data, error } = await supabase.rpc("sync_factory_accounting", {
+      p_source: source,
+      p_expected_version: version,
+      p_payload: payload
+    });
+    if (error) {
+      if (error.code === "40001" || error.code === "23505") {
+        localStorage.setItem(conflictKey, JSON.stringify({
+          reason: "stale_accounting_snapshot",
+          source,
+          localVersion: version,
+          at: new Date().toISOString()
+        }));
+        hasConflict = true;
+        errors.push(source + ": version conflict; cloud ledger and stock movements were not overwritten");
+      } else {
+        errors.push(source + ": " + error.message);
+      }
+      continue;
+    }
+    const row = Array.isArray(data) ? data[0] : data;
+    if (!row?.sync_version) {
+      errors.push(source + ": server returned no accounting sync version");
+      continue;
+    }
+    localStorage.setItem(accountingVersionKey(source), String(row.sync_version));
+    localStorage.setItem(accountingHashKey(source), hash);
+    localStorage.removeItem(conflictKey);
+  }
+  return hasConflict || hasAccountingConflicts();
+}
+
 
 // ===== الرفع مرة واحدة على الجداول - الكاش هو الأساس =====
 async function uploadToTables(showAlert = false) {
