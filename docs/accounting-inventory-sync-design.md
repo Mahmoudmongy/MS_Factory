@@ -32,6 +32,14 @@ A pure helper pair has now been added to `js/cloud-sync.js`:
 - `buildStockBaseline(state)` creates a deterministic, sorted manifest of item external IDs, variants, absolute quantities, and valuation, and rejects duplicate IDs or invalid stock values.
 - `applyStockBaseline(state, manifest)` verifies the manifest checksum and validates every item before changing anything. It replaces absolute quantities (never adds deltas), is idempotent, refuses partial application if any referenced item is missing, and preserves non-stock fields and local-only items.
 
+A complete pure baseline pair now sits above the stock-only helpers:
+
+- `buildFactoryBaseline(state)` packages the absolute stock manifest, account definitions, partner identities, opening-ledger lines, and opening-stock movement history. It refuses to publish if any source-scoped effects still need backfill, if an unscoped ledger/movement row is not clearly an opening balance, or if the opening journal is unbalanced.
+- `applyFactoryBaseline(state, baseline)` validates all account/partner/item references before mutation, adds missing account definitions, links legacy partners by a unique name/phone match, restores stock as absolute quantities, and imports opening ledger/movement history without replaying stock deltas. Reapplying the same baseline is idempotent.
+- Default SKU generation for new items now derives from the unique item ID rather than the local item count, reducing cross-device collisions while preserving manually entered SKUs.
+
+The baseline fingerprint is a deterministic corruption check, not an authentication mechanism; publication and access must be enforced by the server-side RPC and permissions.
+
 The draft SQL RPCs were also tightened during review: privileged `SECURITY DEFINER` implementations now live in the unexposed `private` schema behind `SECURITY INVOKER` public RPC wrappers. The read RPC exposes ledger and movement sections independently according to permissions. **Writes currently reject role-redacted/partial payloads and require both source-category and inventory write permissions**; this is an intentional fail-closed gate until atomic section-aware merging is implemented. This prevents an inventory-only client from replacing a full effect with an empty hidden ledger section.
 
 These helpers are not yet wired into the live sync flow. The baseline must be published and versioned before employee devices use it; only then may post-baseline movement effects be applied as deltas.
