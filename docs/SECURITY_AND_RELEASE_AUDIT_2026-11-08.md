@@ -56,6 +56,7 @@ Passed checks:
 - Production employee could read the production order and the restricted production configuration/catalog, but could not read the full factory snapshot or invoice rows. Invoice-only employee could not read production orders.
 - The administrator could synchronize the manual settings source.
 - The production configuration projection was tested with sentinel cash/balance values; the new allowlist migration removed those fields before the employee could read the projection.
+- The production catalog projection was also exercised with a QA product carrying retail price 250, wholesale price 190, buy cost 12, and stock 7. The production-only user saw only the allowed product/variant quantity and buy-cost projection; the full `products` row and retail/wholesale/raw columns were not exposed.
 
 These are live Postgres/RLS/RPC integration tests against the QA project, not merely static mocks. They do not replace a real browser password-login test or a full restore drill.
 
