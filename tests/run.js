@@ -210,7 +210,7 @@ const xssTables=await p.evaluate(()=>{
  return {tableInjected,tableLiteral,printInjected,printLiteral};
 });
 ok('XSS payloads in reports and print metadata remain inert text',!xssTables.tableInjected&&xssTables.tableLiteral&&!xssTables.printInjected&&xssTables.printLiteral,xssTables);
-ok('inline ledger actions whitelist source codes and no longer interpolate user-controlled date strings',app.includes('const safeSourceKey = value => ["doc","vch","po","wo","je"].includes(String(value))')&&app.includes('openRef(\'${safeSourceKey(l.src)}\'')&&app.includes('editRef(\'${safeSourceKey(m.src)}\'')&&!app.includes("drillAcct(${x.id},'','${to_()}')"));
+ok('inline ledger actions whitelist source codes, safe numeric IDs and supported handlers only',app.includes('const safeSourceKey = value => ["doc","vch","po","wo","je"].includes(String(value))')&&app.includes('const safeNumericId = value =>')&&app.includes('const safeLinkHandler = value =>')&&app.includes('onclick="\${escapeHTML(safeLinkHandler(fn))}"')&&app.includes('openRef(\'\${safeSourceKey(l.src)}\',\${safeNumericId(l.rid)})')&&app.includes('editRef(\'\${safeSourceKey(m.src)}\',\${safeNumericId(m.rid)})'));
 
 
 const ev=(f,a)=>p.evaluate(()=>{SAVING=0}).then(()=>p.evaluate(f,a)),bal=()=>ev(()=>Math.abs(S.L.reduce((a,l)=>a+l.dr-l.cr,0))<.01);
