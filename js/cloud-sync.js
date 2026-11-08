@@ -161,13 +161,17 @@ function collectSourceEffects(state) {
   const allowed = new Set(["doc", "po", "vch", "je", "wo"]);
   const groups = new Map();
   const invalid = [];
+  const ignored = [];
   const add = (kind, row, index) => {
     if (!row || typeof row !== "object") { invalid.push({ kind, index, reason: "invalid_row" }); return; }
     const sourceType = String(row.src || "");
-    if (!allowed.has(sourceType)) { invalid.push({ kind, index, reason: "unsupported_source", sourceType }); return; }
-    if (row.rid === undefined || row.rid === null || String(row.rid) === "") {
-      invalid.push({ kind, index, reason: "missing_source_id", sourceType }); return;
+    const hasSourceId = row.rid !== undefined && row.rid !== null && String(row.rid) !== "";
+    // First-launch opening balances predate source IDs and are baseline state, not replayable deltas.
+    if (!sourceType && !hasSourceId && (row.desc === "رصيد افتتاحي" || row.ref === "رصيد افتتاحي")) {
+      ignored.push({ kind, index, reason: "opening_baseline" }); return;
     }
+    if (!allowed.has(sourceType)) { invalid.push({ kind, index, reason: "unsupported_source", sourceType }); return; }
+    if (!hasSourceId) { invalid.push({ kind, index, reason: "missing_source_id", sourceType }); return; }
     const sourceId = String(row.rid);
     const key = JSON.stringify([sourceType, sourceId]);
     if (!groups.has(key)) groups.set(key, { sourceType, sourceId, ledger: [], movements: [] });
@@ -186,7 +190,79 @@ function collectSourceEffects(state) {
     effect.movements.sort((a, b) => stable(a).localeCompare(stable(b)));
   }
   effects.sort((a, b) => a.sourceType.localeCompare(b.sourceType) || a.sourceId.localeCompare(b.sourceId));
-  return { effects, invalid };
+  return { effects, invalid, ignored };
+}
+
+// Convert device-local foreign keys into the stable business keys already used by detail sync.
+// The function refuses ambiguous/missing references; it never guesses by item or account name.
+function normalizeSourceEffects(state) {
+  const collected = collectSourceEffects(state);
+  const invalid = [...collected.invalid];
+  const accountById = new Map();
+  const accountCodes = new Map();
+  for (const account of Array.isArray(state?.accts) ? state.accts : []) {
+    if (!account || account.id == null || account.code == null || String(account.code).trim() === "") continue;
+    const id = String(account.id), code = String(account.code).trim();
+    if (accountCodes.has(code) && accountCodes.get(code) !== id) {
+      invalid.push({ reason: "duplicate_account_code", code });
+      continue;
+    }
+    accountCodes.set(code, id);
+    accountById.set(id, { code, name: String(account.name || "") });
+  }
+  const itemById = new Map();
+  const itemIds = new Set();
+  for (const item of Array.isArray(state?.items) ? state.items : []) {
+    if (!item || item.id == null) continue;
+    const id = String(item.id);
+    if (itemIds.has(id)) invalid.push({ reason: "duplicate_item_id", id });
+    itemIds.add(id);
+    itemById.set(id, {
+      externalId: id,
+      name: String(item.name || ""),
+      sku: String(item.sku || ""),
+      warehouseId: item.wh == null ? null : String(item.wh),
+      warehouseName: (state.wh || []).find(w => String(w.id) === String(item.wh))?.name || "",
+      unit: String(item.unit || "")
+    });
+  }
+  const partnerById = new Map();
+  for (const partner of Array.isArray(state?.partners) ? state.partners : []) {
+    if (partner?.id != null) partnerById.set(String(partner.id), {
+      externalId: String(partner.id), name: String(partner.name || "")
+    });
+  }
+  const effects = collected.effects.map(effect => {
+    const ledger = effect.ledger.map(row => {
+      const account = accountById.get(String(row.a));
+      if (!account) { invalid.push({ sourceType: effect.sourceType, sourceId: effect.sourceId, reason: "unmapped_account", accountId: String(row.a) }); return null; }
+      let partner = null;
+      if (row.pid != null && Number(row.pid) !== 0) {
+        partner = partnerById.get(String(row.pid));
+        if (!partner) { invalid.push({ sourceType: effect.sourceType, sourceId: effect.sourceId, reason: "unmapped_partner", partnerId: String(row.pid) }); return null; }
+      }
+      return {
+        date: row.d || null, timestamp: Number(row.ts || 0), reference: String(row.ref || ""),
+        description: String(row.desc || ""), accountCode: account.code, accountName: account.name,
+        debit: Number(row.dr || 0), credit: Number(row.cr || 0),
+        partnerExternalId: partner?.externalId || null, partnerName: partner?.name || "",
+        foreignCurrencyAmount: Number(row.fc || 0)
+      };
+    }).filter(Boolean);
+    const movements = effect.movements.map(row => {
+      const item = itemById.get(String(row.iid));
+      if (!item) { invalid.push({ sourceType: effect.sourceType, sourceId: effect.sourceId, reason: "unmapped_item", itemId: String(row.iid) }); return null; }
+      return {
+        date: row.d || null, timestamp: Number(row.ts || 0), itemExternalId: item.externalId,
+        itemName: item.name, sku: item.sku, warehouseId: item.warehouseId,
+        warehouseName: item.warehouseName, variant: String(row.v || "-"),
+        quantity: Number(row.q || 0), value: Number(row.val || 0),
+        reference: String(row.ref || ""), partnerExternalId: row.pid ? String(row.pid) : null
+      };
+    }).filter(Boolean);
+    return { sourceType: effect.sourceType, sourceId: effect.sourceId, ledger, movements };
+  });
+  return { effects, invalid, ignored: collected.ignored };
 }
 
 function stableJson(value) {
