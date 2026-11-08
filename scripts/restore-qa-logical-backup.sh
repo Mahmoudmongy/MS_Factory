@@ -117,14 +117,26 @@ import re
 from pathlib import Path
 
 source = Path("auth-trigger.sql").read_text()
+# pg_get_functiondef() may omit the final SQL statement terminator. The backup
+# exporter concatenates CREATE TRIGGER after it; repair that boundary before psql.
+source, repaired_boundaries = re.subn(
+    r'(?im)(?<!;)(\r?\n[ \t]*CREATE\s+TRIGGER\b)',
+    lambda match: ";" + match.group(0),
+    source
+)
 names = re.findall(
     r'CREATE\s+TRIGGER\s+("(?:[^"]|"")*"|[A-Za-z_][A-Za-z0-9_$]*)\s+.*?\s+ON\s+auth\.users\b',
     source, flags=re.IGNORECASE | re.DOTALL
 )
 if not names:
     raise SystemExit("No custom auth.users trigger definition found in backup.")
+for match in re.finditer(r'(?im)CREATE\s+TRIGGER\b', source):
+    prefix = source[:match.start()].rstrip()
+    if prefix and not prefix.endswith(";"):
+        raise SystemExit("Malformed auth-trigger.sql: preceding function statement is not terminated.")
 drops = "".join(f"DROP TRIGGER IF EXISTS {name} ON auth.users;\n" for name in dict.fromkeys(names))
 Path("auth-trigger-qa-idempotent.sql").write_text(drops + "\n" + source)
+print(f"Normalized missing SQL terminators before {repaired_boundaries} Auth trigger statement(s).")
 PY
 
 # Supabase-managed schemas are not application data. Storage rows belong to
