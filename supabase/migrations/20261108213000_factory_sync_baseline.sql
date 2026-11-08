@@ -86,7 +86,7 @@ begin
      where pg_catalog.jsonb_typeof(x.value -> 'variants') is distinct from 'array'
         or pg_catalog.jsonb_typeof(x.value -> 'value') is distinct from 'number'
         or exists (
-          select 1 from pg_catalog.jsonb_array_elements(coalesce(x.value -> 'variants', '[]'::jsonb)) v(value)
+          select 1 from pg_catalog.jsonb_array_elements(case when pg_catalog.jsonb_typeof(x.value -> 'variants') = 'array' then x.value -> 'variants' else '[]'::jsonb end) v(value)
            where nullif(pg_catalog.btrim(v.value ->> 'variant'), '') is null
               or pg_catalog.jsonb_typeof(v.value -> 'quantity') is distinct from 'number'
         )
