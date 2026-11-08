@@ -87,6 +87,32 @@ const baselineMissing=applyStockBaseline?applyStockBaseline(baselineMissingTarge
 ok('stock baseline refuses partial application when an item is missing',!baselineMissing.applied&&JSON.stringify(baselineMissingTarget)===baselineBefore);
 const tamperedBaseline={...stockBaseline,items:stockBaseline.items.map(x=>({...x,value:x.value+1}))};
 ok('stock baseline rejects a modified manifest checksum',!applyStockBaseline(baselineTarget,tamperedBaseline).applied);
+const productMergeStart=cloud.indexOf('function mergeCloudProducts(existing, incoming)');
+const productMergeEnd=cloud.indexOf('function mergeCloudInvoices(existing, incoming)',productMergeStart);
+const productMergeContext=vm.createContext({});
+let mergeCloudProducts=null;
+try {
+  vm.runInContext(cloud.slice(productMergeStart,productMergeEnd)+';this.mergeCloudProducts=mergeCloudProducts;',productMergeContext);
+  mergeCloudProducts=productMergeContext.mergeCloudProducts;
+} catch(e) {}
+const legacyProduct=[{id:101,sku:'FB101',name:'قماش أبيض',st:{'-':5},val:50}];
+const remoteProduct=[{id:1,cloudId:'factory-item-1',sku:'FB101',name:'قماش أبيض',st:{'-':9},val:90}];
+const linkedProduct=mergeCloudProducts?mergeCloudProducts(legacyProduct,remoteProduct):{arr:legacyProduct,linked:0,conflicts:0};
+ok('remote product links to a unique local SKU without duplicating the item',linkedProduct.linked===1&&linkedProduct.arr.length===1&&legacyProduct[0].cloudId==='factory-item-1');
+const mismatchedProduct=[{id:102,sku:'FB102',name:'قماش مختلف'}];
+const mismatchResult=mergeCloudProducts?mergeCloudProducts(mismatchedProduct,[{id:2,cloudId:'factory-item-2',sku:'FB102',name:'اسم مختلف'}]):{conflicts:0,added:1};
+ok('product SKU match with a different name is preserved as a conflict',mismatchResult.conflicts===1&&mismatchedProduct.length===1);
+const ambiguousProducts=[{id:103,sku:'FB103',name:'قماش'},{id:104,sku:'FB103',name:'قماش'}];
+const ambiguousResult=mergeCloudProducts?mergeCloudProducts(ambiguousProducts,[{id:3,cloudId:'factory-item-3',sku:'FB103',name:'قماش'}]):{conflicts:0,added:1};
+ok('ambiguous duplicate local SKUs are not auto-merged',ambiguousResult.conflicts===1&&ambiguousProducts.length===2);
+const cloudIdFixture={...stockBaselineFixture,items:[{...stockBaselineFixture.items[0],cloudId:'canonical-fabric-11'}]};
+const cloudIdBaseline=buildStockBaseline?buildStockBaseline(cloudIdFixture):{items:[]};
+ok('stock baseline uses canonical cloud identity rather than device-local numeric ID',cloudIdBaseline.items[0]?.itemExternalId==='canonical-fabric-11');
+const cloudIdTarget={items:[{id:999,cloudId:'canonical-fabric-11',st:{'أبيض':0},val:0}]};
+const cloudIdApply=applyStockBaseline?applyStockBaseline(cloudIdTarget,cloudIdBaseline):{applied:false};
+ok('stock baseline resolves canonical identity on a device with a different local ID',cloudIdApply.applied&&cloudIdTarget.items[0].st['أبيض']===12);
+ok('new inventory items receive a stable cloud identity at creation',/cloudId:String\(itemId\)/.test(app));
+ok('product uploads and ledger effects use canonical cloud identities',cloud.includes('pr.cloudId = String(pr.id)')&&cloud.includes('externalId: String(item.cloudId || id)'));
 const effectFixture={
   L:[
     {src:'doc',rid:7,a:1,dr:100,cr:0},
