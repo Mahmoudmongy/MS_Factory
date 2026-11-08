@@ -120,8 +120,10 @@ begin
       select 1
         from pg_catalog.jsonb_array_elements(p_payload -> 'ledger') as x(value)
        where nullif(pg_catalog.btrim(x.value ->> 'accountCode'), '') is null
-          or coalesce((x.value ->> 'debit')::numeric, 0) < 0
-          or coalesce((x.value ->> 'credit')::numeric, 0) < 0
+          or pg_catalog.jsonb_typeof(x.value -> 'debit') is distinct from 'number'
+          or pg_catalog.jsonb_typeof(x.value -> 'credit') is distinct from 'number'
+          or (x.value ->> 'debit')::numeric < 0
+          or (x.value ->> 'credit')::numeric < 0
     ) then
       raise exception 'Ledger rows require an account code and non-negative amounts' using errcode = '22023';
     end if;
@@ -140,8 +142,8 @@ begin
         from pg_catalog.jsonb_array_elements(p_payload -> 'movements') as x(value)
        where nullif(pg_catalog.btrim(x.value ->> 'itemExternalId'), '') is null
           or nullif(pg_catalog.btrim(x.value ->> 'variant'), '') is null
-          or coalesce((x.value ->> 'quantity')::numeric, 0) = 'NaN'::numeric
-          or coalesce((x.value ->> 'value')::numeric, 0) = 'NaN'::numeric
+          or pg_catalog.jsonb_typeof(x.value -> 'quantity') is distinct from 'number'
+          or pg_catalog.jsonb_typeof(x.value -> 'value') is distinct from 'number'
     ) then
       raise exception 'Stock movements require stable item and variant identities' using errcode = '22023';
     end if;
