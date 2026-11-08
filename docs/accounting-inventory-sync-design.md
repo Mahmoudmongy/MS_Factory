@@ -41,6 +41,24 @@ Publish/replace through one authenticated, permission-checking RPC using compare
 
 The RPC must validate source categories, ownership, payload shape/size, and permission mapping. It must not trust client-supplied `user_id`, account IDs, item IDs, or permission claims. Account/item references should be canonical external keys resolved server-side, or be stored as stable code/identity strings and resolved by the receiving client with explicit conflict reporting.
 
+
+## Findings confirmed against the live schema (read-only)
+
+- Employee ownership is resolved by `profiles.created_by`; the admin owns the factory row. Existing RLS policies call `private.can_access_factory_owner(user_id, permission, write)`. The draft RPC derives the owner from the authenticated profile and calls this function; it never accepts a client-supplied owner ID.
+- Existing detail tables use `external_id` scoped by `user_id`. The app currently writes product `external_id = String(item.id)`, and partner `external_id = String(partner.id)`. The normalizer therefore translates local account IDs to account codes, and local item/partner IDs to the same external IDs already used by detail sync.
+- The live factory snapshot has account codes and the live products table currently has no duplicate non-empty SKU values. The draft migration adds a per-factory unique SKU index so two devices cannot silently register different products under the same operational SKU. If a pre-existing duplicate appears before migration rollout, index creation will fail safely rather than choose one record.
+- The app's first-launch opening ledger rows have `src='je'` but no `rid`; opening stock rows have no source identity. The collector explicitly excludes rows marked `رصيد افتتاحي` from replayable deltas. They remain part of the admin snapshot / opening baseline and must not be replayed as transactions.
+- Stock movements contain item, variant, quantity and value, but do not record a historical warehouse ID. The normalizer can attach the item's current warehouse label for context only; it cannot reconstruct historical warehouse changes or true multi-warehouse stock from the existing data model.
+
+## Implemented on the isolated branch (not enabled)
+
+- `collectSourceEffects` groups `S.L` and `S.mv` by `(src,rid)`, keeping equal IDs from different source categories separate.
+- `normalizeSourceEffects` maps account IDs to account codes, item IDs to the existing product external ID, and partner IDs to partner external IDs. It rejects missing/ambiguous mappings, duplicate account codes/SKUs, and unbalanced ledger groups.
+- Focused regression tests cover source scoping, repeatable collection, opening-baseline exclusion, account/item/partner mapping, duplicate keys, and invalid/unbalanced effects.
+- A draft migration defines a versioned `source_effects` table, read RLS, and an authenticated compare-and-swap RPC with source-category permission checks, tombstones, payload validation, and per-source advisory locking.
+
+**Not implemented yet:** the client does not call the RPC, does not fetch/apply effect records, and does not alter stock or ledger balances. The draft migration has not been applied to production or QA. The unique SKU index and RPC therefore have no live effect at this stage.
+
 ## Rollout sequence
 
 1. Add pure client helpers to collect and normalize effects by `(src,rid)`, without changing existing upload behavior.
