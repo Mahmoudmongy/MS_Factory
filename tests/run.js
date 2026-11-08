@@ -156,7 +156,7 @@ ok('source-effect client sends only the sections allowed by the employee permiss
 ok('source-effect deletion uses queued tombstones and requires both sections before clearing',
   cloud.includes('mgr6-cloud-effect-tombstones')&&cloud.includes('if (isDelete ? (!writeLedger || !writeMovements)')&&sourceEffectMigration.includes('Deleting a complete source effect requires ledger and inventory write permissions'));
 ok('source effects are downloaded after master data and opening baseline application',
-  cloud.indexOf('const effectsResult = await supabase.rpc("get_source_effects")')>cloud.indexOf('applyInventoryBaselineSection(S')&&cloud.indexOf('applyInventoryBaselineSection(S')>cloud.indexOf('mergeCloudProducts(S.items'));
+  cloud.indexOf('const effectsResult = await supabase.rpc("get_source_effects")')>cloud.indexOf('for (const [sectionName, row, applySection]')&&cloud.indexOf('for (const [sectionName, row, applySection]')>cloud.indexOf('mergeCloudProducts(S.items'));
 const productMergeStart=cloud.indexOf('function mergeCloudProducts(existing, incoming)');
 const productMergeEnd=cloud.indexOf('function mergeCloudInvoices(existing, incoming)',productMergeStart);
 const productMergeContext=vm.createContext({});
