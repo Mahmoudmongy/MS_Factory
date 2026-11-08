@@ -674,11 +674,16 @@ async function loadFromTablesMerge(isAuto = false) {
     try { localStorage.setItem("mgr6-backup-before-cloud-restore", localStorage.getItem("mgr6") || ""); } catch(e){}
 
     const emptyResult = { data: [], error: null };
+    const inventoryRead = canRead("inventory");
     const results = await Promise.all([
       canRead("customers") ? supabase.from("customers").select("*").eq("user_id", owner) : Promise.resolve(emptyResult),
       canRead("suppliers") ? supabase.from("suppliers").select("*").eq("user_id", owner) : Promise.resolve(emptyResult),
       canRead("invoices") ? supabase.from("invoices").select("*").eq("user_id", owner) : Promise.resolve(emptyResult),
-      canRead("inventory") ? supabase.from("products").select("*").eq("user_id", owner) : Promise.resolve(emptyResult),
+      inventoryRead
+        ? supabase.from("products").select("*").eq("user_id", owner)
+        : canRead("production")
+          ? supabase.from("production_catalog").select("user_id,external_id,name,sku,model,unit,warehouse,image_url,buy_price,variant,quantity").eq("user_id", owner)
+          : Promise.resolve(emptyResult),
       canRead("invoices") ? supabase.from("returns").select("*").eq("user_id", owner) : Promise.resolve(emptyResult),
       canRead("invoices") ? supabase.from("vouchers").select("*").eq("user_id", owner) : Promise.resolve(emptyResult),
       canRead("production") ? supabase.from("production_orders").select("*").eq("user_id", owner) : Promise.resolve(emptyResult),
@@ -761,22 +766,45 @@ async function loadFromTablesMerge(isAuto = false) {
 
 
     if (prods?.length) {
-      const cloudProducts = prods.map(p => {
-        if (p.raw && typeof p.raw === "object" && !Array.isArray(p.raw)) {
-          const raw = { ...p.raw };
-          if (!raw.st || typeof raw.st !== "object" || Array.isArray(raw.st)) raw.st = {};
-          return raw;
+      let cloudProducts;
+      if (!inventoryRead) {
+        const grouped = new Map();
+        for (const p of prods) {
+          const key = String(p.external_id || p.sku || p.name);
+          let item = grouped.get(key);
+          if (!item) {
+            item = {
+              id: p.external_id || p.id, name: p.name, sku: p.sku || p.external_id || "",
+              model: p.model || "", unit: p.unit || "قطعة", wh: Number(p.warehouse) || p.warehouse || null,
+              buy: Number(p.buy_price || 0) || 0, retail: 0, wholesale: 0,
+              img: p.image_url || "", st: {}, val: 0
+            };
+            grouped.set(key, item);
+          }
+          const variant = String(p.variant || "-");
+          const quantity = Number(p.quantity || 0) || 0;
+          item.st[variant] = quantity;
+          item.val += quantity * item.buy;
         }
-        const qty = Number(p.qty || 0) || 0;
-        const buy = Number(p.buy_price ?? p.price ?? 0) || 0;
-        return {
-          id: p.external_id || p.id, name: p.name, sku: p.sku || p.external_id || "",
-          unit: p.unit || "قطعة", wh: p.warehouse || null,
-          buy, retail: Number(p.retail_price || 0) || 0,
-          wholesale: Number(p.wholesale_price || 0) || 0,
-          img: p.image_url || "", st: qty ? { "-": qty } : {}, val: qty * buy
-        };
-      });
+        cloudProducts = Array.from(grouped.values());
+      } else {
+        cloudProducts = prods.map(p => {
+          if (p.raw && typeof p.raw === "object" && !Array.isArray(p.raw)) {
+            const raw = { ...p.raw };
+            if (!raw.st || typeof raw.st !== "object" || Array.isArray(raw.st)) raw.st = {};
+            return raw;
+          }
+          const qty = Number(p.qty || 0) || 0;
+          const buy = Number(p.buy_price ?? p.price ?? 0) || 0;
+          return {
+            id: p.external_id || p.id, name: p.name, sku: p.sku || p.external_id || "",
+            unit: p.unit || "قطعة", wh: p.warehouse || null,
+            buy, retail: Number(p.retail_price || 0) || 0,
+            wholesale: Number(p.wholesale_price || 0) || 0,
+            img: p.image_url || "", st: qty ? { "-": qty } : {}, val: qty * buy
+          };
+        });
+      }
       if (!Array.isArray(S.items)) S.items = [];
       const m = mergeByKey(S.items, cloudProducts, x => x.id || x.sku || x.name);
       S.items = m.arr; totalAdded += m.added;
