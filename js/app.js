@@ -4,7 +4,7 @@ const safeSourceKey = value => ["doc","vch","po","wo","je"].includes(String(valu
 const safeNumericId = value => Number.isSafeInteger(Number(value)) && Number(value) > 0 ? Math.trunc(Number(value)) : 0;
 const safeLinkHandler = value => {
   const handler = String(value ?? "");
-  return /^(?:drillItem\\(\\d+(?:,ITV\\[\\d+\\])?\\)|drillAcct\\(\\d+\\)|poView\\(\\d+\\)|drillPartner\\(\\d+\\)|inv\\(\\d+\\)|itemDet\\(\\d+\\)|R\\.pa=\\d+;R\\.pc=\\d+;render\\(\\))$/.test(handler) ? handler : "void(0)";
+  return /^(?:drillItem\(\d+(?:,ITV\[\d+\])?\)|drillAcct\(\d+\)|poView\(\d+\)|drillPartner\(\d+\)|inv\(\d+\)|itemDet\(\d+\)|R\.pa=\d+;R\.pc=\d+;render\(\))$/.test(handler) ? handler : "void(0)";
 };
 const safeImageSrc = value => { const src = String(value ?? "").trim(); return /^(?:https?:\/\/|\/(?!\/)|blob:|data:image\/(?:png|jpe?g|gif|webp|svg\+xml);base64,)/i.test(src) ? escapeHTML(src) : ""; };
 const $g=s=>document.querySelector(s),$=s=>(ACT||document).querySelector(s),p2=n=>String(n).padStart(2,"0"),f=n=>Number(n||0).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}),qf=n=>Number(n||0).toLocaleString('en-US',{maximumFractionDigits:3}),uid=()=>Date.now()+Math.floor(Math.random()*1e5),pad=n=>String(n).padStart(4,"0"),U=(a,fn)=>a.map(fn).join("");
