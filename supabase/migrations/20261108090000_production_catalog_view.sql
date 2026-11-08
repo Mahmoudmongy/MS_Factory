@@ -19,5 +19,5 @@ LEFT JOIN public.inventory AS i
  AND i.product_id = p.id
 WHERE private.can_access_factory_owner(p.user_id, 'production', false);
 
-REVOKE ALL ON TABLE public.production_catalog FROM PUBLIC, anon;
+REVOKE ALL ON TABLE public.production_catalog FROM authenticated, PUBLIC, anon;
 GRANT SELECT ON TABLE public.production_catalog TO authenticated;
