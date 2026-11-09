@@ -234,7 +234,12 @@ async function persistState(state) {
     try {
       await flushQueue();
       const latestOps = makeOperations(getState());
-      if (latestOps.length) await writeOperations(latestOps);
+      if (latestOps.length) {
+        const pending = new Map(getQueue().map(item => [mapKey(item.type,item.id),item]));
+        for (const op of latestOps) pending.set(mapKey(op.type,op.id),op);
+        setQueue([...pending.values()]);
+        await flushQueue();
+      }
       localStorage.removeItem('mgr6-sync-pending');
     } catch (error) {
       if (error?.code === 'FACTORY_RECORD_CONFLICT') {
