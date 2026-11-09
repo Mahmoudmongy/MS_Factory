@@ -43,6 +43,12 @@ jobs:
           VITE_SUPABASE_URL: https://yvrislcbbhtruwdnuooz.supabase.co
           VITE_SUPABASE_ANON_KEY: sb_publishable_7y8sqUPYv4mCfmpjin3xRQ_1_X5QJfG
 
+      - name: Copy legacy runtime files into the Vite output
+        run: |
+          mkdir -p dist/js
+          cp js/app.js dist/js/app.js
+          cp public/sw.js dist/sw.js
+
       - name: Verify required static assets
         shell: bash
         run: |
@@ -55,7 +61,7 @@ jobs:
               exit 1
             fi
           done
-          if ! grep -q 'manifest' dist/index.html; then
+          if ! grep -Eq 'manifest-[^\" ]+\\.json' dist/index.html; then
             echo "::error::PWA manifest reference is missing from the built application shell"
             exit 1
           fi
