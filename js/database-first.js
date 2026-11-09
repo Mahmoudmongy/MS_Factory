@@ -187,10 +187,24 @@ function queueOperations(operations) {
   localStorage.setItem('mgr6', JSON.stringify(getState()));
   localStorage.setItem('mgr6-sync-pending', JSON.stringify({ at:Date.now(), count:latest.size }));
 }
+function applyOperationToState(op) {
+  if (op.type === '__meta') {
+    if (!op.deleted && op.payload) window.__factoryReplaceArrays?.({__meta:op.payload});
+    return;
+  }
+  const state = getState();
+  const list = Array.isArray(state[op.type]) ? [...state[op.type]] : [];
+  const index = list.findIndex((item,i) => recordKey(op.type,item,i) === op.id);
+  if (op.deleted) { if (index >= 0) list.splice(index,1); }
+  else if (index >= 0) list[index] = clone(op.payload);
+  else list.push(clone(op.payload));
+  window.__factoryReplaceArrays?.({[op.type]:list});
+}
 async function flushQueue() {
   if (!navigator.onLine || !getQueue().length) return;
   const queue = getQueue();
   await writeOperations(queue);
+  for (const op of queue) applyOperationToState(op);
   setQueue([]);
   localStorage.removeItem('mgr6-sync-pending');
 }
