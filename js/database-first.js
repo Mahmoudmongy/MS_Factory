@@ -357,6 +357,7 @@ async function bootstrap() {
     for (const op of getQueue()) applyOperationToState(op);
     stateReady = true;
     window.__factoryDatabaseFirstReady = true;
+    window.__factoryDatabaseFirstFailed = false;
     window.dispatchEvent(new CustomEvent('factory-database-ready'));
     return;
   }
@@ -390,6 +391,7 @@ async function bootstrap() {
   }
   stateReady=true;
   window.__factoryDatabaseFirstReady = true;
+  window.__factoryDatabaseFirstFailed = false;
   for (const op of getQueue()) applyOperationToState(op);
   await flushQueue();
   await connectRealtime();
@@ -422,6 +424,7 @@ async function reconnectDatabase() {
   await connectRealtime();
   window.__factoryOfflineMode=false;
   window.__factoryDatabaseFirstReady=true;
+  window.__factoryDatabaseFirstFailed=false;
   window.dispatchEvent(new CustomEvent('factory-database-ready'));
 }
 window.addEventListener('online', async () => {
@@ -433,6 +436,7 @@ window.addEventListener('factory-db-conflict', event => {
   console.warn('Factory database conflict:',event.detail?.message || event.detail);
 });
 bootstrap().catch(error => {
+  window.__factoryDatabaseFirstFailed = true;
   console.error('Database-first startup failed:',error);
   document.dispatchEvent(new CustomEvent('factory-db-startup-error',{detail:{message:error.message || String(error)}}));
 });

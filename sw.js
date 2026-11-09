@@ -3,7 +3,7 @@
  * Authenticated Supabase/API responses are never cached.
  * Only stable shell files are precached; built Vite assets are cached on first successful request.
  */
-const VERSION = 'factory-v10';
+const VERSION = 'factory-v11';
 const CORE = [
   './',
   './index.html',

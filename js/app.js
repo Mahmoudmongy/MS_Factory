@@ -17,7 +17,7 @@ let S;try{S=JSON.parse(localStorage.getItem("mgr6"))}catch(e){}if(!S)S=seed();
 window.__factoryDatabaseFirst=true;
 window.__factoryGetState=()=>S;
 window.__factoryReplaceArrays=(data)=>{if(!data||typeof data!=="object")return;for(const [k,v] of Object.entries(data)){if(Array.isArray(v))S[k]=v;else if(k==="__meta"&&v&&typeof v==="object")Object.assign(S,v);}try{render()}catch(e){}};
-const sv=()=>{try{S.pend=(S.pend||0)+1;if(window.__factoryDatabaseFirstReady&&typeof window.__factoryPersistState==="function"){window.__factoryPersistState(S).catch(e=>console.error("Database save failed:",e));}else if(!navigator.onLine){localStorage.setItem("mgr6",JSON.stringify(S));localStorage.setItem("mgr6-sync-pending",JSON.stringify({at:Date.now(),pend:S.pend}));}else{localStorage.setItem("mgr6",JSON.stringify(S));}}catch(e){console.error("State save failed:",e)}};
+const sv=()=>{try{S.pend=(S.pend||0)+1;if(window.__factoryDatabaseFirstFailed&&navigator.onLine){alert("تعذر الاتصال بقاعدة البيانات. لم يتم تأكيد حفظ العملية؛ حاول مرة أخرى بعد عودة الاتصال.");return;}if(window.__factoryDatabaseFirstReady&&typeof window.__factoryPersistState==="function"){window.__factoryPersistState(S).catch(e=>{console.error("Database save failed:",e);alert(e.message||"تعذر حفظ التغييرات في قاعدة البيانات");});}else if(!navigator.onLine){localStorage.setItem("mgr6",JSON.stringify(S));localStorage.setItem("mgr6-sync-pending",JSON.stringify({at:Date.now(),pend:S.pend}));}else{localStorage.setItem("mgr6",JSON.stringify(S));}}catch(e){console.error("State save failed:",e)}};
 const TN={sale:"فاتورة بيع",pur:"فاتورة شراء",sret:"إشعار دائن (مرتجع بيع)",pret:"إشعار مدين (مرتجع شراء)"},PF={sale:"SA",pur:"PU",sret:"SR",pret:"RP"},CT={mfg:"تصنيع",sup:"مشتريات"},TT={A:"الأصول",L:"الالتزامات",Q:"حقوق الملكية",I:"الإيرادات",X:"المصروفات"};
 /* ===== ledger + stock core ===== */
 const ak=k=>S.accts.find(a=>a.k==k).id,ac_=id=>S.accts.find(a=>a.id==id)||{},an=id=>ac_(id).name||"",nat=a=>"AX".includes(a.t)?1:-1;
@@ -273,7 +273,7 @@ function syncPage(){
   try{const q=JSON.parse(localStorage.getItem("ms-factory-db-queue-v1")||"[]");queued=Array.isArray(q)?q.length:0}catch(e){}
   const offline=!navigator.onLine||window.__factoryOfflineMode===true;
   const ready=window.__factoryDatabaseFirstReady===true;
-  const status=offline?(queued?"🔴 غير متصل - تغييرات محفوظة محليًا":"🔴 غير متصل - العمل دون اتصال"):queued?"🟡 توجد تغييرات في انتظار الإرسال":ready?"🟢 متصل - الحفظ المباشر على قاعدة البيانات":"🟡 جارٍ الاتصال بقاعدة البيانات";
+  const status=window.__factoryDatabaseFirstFailed?"🔴 فشل الاتصال بقاعدة البيانات":offline?(queued?"🔴 غير متصل - تغييرات محفوظة محليًا":"🔴 غير متصل - العمل دون اتصال"):queued?"🟡 توجد تغييرات في انتظار الإرسال":ready?"🟢 متصل - الحفظ المباشر على قاعدة البيانات":"🟡 جارٍ الاتصال بقاعدة البيانات";
   const role=cloudProfile()?.is_admin===true?"مدير النظام":"حساب موظف";
   const c=[
     ["فواتير ومرتجعات",S.docs.length],
