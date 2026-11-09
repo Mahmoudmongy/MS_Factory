@@ -37,7 +37,7 @@ if (!supabase) {
   $('auth-login').addEventListener('click', async (e) => {
     e.preventDefault();
     const { email, password } = credentials();
-    if (!email || !password) return say('أدخل البريد الإلكتروني وكلمة المرور');
+    if (!email || !password) return say('أدخل اسم المستخدم أو البريد الإلكتروني وكلمة المرور');
     const remember = $('auth-remember')?.checked !== false;
     try { localStorage.setItem('factory-remember', remember ? '1' : '0'); } catch (_) {}
     const projectRef = new URL('https://yvrislcbbhtruwdnuooz.supabase.co').hostname.split('.')[0];
