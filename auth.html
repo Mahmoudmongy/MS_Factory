@@ -10,7 +10,7 @@
   .auth-card{width:100%;max-width:380px;padding:24px}
   .auth-card h1{margin:0 0 8px;font-size:22px}
   .auth-form{display:flex;flex-direction:column}
-  .auth-session{display:flex;flex-direction:column;gap:12px}
+  .remember-row{display:flex;align-items:center;gap:8px;margin:12px 0}.remember-row input{width:auto}
 </style>
 </head>
 <body>
@@ -26,15 +26,12 @@
       <input id="auth-email" type="email" dir="ltr" autocomplete="email">
       <label for="auth-password">كلمة المرور</label>
       <input id="auth-password" type="password" dir="ltr" autocomplete="current-password" minlength="6">
+      <label class="remember-row"><input type="checkbox" id="auth-remember" checked> تذكرني على هذا المتصفح</label>
       <div class="row">
         <button type="button" id="auth-login">تسجيل الدخول</button>
       </div>
     </div>
 
-    <div id="auth-session" class="auth-session" hidden>
-      <p>مسجل الدخول باسم: <b id="auth-user"></b></p>
-      <button type="button" id="auth-logout" class="g">تسجيل الخروج</button>
-    </div>
   </section>
 </main>
 <script type="module" src="./js/auth.js"></script>
