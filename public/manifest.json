@@ -1,0 +1,37 @@
+{
+  "name": "مدير الشركة",
+  "short_name": "مدير الشركة",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "background_color": "#0f766e",
+  "theme_color": "#0f766e",
+  "dir": "rtl",
+  "lang": "ar",
+  "icons": [
+    {
+      "src": "./assets/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "./assets/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    }
+  ],
+  "id": "./index.html",
+  "scope": "./",
+  "orientation": "any",
+  "categories": [
+    "business",
+    "productivity"
+  ],
+  "description": "تطبيق إدارة الشركة والحسابات والمخزون والمبيعات والمشتريات والإنتاج.",
+  "display_override": [
+    "standalone",
+    "minimal-ui"
+  ],
+  "prefer_related_applications": false
+}
