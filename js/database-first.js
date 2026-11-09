@@ -448,8 +448,14 @@ async function reconnectDatabase() {
 }
 window.addEventListener('online', async () => {
   if (!stateReady) return;
+  window.__factoryDatabaseFirstFailed = true;
+  window.dispatchEvent(new Event('factory-db-connection-state'));
   try { await saveChain.catch(()=>{}); await reconnectDatabase(); }
-  catch (error) { console.error('Database reconnect:',error); }
+  catch (error) {
+    window.__factoryDatabaseFirstFailed = true;
+    console.error('Database reconnect:',error);
+    window.dispatchEvent(new Event('factory-db-connection-state'));
+  }
 });
 window.addEventListener('factory-db-conflict', event => {
   console.warn('Factory database conflict:',event.detail?.message || event.detail);
