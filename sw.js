@@ -1,5 +1,6 @@
 /* Service Worker v8 - offline application shell.
- * Business data stays in localStorage. Authenticated Supabase/API responses are never cached.
+ * Online business data is read/written directly in Supabase; local state and queued changes are fallback-only offline.
+ * Authenticated Supabase/API responses are never cached.
  * Only stable shell files are precached; built Vite assets are cached on first successful request.
  */
 const VERSION = 'factory-v10';

@@ -2,7 +2,7 @@
   "name": "factory-manager",
   "version": "2.0.1",
   "private": true,
-  "description": "Factory Manager - Arabic RTL PWA with Supabase authentication, local-first offline workspace, and cloud synchronization.",
+  "description": "Factory Manager - Arabic RTL PWA with Supabase authentication, database-first records, and offline change queue.",
   "scripts": {
     "dev": "vite",
     "test": "node tests/run.js",
