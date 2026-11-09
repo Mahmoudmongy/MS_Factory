@@ -214,6 +214,28 @@ ok('print-template preview reflects title and hidden column',await ev(()=>{const
 await ev(()=>{PRF.lang='en';applyPref()});const left=[];for(const s of ['home','bank','rc','py','cust','supp','sale','sret','pur','pret','stock','prod','coa','je','tl','emp','rep','ai','set']){await ev(x=>go(x),s);await p.waitForTimeout(40);const t=await ev(x=>{const out=[],w=document.createTreeWalker(document.body,NodeFilter.SHOW_TEXT);let n;while(n=w.nextNode()){if(n.parentElement&&n.parentElement.tagName=='SCRIPT')continue;if(/[\u0600-\u06FF]/.test(n.nodeValue)&&n.nodeValue.trim()!='ع')out.push(n.nodeValue.trim())}return out},s);t.forEach(x=>{if(!/محلات|عميل قطاعي|اختبار|استيراد|النسيج|جيرسي|زراير|تيشيرت|جاكيت|بنطلون|قماش|أحمر|أسود|جهة|الخزنة بالدولار|موظف/.test(x))left.push(s+': '+x)})}
 ok('English mode: no untranslated UI text on the 19 main screens',left.length==0,left.slice(0,12));await ev(()=>{PRF.lang='ar';applyPref()});
 ok('no JavaScript errors during the whole desktop session',errs.length==0,errs.slice(0,3));
+const scopeCtx=await browser.newContext({viewport:{width:800,height:600}}),scopePage=await scopeCtx.newPage();await scopePage.goto(BASE);await scopePage.waitForTimeout(150);
+const accountIsolation=await scopePage.evaluate(async()=>{
+  localStorage.clear();
+  localStorage.setItem("mgr6","legacy-admin-state");
+  const {scopeFactoryStorage}=await import("./js/account-storage.js");
+  scopeFactoryStorage({id:"employee-001",is_admin:false});
+  const employeeStartedEmpty=localStorage.getItem("mgr6")===null;
+  localStorage.setItem("mgr6","employee-state");
+  localStorage.setItem("mgr6pref",JSON.stringify({lang:"en"}));
+  localStorage.setItem("mgr6-cloud-snapshot-version","4");
+  scopeFactoryStorage({id:"admin-001",is_admin:true});
+  const adminMigratedLegacy=localStorage.getItem("mgr6")==="legacy-admin-state";
+  localStorage.setItem("mgr6","admin-state");
+  const adminVersion=localStorage.getItem("mgr6-cloud-snapshot-version");
+  scopeFactoryStorage({id:"employee-001",is_admin:false});
+  const employeeState=localStorage.getItem("mgr6");
+  const employeePref=localStorage.getItem("mgr6pref");
+  const employeeVersion=localStorage.getItem("mgr6-cloud-snapshot-version");
+  return {employeeStartedEmpty,adminMigratedLegacy,employeeState,employeePref:JSON.parse(employeePref||"{}").lang,employeeVersion,adminVersion,legacyRemoved:localStorage.getItem("mgr6-legacy-unassigned")===null};
+});
+ok('account-scoped storage keeps employee state and sync metadata separate while migrating the legacy cache to the admin',accountIsolation.employeeStartedEmpty&&accountIsolation.adminMigratedLegacy&&accountIsolation.employeeState==="employee-state"&&accountIsolation.employeePref==="en"&&accountIsolation.employeeVersion==="4"&&accountIsolation.adminVersion===null&&accountIsolation.legacyRemoved,accountIsolation);
+await scopeCtx.close();
 await ctx.close();
 /* ---------- C. PWA: service worker + offline shell ---------- */
 const c2=await browser.newContext({viewport:{width:1280,height:800}}),q=await c2.newPage(),swConsole=[];q.on('console',m=>swConsole.push(m.type()+': '+m.text()));q.on('pageerror',e=>swConsole.push('pageerror: '+e.message));await q.goto(BASE);const swReg=await q.evaluate(async()=>{try{const reg=await navigator.serviceWorker.register('./sw.js');return {ok:true,scope:reg.scope,installing:reg.installing?.state,waiting:reg.waiting?.state,active:reg.active?.state}}catch(e){return {ok:false,error:e.message}}});const swReady=await q.evaluate(()=>Promise.race([navigator.serviceWorker.ready.then(()=>true),new Promise(resolve=>setTimeout(()=>resolve(false),15000))]));if(!swReady){const diag=await q.evaluate(async()=>{const r=await navigator.serviceWorker.getRegistration();return r?{installing:r.installing?.state,waiting:r.waiting?.state,active:r.active?.state,scope:r.scope}:null});await c2.close();throw new Error('Service Worker did not become ready: '+JSON.stringify({swReg,diag,console:swConsole.slice(-20)}))}await q.reload();await q.waitForTimeout(600);

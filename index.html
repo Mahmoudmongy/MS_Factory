@@ -51,6 +51,7 @@
 </head>
 <script type="module">
 import { supabase } from './js/supabase.js';
+import { scopeFactoryStorage } from './js/account-storage.js';
 (async function bootstrapFactoryApp() {
     try {
       const { data, error } = supabase ? await supabase.auth.getSession() : { data: { session: null }, error: new Error('Supabase unavailable') };
@@ -70,6 +71,7 @@ import { supabase } from './js/supabase.js';
               location.replace('change-password.html');
               return;
             }
+            try { scopeFactoryStorage(cachedProfile); } catch (e) { console.warn('Account storage scoping skipped:', e); }
             window.__factoryAuthProfile = cachedProfile;
             window.__factoryAuthEmail = data.session.user.email || '';
             window.__factoryOfflineMode = true;
@@ -95,6 +97,7 @@ import { supabase } from './js/supabase.js';
             location.replace('change-password.html');
             return;
           }
+          try { scopeFactoryStorage(profile); } catch (e) { console.warn('Account storage scoping skipped:', e); }
           window.__factoryAuthProfile = profile;
           window.__factoryAuthEmail = data.session.user.email || '';
           window.__factoryOfflineMode = false;
