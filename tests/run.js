@@ -36,7 +36,7 @@ ok('login screen does not expose public self-registration',!/auth-signup|signUp\
 const createEmployeeFn=fs.readFileSync(path.join(ROOT,'supabase/functions/create-employee-account/index.ts'),'utf8');
 const changePasswordFn=fs.readFileSync(path.join(ROOT,'supabase/functions/change-initial-password/index.ts'),'utf8');
 const changePasswordPage=fs.readFileSync(path.join(ROOT,'change-password.html'),'utf8')+fs.readFileSync(path.join(ROOT,'js/change-password.js'),'utf8');
-ok('employee login account can be created from employee name alone with an automatically generated username',/enteredUsername\|\|\("worker"\+Date\.now\(\)\.toString\(36\)\.toLowerCase\(\)\)/.test(app)&&/اسم المستخدم \(اختياري/.test(app));
+ok('employee login account can be created from employee name alone with an automatically generated username',app.includes('enteredUsername||("worker"+Date.now().toString(36).toLowerCase())')&&app.includes('اسم المستخدم (اختياري')));
 ok('new employee accounts require a first-login password change',/must_change_password:\s*true/.test(createEmployeeFn));
 ok('online and cached profile gates redirect flagged employees before opening the app',/profile\.must_change_password === true/.test(idx)&&/cachedProfile\.must_change_password === true/.test(idx)&&/change-password\.html/.test(idx));
 ok('first-login password endpoint verifies the signed-in user before privileged password update',/caller\.auth\.getUser\(\)/.test(changePasswordFn)&&/admin\.auth\.admin\.updateUserById\(\s*authData\.user\.id,\s*\{\s*password\s*\}\s*,\s*\)/.test(changePasswordFn));
