@@ -20,7 +20,7 @@ const stable = value => {
 };
 const recordKey = (type, item, index) => {
   const id = item && typeof item === 'object'
-    ? (item.id ?? item.no ?? item.code ?? item.sku ?? item.external_id)
+    ? (item._cloudRecordId ?? item.id ?? item.no ?? item.code ?? item.sku ?? item.external_id)
     : null;
   return String(id !== undefined && id !== null && id !== '' ? id : 'legacy-index-' + index);
 };
@@ -30,6 +30,7 @@ const cleanPayload = item => {
     delete out._cloudUpdatedAt;
     delete out._cloudConflict;
     delete out._cloudVersion;
+    delete out._cloudRecordId;
   }
   return out;
 };
@@ -103,8 +104,13 @@ function hydrateFromRows(rows) {
   const metaRow = rows.find(r => r.record_type === '__meta' && r.record_id === 'main' && !r.deleted_at);
   for (const row of rows) {
     setBaselineRow(row);
-    if (row.deleted_at || row.record_type === '__meta') continue;
-    (grouped[row.record_type] ||= []).push(clone(row.payload));
+    if (row.record_type === '__meta') continue;
+    const target = (grouped[row.record_type] ||= []);
+    if (!row.deleted_at) {
+      const payload = clone(row.payload);
+      if (payload && typeof payload === 'object' && !Array.isArray(payload)) payload._cloudRecordId = row.record_id;
+      target.push(payload);
+    }
   }
   for (const values of Object.values(grouped)) values.sort((a,b) => {
     const ai = Number(a?.id), bi = Number(b?.id);
@@ -210,8 +216,8 @@ function applyOperationToState(op) {
   const list = Array.isArray(state[op.type]) ? [...state[op.type]] : [];
   const index = list.findIndex((item,i) => recordKey(op.type,item,i) === op.id);
   if (op.deleted) { if (index >= 0) list.splice(index,1); }
-  else if (index >= 0) list[index] = clone(op.payload);
-  else list.push(clone(op.payload));
+  else if (index >= 0) { list[index] = clone(op.payload); if (list[index] && typeof list[index] === 'object') list[index]._cloudRecordId = op.id; }
+  else { const item = clone(op.payload); if (item && typeof item === 'object') item._cloudRecordId = op.id; list.push(item); }
   window.__factoryReplaceArrays?.({[op.type]:list});
 }
 async function flushQueue() {
@@ -281,8 +287,8 @@ function applyRealtimeRow(row) {
       const list = Array.isArray(current[row.record_type]) ? [...current[row.record_type]] : [];
       const index = list.findIndex((item,i) => recordKey(row.record_type,item,i) === row.record_id);
       if (row.deleted_at) { if (index >= 0) list.splice(index,1); }
-      else if (index >= 0) list[index] = clone(row.payload);
-      else list.push(clone(row.payload));
+      else if (index >= 0) { list[index] = clone(row.payload); if (list[index] && typeof list[index] === 'object') list[index]._cloudRecordId = row.record_id; }
+      else { const item = clone(row.payload); if (item && typeof item === 'object') item._cloudRecordId = row.record_id; list.push(item); }
       window.__factoryReplaceArrays?.({[row.record_type]:list});
     }
   } finally { applyingRemote = false; }
