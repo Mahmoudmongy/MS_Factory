@@ -88,8 +88,8 @@ function resetLocalBusinessState() {
   const { arrays } = splitState(state);
   const patch = {};
   for (const [type, items] of Object.entries(arrays)) {
-    // Keep only the built-in chart-of-accounts and warehouse templates; all device business data is discarded.
-    patch[type] = type === 'accts' || type === 'wh' ? items : [];
+    // Discard every seeded/demo business collection; only the authenticated production database may populate it.
+    patch[type] = [];
   }
   window.__factoryReplaceArrays?.(patch);
 }
