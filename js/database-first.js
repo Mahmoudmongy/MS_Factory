@@ -386,6 +386,10 @@ async function reconnectDatabase() {
   if (since) {
     const changed=await fetchChangedRecords(since);
     for (const row of changed) applyRealtimeRow(row);
+  } else {
+    const initialRows=await fetchAllRecords();
+    hydrateFromRows(initialRows);
+    setLastSyncAt(new Date().toISOString());
   }
   for (const op of getQueue()) applyOperationToState(op);
   await flushQueue();
