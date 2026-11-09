@@ -460,6 +460,7 @@ main{padding-bottom:calc(20px + env(safe-area-inset-bottom,0px))}
 
 /* Settings stays in its natural navigation position; it is not a floating/sticky button. */
 @media(max-width:860px){
- #sb{padding-bottom:calc(16px + env(safe-area-inset-bottom,0px))!important;}
- #sb a[onclick*="'set'"]{position:static!important;inset:auto!important;top:auto!important;right:auto!important;bottom:auto!important;left:auto!important;z-index:auto!important;box-shadow:none!important;margin-top:0!important;}
+ #sb{display:flex!important;flex-direction:column!important;padding-bottom:calc(16px + env(safe-area-inset-bottom,0px))!important;}
+ #sb>.sb-controls,#sb>.br,#sb>a{flex:0 0 auto;}
+ #sb a[onclick*="'set'"]{position:static!important;inset:auto!important;top:auto!important;right:auto!important;bottom:auto!important;left:auto!important;z-index:auto!important;box-shadow:none!important;margin-top:auto!important;}
 }
