@@ -554,6 +554,90 @@ const IMPF={
  customers:[["name","اسم العميل",1,["اسم","عميل","customer","client"]],["phone","الموبايل",0,["موبايل","تليفون","هاتف","phone","mobile"]],["kind","التعامل (جملة / قطاعي)",0,["تعامل","جملة","kind"]],["gov","المحافظة",0,["محافظة","gov"]],["city","المدينة",0,["مدينة","city"]],["adr","العنوان",0,["عنوان","address","adr"]]],
  suppliers:[["name","اسم المورد",1,["اسم","مورد","supplier"]],["phone","الموبايل",0,["موبايل","تليفون","هاتف","phone","mobile"]],["gov","المحافظة",0,["محافظة","gov"]],["city","المدينة",0,["مدينة","city"]],["adr","العنوان",0,["عنوان","address","adr"]]]
 };
+const IMPORT_LISTS={
+ accts:"شجرة الحسابات",wh:"المخازن الفرعية",docs:"الفواتير والمرتجعات",po:"أوامر الإنتاج",
+ vch:"سندات القبض والصرف",wo:"الهالك",codes:"أكواد الباركود",je:"قيود اليومية",
+ emp:"الموظفون",mv:"حركات المخزون",L:"دفتر الأستاذ",curs:"العملات",hide:"التبويبات المخفية"
+};
+const IMPORT_FIELD_LABELS={
+ accts:{id:"معرف الحساب",code:"كود الحساب",name:"اسم الحساب",t:"نوع الحساب",k:"التصنيف الداخلي",cash:"حساب نقدي",cur:"العملة"},
+ wh:{id:"معرف المخزن",name:"اسم المخزن"},
+ docs:{id:"معرف المستند",t:"نوع الفاتورة",no:"رقم الفاتورة",date:"التاريخ",ts:"وقت التسجيل",pid:"كود العميل أو المورد",cat:"التصنيف",dest:"الوجهة",lines:"تفاصيل الأصناف (JSON)",gross:"الإجمالي قبل الخصم",disc:"الخصم",total:"الصافي",note:"ملاحظات",img:"المرفق"},
+ po:{id:"معرف الأمر",no:"رقم أمر الإنتاج",date:"التاريخ",ts:"وقت التسجيل",desc:"البيان",iname:"الصنف",wh:"المخزن",subs:"الألوان والمقاسات والكميات (JSON)",mats:"الخامات (JSON)",x:"التكاليف الإضافية (JSON)",st:"الحالة",matCost:"تكلفة الخامات",rec:"الكميات المستلمة (JSON)",wc:"تكلفة الهالك"},
+ vch:{id:"معرف السند",no:"رقم السند",date:"التاريخ",ts:"وقت التسجيل",dir:"النوع",title:"البيان",pid:"كود الطرف",who:"اسم المستلم",desc:"ملاحظات",ac:"الحسابات (JSON)",ln:"التفاصيل (JSON)",link:"المرجع",img:"المرفق",total:"الإجمالي",alloc:"التوزيع (JSON)"},
+ wo:{id:"معرف الهالك",ts:"وقت التسجيل",ref:"رقم الهالك",c:"التكلفة",desc:"البيان",po:"أمر الإنتاج"},
+ codes:{code:"الباركود",iid:"كود الصنف",v:"اللون والمقاس"},
+ je:{id:"معرف القيد",no:"رقم القيد",date:"التاريخ",ts:"وقت التسجيل",desc:"البيان"},
+ emp:{id:"معرف الموظف",name:"اسم الموظف",p1:"التليفون الأول",p2:"التليفون الثاني",gov:"المحافظة",city:"المدينة",adr:"العنوان",perm:"الصلاحيات (JSON)",img:"صورة البطاقة"},
+ mv:{d:"التاريخ",ts:"وقت التسجيل",iid:"كود الصنف",v:"اللون والمقاس",q:"الكمية",val:"القيمة",ref:"المرجع",pid:"كود الطرف",rid:"معرف الحركة",src:"المصدر"},
+ L:{d:"التاريخ",ts:"وقت التسجيل",ref:"المرجع",desc:"البيان",a:"كود الحساب",dr:"مدين",cr:"دائن",pid:"كود الطرف",src:"المصدر",rid:"معرف الحركة",fc:"قيمة العملة"},
+ curs:{value:"العملة"},hide:{value:"كود الشاشة"}
+};
+const IMPORT_FIELD_ALIASES={
+ docs:{no:["رقم","invoice"],t:["نوع","type"],date:["تاريخ"],pid:["الطرف","عميل","مورد","partner"],lines:["الأصناف","التفاصيل","items"]},
+ po:{no:["كود الأمر","رقم الأمر","production"],iname:["اسم الصنف"],subs:["تفاصيل الإنتاج"],mats:["الخامات"]},
+ vch:{no:["رقم","voucher"],dir:["اتجاه","نوع السند"],date:["تاريخ"],pid:["الطرف","partner"]},
+ accts:{code:["رقم الحساب","account code"],name:["الحساب","account name"]},
+ mv:{iid:["الصنف","item"],q:["كمية","quantity"],val:["قيمة","value"]},
+ L:{a:["الحساب","account"],dr:["مدين","debit"],cr:["دائن","credit"]}
+};
+const IMPORT_FALLBACK={
+ po:[
+  ["id","معرف الأمر","number",0],["no","رقم أمر الإنتاج","string",1],["date","التاريخ","string",0],["ts","وقت التسجيل","number",0],
+  ["desc","البيان","string",0],["iname","الصنف","string",1],["wh","معرف المخزن","number",0],
+  ["subs","الألوان والمقاسات والكميات (JSON)","json-array",1],["mats","الخامات (JSON)","json-array",0],["x","التكاليف الإضافية (JSON)","json-array",0],
+  ["st","الحالة","number",0],["matCost","تكلفة الخامات","number",0],["rec","الكميات المستلمة (JSON)","json-array",0],["wc","تكلفة الهالك","number",0]
+ ],
+ vch:[
+  ["id","معرف السند","number",0],["no","رقم السند","string",1],["date","التاريخ","string",1],["ts","وقت التسجيل","number",0],
+  ["dir","النوع (in / out)","string",1],["title","البيان","string",0],["pid","معرف الطرف","number",0],["who","اسم المستلم","string",0],
+  ["desc","ملاحظات","string",0],["ac","الحسابات (JSON)","json-array",0],["ln","التفاصيل (JSON)","json-array",0],
+  ["link","المرجع","string",0],["img","المرفق","string",0],["total","الإجمالي","number",0],["alloc","التوزيع (JSON)","json-object",0]
+ ],
+ wo:[
+  ["id","معرف الهالك","number",0],["ts","وقت التسجيل","number",0],["ref","رقم الهالك","string",1],
+  ["c","التكلفة","number",0],["desc","البيان","string",0],["po","معرف أمر الإنتاج","number",0]
+ ]
+};
+function genericImportFields(key){
+ if(key==="curs"||key==="hide")return [["value",IMPORT_FIELD_LABELS[key].value,1,["value",IMPORT_FIELD_LABELS[key].value.toLowerCase(),key],0,"string"]];
+ const sample=(S[key]||[]).find(x=>x&&typeof x==="object"&&!Array.isArray(x));
+ const fallback=IMPORT_FALLBACK[key]||[];
+ const keys=sample?Object.keys(sample).filter(k=>!k.startsWith("_cloud")):fallback.map(x=>x[0]);
+ return keys.map(k=>{
+  const spec=fallback.find(x=>x[0]===k),value=sample?.[k];
+  const type=spec?.[2]||(Array.isArray(value)?"json-array":value&&typeof value==="object"?"json-object":typeof value==="number"?"number":typeof value==="boolean"?"boolean":/^(id|pid|iid|wh|a|rid|qty|q|total|gross|disc|st|wc|matCost|buy|retail|wholesale|val|dr|cr|fc|ts|c)$/i.test(k)?"number":"string");
+  const label=IMPORT_FIELD_LABELS[key]?.[k]||spec?.[1]||k;
+  const aliases=[k.toLowerCase(),label.toLowerCase(),...(IMPORT_FIELD_ALIASES[key]?.[k]||[])];
+  const required=spec?.[3]??(["name","no","code"].includes(k)?1:0);
+  return [k,label,required,aliases,type==="number"?1:0,type];
+ });
+}
+function importFieldsFor(type){
+ if(IMPF[type])return IMPF[type];
+ return type.startsWith("list:")?genericImportFields(type.slice(5)):[];
+}
+function detectImportTarget(sheetName){
+ const n=String(sheetName||"").toLowerCase();
+ if(/عملاء.?وموردون|partners/.test(n))return "partners";
+ if(/عميل|customer|client/.test(n))return "customers";
+ if(/مورد|supplier/.test(n))return "suppliers";
+ if(/صنف|مخزون|item|stock/.test(n))return "items";
+ if(/شجرة.?الحسابات|دليل.?الحسابات|account.?tree|accounts/.test(n))return "list:accts";
+ if(/مخازن.?فرعية|المخازن|warehouse|warehouses/.test(n))return "list:wh";
+ if(/فواتير|مرتجعات|invoice|invoices|documents/.test(n))return "list:docs";
+ if(/أوامر.?الإنتاج|اوامر.?الانتاج|production.?orders|^po$/i.test(n))return "list:po";
+ if(/سندات|voucher|vouchers/.test(n))return "list:vch";
+ if(/هالك|waste/.test(n))return "list:wo";
+ if(/باركود|أكواد|اكواد|codes/.test(n))return "list:codes";
+ if(/قيود.?اليومية|journal.?entries/.test(n))return "list:je";
+ if(/موظفين|الموظفون|employees/.test(n))return "list:emp";
+ if(/حركات.?المخزون|stock.?movements/.test(n))return "list:mv";
+ if(/دفتر.?الأستاذ|دفتر.?الاستاذ|ledger/.test(n))return "list:L";
+ if(/عملات|currencies/.test(n))return "list:curs";
+ if(/تبويبات.?مخفية|hidden.?tabs/.test(n))return "list:hide";
+ return "";
+}
 function impForm(){WZ={t:"items",hd:[],rows:[],map:{},out:[],sheets:{},sheetNames:[],sheet:"",fullImport:null};sh('<h3>استيراد بيانات من Excel / CSV</h3><div class="row"><button class="g" onclick="templateExcel()">⬇️ تحميل قالب نقل البيانات</button><button class="g" onclick="exportFactoryWorkbook()">⬇️ تصدير نسخة Excel كاملة</button></div><label>نوع البيانات</label><select id="imt" onchange="WZ.t=this.value;if(WZ.hd.length&&this.value!==\'all\')impMap()"><option value="items">أصناف المخزون</option><option value="customers">العملاء</option><option value="suppliers">الموردون</option><option value="partners">عملاء وموردون معًا</option><option value="all">نسخة كاملة لكل بيانات المصنع والشاشات</option></select><label>ملف Excel متعدد الشيتات أو CSV — الصف الأول عناوين الأعمدة</label><input type="file" id="impf" accept=".xlsx,.xls,.csv" onchange="impFile(this)"><div id="impw"></div>')}
 async function templateExcel(){try{await ld("https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js");const wb=XLSX.utils.book_new();const sheets=[["العملاء",[["اسم العميل","الموبايل","التعامل (جملة / قطاعي)","المحافظة","المدينة","العنوان"]]],["الموردين",[["اسم المورد","الموبايل","المحافظة","المدينة","العنوان"]]],["الأصناف",[["اسم الصنف","الكود / الباركود","النوع (المخزن الفرعي)","الوحدة","الموديل","سعر الشراء","سعر القطاعي","سعر الجملة","الكمية الافتتاحية","اللون","المقاس"]]]];sheets.forEach(x=>XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(x[1]),x[0]));XLSX.writeFile(wb,"قالب_نقل_البيانات_إلى_مدير_المصنع.xlsx")}catch(e){toast("تعذر إنشاء القالب؛ يلزم الاتصال بالإنترنت لتحميل مكتبة Excel")}}
 async function impFile(inp){const fl=inp.files[0];if(!fl)return;try{WZ.sheets={};if(/\.csv$/i.test(fl.name)){WZ.sheets["CSV"]=parseCsv(await fl.text())}else{await ld("https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js");const wb=XLSX.read(await fl.arrayBuffer(),{type:"array"});wb.SheetNames.forEach(name=>WZ.sheets[name]=XLSX.utils.sheet_to_json(wb.Sheets[name],{header:1,blankrows:false,defval:""}))}WZ.sheetNames=Object.keys(WZ.sheets);if(!WZ.sheetNames.length){toast("الملف فارغ أو بدون شيتات");return}if(WZ.t==="all"){prepareFullImport();return}const first=WZ.sheetNames.find(n=>/عميل|customer|client|مورد|supplier|صنف|مخزون|item/i.test(n))||WZ.sheetNames[0];impSheet(first)}catch(e){toast("تعذر قراءة الملف (ملفات Excel تحتاج اتصالًا لتحميل مكتبة القراءة)")}}
