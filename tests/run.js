@@ -372,7 +372,7 @@ ok('offline shell precaches the stable production app and first-login password p
 ok('mobile and desktop usability includes visible keyboard focus and safe-area spacing',/focus-visible/.test(css)&&/safe-area-inset-bottom/.test(css));
 ok('offline-created detail records are uploaded even when the full snapshot has a preserved conflict',/if \(admin && !snapshotConflict\)/.test(cloud)&&/for \(const \{ key, arr \} of partnerArrays\)/.test(cloud)&&/hasSnapshotConflict/.test(cloud));
 ok('local save writes a durable pending-sync marker before network recovery',/mgr6-sync-pending/.test(app)&&/localStorage\.setItem\("mgr6-sync-pending"/.test(app));
-ok('sync indicator is a separate small icon and turns blue while syncing',/id="sync-icon"/.test(idx)&&/syncIcon\.classList\.toggle\('syncing', syncState === 'saving'\)/.test(cloud)&&/#sync-icon\.syncing\{color:#38bdf8/.test(css));
+ok('header keeps one clear cloud-status icon with the refined light-green treatment and no duplicate sync button',!idx.includes('id="sync-btn"')&&/id="net"[^>]*id="net-cloud"/.test(idx)&&css.includes('#top #net{background:#e8f5e9'));
 ok('header uses an icon-only light/dark toggle and language stays out of the header',/<button id="thb"/.test(idx)&&!idx.includes('id="lgb"')&&/togLang\(\)/.test(app)&&/التبديل إلى الوضع الداكن/.test(app));
 ok('admin selector is labelled Admin in Arabic and English',/الأدمن \/ Admin/.test(app));
 ok('search filters retain typed values and commit on Enter or blur',/function fbarType\(k,id,el\)\{FL\[k\]=FL\[k\]\|\|\{\};FL\[k\]\[id\]=el\.value;\}/.test(app)&&/oninput="fbarType\(/.test(app)&&/onblur="fbarCommit/.test(app));
