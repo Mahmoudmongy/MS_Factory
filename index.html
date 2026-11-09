@@ -193,8 +193,9 @@ window.addEventListener('factory-db-startup-error',e=>{document.getElementById('
 setTimeout(()=>{const s=document.getElementById('factory-boot-screen');if(s&&!window.__factoryDatabaseFirstReady){s.remove();window.__showFactoryBootError?.('تأخر تحميل بيانات المصنع','لم يكتمل الاتصال بقاعدة بيانات الإنتاج بعد المحاولات التلقائية. أعد المحاولة بعد لحظات.')}},22000);
 if('serviceWorker' in navigator){
   let reloadedForController = false;
+  const hadPreviousController = !!navigator.serviceWorker.controller;
   navigator.serviceWorker.addEventListener('controllerchange', () => {
-    if (reloadedForController) return;
+    if (!hadPreviousController || reloadedForController) return;
     reloadedForController = true;
     location.reload();
   });
