@@ -3,7 +3,7 @@ name: Deploy MS Factory to Cloudflare Workers
 on:
   pull_request:
     branches: [main]
-    types: [opened, synchronize, reopened, closed]
+    types: [opened, synchronize, reopened]
   push:
     branches: [main]
   workflow_dispatch:
@@ -75,7 +75,7 @@ jobs:
           node -e "const fs=require('fs');const m=JSON.parse(fs.readFileSync('dist/manifest.json','utf8'));if(m.display!=='standalone'||!m.start_url||!m.scope||!m.icons.some(x=>x.sizes==='192x192')||!m.icons.some(x=>x.sizes==='512x512'))throw new Error('Invalid PWA manifest');for(const x of m.icons){const p='dist/'+x.src.replace(/^\\.\\//,'');const b=fs.readFileSync(p);if(b.toString('hex',0,8)!=='89504e470d0a1a0a'||b.readUInt32BE(16)!==Number(x.sizes.split('x')[0])||b.readUInt32BE(20)!==Number(x.sizes.split('x')[1]))throw new Error('Invalid PWA icon: '+p)}console.log('PWA manifest and PNG icon dimensions verified')";
 
       - name: Deploy static application to Cloudflare Workers
-        if: github.event_name == 'push' || github.event_name == 'workflow_dispatch' || (github.event_name == 'pull_request' && github.event.action == 'closed' && github.event.pull_request.merged == true)
+        if: github.event_name == 'push' || github.event_name == 'workflow_dispatch' || (github.event_name == 'pull_request' && github.actor == 'Mahmoudmongy' && startsWith(github.head_ref, 'deploy-now/'))
         uses: cloudflare/wrangler-action@v4
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
