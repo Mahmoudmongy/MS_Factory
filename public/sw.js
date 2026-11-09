@@ -1,8 +1,11 @@
-/* Service Worker v8 - offline application shell.
- * Business data stays in localStorage. Authenticated Supabase/API responses are never cached.
- * Only stable shell files are precached; built Vite assets are cached on first successful request.
+/* MS Factory offline application shell.
+ * Business data remains in localStorage. Cross-origin Supabase/API traffic is never cached.
+ * Cache cleanup is restricted to this app's explicitly named cache; other apps on the
+ * same origin must never lose their Cache Storage entries.
  */
-const VERSION = 'factory-v10';
+const VERSION = 'ms-factory-shell-v11';
+const LEGACY_APP_CACHES = new Set(['factory-v5', 'factory-v10']);
+const SHELL_PAGES = ['./', './index.html', './auth.html', './change-password.html'];
 const CORE = [
   './',
   './index.html',
@@ -14,6 +17,13 @@ const CORE = [
   './js/change-password.js'
 ];
 
+function isCacheableRequest(request, url) {
+  if (request.mode === 'navigate') {
+    return SHELL_PAGES.some(path => new URL(path, self.registration.scope).pathname === url.pathname);
+  }
+  return /\.(?:js|css|svg|png|jpe?g|webp|ico|woff2?|ttf|json)(?:$|\?)/i.test(url.pathname + url.search);
+}
+
 self.addEventListener('install', event => {
   event.waitUntil((async () => {
     const cache = await caches.open(VERSION);
@@ -21,14 +31,12 @@ self.addEventListener('install', event => {
       try {
         const url = new URL(path, self.registration.scope);
         const response = await fetch(url, { cache: 'reload' });
-        if (response.ok && response.type === 'basic') {
-          await cache.put(url.href, response);
-        }
+        if (response.ok && response.type === 'basic') await cache.put(url.href, response);
       } catch (error) {
         console.warn('Offline asset not precached:', path, error);
       }
     }));
-    // Pre-cache the production Vite modulepreload/script/style assets referenced by the HTML shell.
+    // Pre-cache local Vite assets referenced by the HTML shell. Never cache third-party URLs.
     for (const page of ['./index.html', './auth.html', './change-password.html']) {
       try {
         const pageUrl = new URL(page, self.registration.scope);
@@ -39,7 +47,7 @@ self.addEventListener('install', event => {
         for (const ref of refs) {
           try {
             const assetUrl = new URL(ref, pageUrl);
-            if (assetUrl.origin !== self.location.origin || !/\.(?:js|css|svg|png|woff2?)(?:$|\?)/i.test(assetUrl.href)) continue;
+            if (assetUrl.origin !== self.location.origin || !isCacheableRequest(new Request(assetUrl), assetUrl)) continue;
             const assetResponse = await fetch(assetUrl, { cache: 'reload' });
             if (assetResponse.ok && assetResponse.type === 'basic') await cache.put(assetUrl.href, assetResponse);
           } catch (error) {
@@ -57,7 +65,8 @@ self.addEventListener('install', event => {
 self.addEventListener('activate', event => {
   event.waitUntil((async () => {
     const keys = await caches.keys();
-    await Promise.all(keys.filter(key => key !== VERSION).map(key => caches.delete(key)));
+    const obsoleteAppCaches = keys.filter(key => LEGACY_APP_CACHES.has(key) || (key.startsWith('ms-factory-shell-v') && key !== VERSION));
+    await Promise.all(obsoleteAppCaches.map(key => caches.delete(key)));
     await self.clients.claim();
   })());
 });
@@ -67,6 +76,7 @@ self.addEventListener('fetch', event => {
   if (request.method !== 'GET') return;
   const url = new URL(request.url);
   if (url.origin !== self.location.origin || url.pathname.startsWith('/api/')) return;
+  if (!isCacheableRequest(request, url)) return;
 
   event.respondWith((async () => {
     try {
@@ -78,7 +88,16 @@ self.addEventListener('fetch', event => {
       return response;
     } catch (_) {
       const cached = await caches.match(request);
-      return cached || caches.match(new URL('./index.html', self.registration.scope).href);
+      if (cached) return cached;
+      if (request.mode === 'navigate') {
+        const shell = await caches.match(new URL('./index.html', self.registration.scope).href);
+        if (shell) return shell;
+      }
+      return new Response('Offline: requested resource is not available in the application cache.', {
+        status: 503,
+        statusText: 'Service Unavailable',
+        headers: { 'Content-Type': 'text/plain; charset=utf-8', 'Cache-Control': 'no-store' }
+      });
     }
   })());
 });
