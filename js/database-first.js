@@ -305,6 +305,8 @@ async function bootstrap() {
   if (!supabase || !navigator.onLine || window.__factoryOfflineMode === true) {
     snapshotBaseline(getState());
     stateReady = true;
+    window.__factoryDatabaseFirstReady = true;
+    window.dispatchEvent(new CustomEvent('factory-database-ready'));
     return;
   }
   const {data:{user},error:userError}=await supabase.auth.getUser();
@@ -319,6 +321,7 @@ async function bootstrap() {
   const rows=await fetchAllRecords();
   hydrateFromRows(rows);
   stateReady=true;
+  window.__factoryDatabaseFirstReady = true;
   await flushQueue();
   await connectRealtime();
   window.dispatchEvent(new CustomEvent('factory-database-ready'));
