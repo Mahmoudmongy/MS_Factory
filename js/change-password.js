@@ -5,6 +5,7 @@ const message = $('cp-message');
 const form = $('cp-form');
 const submit = $('cp-submit');
 let currentUser = null;
+let currentProfile = null;
 
 function say(text, isError = true) {
   message.textContent = text;
@@ -34,6 +35,7 @@ async function boot() {
     say('تعذر التحقق من ملف الحساب. تأكد من اتصال الإنترنت ثم حاول مرة أخرى.');
     return;
   }
+  currentProfile = profile;
   if (profile.is_admin === true || profile.must_change_password !== true) {
     location.replace('index.html');
     return;
@@ -54,6 +56,13 @@ submit?.addEventListener('click', async () => {
   if (error || data?.error || data?.success !== true) {
     submit.disabled = false;
     return say(data?.error || error?.message || 'تعذر تغيير كلمة المرور. حاول مرة أخرى.');
+  }
+  if (currentProfile) {
+    currentProfile.must_change_password = false;
+    try {
+      localStorage.setItem('factory-profile:' + currentUser.id, JSON.stringify(currentProfile));
+      localStorage.setItem('factory-profile-verified:' + currentUser.id, String(Date.now()));
+    } catch (_) {}
   }
   const { error: refreshError } = await supabase.auth.refreshSession();
   if (refreshError) {
