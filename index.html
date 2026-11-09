@@ -128,18 +128,20 @@ import { scopeFactoryStorage } from './js/account-storage.js';
 })();
 </script>
 <body>
+<div id="factory-boot-screen" role="status"><div class="boot-card"><span class="boot-spinner"></span><b>جارٍ تجهيز بيانات المصنع...</b><small>يتم التحقق من الاتصال وقاعدة البيانات</small></div></div>
 <div id="app">
   <div id="sb-overlay" onclick="closeSB()"></div>
   <aside id="sb"></aside>
   <div id="cn">
     <div id="top">
       <button id="bg" onclick="$g('#sb').classList.toggle('open'); document.getElementById('sb-overlay').style.display=$g('#sb').classList.contains('open')?'block':'none'">☰</button>
-      <button onclick="bkw(-1)" title="رجوع">▶</button>
-      <button onclick="bkw(1)" title="تقدم">◀</button>
+      <button class="top-nav" onclick="bkw(-1)" title="رجوع" aria-label="رجوع">▶</button>
+      <button class="top-nav" onclick="bkw(1)" title="تقدم" aria-label="تقدم">◀</button>
       <h1 id="ttl"></h1>
-      <span id="net" onclick="syncPage()" role="button" tabindex="0" aria-live="polite" title="حالة الاتصال والمزامنة"><span id="net-status">🟢 متصل</span><span id="sync-icon" class="sync-icon" aria-label="المزامنة التلقائية" title="المزامنة التلقائية">↻</span></span>
+      <button id="net" class="net-indicator online" onclick="syncPage()" type="button" aria-label="حالة الاتصال" title="حالة الاتصال والمزامنة"><svg id="net-cloud" viewBox="0 0 24 24" aria-hidden="true"><path d="M7.5 18.5h10a4.5 4.5 0 0 0 .5-8.97A6.5 6.5 0 0 0 5.4 8.2 5.2 5.2 0 0 0 7.5 18.5Z"/></svg><span id="sync-icon" class="sync-icon" aria-label="المزامنة التلقائية" title="المزامنة التلقائية">↻</span></button>
       <select id="who" onchange="swho(this.value)" aria-label="الحساب"></select>
       <button id="thb" type="button" onclick="togTheme()" aria-label="تغيير المظهر" title="تغيير المظهر">🌙</button>
+      <button id="logout-btn" type="button" onclick="signOutNow()" aria-label="خروج" title="خروج">✕</button>
     </div>
     <div id="tabs"></div>
     <main id="m"></main>
@@ -173,6 +175,9 @@ import { scopeFactoryStorage } from './js/account-storage.js';
     }catch(e){}
   };
 })();
+window.addEventListener('factory-database-ready',()=>{document.getElementById('factory-boot-screen')?.classList.add('done');setTimeout(()=>document.getElementById('factory-boot-screen')?.remove(),180)});
+window.addEventListener('factory-db-startup-error',e=>{document.getElementById('factory-boot-screen')?.remove();window.__showFactoryBootError?.('تعذر الاتصال بقاعدة بيانات الإنتاج',e.detail?.message||'تحقق من الاتصال ثم أعد المحاولة')});
+setTimeout(()=>{const s=document.getElementById('factory-boot-screen');if(s&&!window.__factoryDatabaseFirstReady){s.remove();window.__showFactoryBootError?.('تأخر تحميل بيانات المصنع','انتهت مهلة تجهيز قاعدة البيانات بعد 12 ثانية. أعد المحاولة أو تحقق من اتصال الإنترنت.')}},12000);
 if('serviceWorker' in navigator){
   window.addEventListener('load', ()=>{ navigator.serviceWorker.register('./sw.js').catch(()=>{}); });
 }
