@@ -104,6 +104,21 @@ async function fetchAllRecords() {
   }
   return all;
 }
+async function fetchChangedRecords(since) {
+  if (!since) return [];
+  const all = [];
+  for (let from = 0; ; from += PAGE_SIZE) {
+    const { data, error } = await supabase.from('factory_records')
+      .select('user_id,record_type,record_id,payload,version,deleted_at,updated_at,updated_by')
+      .eq('user_id', ownerId).gt('updated_at', since)
+      .order('updated_at').order('record_type').order('record_id')
+      .range(from, from + PAGE_SIZE - 1);
+    if (error) throw error;
+    all.push(...(data || []));
+    if (!data || data.length < PAGE_SIZE) break;
+  }
+  return all;
+}
 function hydrateFromRows(rows) {
   const grouped = {};
   const metaRow = rows.find(r => r.record_type === '__meta' && r.record_id === 'main' && !r.deleted_at);
@@ -253,6 +268,10 @@ async function persistState(state) {
 function applyRealtimeRow(row) {
   if (!row || row.user_id !== ownerId) return;
   const key = mapKey(row.record_type,row.record_id);
+  if (getQueue().some(op => mapKey(op.type,op.id) === key)) {
+    document.dispatchEvent(new CustomEvent('factory-db-conflict',{detail:{message:'سجل عليه تعديل محلي معلق وتعديل أحدث من جهاز آخر.'}}));
+    return;
+  }
   const old = baseline.get(key);
   if (old) {
     const localPayload = old.payload;
@@ -267,6 +286,8 @@ function applyRealtimeRow(row) {
     }
   }
   setBaselineRow(row);
+  persistBaseline();
+  if (row.updated_at) setLastSyncAt(row.updated_at);
   applyingRemote = true;
   try {
     const current = getState();
@@ -321,9 +342,32 @@ async function bootstrap() {
 }
 window.__factoryPersistState = persistState;
 window.__factoryDatabaseSyncNow = async () => { await flushQueue(); await persistState(getState()); };
+async function reconnectDatabase() {
+  const {data:{user},error:userError}=await supabase.auth.getUser();
+  if (userError || !user) throw userError || new Error('لا يوجد مستخدم مسجل');
+  actorId=user.id;
+  const {data:profileData,error:profileError}=await supabase.from('profiles')
+    .select('id,created_by,is_admin,permissions').eq('id',actorId).maybeSingle();
+  if (profileError) throw profileError;
+  if (!profileData) throw new Error('لم يتم العثور على ملف صلاحيات الحساب');
+  profile=profileData;
+  ownerId=profile.created_by || profile.id;
+  storageScope=ownerId;
+  const since=getLastSyncAt();
+  if (since) {
+    const changed=await fetchChangedRecords(since);
+    for (const row of changed) applyRealtimeRow(row);
+  }
+  for (const op of getQueue()) applyOperationToState(op);
+  await flushQueue();
+  await connectRealtime();
+  window.__factoryOfflineMode=false;
+  window.__factoryDatabaseFirstReady=true;
+  window.dispatchEvent(new CustomEvent('factory-database-ready'));
+}
 window.addEventListener('online', async () => {
   if (!stateReady) return;
-  try { await bootstrap(); await flushQueue(); }
+  try { await saveChain.catch(()=>{}); await reconnectDatabase(); }
   catch (error) { console.error('Database reconnect:',error); }
 });
 window.addEventListener('factory-db-conflict', event => {
