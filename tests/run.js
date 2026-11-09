@@ -15,6 +15,7 @@ ok('app.js has no duplicate top-level function definitions',dup.length==0,dup);
 ok('customer/supplier rows expose permission-gated edit actions',app.includes('pForm(${c},${p.id})')&&app.includes('can("edit")'));
 ok('filter bar escapes dynamic labels, option values and entered filter text',/escHtml\(z\[0\]\)/.test(app)&&/escHtml\(z\[1\]\)/.test(app)&&/escHtml\(v\)/.test(app));
 ok('uploaded image previews use DOM properties and no insertAdjacentHTML sinks remain',app.includes('preview.src=v')&&app.includes('insertAdjacentElement("afterend",preview)')&&!app.includes('insertAdjacentHTML('));
+ok('ledger report labels are escaped by the shared row helper',/lr=\(n,v,fn\)=>`<div class="row sp lr"><span>\$\{escHtml\(n\)\}/.test(app));
 ok('shared select helper escapes dynamic option values and labels',/const sel=\(v,a\)=>U\(a,x=>`<option value="\$\{escHtml\(x\[0\]\)\}"/.test(app)&&app.includes('${escHtml(x[1])}'));
 ok('clickable labels escape text by default and isolate the one trusted balance markup helper',/lk=\(t,fn\)=>[^;]*escHtml\(t\)/.test(app)&&/lkHtml=\(html,fn\)/.test(app)&&app.includes('lkHtml(btxt(pbal(p.id))'));
 const linkXss=await ev(()=>{const payload='<img data-xss="link" src=x onerror="window.__linkXss=1">',html=lk(payload,"void(0)"),parsed=new DOMParser().parseFromString(html,"text/html");return{noInjectedImage:parsed.querySelectorAll('img[data-xss="link"]').length===0,textPreserved:parsed.body.textContent.includes(payload)}});
@@ -228,6 +229,7 @@ const importXss=await ev(()=>{const payload='<img src=x onerror="window.__import
 ok('Excel sheet names, headers and imported cell text are rendered as text (XSS regression)',importXss.mapSafe&&importXss.previewSafe&&!importXss.executed,importXss);
 ok('barcode camera stream stops when the scan view closes or the page is hidden',/function stopCam\(\)/.test(app)&&/getTracks\(\)\.forEach\(track=>track\.stop\(\)\)/.test(app)&&/if\(!v\.isConnected\)\{stopCam\(\);return\}/.test(app)&&/visibilitychange/.test(app)&&/pagehide/.test(app));
 const barcodeXss=await ev(()=>{go('sale');docForm('sale');const payload='<img src=x onerror="window.__barcodeXss=1">';$("#bcd").value=payload;addBc();return{renderedAsText:$("#bmsg").textContent.includes(payload),noInjectedImage:$("#bmsg").querySelectorAll("img").length===0,executed:window.__barcodeXss===1}});
+const unicodeBarcode=await ev(()=>{try{return bc("قميص")}catch(e){return "THREW: "+e.message}});ok('unsupported Unicode barcode values fail safely instead of crashing the label renderer',unicodeBarcode.includes('كود غير صالح للباركود'),unicodeBarcode);
 ok('unknown barcode input is rendered as text and cannot inject HTML',barcodeXss.renderedAsText&&barcodeXss.noInjectedImage&&!barcodeXss.executed,barcodeXss);
 await ev(()=>closeTab(CUR,1));
 /* ---------- templates ---------- */
