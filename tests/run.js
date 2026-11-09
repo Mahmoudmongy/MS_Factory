@@ -541,7 +541,7 @@ ok('account-scoped storage keeps employee state and sync metadata separate while
 await scopeCtx.close();
 await ctx.close();
 ok('employee permissions include a one-click select-all toggle',app.includes('toggleAllEmployeePermissions(this)')&&app.includes('function toggleAllEmployeePermissions'));
-ok('custom date ranges are hidden until the user presses the period button',app.includes('filter-date-toggle')&&app.includes('toggleFilterDates')&&css.includes('.filter-card .filter-date-field{display:none!important}'));
+ok('custom date ranges are hidden until the user presses the period button',app.includes('filter-date-toggle')&&app.includes('toggleFilterDates')&&app.includes('FL[key]._dateOpen=open')&&css.includes('.filter-card .filter-date-field{display:none!important}'));
 ok('company identity form preserves and edits the company name and logo alongside legal details',app.includes('id="biz_name"')&&app.includes('شعار الشركة')&&app.includes('S.logo=v')&&app.includes('function saveBiz()'));
 ok('Excel exports use localized sheet and column labels and preserve the internal mapping for round-trip imports',app.includes('excelSheetName(k)')&&app.includes('excelFieldName(k,')&&app.includes('map.fields[excelSheetName(k)]')&&app.includes('WZ.sheets[dn]||WZ.sheets[k]'));
 ok('middle-click is the only sidebar gesture that opens a new tab',app.includes('function handleNavClick(e,sid){if(e&&e.button===1')&&!app.includes('Double click detection'));
