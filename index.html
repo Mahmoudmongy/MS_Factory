@@ -97,7 +97,7 @@ window.__factoryBootstrapReady = (async function bootstrapFactoryApp() {
 <div id="toast"></div>
 <div id="pr" style="display:none"></div>
 <script type="module">
-import appUrl from './js/app.js?url';
+import appSource from './js/app.js?raw';
 
 // Authentication and profile permissions must finish before app.js reads local data.
 const authenticated = await window.__factoryBootstrapReady;
@@ -108,16 +108,29 @@ if (!authenticated || !window.__factoryAuthProfile?.id) {
   throw new Error('Factory application startup stopped: no verified profile.');
 }
 
+// Register and activate the worker before loading lazy modules, so their first
+// successful online requests are cached for the next offline session.
+if ('serviceWorker' in navigator) {
+  try {
+    await navigator.serviceWorker.register('./sw.js');
+    await navigator.serviceWorker.ready;
+    if (!navigator.serviceWorker.controller) {
+      await Promise.race([
+        new Promise(resolve => navigator.serviceWorker.addEventListener('controllerchange', resolve, { once: true })),
+        new Promise(resolve => setTimeout(resolve, 2500))
+      ]);
+    }
+  } catch (error) {
+    console.warn('Service worker registration failed:', error);
+  }
+}
+
 const { scopeFactoryStorage } = await import('./js/account-storage.js');
 scopeFactoryStorage(window.__factoryAuthProfile);
 
-await new Promise((resolve, reject) => {
-  const script = document.createElement('script');
-  script.src = appUrl;
-  script.onload = resolve;
-  script.onerror = () => reject(new Error('Could not load the factory application.'));
-  document.body.appendChild(script);
-});
+const script = document.createElement('script');
+script.textContent = appSource;
+document.body.appendChild(script);
 
 await import('./js/cloud-sync.js');
 
@@ -140,9 +153,6 @@ await import('./js/cloud-sync.js');
     }catch(e){}
   };
 })();
-if('serviceWorker' in navigator){
-  window.addEventListener('load', ()=>{ navigator.serviceWorker.register('./sw.js').catch(()=>{}); });
-}
 </script>
 </body>
 </html>
