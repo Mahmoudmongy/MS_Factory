@@ -415,7 +415,7 @@ function fbar(k,cfg){
  FL[k]=FL[k]||{};const hasD=cfg.some(c=>c[0]==="from");
  const fields=cfg.map(c=>{const id=c[0],ty=c[1],lb=c[2],op=c[3],v=FL[k][id]||"";
   if(ty==="sel")return '<div><label>'+lb+'</label><select data-filter-key="'+k+'" data-filter-id="'+id+'" onchange="FL[\''+k+'\'].'+id+'=this.value;render()">'+op.map(o=>{const z=Array.isArray(o)?o:[o,o||"الكل"];return '<option value="'+z[0]+'" '+(String(v)==String(z[0])?"selected":"")+'>'+z[1]+'</option>'}).join("")+'</select></div>';
-  const typ=ty==="date"?"date":"search",handler=ty==="date"?'onchange="FL[\''+k+'\'].'+id+'=this.value;render()"':'oninput="fbarType(\''+k+'\',\''+id+'\',this)" onchange="fbarCommit(\''+k+'\',\''+id+'\',this)" onkeydown="if(event.key===\'Enter\')fbarCommit(\''+k+'\',\''+id+'\',this)"';
+  const typ=ty==="date"?"date":"search",handler=ty==="date"?'onchange="FL[\''+k+'\'].'+id+'=this.value;render()"':'oninput="fbarType(\''+k+'\',\''+id+'\',this)" onblur="fbarCommit(\''+k+'\',\''+id+'\',this)" onkeydown="if(event.key===\'Enter\')fbarCommit(\''+k+'\',\''+id+'\',this)"';
   return '<div><label>'+lb+'</label><input data-filter-key="'+k+'" data-filter-id="'+id+'" type="'+typ+'" inputmode="'+(ty==="text"?"search":"none")+'" autocomplete="off" autocapitalize="off" spellcheck="false" value="'+String(v).replace(/&/g,"&amp;").replace(/"/g,"&quot;")+'" placeholder="'+(ty==="text"?lb:"")+'" '+handler+'></div>';
  }).join("");
  const periods=hasD?[["d","اليوم"],["w","هذا الأسبوع"],["m","هذا الشهر"]].map(x=>'<button class="g" onclick="fpr(\''+k+'\',\''+x[0]+'\')">'+x[1]+'</button>').join(""):"";
@@ -639,4 +639,11 @@ document.addEventListener('DOMContentLoaded', function(){
   }, {passive:false});
 });
 
+const renderNavBase=nav;
+nav=function(){renderNavBase();const sb=$g("#sb");if(sb&&!sb.querySelector(".sb-controls"))sb.insertAdjacentHTML("afterbegin",'<div class="sb-controls"><button type="button" class="sb-mode" onclick="toggleSidebarMode()">أيقونات فقط</button></div>');applySidebarMode();};
+function applySidebarMode(){const mode=localStorage.getItem("factory-sidebar-mode")||"list";const sb=$g("#sb");if(sb)sb.classList.toggle("icons-only",mode==="icons");const b=sb?.querySelector(".sb-mode");if(b){b.textContent=mode==="icons"?"عرض القائمة":"أيقونات فقط";b.title=b.textContent;}}
+function toggleSidebarMode(){const next=(localStorage.getItem("factory-sidebar-mode")||"list")==="list"?"icons":"list";localStorage.setItem("factory-sidebar-mode",next);applySidebarMode();}
+async function signOutNow(){if(!confirm(LANGEN?"Sign out?":"هل تريد تسجيل الخروج؟"))return;try{const {supabase}=await import("./supabase.js");if(supabase)await supabase.auth.signOut();}catch(e){console.error("Sign out failed",e)}location.replace("auth.html")}
+window.signOutNow=signOutNow;window.toggleSidebarMode=toggleSidebarMode;
+window.history.pushState({factoryStay:true},"","#factory");window.addEventListener("popstate",()=>{window.history.pushState({factoryStay:true},"","#factory");});
 migrate();applyPref();netUp();go("home");
