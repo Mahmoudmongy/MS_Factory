@@ -192,8 +192,8 @@ ok('QA restore uses logical schema/data plus separately exported Auth and migrat
   qaRestoreScript.includes('--file roles.sql')&&qaRestoreScript.includes('--file schema.sql')&&qaRestoreScript.includes('--file data.sql')&&qaRestoreScript.includes('--file auth-users.sql')&&qaRestoreScript.includes('--file migration-history.sql')&&qaRestoreScript.includes('--file auth-trigger-qa-idempotent.sql'));
 ok('QA restore refuses non-empty targets and verifies row counts, RLS, and custom Auth trigger',
   qaRestoreScript.includes('Never overwrite an existing QA dataset')&&qaRestoreScript.includes('public-row-counts.txt')&&qaRestoreScript.includes('auth-row-counts.txt')&&qaRestoreScript.includes('relrowsecurity')&&qaRestoreScript.includes('expected_trigger_names.issubset(actual_trigger_names)'));
-ok('one-off manual backup is possible without enabling scheduled backups',
-  backupWorkflow.includes("github.event_name == 'schedule' && vars.BACKUP_ENABLED == 'true'")&&backupWorkflow.includes("github.event_name == 'workflow_dispatch' && inputs.run_backup == true"));
+ok('manual backup requires its explicit gate and remains independent of the scheduled-backup gate',
+  backupWorkflow.includes("github.event_name == 'schedule' && vars.BACKUP_SCHEDULE_ENABLED == 'true'")&&backupWorkflow.includes("github.event_name == 'workflow_dispatch' && inputs.run_backup == true && vars.BACKUP_ENABLED == 'true'")&&!backupWorkflow.includes("github.event_name == 'schedule' && vars.BACKUP_ENABLED == 'true'"));
 const productMergeStart=cloud.indexOf('function mergeCloudProducts(existing, incoming)');
 const productMergeEnd=cloud.indexOf('function mergeCloudInvoices(existing, incoming)',productMergeStart);
 const productMergeContext=vm.createContext({});
