@@ -1,6 +1,7 @@
 import { supabase } from './supabase.js';
 
 const QUEUE_KEY = 'ms-factory-db-queue-v1';
+const BASELINE_KEY = 'ms-factory-db-baseline-v1';
 const PAGE_SIZE = 500;
 let ownerId = null;
 let actorId = null;
@@ -56,8 +57,18 @@ function splitState(state) {
   }
   return { arrays, meta };
 }
+function persistBaseline() {
+  try { localStorage.setItem(BASELINE_KEY, JSON.stringify([...baseline.values()])); } catch (e) { console.warn('Could not persist sync baseline',e); }
+}
 function snapshotBaseline(state) {
   baseline = new Map();
+  try {
+    const saved = JSON.parse(localStorage.getItem(BASELINE_KEY) || '[]');
+    if (Array.isArray(saved) && saved.length) {
+      for (const row of saved) baseline.set(mapKey(row.type,row.id),row);
+      return;
+    }
+  } catch (_) {}
   const { arrays, meta } = splitState(state);
   for (const [type, items] of Object.entries(arrays)) {
     items.forEach((item, index) => {
@@ -66,6 +77,7 @@ function snapshotBaseline(state) {
     });
   }
   baseline.set(mapKey('__meta', 'main'), { type: '__meta', id: 'main', payload: meta, version: 0, deleted_at: null });
+  persistBaseline();
 }
 function setBaselineRow(row) {
   baseline.set(mapKey(row.record_type, row.record_id), {
@@ -113,6 +125,7 @@ function hydrateFromRows(rows) {
     });
   }
   if (!baseline.has(mapKey('__meta','main'))) baseline.set(mapKey('__meta','main'), { type:'__meta', id:'main', payload:meta, version:0, deleted_at:null });
+  persistBaseline();
 }
 function makeOperations(state) {
   const { arrays, meta } = splitState(state);
@@ -174,6 +187,7 @@ async function writeOperations(operations) {
     if (error) throw error;
     for (const row of data || []) setBaselineRow(row);
   }
+  persistBaseline();
 }
 function queueOperations(operations) {
   const queue = getQueue();
