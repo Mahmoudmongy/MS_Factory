@@ -98,6 +98,8 @@ ok('invoice sync fix qualifies child-row deletion columns',/DELETE FROM public\.
 const ctx=await browser.newContext({viewport:{width:1280,height:900},acceptDownloads:true}),p=await ctx.newPage(),errs=[];p.on('pageerror',e=>errs.push(e.message));
 await p.goto(BASE);await p.waitForTimeout(500);
 const ev=(f,a)=>p.evaluate(()=>{SAVING=0}).then(()=>p.evaluate(f,a)),bal=()=>ev(()=>Math.abs(S.L.reduce((a,l)=>a+l.dr-l.cr,0))<.01);
+const scopedReverse=await ev(()=>{const oldL=S.L,oldMv=S.mv,oldItems=S.items;const item={id:991,st:{"-":5},val:50};S.items=[item];S.L=[{rid:7,src:"doc",dr:10},{rid:7,src:"po",dr:20}];S.mv=[{rid:7,src:"doc",iid:991,v:"-",q:2,val:20},{rid:7,src:"po",iid:991,v:"-",q:1,val:10}];rev(7,"doc");const result={ledger:S.L.map(x=>x.src),movements:S.mv.map(x=>x.src),qty:item.st["-"],value:item.val};S.L=oldL;S.mv=oldMv;S.items=oldItems;return result});
+ok('editing one source reverses only matching source type plus ID',scopedReverse.ledger.length===1&&scopedReverse.ledger[0]==="po"&&scopedReverse.movements.length===1&&scopedReverse.movements[0]==="po"&&scopedReverse.qty===3&&scopedReverse.value===30,scopedReverse);
 const scr=await ev(()=>allowed().map(t=>t[0]));for(const s of scr){await ev(x=>go(x),s)}ok(`all ${scr.length} screens render without errors`,errs.length==0,errs.slice(0,2));
 
 /* Search typing and duplicate screen-tab regression, including a narrow mobile viewport. */
