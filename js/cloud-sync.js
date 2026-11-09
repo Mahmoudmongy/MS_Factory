@@ -1966,10 +1966,14 @@ function scheduleOnlineWrite(delay = 250) {
 }
 
 async function refreshFromDatabase(reason = "realtime") {
-  if (!navigator.onLine || autoLoadRunning || uploadRunning) return;
+  if (!navigator.onLine) return;
   clearTimeout(remoteRefreshTimer);
   remoteRefreshTimer = setTimeout(async () => {
-    if (!navigator.onLine || autoLoadRunning || uploadRunning) return;
+    if (!navigator.onLine) return;
+    if (autoLoadRunning || uploadRunning) {
+      refreshFromDatabase(reason);
+      return;
+    }
     const result = await loadFromTablesMerge(true);
     if (String(result).includes("conflict")) syncState = "conflict";
     if (typeof window.render === "function") window.render();
