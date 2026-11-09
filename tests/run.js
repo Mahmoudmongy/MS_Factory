@@ -572,7 +572,7 @@ ok('mobile: no JavaScript errors',merr.length==0,merr.slice(0,2));await mc.close
 await browser.close();server.close();
 ok('legacy cloud-sync polling is disabled in database-first mode',cloud.includes('if (!window.__factoryDatabaseFirst) {')&&cloud.indexOf('if (!window.__factoryDatabaseFirst) {')<cloud.indexOf('const _origSetItem')&&cloud.includes('setInterval(() => {'));
 ok('database startup reuses the cached profile and avoids duplicate getUser requests',dbSync.includes('ensureProfile(actorId, false)')&&dbSync.includes('supabase.auth.getSession()')&&!dbSync.includes('supabase.auth.getUser()'));
-ok('profile cache prevents repeated startup requests and uses a bounded timeout',idx.includes('factory-profile-verified:')&&idx.includes('Date.now() - last > 120000')&&idx.includes('AbortSignal.timeout(9000)'));
+ok('profile cache prevents repeated startup requests and uses a bounded timeout',idx.includes('factory-profile-verified:')&&idx.includes('Date.now() - last > 120000')&&idx.includes('AbortSignal.timeout(6500)'));
 ok('database startup errors reach the window listeners',dbSync.includes("window.dispatchEvent(new CustomEvent('factory-db-startup-error'"));
 ok('full Excel backup includes every app array and supports large JSON rows',app.includes('exportFactoryWorkbook')&&app.includes('json_part_')&&app.includes('prepareFullImport')&&app.includes('importFullConfirm'));
 ok('first-login password change clears the cached must-change-password flag before returning to the app',changePasswordPage.includes('factory-profile-verified:')&&changePasswordPage.includes('currentProfile.must_change_password = false'));
