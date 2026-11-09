@@ -197,6 +197,8 @@ async function writeOperations(operations) {
   }
   for (const row of data || []) setBaselineRow(row);
   persistBaseline();
+  const updated = (data || []).map(row => row.updated_at).filter(Boolean).sort().pop();
+  if (updated) setLastSyncAt(updated);
 }
 function queueOperations(operations) {
   const queue = getQueue();
@@ -313,6 +315,10 @@ async function connectRealtime() {
 }
 async function bootstrap() {
   if (!supabase || !navigator.onLine || window.__factoryOfflineMode === true) {
+    profile = window.__factoryAuthProfile || null;
+    actorId = profile?.id || null;
+    ownerId = profile?.created_by || profile?.id || null;
+    storageScope = ownerId || 'anonymous';
     snapshotBaseline(getState());
     stateReady = true;
     window.__factoryDatabaseFirstReady = true;
