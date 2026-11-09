@@ -266,7 +266,7 @@ function trNode(n){if(n.nodeType==3){const v=n.nodeValue;if(LANGEN){if(AR.test(v
 function trTree(r){if(!r||(!LANGEN&&!TRON))return;const w=document.createTreeWalker(r,NodeFilter.SHOW_TEXT|NodeFilter.SHOW_ELEMENT);let n=w.currentNode;do{trNode(n)}while((n=w.nextNode()))}
 new MutationObserver(ms=>{if(!LANGEN)return;ms.forEach(m=>m.addedNodes.forEach(n=>trTree(n)))}).observe(document.body,{childList:true,subtree:true});
 /* ---- connection / sync indicator ---- */
-function netUp(){const e=$g("#net"),status=$g("#net-status");if(status)status.textContent=navigator.onLine?"🟢 متصل":"🔴 غير متصل";else if(e)e.textContent=navigator.onLine?"🟢 متصل":"🔴 غير متصل";if(e)e.title="حالة الاتصال والمزامنة"}
+function netUp(){const e=$g("#net");if(!e)return;e.classList.toggle("online",navigator.onLine);e.classList.toggle("offline",!navigator.onLine);e.setAttribute("aria-label",navigator.onLine?"متصل":"غير متصل");e.title=navigator.onLine?"متصل":"غير متصل"}
 addEventListener("online",netUp);addEventListener("offline",netUp);
 function syncPage(){
   let queued=0;
@@ -421,11 +421,7 @@ function fbar(k,cfg){
  const periods=hasD?[["d","اليوم"],["w","هذا الأسبوع"],["m","هذا الشهر"]].map(x=>'<button class="g" onclick="fpr(\''+k+'\',\''+x[0]+'\')">'+x[1]+'</button>').join(""):"";
  return '<div class="card filter-card"><div class="row">'+fields+'</div><div class="row">'+periods+'<button class="g" onclick="FL[\''+k+'\']={};render()">مسح الفلاتر</button></div></div>';
 }
-function fbarType(k,id,el){
- FL[k]=FL[k]||{};FL[k][id]=el.value;const key=k+":"+id;window.__fbarTimers=window.__fbarTimers||{};clearTimeout(window.__fbarTimers[key]);
- const start=el.selectionStart,end=el.selectionEnd;
- window.__fbarTimers[key]=setTimeout(()=>{if(!CUR||CUR.kind!=="screen")return;render();const next=ACT&&ACT.querySelector('[data-filter-key="'+k+'"][data-filter-id="'+id+'"]');if(next){next.focus({preventScroll:true});try{next.setSelectionRange(start,end)}catch(e){}}},250);
-}
+function fbarType(k,id,el){FL[k]=FL[k]||{};FL[k][id]=el.value;}
 function fbarCommit(k,id,el){
  FL[k]=FL[k]||{};FL[k][id]=el.value;const key=k+":"+id;
  if(window.__fbarTimers&&window.__fbarTimers[key])clearTimeout(window.__fbarTimers[key]);
