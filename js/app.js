@@ -435,7 +435,7 @@ function fpr(k,x){FL[k]=FL[k]||{};[FL[k].from,FL[k].to]=rng(x);render()}
 function fbar(k,cfg){
  FL[k]=FL[k]||{};const hasD=cfg.some(c=>c[0]==="from");
  const fields=cfg.map(c=>{const id=c[0],ty=c[1],lb=c[2],op=c[3],v=FL[k][id]||"";
-  if(ty==="sel")return '<div><label>'+escHtml(lb)+'</label><select data-filter-key="'+k+'" data-filter-id="'+id+'" onchange="FL[\''+k+'\'].'+id+'=this.value;render()">'+op.map(o=>{const z=Array.isArray(o)?o:[o,o||"الكل"];return '<option value="'+escHtml(z[0])+'" +(String(v)==String(z[0])?"selected":"")+'>'+escHtml(z[1])+'</option>'}).join("")+'</select></div>';
+  if(ty==="sel")return '<div><label>'+escHtml(lb)+'</label><select data-filter-key="'+k+'" data-filter-id="'+id+'" onchange="FL[\''+k+'\'].'+id+'=this.value;render()">'+op.map(o=>{const z=Array.isArray(o)?o:[o,o||"الكل"];return '<option value="'+escHtml(z[0])+'" '+(String(v)==String(z[0])?"selected":"")+'>'+escHtml(z[1])+'</option>'}).join("")+'</select></div>';
   const typ=ty==="date"?"date":"search",handler=ty==="date"?'onchange="FL[\''+k+'\'].'+id+'=this.value;render()"':'oninput="fbarType(\''+k+'\',\''+id+'\',this)"';
   return '<div><label>'+lb+'</label><input data-filter-key="'+k+'" data-filter-id="'+id+'" type="'+typ+'" inputmode="'+(ty==="text"?"search":"none")+'" autocomplete="off" autocapitalize="off" spellcheck="false" value="'+escHtml(v)+'" placeholder="'+(ty==="text"?escHtml(lb):"")+'" '+handler+'></div>';
  }).join("");
