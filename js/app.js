@@ -17,7 +17,7 @@ let S=seed(); // Legacy local snapshots are intentionally ignored; Supabase hydr
 window.__factoryDatabaseFirst=true;
 window.__factoryGetState=()=>S;
 window.__factoryReplaceArrays=(data)=>{if(!data||typeof data!=="object")return;for(const [k,v] of Object.entries(data)){if(Array.isArray(v))S[k]=v;else if(k==="__meta"&&v&&typeof v==="object")Object.assign(S,v);}try{render()}catch(e){}};
-const sv=()=>{try{S.pend=(S.pend||0)+1;if(window.__factoryDatabaseFirstFailed&&navigator.onLine){alert("تعذر الاتصال بقاعدة البيانات. لم يتم تأكيد حفظ العملية؛ حاول مرة أخرى بعد عودة الاتصال.");return;}if(window.__factoryDatabaseFirstReady&&typeof window.__factoryPersistState==="function"){window.__factoryPersistState(S).catch(e=>{console.error("Database save failed:",e);alert(e.message||"تعذر حفظ التغييرات في قاعدة البيانات");});}else if(!navigator.onLine){localStorage.setItem("mgr6",JSON.stringify(S));localStorage.setItem("mgr6-sync-pending",JSON.stringify({at:Date.now(),pend:S.pend}));}else{alert("البرنامج لسه بيجهز الاتصال بقاعدة البيانات. انتظر لحظات ثم أعد المحاولة.");return;}}catch(e){console.error("State save failed:",e)}};
+const sv=()=>{try{S.pend=(S.pend||0)+1;if(window.__factoryDatabaseFirstReady&&typeof window.__factoryPersistState==="function"){window.__factoryPersistState(S).catch(e=>{console.error("Database save failed:",e);alert(e.message||"تعذر حفظ التغييرات في قاعدة البيانات");});}else if(!navigator.onLine){localStorage.setItem("mgr6",JSON.stringify(S));localStorage.setItem("mgr6-sync-pending",JSON.stringify({at:Date.now(),pend:S.pend}));}else{alert("البرنامج لسه بيجهز الاتصال بقاعدة البيانات. انتظر لحظات ثم أعد المحاولة.");return;}}catch(e){console.error("State save failed:",e)}};
 const TN={sale:"فاتورة بيع",pur:"فاتورة شراء",sret:"إشعار دائن (مرتجع بيع)",pret:"إشعار مدين (مرتجع شراء)"},PF={sale:"SA",pur:"PU",sret:"SR",pret:"RP"},CT={mfg:"تصنيع",sup:"مشتريات"},TT={A:"الأصول",L:"الالتزامات",Q:"حقوق الملكية",I:"الإيرادات",X:"المصروفات"};
 /* ===== ledger + stock core ===== */
 const ak=k=>S.accts.find(a=>a.k==k).id,ac_=id=>S.accts.find(a=>a.id==id)||{},an=id=>ac_(id).name||"",nat=a=>"AX".includes(a.t)?1:-1;
@@ -283,7 +283,7 @@ function netUp(){const e=$g("#net");if(!e)return;const connected=navigator.onLin
 addEventListener("online",netUp);addEventListener("offline",netUp);addEventListener("factory-database-ready",netUp);addEventListener("factory-db-startup-error",netUp);addEventListener("factory-db-connection-state",netUp);
 function syncPage(){
   let queued=0;
-  try{const q=JSON.parse(localStorage.getItem("ms-factory-db-queue-v1")||"[]");queued=Array.isArray(q)?q.length:0}catch(e){}
+  try{for(let i=0;i<localStorage.length;i++){const key=localStorage.key(i);if(key&&key.startsWith("ms-factory-db-queue-v1:")){const q=JSON.parse(localStorage.getItem(key)||"[]");if(Array.isArray(q))queued+=q.length;}}}catch(e){}
   const offline=!navigator.onLine||window.__factoryOfflineMode===true;
   const ready=window.__factoryDatabaseFirstReady===true;
   const status=window.__factoryDatabaseFirstFailed?"🔴 فشل الاتصال بقاعدة البيانات":offline?(queued?"🔴 غير متصل - تغييرات محفوظة محليًا":"🔴 غير متصل - العمل دون اتصال"):queued?"🟡 توجد تغييرات في انتظار الإرسال":ready?"🟢 متصل - الحفظ المباشر على قاعدة البيانات":"🟡 جارٍ الاتصال بقاعدة البيانات";
