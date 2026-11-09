@@ -13,7 +13,7 @@ items:[{id:1,name:"قماش جيرسي",sku:"FB001",wh:1,unit:"متر",buy:90,re
 partners:[{id:1,name:"عميل قطاعي (نقدي)",phone:"",c:1,s:0,type:"r",gov:"",city:"",adr:""},{id:2,name:"محلات الأمل",phone:"01000000000",c:1,s:1,type:"w",gov:"القاهرة",city:"شبرا",adr:"شارع الترعة"},{id:3,name:"شركة النسيج الحديثة",phone:"",c:0,s:1,type:"w",gov:"الغربية",city:"المحلة الكبرى",adr:""}],
 docs:[],po:[],vch:[],wo:[],codes:[],je:[{no:"JE-0001",date:d0,ts:n0,desc:"رصيد افتتاحي"}],emp:[],mv:[],L:[op(1,50000,0),op(2,150000,0),op(5,14200,0),op(8,0,214200)]};
 s.items.forEach(i=>Object.entries(i.st).forEach(([v,q])=>s.mv.push({d:d0,ts:n0,iid:i.id,v,q,val:q*i.buy,ref:"رصيد افتتاحي",pid:0})));return s}
-let S;try{S=JSON.parse(localStorage.getItem("mgr6"))}catch(e){}if(!S)S=seed();
+let S=seed(); // Legacy local snapshots are intentionally ignored; Supabase hydrates the state.
 window.__factoryDatabaseFirst=true;
 window.__factoryGetState=()=>S;
 window.__factoryReplaceArrays=(data)=>{if(!data||typeof data!=="object")return;for(const [k,v] of Object.entries(data)){if(Array.isArray(v))S[k]=v;else if(k==="__meta"&&v&&typeof v==="object")Object.assign(S,v);}try{render()}catch(e){}};
