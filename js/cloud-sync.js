@@ -617,7 +617,9 @@ async function loadFromTablesMerge(isAuto = false) {
       S.items = m.arr; totalAdded += m.added;
     }
     Object.getPrototypeOf(localStorage).setItem.call(localStorage, "mgr6", JSON.stringify(S));
-    if (restoredSnapshot && isAuto) setTimeout(() => location.reload(), 500);
+    if (restoredSnapshot && isAuto) {
+      if (typeof window.render === "function") window.render();
+    }
     if (recordConflicts) {
       return T("تم تحميل " + totalAdded + " سجل جديد. يوجد " + recordConflicts + " سجل بتعارض إصدار؛ احتفظنا بالنسختين ولم نستبدل بياناتك المحلية.", "Loaded " + totalAdded + " new records. " + recordConflicts + " cloud record conflict(s) were preserved without overwriting local data.");
     }

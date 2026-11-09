@@ -408,7 +408,7 @@ function fbar(k,cfg){
  FL[k]=FL[k]||{};const hasD=cfg.some(c=>c[0]==="from");
  const fields=cfg.map(c=>{const id=c[0],ty=c[1],lb=c[2],op=c[3],v=FL[k][id]||"";
   if(ty==="sel")return '<div><label>'+lb+'</label><select data-filter-key="'+k+'" data-filter-id="'+id+'" onchange="FL[\''+k+'\'].'+id+'=this.value;render()">'+op.map(o=>{const z=Array.isArray(o)?o:[o,o||"الكل"];return '<option value="'+z[0]+'" '+(String(v)==String(z[0])?"selected":"")+'>'+z[1]+'</option>'}).join("")+'</select></div>';
-  const typ=ty==="date"?"date":"search",handler=ty==="date"?'onchange="FL[\''+k+'\'].'+id+'=this.value;render()"':'oninput="fbarType(\''+k+'\',\''+id+'\',this)"';
+  const typ=ty==="date"?"date":"search",handler=ty==="date"?'onchange="FL[\''+k+'\'].'+id+'=this.value;render()"':'oninput="fbarType(\''+k+'\',\''+id+'\',this)" onchange="fbarCommit(\''+k+'\',\''+id+'\',this)" onkeydown="if(event.key===\'Enter\')fbarCommit(\''+k+'\',\''+id+'\',this)"';
   return '<div><label>'+lb+'</label><input data-filter-key="'+k+'" data-filter-id="'+id+'" type="'+typ+'" inputmode="'+(ty==="text"?"search":"none")+'" autocomplete="off" autocapitalize="off" spellcheck="false" value="'+String(v).replace(/&/g,"&amp;").replace(/"/g,"&quot;")+'" placeholder="'+(ty==="text"?lb:"")+'" '+handler+'></div>';
  }).join("");
  const periods=hasD?[["d","اليوم"],["w","هذا الأسبوع"],["m","هذا الشهر"]].map(x=>'<button class="g" onclick="fpr(\''+k+'\',\''+x[0]+'\')">'+x[1]+'</button>').join(""):"";
@@ -417,7 +417,12 @@ function fbar(k,cfg){
 function fbarType(k,id,el){
  FL[k]=FL[k]||{};FL[k][id]=el.value;const key=k+":"+id;window.__fbarTimers=window.__fbarTimers||{};clearTimeout(window.__fbarTimers[key]);
  const start=el.selectionStart,end=el.selectionEnd;
- window.__fbarTimers[key]=setTimeout(()=>{if(!CUR||CUR.kind!=="screen")return;render();const next=ACT&&ACT.querySelector('[data-filter-key="'+k+'"][data-filter-id="'+id+'"]');if(next){next.focus({preventScroll:true});try{next.setSelectionRange(start,end)}catch(e){}}},100);
+ window.__fbarTimers[key]=setTimeout(()=>{if(!CUR||CUR.kind!=="screen")return;render();const next=ACT&&ACT.querySelector('[data-filter-key="'+k+'"][data-filter-id="'+id+'"]');if(next){next.focus({preventScroll:true});try{next.setSelectionRange(start,end)}catch(e){}}},250);
+}
+function fbarCommit(k,id,el){
+ FL[k]=FL[k]||{};FL[k][id]=el.value;const key=k+":"+id;
+ if(window.__fbarTimers&&window.__fbarTimers[key])clearTimeout(window.__fbarTimers[key]);
+ render();
 }
 /* ---- invoices: payment status from linked vouchers ---- */
 const paidOf=(d,ex)=>S.vch.filter(v=>v.id!=ex).reduce((a,v)=>a+((v.alloc||{})[d.id]||0),0),remOf=(d,ex)=>d.total-paidOf(d,ex),stOf=d=>{if(d.t!="sale"&&d.t!="pur")return "—";return remOf(d)<=.005?"مسددة":paidOf(d)>.005?"مسددة جزئيًا":"غير مسددة"};
