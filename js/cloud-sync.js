@@ -1972,6 +1972,9 @@ async function onInternetBack() {
   if (localStorage.getItem(PENDING_SYNC_KEY) && !localStorage.getItem("mgr6-cloud-snapshot-conflict")) scheduleAutoSync(800);
   return pushed;
 }
+// The database-first runtime owns profile loading, navigation, logout, and offline queue handling.
+// Do not run the legacy snapshot-sync timers or their repeated profile lookups in that mode.
+if (!window.__factoryDatabaseFirst) {
 const _origSetItem = localStorage.setItem.bind(localStorage);
 localStorage.setItem = function(key, value) {
   _origSetItem(key, value);
@@ -2239,3 +2242,5 @@ setInterval(() => {
 window.addEventListener("resize", () => drawAll());
 drawAll();
 console.log("☁️ Cloud Sync V28 شغال - إصلاح الشاشة البيضا");
+
+}
