@@ -71,7 +71,7 @@ jobs:
               exit 1
             fi
           done
-          node -e "const fs=require('fs');const m=JSON.parse(fs.readFileSync('dist/manifest.json','utf8'));if(m.display!=='standalone'||!m.start_url||!m.scope||!m.icons.some(x=>x.sizes==='192x192')||!m.icons.some(x=>x.sizes==='512x512'))process.exit(1);console.log('PWA manifest and install icons verified')";
+          node -e "const fs=require('fs');const m=JSON.parse(fs.readFileSync('dist/manifest.json','utf8'));if(m.display!=='standalone'||!m.start_url||!m.scope||!m.icons.some(x=>x.sizes==='192x192')||!m.icons.some(x=>x.sizes==='512x512'))throw new Error('Invalid PWA manifest');for(const x of m.icons){const p='dist/'+x.src.replace(/^\\.\\//,'');const b=fs.readFileSync(p);if(b.toString('hex',0,8)!=='89504e470d0a1a0a'||b.readUInt32BE(16)!==Number(x.sizes.split('x')[0])||b.readUInt32BE(20)!==Number(x.sizes.split('x')[1]))throw new Error('Invalid PWA icon: '+p)}console.log('PWA manifest and PNG icon dimensions verified')";
 
       - name: Deploy static application to Cloudflare Workers
         if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
