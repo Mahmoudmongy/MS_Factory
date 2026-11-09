@@ -7,7 +7,7 @@ const configuredRef = configuredUrl ? (() => { try { return new URL(configuredUr
 const PRODUCTION_REF = 'yvrislcbbhtruwdnuooz';
 const useProduction = !configuredUrl || configuredRef !== PRODUCTION_REF;
 const url = useProduction ? PRODUCTION_URL : configuredUrl;
-const key = useProduction ? PRODUCTION_KEY : (configuredKey || PRODUCTION_KEY);
+const key = PRODUCTION_KEY;
 const storage = {
  getItem(key){try{return(localStorage.getItem('factory-remember')==='0'?sessionStorage:localStorage).getItem(key)}catch(_){return null}},
  setItem(key,value){try{const persistent=localStorage.getItem('factory-remember')!=='0';const target=persistent?localStorage:sessionStorage;(persistent?sessionStorage:localStorage).removeItem(key);target.setItem(key,value)}catch(error){console.warn('Auth session storage failed:',error)}},
