@@ -245,3 +245,35 @@ button:disabled{opacity:.55;cursor:not-allowed}
   #top #thb,#top #logout-btn{width:32px;min-width:32px;height:32px}
   .filter-card .row>div{flex-basis:calc(50% - 6px)}
 }
+
+/* Refined desktop/mobile navigation and compact status bar */
+#sb .sb-controls{display:flex;justify-content:flex-end;align-items:center;padding:5px 8px}
+#sb .sb-mode{width:34px;min-width:34px;height:32px;min-height:32px;padding:0;display:grid;place-items:center;font-size:0;border:1px solid rgba(255,255,255,.18);border-radius:6px;background:rgba(255,255,255,.1);color:#fff}
+#sb .sb-mode:before{content:"☰";font-size:20px;line-height:1}
+#sb.icons-only .sb-mode:before{content:"☰"}
+#logout-btn{background:#c62828!important;color:#fff!important;border:1px solid #b71c1c!important}
+#logout-btn:hover{background:#a91f1f!important}
+#top{min-height:42px!important;gap:4px!important;padding-block:3px!important}
+#top #net{width:34px;height:32px;min-width:34px;min-height:32px}
+#top #net-cloud{width:21px;height:21px}
+#top #sync-icon{font-size:13px}
+#tabs .tb{max-width:min(220px,28vw);min-width:0;padding:4px 6px;gap:5px}
+#tabs .tb b{flex:none;min-width:20px;height:20px;display:inline-grid;place-items:center;border:1px solid var(--bd);border-radius:4px;background:var(--bg);margin-inline-start:3px}
+@media(min-width:861px){
+ #top{grid-template-columns:34px 32px 32px minmax(120px,1fr) 36px minmax(90px,130px) 34px 34px;min-height:42px!important}
+ #top h1{font-size:14px;line-height:1.1}
+ #top button{min-height:32px;height:32px;padding:3px 7px}
+ #sb .sb-controls{justify-content:flex-end}
+ #sb.icons-only{width:64px}
+}
+@media(max-width:860px){
+ #sb{width:66vw!important;max-width:66vw!important;min-width:0!important}
+ #sb.icons-only{width:68px!important;max-width:68px!important;min-width:68px!important}
+ #sb .sb-controls{justify-content:flex-end}
+ #sb .sb-mode{width:36px;height:34px}
+ #top{min-height:40px!important}
+}
+@media(max-width:390px){
+ #sb{width:66vw!important;max-width:66vw!important}
+ #sb.icons-only{width:64px!important;max-width:64px!important;min-width:64px!important}
+}
