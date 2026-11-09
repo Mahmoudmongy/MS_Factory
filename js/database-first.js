@@ -69,7 +69,7 @@ function splitState(state) {
   return { arrays, meta };
 }
 function clearLegacyDeviceData() {
-  const marker = 'ms-factory-empty-device-v1:' + storageScope;
+  const marker = 'ms-factory-empty-device-v2:' + storageScope;
   if (localStorage.getItem(marker) === '1') return;
   const remove = [];
   for (let i = 0; i < localStorage.length; i++) {
