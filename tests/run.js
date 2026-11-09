@@ -47,7 +47,7 @@ ok('mobile settings link remains reachable above the bottom safe area',css.inclu
 ok('company name and logo are centered in the mobile navigation drawer',css.includes('#sb .br{text-align:center!important;display:flex!important')&&css.includes('align-items:center;justify-content:center'));
 ok('filter clear and date controls share the filter-fields row',app.includes('class="row filter-controls"')&&app.includes('class="filter-actions"')&&app.includes('class="g filter-clear"'));
 ok('date range remains hidden until the date-range button is pressed',css.includes('.filter-card .filter-date-field{display:none!important}')&&css.includes('.filter-card.date-range-open .filter-date-field{display:flex!important}')&&app.includes('toggleFilterDates(this)'));
-ok('date inputs live in a separate hidden panel controlled by the standalone period button',app.includes('class="filter-date-panel"')&&app.includes('panel.hidden=!open')&&css.includes('.filter-card .filter-date-panel[hidden]{display:none!important}'));
+ok('date inputs live in a separate hidden panel controlled by the standalone period button',app.includes('class="filter-date-panel"')&&app.includes('panel.hidden=!open')&&css.includes('.filter-card .filter-date-panel[hidden]{display:none!important;}'));
 
 
 const sw=fs.readFileSync(path.join(ROOT,'sw.js'),'utf8'),builtSw=fs.readFileSync(path.join(ROOT,'public/sw.js'),'utf8');ok('Vite production build receives the service worker from public/',builtSw===sw);ok('service worker is versioned, GET-only and same-origin only',/const VERSION\s*=/.test(sw)&&/request\.method\s*!==\s*'GET'/.test(sw)&&/url\.origin\s*!==\s*self\.location\.origin/.test(sw)&&/caches\.delete/.test(sw));
