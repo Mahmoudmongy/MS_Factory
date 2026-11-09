@@ -56,7 +56,7 @@ ok('live updates subscribe to individual factory_records rows instead of reloadi
 ok('reconnect reads only rows changed since the last sync cursor',/fetchChangedRecords\(since\)/.test(dbSync)&&/gt\('updated_at', since\)/.test(dbSync)&&/LAST_SYNC_KEY/.test(dbSync));
 ok('offline cache stores individual rows and version metadata, not a full local state snapshot during online saves',/CACHE_PREFIX/.test(dbSync)&&/cacheRow\(row\)/.test(dbSync)&&!/JSON\.stringify\(\[\.\.\.baseline\.values\(\)\]\)/.test(dbSync)&&/if\(!navigator\.onLine\)\{localStorage\.setItem\("mgr6"/.test(app));
 ok('atomic database RPC is invoker-secured and protected by RLS migration',fs.readFileSync(path.join(ROOT,'supabase/migrations/20261109162608_atomic_factory_record_batch.sql'),'utf8').includes('security invoker')&&fs.readFileSync(path.join(ROOT,'supabase/migrations/20261109161927_database_first_factory_records.sql'),'utf8').includes('force row level security'));
-ok('duplicate sync button is removed and the cloud-status control remains available',!idx.includes('id="sync-btn"')&&/id="net"[^>]*onclick="syncPage\\(\\)"/.test(idx)&&cloud.indexOf('if (!window.__factoryDatabaseFirst) {')<cloud.indexOf('const _origSetItem')&&cloud.trimEnd().endsWith('}'));
+ok('duplicate sync button is removed and the cloud-status control remains available',!idx.includes('id="sync-btn"')&&/id="net"[^>]*onclick="syncPage\(\)"/.test(idx)&&cloud.indexOf('if (!window.__factoryDatabaseFirst) {')<cloud.indexOf('const _origSetItem')&&cloud.trimEnd().endsWith('}'));
 
 const collectorStart=cloud.indexOf('function collectSourceEffects(state)');
 const collectorEnd=cloud.indexOf('// ===== الرفع مرة واحدة',collectorStart);
