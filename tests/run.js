@@ -13,6 +13,8 @@ const app=fs.readFileSync(path.join(ROOT,'js/app.js'),'utf8'),idx=fs.readFileSyn
 const names=[...app.matchAll(/^(?:async )?function ([A-Za-z0-9_$]+)\(/gm)].map(m=>m[1]),dup=[...new Set(names.filter((n,i)=>names.indexOf(n)!==i))];
 ok('app.js has no duplicate top-level function definitions',dup.length==0,dup);
 ok('customer/supplier rows expose permission-gated edit actions',app.includes('pForm(${c},${p.id})')&&app.includes('can("edit")'));
+ok('filter bar escapes dynamic labels, option values and entered filter text',/escHtml\(z\[0\]\)/.test(app)&&/escHtml\(z\[1\]\)/.test(app)&&/escHtml\(v\)/.test(app));
+ok('customer, stock and voucher lists escape user-controlled labels',app.includes('escHtml(p.name)')&&app.includes('escHtml(i.name)')&&app.includes('escHtml(v.title)'));
 ok('partner edit preserves the stable record ID and updates the existing object',app.includes('function saveP(id)')&&app.includes('if(old)Object.assign(old,data)'));
 ok('employee edit preserves the existing employee record',app.includes('function saveE(id)')&&app.includes('if(old)Object.assign(old,data)'));
 ok('warehouse names can be edited without replacing warehouse IDs',app.includes('function saveWh(id)')&&app.includes('w.name=n'));
