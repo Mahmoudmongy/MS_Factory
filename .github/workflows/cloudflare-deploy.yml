@@ -1,0 +1,56 @@
+name: Deploy MS Factory to Cloudflare Workers
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ms-factory-cloudflare-production
+  cancel-in-progress: true
+
+jobs:
+  validate-and-deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run application regression tests
+        run: npm test
+
+      - name: Build production application
+        run: npm run build
+        env:
+          VITE_SUPABASE_URL: https://yvrislcbbhtruwdnuooz.supabase.co
+          VITE_SUPABASE_ANON_KEY: sb_publishable_7y8sqUPYv4mCfmpjin3xRQ_1_X5QJfG
+
+      - name: Verify required static assets
+        run: |
+          test -s dist/index.html
+          test -s dist/auth.html
+          test -s dist/change-password.html
+          test -s dist/js/app.js
+          test -s dist/js/cloud-sync.js
+          test -s dist/sw.js
+          test -s dist/manifest.json
+
+      - name: Deploy static application to Cloudflare Workers
+        uses: cloudflare/wrangler-action@v4
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: d6d9e923e57e3b039156162de3a44688
+          command: deploy
