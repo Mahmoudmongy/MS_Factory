@@ -91,7 +91,7 @@ const PT="212222,222122,222221,121223,121322,131222,122213,122312,132212,221213,
 function bc(t){const c=[104];for(let i=0;i<t.length;i++)c.push(t.charCodeAt(i)-32);let s=104;for(let i=1;i<c.length;i++)s+=c[i]*i;c.push(s%103,106);let x=10,r="";c.forEach(v=>{const p=PT[v];for(let i=0;i<p.length;i++){const w=+p[i];if(i%2==0)r+=`<rect x="${x}" y="0" width="${w}" height="50"/>`;x+=w}});x+=10;return `<svg viewBox="0 0 ${x} 50" preserveAspectRatio="none">${r}</svg>`}
 let LB=[];function labels(l){LB=l;sh(`<h3>طباعة باركود</h3><div class="row"><div><label>عدد النسخ لكل ملصق</label><input id="cp" type="number" min="1" value="1" oninput="drawLb()"></div><div><label>مقاس الملصق (إعداد الطابعة)</label><select id="lsz" onchange="lsz()"><option value="50x30">50×30 مم</option><option value="40x25">40×25 مم</option><option value="60x40">60×40 مم</option><option value="80x50">80×50 مم</option></select></div></div><div id="pr"></div><div class="row"><button onclick="print()">🖨️ طباعة</button>${bk}</div>`);lsz();drawLb()}
 function lsz(){const[w,h]=$("#lsz").value.split("x");$g("#pgst").textContent=`@media print{@page{size:${w}mm ${h}mm;margin:1mm}.lbls{display:block}.lb{width:${w-2}mm;height:${h-2}mm;page-break-after:always;border:0}}`}
-function drawLb(){const n=Math.max(1,+$("#cp").value||1);let h="";LB.forEach(l=>{for(let i=0;i<n;i++)h+=`<div class="lb"><b>${l.t}</b><div>${l.s||""}</div>${bc(l.c)}<code>${l.c}</code></div>`});$("#pr").innerHTML=`<div class="lbls">${h}</div>`}
+function drawLb(){const n=Math.max(1,+$("#cp").value||1);let h="";LB.forEach(l=>{for(let i=0;i<n;i++)h+=`<div class="lb"><b>${escHtml(l.t)}</b><div>${escHtml(l.s||"")}</div>${bc(l.c)}<code>${escHtml(l.c)}</code></div>`});$("#pr").innerHTML=`<div class="lbls">${h}</div>`}
 
 /* ===== Summary ===== */
 const card=(t,tot,rows)=>`<div class="sc"><div class="row sp sh"><b>${t}</b><b>${f(tot)} ج.م</b></div>${rows?`<div style="padding:6px 0">${rows}</div>`:""}</div>`,lr=(n,v,fn)=>`<div class="row sp lr"><span>${n}</span>${fn?lk(f(v),fn):`<span>${f(v)}</span>`}</div>`;
@@ -149,7 +149,32 @@ function dp(i){const t=D.t,pid=+$("#pt").value,p=S.partners.find(x=>x.id==pid)||
 const clr=ks=>ks.forEach(k=>{if($("#"+k))$("#"+k).value=""});
 function addL(){const{i,n}=curIt(),pur=D.t=="pur";if(!i&&!(pur&&n)){$("#bmsg").textContent="اختر الصنف أولًا";return}let v=vk($("#cl").value.trim(),$("#sz").value.trim());if(i&&v=="-"&&!pur)v=bestV(i);const l={iid:i?i.id:null,name:i?i.name:n,v,qty:+$("#q").value||1,price:+$("#pc").value||(i?dp(i):0),cost:0,note:$("#ln").value.trim(),unit:i?i.unit:($("#un").value||"قطعة")};if(!i)l.ni={wh:+$("#ty").value||S.wh[0].id,unit:l.unit};D.lines.push(l);clr(["cl","sz","pc","ln","q","bcd","in"]);$("#bmsg").textContent="";unitSet();drawL()}
 function addF(){const n=$("#nm").value.trim();if(!n)return;D.lines.push({iid:null,name:n,v:"-",qty:+$("#fq").value||1,price:+$("#fp").value||0,cost:0,a:+$("#fa").value,note:$("#fn").value.trim(),unit:""});clr(["nm","fp","fq","fn"]);drawL()}
-async function scanCam(){const m=$("#bmsg");if(!window.BarcodeDetector||!navigator.mediaDevices){m.textContent="المتصفح لا يدعم مسح الباركود بالكاميرا — اكتب الكود";return}try{const st=await navigator.mediaDevices.getUserMedia({video:{facingMode:"environment"}}),v=document.createElement("video");v.srcObject=st;v.setAttribute("playsinline","");v.style.width="100%";$("#bcam").appendChild(v);await v.play();const bd=new BarcodeDetector();const loop=async()=>{try{const r=await bd.detect(v);if(r.length){st.getTracks().forEach(t=>t.stop());v.remove();$("#bcd").value=r[0].rawValue;addBc();return}}catch(e){}if(v.isConnected)setTimeout(loop,300)};loop()}catch(e){m.textContent="تعذر فتح الكاميرا (الصلاحية غير متاحة)"}}
+let scanStream=null,scanTimer=null,scanVideo=null;
+function stopCam(){
+ if(scanTimer!==null){clearTimeout(scanTimer);scanTimer=null}
+ if(scanStream){try{scanStream.getTracks().forEach(track=>track.stop())}catch(e){}scanStream=null}
+ if(scanVideo){try{scanVideo.pause();scanVideo.srcObject=null}catch(e){}scanVideo.remove();scanVideo=null}
+}
+document.addEventListener("visibilitychange",()=>{if(document.hidden)stopCam()});
+window.addEventListener("pagehide",stopCam);
+async function scanCam(){
+ const m=$("#bmsg");stopCam();
+ if(!window.BarcodeDetector||!navigator.mediaDevices){if(m)m.textContent="المتصفح لا يدعم مسح الباركود بالكاميرا — اكتب الكود";return}
+ try{
+  scanStream=await navigator.mediaDevices.getUserMedia({video:{facingMode:"environment"}});
+  const v=document.createElement("video");scanVideo=v;v.srcObject=scanStream;v.setAttribute("playsinline","");v.style.width="100%";
+  $("#bcam").appendChild(v);await v.play();const bd=new BarcodeDetector();
+  const loop=async()=>{
+   if(!v.isConnected){stopCam();return}
+   try{
+    const r=await bd.detect(v);
+    if(r.length){const value=r[0].rawValue;stopCam();const input=$("#bcd");if(input){input.value=value;addBc()}return}
+   }catch(e){}
+   if(v.isConnected)scanTimer=setTimeout(loop,300);else stopCam();
+  };
+  loop();
+ }catch(e){stopCam();if(m)m.textContent="تعذر فتح الكاميرا (الصلاحية غير متاحة)"}
+}
 const gross=()=>D.lines.reduce((a,l)=>a+l.qty*l.price,0);
 function drawL(){const rt=D.t=="sret"||D.t=="pret",g=gross(),dsc=rt?0:(D.disc||0);$("#ls").innerHTML=D.lines.length?`<table><tr><th>الصنف</th><th>الوحدة</th><th>الكمية</th><th>السعر</th><th>الإجمالي</th><th>البيان</th><th></th></tr>${U(D.lines,(l,i)=>`<tr><td>${l.name}${l.v!="-"?" ("+l.v+")":""}</td><td>${l.unit||""}</td><td><input type="number" value="${l.qty||""}" placeholder="0" ${l.max?`max="${l.max}"`:""} style="width:80px;margin:0" onchange="D.lines[${i}].qty=+this.value||0;drawL()"></td><td>${f(l.price)}</td><td>${f(l.qty*l.price)}</td><td>${l.note||""}</td><td><button class="d" onclick="D.lines.splice(${i},1);drawL()">✕</button></td></tr>`)}<tr><th colspan="4">الإجمالي (الأسعار مثبّتة)</th><th colspan="3">${f(g)}</th></tr>${dsc?`<tr><th colspan="4">${D.t=="sale"?"خصم مبيعات":"خصم مشتريات"}</th><th colspan="3">-${f(dsc)}</th></tr><tr><th colspan="4">الصافي</th><th colspan="3">${f(g-dsc)}</th></tr>`:""}</table>`:'<p class="mu">أضف أصنافًا أو بنودًا</p>'}
 function pend(){if($("#bcd")&&$("#bcd").value.trim())addBc();else if(["cl","sz","pc","ln","q"].some(k=>$("#"+k)&&$("#"+k).value.trim())||($("#in")&&$("#in").value.trim()))addL();if($("#nm")&&$("#nm").value.trim())addF()}
@@ -382,7 +407,7 @@ function addBc(){
     }
   }
   if(!it){
-    $("#bmsg").innerHTML=`<span style="color:#c0392b;font-weight:700">⚠️ الباركود غير موجود: ${c}</span>`;
+    $("#bmsg").textContent="⚠️ الباركود غير موجود: "+c;$("#bmsg").style.color="#c0392b";$("#bmsg").style.fontWeight="700";
     toast("الباركود غير موجود: "+c);
     return;
   }
@@ -397,7 +422,7 @@ function addBc(){
   $("#info").innerHTML=`<div class="card" style="border-right:4px solid #0f766e"><b>${it.name}</b> — ${whn(it.wh)} | الموديل: ${it.model||"-"} | الوحدة: ${it.unit} | المخزن: ${whn(it.wh)}<br>اللون: ${v.split(" / ")[0]||"-"} | المقاس: ${v.split(" / ")[1]||"-"} | الباركود: <code>${bcCode}</code><br>سعر البيع: ${f(it.retail)} | جملة: ${f(it.wholesale)} | شراء: ${f(it.buy)} | تكلفة: ${f(av(it))}</div>`;
   D.lines.push({iid:it.id,name:it.name,v,qty:+$("#q").value||1,price:pr,cost:av(it)||it.buy||0,note:$("#ln").value.trim(),unit:it.unit,sku:it.sku,model:it.model||"",barcode:bcCode});
   clr(["cl","sz","pc","ln","q","bcd"]);
-  $("#bmsg").innerHTML=`<span style="color:#0f766e">✅ تمت إضافة: ${it.name} — ${v} — ${bcCode}</span>`;
+  $("#bmsg").textContent="✅ تمت إضافة: "+it.name+" — "+v+" — "+bcCode;$("#bmsg").style.color="#0f766e";
   drawL();
 }
 function docLb(id){const d=S.docs.find(x=>x.id==id);labels(d.lines.filter(l=>l.iid).map(l=>{const it=it_(l.iid)||{};return {c:codeFor(l.iid,l.v),t:l.name,s:`${it.model?it.model+" · ":""}${l.v!="-"?l.v+" · ":""}${qf(l.qty)} ${l.unit||""}`}}))}
