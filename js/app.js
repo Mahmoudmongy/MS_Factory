@@ -26,7 +26,7 @@ function rev(rid,src){const match=x=>x.rid==rid&&(!src||x.src==src);S.L=S.L.filt
 function ensureItem(name,wh,unit,buy){let i=S.items.find(x=>x.name==name&&x.wh==wh)||S.items.find(x=>x.name==name);if(!i){i={id:uid(),name,sku:"IT"+(S.items.length+1),wh,unit:unit||"قطعة",buy:buy||0,retail:0,wholesale:0,img:"",st:{},val:0};S.items.push(i)}return i}
 const pbal=id=>S.L.filter(l=>l.pid==id).reduce((s,l)=>s+l.dr-l.cr,0);
 const btxt=b=>pvh(-b);
-const vk=(c,z)=>[c,z].filter(Boolean).join(" / ")||"-",lk=(t,fn)=>`<span class="lk" onclick="${fn}">${t}</span>`,img=s=>s?`<img src="${s}" width="38" style="border-radius:4px">`:"";
+const vk=(c,z)=>[c,z].filter(Boolean).join(" / ")||"-",lk=(t,fn)=>`<span class="lk" onclick="${fn}">${escHtml(t)}</span>`,lkHtml=(html,fn)=>`<span class="lk" onclick="${fn}">${html}</span>`,img=s=>s?`<img src="${escHtml(s)}" width="38" style="border-radius:4px">`:"";
 const colors=()=>[...new Set(S.items.flatMap(i=>Object.keys(i.st).map(k=>k.split(" / ")[0])))].filter(x=>x!="-"),bestV=i=>Object.keys(i.st).sort((a,b)=>i.st[b]-i.st[a])[0]||"-",nd=s=>(s||"").replace(/-/g,"");
 const sug=(i,k)=>Math.round((av(i)||i.buy)*(1+(S.pct[k]||0)/100)*100)/100;
 const FW=()=>(S.wh.find(w=>w.name.includes("منتج"))||S.wh[0]).id,pnm=o=>o.iname||(it_(o.iid)||{}).name||"";
@@ -256,7 +256,7 @@ im:()=>repIm(),
 wo:()=>tb2(["وقت التسجيل","الصنف","لون / مقاس","البيان","الكمية","القيمة"],srt(S.mv.filter(m=>m.ref.startsWith("هالك")&&inR(m.d))).map(m=>[m.ts?fts(m.ts):dfm(m.d),it_(m.iid).name,m.v,m.ref,qf(-m.q),f(-m.val)])),
 po:()=>tb2(["الأمر","وقت التسجيل","الصنف","الكمية","التكلفة","للقطعة","الحالة"],S.po.filter(o=>inR(o.date)).map(o=>{const q=o.st==2?o.rec.reduce((a,r)=>a+r.qty,0):poQty(o);return [o.no,sd(o),pnm(o),qf(q),lk(f(poCost(o)),`poView(${o.id})`),f(q?poCost(o)/q:0),["جديد","جاري","تم"][o.st]]})),
 st:()=>{const id=R.pt||S.partners[0].id;return `<div class="card"><select onchange="R.pt=+this.value;render()">${sel(id,S.partners.map(x=>[x.id,x.name]))}</select></div>`+lgTbl(srt(S.L.filter(l=>l.pid==id&&inR(l.d))),-1,1)+`<b>${btxt(pbal(+id))}</b>`},
-bl:()=>tb2(["الطرف","الصفة","الرصيد المدمج"],S.partners.map(p=>[p.name,p.c&&p.s?"عميل ومورد":p.c?"عميل":"مورد",lk(btxt(pbal(p.id)),`drillPartner(${p.id})`)])),
+bl:()=>tb2(["الطرف","الصفة","الرصيد المدمج"],S.partners.map(p=>[p.name,p.c&&p.s?"عميل ومورد":p.c?"عميل":"مورد",lkHtml(btxt(pbal(p.id)),`drillPartner(${p.id})`)])),
 pf:()=>tb2(["التصنيف","الإيراد","التكلفة","الربح"],["mfg","sup"].filter(c=>R.cat=="all"||R.cat==c).map(c=>{let rv=0,cg=0;[["sale",1],["sret",-1]].forEach(([t,k])=>S.docs.filter(d=>d.t==t&&d.cat==c&&inR(d.date)).forEach(d=>d.lines.forEach(l=>{rv+=k*l.qty*l.price;cg+=k*l.qty*l.cost})));return [CT[c],f(rv),f(cg),f(rv-cg)]})),
 pv:()=>{const dims=Object.keys(PD),rows=[];fdoc(R.ds).forEach(d=>d.lines.forEach(l=>{const r={d,l,qty:l.qty,amt:l.qty*l.price,cost:l.qty*(l.cost||0),profit:l.qty*(l.price-(l.cost||0)),n:1};dims.forEach(k=>r[k]=PD[k](d,l));rows.push(r)}));const A={},C=new Set();rows.forEach(r=>{const a=r[R.gb],c=R.gc?r[R.gc]:"الإجمالي";C.add(c);A[a]=A[a]||{};A[a][c]=(A[a][c]||0)+r[R.ms]});const cs=[...C],ra=Object.keys(A);PVR={rows:ra,cols:cs};
  const hit=R.pa>=0&&ra[R.pa]!==undefined?rows.filter(r=>r[R.gb]==ra[R.pa]&&(!R.gc||r[R.gc]==cs[R.pc])):null;
