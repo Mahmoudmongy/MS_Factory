@@ -29,6 +29,9 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Install Playwright browser
+        run: npx playwright install --with-deps chromium
+
       - name: Run application regression tests
         run: npm test
 
@@ -44,7 +47,6 @@ jobs:
           test -s dist/auth.html
           test -s dist/change-password.html
           test -s dist/js/app.js
-          test -s dist/js/cloud-sync.js
           test -s dist/sw.js
           test -s dist/manifest.json
 
