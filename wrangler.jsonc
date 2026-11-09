@@ -3,7 +3,7 @@
   "name": "ms-factory",
   "compatibility_date": "2026-11-09",
   "workers_dev": true,
-  "account_id": "d6d9e923e57e3b039156162de3a44688",
+  "account_id": "d6d9e923e57e3b039156162fc231617e",
   "assets": {
     "directory": "./dist",
     "not_found_handling": "single-page-application"
