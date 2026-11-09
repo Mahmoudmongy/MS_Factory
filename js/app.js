@@ -669,7 +669,7 @@ const renderNavBase=nav;
 nav=function(){renderNavBase();const sb=$g("#sb");if(sb&&!sb.querySelector(".sb-controls"))sb.insertAdjacentHTML("afterbegin",'<div class="sb-controls"><button type="button" class="sb-mode" onclick="toggleSidebarMode()" aria-label="تبديل عرض القائمة" title="تبديل عرض القائمة">☰</button></div>');applySidebarMode();};
 function applySidebarMode(){const mode=localStorage.getItem("factory-sidebar-mode")||"list";const sb=$g("#sb");if(sb)sb.classList.toggle("icons-only",mode==="icons");const b=sb?.querySelector(".sb-mode");if(b){b.textContent="☰";b.title=LANGEN?"Toggle sidebar display":"تبديل عرض القائمة";b.setAttribute("aria-label",b.title);}const logout=$g("#logout-btn");if(logout){logout.title=LANGEN?"Exit":"خروج";logout.setAttribute("aria-label",logout.title);}}
 function toggleSidebarMode(){const next=(localStorage.getItem("factory-sidebar-mode")||"list")==="list"?"icons":"list";localStorage.setItem("factory-sidebar-mode",next);applySidebarMode();}
-async function signOutNow(){if(!confirm(LANGEN?"Sign out?":"هل تريد تسجيل الخروج؟"))return;try{const {supabase}=await import("./supabase.js");if(supabase)await supabase.auth.signOut();}catch(e){console.error("Sign out failed",e)}location.replace("auth.html")}
+async function signOutNow(skipConfirm=false){if(!skipConfirm&&!confirm(LANGEN?"Sign out?":"هل تريد تسجيل الخروج؟"))return;try{const {supabase}=await import("./supabase.js");if(supabase)await supabase.auth.signOut();}catch(e){console.error("Sign out failed",e)}location.replace("auth.html")}
 window.signOutNow=signOutNow;window.toggleSidebarMode=toggleSidebarMode;
 
 migrate();applyPref();netUp();go("home");
@@ -683,7 +683,7 @@ migrate();applyPref();netUp();go("home");
    const now=Date.now();
    if(now-lastBackAt<1800){
      lastBackAt=0;
-     if(confirm(LANGEN?"Exit the application?":"هل تريد الخروج من البرنامج؟"))signOutNow();
+     if(confirm(LANGEN?"Exit the application?":"هل تريد الخروج من البرنامج؟"))signOutNow(true);
      else arm();
    }else{
      lastBackAt=now;
