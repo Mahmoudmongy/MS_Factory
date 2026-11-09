@@ -420,7 +420,7 @@ function addBc(){
   const isSale=D.t=="sale"||D.t=="sret";
   const pr=+$ ("#pc").value || (isSale ? (it.retail||sug(it,"r")||it.buy) : it.buy) || dp(it);
   const bcCode=codeLook(it.id, v);
-  $("#info").innerHTML=`<div class="card" style="border-right:4px solid #0f766e"><b>${it.name}</b> — ${whn(it.wh)} | الموديل: ${it.model||"-"} | الوحدة: ${it.unit} | المخزن: ${whn(it.wh)}<br>اللون: ${v.split(" / ")[0]||"-"} | المقاس: ${v.split(" / ")[1]||"-"} | الباركود: <code>${bcCode}</code><br>سعر البيع: ${f(it.retail)} | جملة: ${f(it.wholesale)} | شراء: ${f(it.buy)} | تكلفة: ${f(av(it))}</div>`;
+  $("#info").innerHTML=`<div class="card" style="border-right:4px solid #0f766e"><b>${escHtml(it.name)}</b> — ${escHtml(whn(it.wh))} | الموديل: ${escHtml(it.model||"-")} | الوحدة: ${escHtml(it.unit)} | المخزن: ${escHtml(whn(it.wh))}<br>اللون: ${escHtml(v.split(" / ")[0]||"-")} | المقاس: ${escHtml(v.split(" / ")[1]||"-")} | الباركود: <code>${escHtml(bcCode)}</code><br>سعر البيع: ${f(it.retail)} | جملة: ${f(it.wholesale)} | شراء: ${f(it.buy)} | تكلفة: ${f(av(it))}</div>`;
   D.lines.push({iid:it.id,name:it.name,v,qty:+$("#q").value||1,price:pr,cost:av(it)||it.buy||0,note:$("#ln").value.trim(),unit:it.unit,sku:it.sku,model:it.model||"",barcode:bcCode});
   clr(["cl","sz","pc","ln","q","bcd"]);
   $("#bmsg").textContent="✅ تمت إضافة: "+it.name+" — "+v+" — "+bcCode;$("#bmsg").style.color="#0f766e";
