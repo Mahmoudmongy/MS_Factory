@@ -66,8 +66,8 @@ begin
      or pg_catalog.jsonb_typeof(p_accounting_section -> 'accounts') <> 'array'
      or pg_catalog.jsonb_typeof(p_accounting_section -> 'partners') <> 'array'
      or pg_catalog.jsonb_typeof(p_accounting_section -> 'openingLedger') <> 'array'
-     or p_inventory_section ->> 'baselineVersion' <> '1'
-     or p_accounting_section ->> 'baselineVersion' <> '1'
+     or p_inventory_section ->> 'baselineVersion' is distinct from '1'
+     or p_accounting_section ->> 'baselineVersion' is distinct from '1'
      or pg_catalog.octet_length(p_inventory_section::text) > 2097152
      or pg_catalog.octet_length(p_accounting_section::text) > 2097152 then
     raise exception 'Invalid baseline sections or expected version'
