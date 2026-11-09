@@ -395,6 +395,7 @@ function stk(d,i,v,q,val,ref,pid,rid,src){codeFor(i.id,v);i.st[v]=(i.st[v]||0)+q
 function showInfo(i,v,price){const[c,z]=!v||v=="-"?["-","-"]:v.split(" / ");$("#info").innerHTML=`<div class="card"><b>${escHtml(i.name)}</b> — النوع: ${escHtml(whn(i.wh))} | الموديل: ${escHtml(i.model||"-")} | اللون: ${escHtml(c)} | المقاس: ${escHtml(z||"-")} | الوحدة: ${escHtml(i.unit)} | الباركود: <code>${escHtml(v&&v!="-"?codeLook(i.id,v):nd(i.sku))}</code> | السعر: ${f(price)} ج.م</div>`}
 function unitSet(){const{i}=curIt(),u=$("#un");if(i){u.value=i.unit;u.disabled=true;showInfo(i,vk($("#cl").value.trim(),$("#sz").value.trim()),dp(i))}else{if(u.disabled)u.value="";u.disabled=D.t!="pur";$("#info").innerHTML=""}}
 function addBc(){
+  stopCam();
   const c=nd($("#bcd").value.trim()).toLowerCase();
   if(!c){$("#bmsg").textContent="اكتب كود الصنف أو الباركود أولاً"; return;}
   const h=S.codes.find(x=>x.code.toLowerCase()==c);
