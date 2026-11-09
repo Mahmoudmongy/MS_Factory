@@ -609,7 +609,7 @@ function genericImportFields(key){
   const inferred=spec?.[2]||(Array.isArray(value)?"json-array":value&&typeof value==="object"?"json-object":typeof value==="number"?"number":typeof value==="boolean"?"boolean":/^(id|rid|qty|q|total|gross|disc|st|wc|matCost|buy|retail|wholesale|val|dr|cr|fc|ts|c)$/i.test(k)?"number":"string");const type=["pid","iid","wh","a","po"].includes(k)?"reference":inferred;
   const label=IMPORT_FIELD_LABELS[key]?.[k]||spec?.[1]||k;
   const aliases=[k.toLowerCase(),label.toLowerCase(),...(IMPORT_FIELD_ALIASES[key]?.[k]||[])];
-  const required=spec?.[3]??(["name","no","code"].includes(k)?1:0);
+  const required=spec?.[3]??(key==="L"?["d","ref","a"].includes(k):key==="mv"?["d","iid","q"].includes(k):key==="codes"?["code","iid"].includes(k):key==="emp"?k==="name":["name","no","code"].includes(k)?1:0);
   return [k,label,required,aliases,type==="number"?1:0,type];
  });
 }
