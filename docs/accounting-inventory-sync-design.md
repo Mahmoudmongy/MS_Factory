@@ -120,6 +120,7 @@ The following supersedes the earlier rollout notes below, which described the pe
 - The source-effect writer initially allowed a deleted effect to be recreated by submitting its latest version. The follow-up migration now rejects any update to a tombstoned source identity permanently.
 - Baseline SQL tests: incomplete payload rejected; complete baseline built from the restored factory snapshot accepted inside a rolled-back transaction.
 - Source-effect SQL tests: authenticated write/read passed; stale optimistic version rejected; tombstone persisted and was readable; resurrection attempt rejected. All test writes were rolled back.
+- Role-boundary SQL tests: inventory-only role could write/read movements but not ledger; accounting-only role could write ledger but not movements; each update preserved the hidden section; a role with both permissions could tombstone the complete effect. The simulated profile changes and all test rows were rolled back; the original QA admin profile was verified restored.
 
 ### Auth and storage checks
 - `public.handle_new_user()` no longer grants direct execution to `PUBLIC`, `anon`, `authenticated`, or `service_role`. The existing `auth.users` trigger remains installed, and `postgres` retains execution permission.
