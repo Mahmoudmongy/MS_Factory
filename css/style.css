@@ -464,3 +464,13 @@ main{padding-bottom:calc(20px + env(safe-area-inset-bottom,0px))}
  #sb>.sb-controls,#sb>.br,#sb>a{flex:0 0 auto;}
  #sb a[onclick*="'set'"]{position:static!important;inset:auto!important;top:auto!important;right:auto!important;bottom:auto!important;left:auto!important;z-index:auto!important;box-shadow:none!important;margin-top:auto!important;}
 }
+
+
+/* Dedicated sidebar footer: settings stays pinned inside the drawer, never floats over content. */
+#sb{display:flex;flex-direction:column;overflow:hidden;}
+#sb .sb-controls{position:static!important;flex:0 0 auto;}
+#sb .br{flex:0 0 auto;}
+#sb .sb-nav-scroll{flex:1 1 auto;min-height:0;overflow-y:auto;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;}
+#sb .sb-footer{flex:0 0 auto;position:static;background:#1f2d3a;border-top:1px solid rgba(255,255,255,.16);padding:7px 0 calc(4px + env(safe-area-inset-bottom,0px));}
+#sb .sb-footer a{position:static!important;inset:auto!important;box-shadow:none!important;margin:0!important;}
+@media(max-width:860px){#sb{padding-bottom:0!important;height:100vh!important;height:100dvh!important;}}
