@@ -145,6 +145,10 @@ const accountingSectionApply=applyAccountingBaselineSection?applyAccountingBasel
 const accountingSectionApplyAgain=applyAccountingBaselineSection?applyAccountingBaselineSection(accountingSectionState,accountingSection):{applied:false};
 ok('accounting-only baseline restores accounts, partners and balanced opening ledger without exposing inventory section',
   accountingSectionApply.applied&&accountingSectionState.accts.length===2&&accountingSectionState.partners.length===1&&accountingSectionState.L.length===2&&accountingSectionState.items[0].st['-']===4&&accountingSectionApplyAgain.applied&&accountingSectionState.L.length===2);
+const accountingWithoutInventory={accts:[],partners:[],items:[],L:[],mv:[]};
+const accountingWithoutInventoryApply=applyAccountingBaselineSection?applyAccountingBaselineSection(accountingWithoutInventory,accountingSection):{applied:false};
+ok('accounting-only baseline does not require inventory products, quantities or movement state',
+  accountingWithoutInventoryApply.applied&&accountingWithoutInventory.accts.length===2&&accountingWithoutInventory.partners.length===1&&accountingWithoutInventory.L.length===2&&accountingWithoutInventory.items.length===0&&accountingWithoutInventory.mv.length===0);
 const baselineMigration=fs.readFileSync(path.join(ROOT,'supabase/migrations/20261108213000_factory_sync_baseline.sql'),'utf8');
 ok('baseline SQL provides immutable one-time publication and independently authorized section reads',
   /p_expected_version is distinct from 0/.test(baselineMigration)&&/Opening baseline is already published and immutable/.test(baselineMigration)&&/p_section = 'inventory'/.test(baselineMigration)&&/p_section = 'accounting'/.test(baselineMigration)&&baselineMigration.includes("can_access_factory_owner_strict(v_owner_id, 'inventory')")&&baselineMigration.includes("can_access_factory_owner_strict(v_owner_id, 'settings')"));
