@@ -86,7 +86,7 @@ async function xl(t,rows){
 }
 /* ===== barcode ===== */
 const PT="212222,222122,222221,121223,121322,131222,122213,122312,132212,221213,221312,231212,112232,122132,122231,113222,123122,123221,223211,221132,221231,213212,223112,312131,311222,321122,321221,312212,322112,322211,212123,212321,232121,111323,131123,131321,112313,132113,132311,211313,231113,231311,112133,112331,132131,113123,113321,133121,313121,211331,231131,213113,213311,213131,311123,311321,331121,312113,312311,332111,314111,221411,431111,111224,111422,121124,121421,141122,141221,112214,112412,122114,122411,142112,142211,241211,221114,413111,241112,134111,111242,121142,121241,114212,124112,124211,411212,421112,421211,212141,214121,412121,111143,111341,131141,114113,114311,411113,411311,113141,114131,311141,411131,211412,211214,211232,2331112".split(",");
-function bc(t){const c=[104];for(let i=0;i<t.length;i++)c.push(t.charCodeAt(i)-32);let s=104;for(let i=1;i<c.length;i++)s+=c[i]*i;c.push(s%103,106);let x=10,r="";c.forEach(v=>{const p=PT[v];for(let i=0;i<p.length;i++){const w=+p[i];if(i%2==0)r+=`<rect x="${x}" y="0" width="${w}" height="50"/>`;x+=w}});x+=10;return `<svg viewBox="0 0 ${x} 50" preserveAspectRatio="none">${r}</svg>`}
+function bc(t){t=String(t??"");if(!t||Array.from(t).some(ch=>ch.length!==1||ch.charCodeAt(0)<32||ch.charCodeAt(0)>126))return '<span class="mu">كود غير صالح للباركود</span>';const c=[104];for(let i=0;i<t.length;i++)c.push(t.charCodeAt(i)-32);let s=104;for(let i=1;i<c.length;i++)s+=c[i]*i;c.push(s%103,106);let x=10,r="";c.forEach(v=>{const p=PT[v];for(let i=0;i<p.length;i++){const w=+p[i];if(i%2==0)r+=`<rect x="${x}" y="0" width="${w}" height="50"/>`;x+=w}});x+=10;return `<svg viewBox="0 0 ${x} 50" preserveAspectRatio="none">${r}</svg>`}
 let LB=[];function labels(l){LB=l;sh(`<h3>طباعة باركود</h3><div class="row"><div><label>عدد النسخ لكل ملصق</label><input id="cp" type="number" min="1" value="1" oninput="drawLb()"></div><div><label>مقاس الملصق (إعداد الطابعة)</label><select id="lsz" onchange="lsz()"><option value="50x30">50×30 مم</option><option value="40x25">40×25 مم</option><option value="60x40">60×40 مم</option><option value="80x50">80×50 مم</option></select></div></div><div id="pr"></div><div class="row"><button onclick="print()">🖨️ طباعة</button>${bk}</div>`);lsz();drawLb()}
 function lsz(){const[w,h]=$("#lsz").value.split("x");$g("#pgst").textContent=`@media print{@page{size:${w}mm ${h}mm;margin:1mm}.lbls{display:block}.lb{width:${w-2}mm;height:${h-2}mm;page-break-after:always;border:0}}`}
 function drawLb(){const n=Math.max(1,+$("#cp").value||1);let h="";LB.forEach(l=>{for(let i=0;i<n;i++)h+=`<div class="lb"><b>${l.t}</b><div>${l.s||""}</div>${bc(l.c)}<code>${l.c}</code></div>`});$("#pr").innerHTML=`<div class="lbls">${h}</div>`}
@@ -380,7 +380,8 @@ function addBc(){
     }
   }
   if(!it){
-    $("#bmsg").innerHTML=`<span style="color:#c0392b;font-weight:700">⚠️ الباركود غير موجود: ${c}</span>`;
+    const safeC=String(c).replace(/[&<>"']/g,s=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[s]));
+    $("#bmsg").innerHTML=`<span style="color:#c0392b;font-weight:700">⚠️ الباركود غير موجود: ${safeC}</span>`;
     toast("الباركود غير موجود: "+c);
     return;
   }
