@@ -216,13 +216,14 @@ function eForm(id){
  if(id&&!can("edit"))return;const e=id?S.emp.find(x=>x.id==id):null;if(id&&!e)return;idImg=e?e.img||"":"";
  const escE=v=>String(v||"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/"/g,"&quot;");
  let h="<h3>"+(e?"تعديل بيانات موظف":"تعيين موظف")+"</h3><input id=\"e1\" placeholder=\"اسم الموظف\" value=\""+escE(e?.name)+"\"><input id=\"e2\" type=\"tel\" dir=\"ltr\" placeholder=\"رقم التليفون 1 (اختياري)\" value=\""+escE(e?.p1)+"\"><input id=\"e3\" type=\"tel\" dir=\"ltr\" placeholder=\"رقم التليفون 2 (اختياري)\" value=\""+escE(e?.p2)+"\">"+addrF(e||{})+"<label>صورة البطاقة (اختياري)</label><input type=\"file\" accept=\"image/*\" onchange=\"pick(this,v=>idImg=v)\">";
- if(!e)h+="<div class=\"card\"><label><input type=\"checkbox\" id=\"e-account\" onchange=\"toggleEmployeeAccount()\"> إنشاء حساب دخول للموظف</label><div id=\"e-account-fields\" hidden><label>اسم المستخدم (اختياري — اتركه فارغًا للتوليد التلقائي)</label><input id=\"e-username\" dir=\"ltr\" placeholder=\"اختياري\"><label>كلمة المرور الافتراضية</label><input id=\"e-default-password\" type=\"text\" dir=\"ltr\" value=\"password\"><small class=\"mu\">سيُطلب من الموظف تغييرها عند أول دخول.</small></div></div>";
- h+="<div><b>الصلاحيات</b></div>"+U(T,t=>"<label style=\"display:block\"><input type=\"checkbox\" class=\"pm\" value=\""+t[0]+"\" "+(e&&e.perm.includes(t[0])?"checked":"")+"> "+t[2]+"</label>")+"<label><input type=\"checkbox\" class=\"pm\" value=\"edit\" "+(e&&e.perm.includes("edit")?"checked":"")+"> تعديل المستندات</label><label><input type=\"checkbox\" class=\"pm\" value=\"del\" "+(e&&e.perm.includes("del")?"checked":"")+"> حذف الحركات</label><p id=\"er\" class=\"mu\"></p><div class=\"row\"><button onclick=\"saveE("+(id||0)+")\">حفظ</button>"+bk+"</div>";sh(h);if(e)gvChg(e.city||"");
+ if(!e)h+="<div class=\"card\"><label><input type=\"checkbox\" id=\"e-account\" onchange=\"toggleEmployeeAccount()\"> إنشاء حساب دخول للموظف</label><div id=\"e-account-fields\" hidden><label>اسم المستخدم (إجباري عند إنشاء الحساب)</label><input id=\"e-username\" dir=\"ltr\" placeholder=\"اختياري\"><label>كلمة المرور الافتراضية</label><input id=\"e-default-password\" type=\"text\" dir=\"ltr\" value=\"password\"><small class=\"mu\">سيُطلب من الموظف تغييرها عند أول دخول.</small></div></div>";
+ h+="<div class=\"row\"><b>الصلاحيات</b><button type=\"button\" class=\"g\" onclick=\"toggleAllEmployeePermissions(this)\">تحديد الكل</button></div>"+U(T,t=>"<label style=\"display:block\"><input type=\"checkbox\" class=\"pm\" value=\""+t[0]+"\" "+(e&&e.perm.includes(t[0])?"checked":"")+"> "+t[2]+"</label>")+"<label><input type=\"checkbox\" class=\"pm\" value=\"edit\" "+(e&&e.perm.includes("edit")?"checked":"")+"> تعديل المستندات</label><label><input type=\"checkbox\" class=\"pm\" value=\"del\" "+(e&&e.perm.includes("del")?"checked":"")+"> حذف الحركات</label><p id=\"er\" class=\"mu\"></p><div class=\"row\"><button onclick=\"saveE("+(id||0)+")\">حفظ</button>"+bk+"</div>";sh(h);if(e)gvChg(e.city||"");
 }
-function toggleEmployeeAccount(){const f=$g("#e-account-fields");if(f)f.hidden=!$g("#e-account")?.checked;}
+function toggleEmployeeAccount(){const f=$g("#e-account-fields"),enabled=!!$g("#e-account")?.checked;if(f)f.hidden=!enabled;const u=$g("#e-username");if(u){u.required=enabled;u.setAttribute("aria-required",String(enabled));if(!enabled)u.value="";}}
+function toggleAllEmployeePermissions(btn){const boxes=[...document.querySelectorAll(".pm")],all=boxes.length>0&&boxes.every(x=>x.checked);boxes.forEach(x=>x.checked=!all);if(btn)btn.textContent=all?"تحديد الكل":"إلغاء تحديد الكل";}
 async function saveE(id){if(id&&!can("edit"))return;const n=$("#e1").value.trim(),a=$("#e2").value.trim(),b=$("#e3").value.trim(),old=id?S.emp.find(x=>x.id==id):null;if(!n){$("#er").textContent="اكتب اسم الموظف على الأقل";return;}if(!guard())return;
  const data={name:n,p1:a,p2:b,img:idImg,...rdA(),perm:[...document.querySelectorAll(".pm:checked")].map(x=>x.value)};let authUserId=old?.authUserId||null,createdUsername="";
- if(!id&&$("#e-account")?.checked){const enteredUsername=$("#e-username").value.trim().toLowerCase(),username=enteredUsername||("worker"+Date.now().toString(36).toLowerCase()),password=$("#e-default-password").value;if(!/^[a-z0-9._-]{3,40}$/.test(username)){$("#er").textContent="اسم المستخدم من 3 إلى 40 حرفًا إنجليزيًا أو رقمًا أو . _ -";return;}if(password.length<8){$("#er").textContent="كلمة المرور لا تقل عن 8 أحرف";return;}const selected=data.perm;const permissions={invoices:selected.some(x=>["sale","sret","pur","pret","rc","py"].includes(x)),inventory:selected.includes("stock"),customers:selected.includes("cust"),suppliers:selected.includes("supp"),production:selected.includes("prod"),reports:selected.includes("rep")||selected.includes("tl")||selected.includes("ai"),settings:selected.some(x=>["set","coa","je","bank","emp"].includes(x))};
+ if(!id&&$("#e-account")?.checked){const username=$("#e-username").value.trim().toLowerCase(),password=$("#e-default-password").value;if(!username){$("#er").textContent="اسم المستخدم إجباري عند إنشاء حساب الدخول";return;}if(S.emp.some(x=>String(x.username||"").toLowerCase()===username)){$("#er").textContent="اسم المستخدم مستخدم بالفعل؛ اختر اسمًا آخر";return;}if(!/^[a-z0-9._-]{3,40}$/.test(username)){$("#er").textContent="اسم المستخدم من 3 إلى 40 حرفًا إنجليزيًا أو رقمًا أو . _ -";return;}if(password.length<8){$("#er").textContent="كلمة المرور لا تقل عن 8 أحرف";return;}const selected=data.perm;const permissions={invoices:selected.some(x=>["sale","sret","pur","pret","rc","py"].includes(x)),inventory:selected.includes("stock"),customers:selected.includes("cust"),suppliers:selected.includes("supp"),production:selected.includes("prod"),reports:selected.includes("rep")||selected.includes("tl")||selected.includes("ai"),settings:selected.some(x=>["set","coa","je","bank","emp"].includes(x))};
  try{const {supabase}=await import("./supabase.js");const {data:created,error}=await supabase.functions.invoke("create-employee-account",{body:{username,full_name:n,password,permissions}});if(error||created?.success!==true)throw new Error(created?.error||error?.message||"تعذر إنشاء الحساب");authUserId=created.user_id;createdUsername=username;}catch(error){$("#er").textContent=error.message||"فشل إنشاء الحساب";return;}}
  if(old)Object.assign(old,data,{authUserId});else S.emp.push({id:uid(),...data,...(authUserId?{authUserId,username:createdUsername}:{})});sv();nav();toast(old?"تم تعديل بيانات الموظف":createdUsername?"تم حفظ الموظف وإنشاء حساب الدخول: "+createdUsername:"تم حفظ الموظف");cl();
 }
@@ -598,20 +599,7 @@ document.addEventListener('click', function(e){ if(e.target.closest('#sb a')) cl
 
 // ===== Mobile UX - Final Version =====
 let lastNavClick = {time:0, target:''};
-function handleNavClick(e, sid){
-  const now = Date.now();
-  // Double click detection (300ms)
-  if(lastNavClick.target === sid && (now - lastNavClick.time) < 350){
-    e.preventDefault();
-    go(sid,0,true); // new tab
-    lastNavClick.time=0;
-    lastNavClick.target='';
-    return;
-  }
-  lastNavClick.time=now;
-  lastNavClick.target=sid;
-  go(sid); // same tab
-}
+function handleNavClick(e,sid){if(e&&e.button===1){e.preventDefault();go(sid,0,true);return;}go(sid);}
 function isMobile(){ return window.innerWidth <= 860; }
 let deferredPrompt=null;window.addEventListener('beforeinstallprompt',e=>{e.preventDefault();deferredPrompt=e;if(CUR&&CUR.sid=='set')render()});
 function canInstall(){return !!deferredPrompt}
