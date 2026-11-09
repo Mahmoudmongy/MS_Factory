@@ -338,3 +338,4 @@ input::placeholder,textarea::placeholder{color:var(--mu);opacity:.72}
  #top{grid-template-columns:30px 30px minmax(120px,1fr) 30px 32px minmax(90px,125px) 32px 32px}
 }
 @media(max-width:860px){#top #bg{display:inline-flex!important}}
+@media(max-width:860px){#top #bg{display:block!important;text-align:center}#top #bg svg{display:block;margin:auto}}
