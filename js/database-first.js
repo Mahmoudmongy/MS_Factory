@@ -68,6 +68,31 @@ function splitState(state) {
   }
   return { arrays, meta };
 }
+function clearLegacyDeviceData() {
+  const marker = 'ms-factory-empty-device-v1:' + storageScope;
+  if (localStorage.getItem(marker) === '1') return;
+  const remove = [];
+  for (let i = 0; i < localStorage.length; i++) {
+    const key = localStorage.key(i);
+    if (!key) continue;
+    if (key === 'mgr6' || key === 'mgr6-sync-pending' || key === 'mgr6-cloud-snapshot-conflict' ||
+        key.startsWith('mgr6-backup') || key.startsWith('ms-factory-db-queue-v1:') ||
+        key.startsWith('ms-factory-db-baseline-v1:') || key.startsWith('ms-factory-db-last-sync-v1:') ||
+        key.startsWith('ms-factory-db-cache-v1:')) remove.push(key);
+  }
+  for (const key of remove) localStorage.removeItem(key);
+  localStorage.setItem(marker, '1');
+}
+function resetLocalBusinessState() {
+  const state = getState();
+  const { arrays } = splitState(state);
+  const patch = {};
+  for (const [type, items] of Object.entries(arrays)) {
+    // Keep only the built-in chart-of-accounts and warehouse templates; all device business data is discarded.
+    patch[type] = type === 'accts' || type === 'wh' ? items : [];
+  }
+  window.__factoryReplaceArrays?.(patch);
+}
 function persistBaseline() {
   try {
     localStorage.setItem(scopedKey(BASELINE_KEY), JSON.stringify([...baseline.values()].map(row => ({
@@ -157,8 +182,14 @@ function hydrateFromRows(rows) {
     return Number.isFinite(ai) && Number.isFinite(bi) ? ai-bi : String(a?.id ?? a?.no ?? '').localeCompare(String(b?.id ?? b?.no ?? ''));
   });
   const local = getState();
+  const { arrays: localArrays } = splitState(local);
   const patch = {};
-  for (const [type, items] of Object.entries(grouped)) patch[type] = items;
+  for (const [type, items] of Object.entries(localArrays)) {
+    patch[type] = grouped[type] || (type === 'accts' || type === 'wh' ? items : []);
+  }
+  for (const [type, items] of Object.entries(grouped)) {
+    if (!Object.prototype.hasOwnProperty.call(patch, type)) patch[type] = items;
+  }
   if (metaRow?.payload && typeof metaRow.payload === 'object') patch.__meta = metaRow.payload;
   window.__factoryReplaceArrays?.(patch);
   const current = getState();
@@ -172,18 +203,6 @@ function hydrateFromRows(rows) {
   }
   if (!baseline.has(mapKey('__meta','main'))) baseline.set(mapKey('__meta','main'), { type:'__meta', id:'main', payload:meta, version:0, deleted_at:null });
   persistBaseline();
-}
-function buildInitialOperations(state) {
-  const { arrays, meta } = splitState(state);
-  const operations = [];
-  for (const [type,items] of Object.entries(arrays)) {
-    items.forEach((item,index) => operations.push({
-      type, id:recordKey(type,item,index), payload:cleanPayload(item),
-      expectedVersion:0, deleted:false
-    }));
-  }
-  operations.push({type:'__meta',id:'main',payload:meta,expectedVersion:0,deleted:false});
-  return operations;
 }
 function makeOperations(state) {
   const { arrays, meta } = splitState(state);
@@ -263,6 +282,7 @@ async function flushQueue() {
   await writeOperations(queue);
   for (const op of queue) applyOperationToState(op);
   setQueue([]);
+  localStorage.removeItem('mgr6');
   localStorage.removeItem('mgr6-sync-pending');
 }
 async function persistState(state) {
@@ -351,6 +371,8 @@ async function bootstrap() {
     actorId = profile?.id || null;
     ownerId = profile?.created_by || profile?.id || null;
     storageScope = ownerId || 'anonymous';
+    clearLegacyDeviceData();
+    resetLocalBusinessState();
     const cachedRows=loadCachedRows();
     if(cachedRows.length) hydrateFromRows(cachedRows);
     else snapshotBaseline(getState());
@@ -371,24 +393,13 @@ async function bootstrap() {
   profile=profileData;
   ownerId=profile.created_by || profile.id;
   storageScope = ownerId;
-  storageScope = ownerId;
-  let rows=await fetchAllRecords();
-  if (!rows.length && profile.is_admin === true) {
-    // One-time import only when this factory has no database records yet.
-    // All subsequent saves are record-level atomic writes; this path never runs again after the first batch.
-    snapshotBaseline(getState());
-    try {
-      await writeOperations(buildInitialOperations(getState()));
-      setLastSyncAt(new Date().toISOString());
-    } catch (error) {
-      if (error?.code !== 'FACTORY_RECORD_CONFLICT') throw error;
-      rows=await fetchAllRecords();
-      hydrateFromRows(rows);
-    }
-  } else {
-    hydrateFromRows(rows);
-    setLastSyncAt(new Date().toISOString());
-  }
+  clearLegacyDeviceData();
+  resetLocalBusinessState();
+  const rows = await fetchAllRecords();
+  // Supabase is the only source of business records. An empty database stays empty;
+  // legacy data from this device or another device is never imported.
+  hydrateFromRows(rows);
+  setLastSyncAt(new Date().toISOString());
   stateReady=true;
   window.__factoryDatabaseFirstReady = true;
   window.__factoryDatabaseFirstFailed = false;
