@@ -659,6 +659,7 @@ function detectImportTarget(sheetName){
  if(/عملاء.?وموردون|partners/.test(n))return "partners";
  if(/عميل|customer|client/.test(n))return "customers";
  if(/مورد|supplier/.test(n))return "suppliers";
+ if(/حركات.?المخزون|stock.?movements/.test(n))return "list:mv";
  if(/صنف|مخزون|item|stock/.test(n))return "items";
  if(/شجرة.?الحسابات|دليل.?الحسابات|account.?tree|accounts/.test(n))return "list:accts";
  if(/مخازن.?فرعية|المخازن|warehouse|warehouses/.test(n))return "list:wh";
@@ -669,7 +670,6 @@ function detectImportTarget(sheetName){
  if(/باركود|أكواد|اكواد|codes/.test(n))return "list:codes";
  if(/قيود.?اليومية|journal.?entries/.test(n))return "list:je";
  if(/موظفين|الموظفون|employees/.test(n))return "list:emp";
- if(/حركات.?المخزون|stock.?movements/.test(n))return "list:mv";
  if(/دفتر.?الأستاذ|دفتر.?الاستاذ|ledger/.test(n))return "list:L";
  if(/عملات|currencies/.test(n))return "list:curs";
  if(/تبويبات.?مخفية|hidden.?tabs/.test(n))return "list:hide";
