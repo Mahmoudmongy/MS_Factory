@@ -321,3 +321,14 @@ input::placeholder,textarea::placeholder{color:var(--mu);opacity:.72}
  #top{grid-template-columns:25px 22px 22px minmax(20px,1fr) 25px 27px minmax(58px,70px) 26px 26px;gap:2px;padding-inline:3px}
  #top #who{max-width:70px}
 }
+
+/* Readable inline date controls and consistent navigation icon treatment */
+.filter-card .row>div:has(input[type=date]){display:flex;align-items:center;gap:6px;min-width:0}
+.filter-card .row>div:has(input[type=date])>label{flex:none;white-space:nowrap;font-size:11px;margin:0}
+.filter-card .row>div:has(input[type=date])>input{flex:1;min-width:0}
+#sb a .nav-ico{width:20px;height:20px;stroke-width:1.8;opacity:.92;transition:transform .15s ease,opacity .15s ease}
+#sb a:hover .nav-ico{opacity:1;transform:scale(1.08)}
+#sb a.on .nav-ico{opacity:1;filter:drop-shadow(0 0 3px rgba(255,255,255,.2))}
+#tabs .tb-close{cursor:pointer;transition:background .15s ease,color .15s ease}
+#tabs .tb-close:hover{background:var(--rd);color:#fff;border-color:var(--rd)}
+#top #sync-btn:hover{background:rgba(56,189,248,.28);box-shadow:0 0 0 3px rgba(56,189,248,.1)}
