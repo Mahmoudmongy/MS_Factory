@@ -42,13 +42,21 @@ jobs:
           VITE_SUPABASE_ANON_KEY: sb_publishable_7y8sqUPYv4mCfmpjin3xRQ_1_X5QJfG
 
       - name: Verify required static assets
+        shell: bash
         run: |
-          test -s dist/index.html
-          test -s dist/auth.html
-          test -s dist/change-password.html
-          test -s dist/js/app.js
-          test -s dist/sw.js
-          test -s dist/manifest.json
+          set -euo pipefail
+          echo "Built files:"
+          find dist -maxdepth 4 -type f -printf '%p (%s bytes)\\n' | sort
+          for file in dist/index.html dist/auth.html dist/change-password.html dist/js/app.js dist/sw.js; do
+            if [[ ! -s "$file" ]]; then
+              echo "::error::Required runtime asset is missing or empty: $file"
+              exit 1
+            fi
+          done
+          if ! grep -q 'manifest' dist/index.html; then
+            echo "::error::PWA manifest reference is missing from the built application shell"
+            exit 1
+          fi
 
       - name: Deploy static application to Cloudflare Workers
         uses: cloudflare/wrangler-action@v4
