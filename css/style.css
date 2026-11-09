@@ -193,7 +193,7 @@ button:disabled{opacity:.55;cursor:not-allowed}
  #top #net-cloud{width:23px;height:23px}
  #top #who{width:100%;max-width:104px;min-width:0;font-size:12px;padding:4px 18px 4px 4px;margin:0;min-height:34px}
  #top #thb,#top #logout-btn{width:34px;min-width:34px;height:34px}
- #sb{width:50vw;max-width:270px;min-width:190px}
+ #sb{width:50vw;max-width:270px;min-width:0}
  #sb.icons-only{width:68px;min-width:68px}
  #sb a{min-height:44px;padding:10px 12px;font-size:14px}
  #sb .br{padding:12px;font-size:17px}
@@ -212,3 +212,20 @@ button:disabled{opacity:.55;cursor:not-allowed}
  .ph .row button{min-height:34px;padding:5px 8px;font-size:12px}
 }
 @media(max-width:390px){#top{grid-template-columns:34px minmax(0,1fr) 34px 74px 34px 34px;gap:3px}#top #who{max-width:74px;font-size:11px}#sb{width:52vw;min-width:180px}#sb.icons-only{width:64px;min-width:64px}}
+
+/* Final mobile drawer and bidirectional toolbar refinements */
+@media(max-width:860px){
+  #sb{width:50vw!important;max-width:270px;min-width:0!important}
+  #sb.icons-only{width:68px!important;min-width:68px!important}
+  #sb-overlay{z-index:29}
+  #sb{z-index:30}
+  #top{min-width:0;grid-template-columns:36px minmax(0,1fr) 36px minmax(64px,100px) 36px 36px;gap:4px}
+  #top #bg,#top #net,#top #thb,#top #logout-btn{width:36px;min-width:36px;height:36px}
+  #top #who{max-width:100px;min-width:0}
+  html[dir=ltr] #top #who{padding:4px 4px 4px 18px}
+}
+@media(min-width:861px){
+  #top{min-width:0;grid-template-columns:36px 36px 36px minmax(0,1fr) 38px minmax(88px,128px) 36px 36px;gap:4px;padding:4px 8px;min-height:44px}
+  #top button,#top select{min-width:0}
+}
+#sb .sb-mode{direction:inherit}
