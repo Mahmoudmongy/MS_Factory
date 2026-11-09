@@ -273,7 +273,7 @@ function syncPage(){
   try{const q=JSON.parse(localStorage.getItem("ms-factory-db-queue-v1")||"[]");queued=Array.isArray(q)?q.length:0}catch(e){}
   const offline=!navigator.onLine||window.__factoryOfflineMode===true;
   const ready=window.__factoryDatabaseFirstReady===true;
-  const status=offline?(queued?"🔴 غير متصل - تغييرات محفوظة محليًا":"🔴 غير متصل - العمل دون اتصال"):queued?"🟡 توجد تغييرات في انتظار الإرسال":ready?"🟢 متصل - الحفظ المباشر على قاعدة البيانات":"🟡 جارٍ الاتصال بقاعدة البيانات";
+  const status=window.__factoryDatabaseFirstFailed?"🔴 فشل الاتصال بقاعدة البيانات":offline?(queued?"🔴 غير متصل - تغييرات محفوظة محليًا":"🔴 غير متصل - العمل دون اتصال"):queued?"🟡 توجد تغييرات في انتظار الإرسال":ready?"🟢 متصل - الحفظ المباشر على قاعدة البيانات":"🟡 جارٍ الاتصال بقاعدة البيانات";
   const role=cloudProfile()?.is_admin===true?"مدير النظام":"حساب موظف";
   const c=[
     ["فواتير ومرتجعات",S.docs.length],
