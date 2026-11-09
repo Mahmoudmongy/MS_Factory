@@ -109,6 +109,118 @@ function mergeByKey(existing, incoming, keyFn) {
   (incoming || []).forEach(it => { try { const k = keyFn(it); if (k && !map.has(String(k))) { map.set(String(k), it); added++; } } catch(e){} });
   return { arr: [...map.values()], added };
 }
+function mergeCloudProducts(existing, incoming) {
+  const rows = Array.isArray(existing) ? existing : [];
+  const map = new Map();
+  const skuMap = new Map();
+  rows.forEach(item => {
+    if (!item || typeof item !== "object") return;
+    const identity = item.cloudId || item.id;
+    if (identity != null) map.set(String(identity), item);
+    const sku = String(item.sku || "").trim();
+    if (sku) {
+      if (!skuMap.has(sku)) skuMap.set(sku, []);
+      skuMap.get(sku).push(item);
+    }
+  });
+  let added = 0, linked = 0, conflicts = 0;
+  (Array.isArray(incoming) ? incoming : []).forEach(remote => {
+    if (!remote || typeof remote !== "object") return;
+    const identity = remote.cloudId || remote.id;
+    if (identity == null) return;
+    const key = String(identity);
+    if (map.has(key)) return;
+    const sku = String(remote.sku || "").trim();
+    const matches = sku ? (skuMap.get(sku) || []) : [];
+    if (matches.length === 1) {
+      const local = matches[0];
+      const sameName = String(local.name || "").trim().toLocaleLowerCase() === String(remote.name || "").trim().toLocaleLowerCase();
+      if (sameName && (!local.cloudId || String(local.cloudId) === key)) {
+        local.cloudId = key;
+        map.set(key, local);
+        linked++;
+      } else {
+        local._cloudConflict = { reason: "product_identity_mismatch", serverCopy: remote };
+        conflicts++;
+      }
+      return;
+    }
+    if (matches.length > 1) {
+      matches.forEach(local => { local._cloudConflict = { reason: "ambiguous_product_sku", serverCopy: remote }; });
+      conflicts++;
+      return;
+    }
+    map.set(key, remote);
+    rows.push(remote);
+    if (sku) {
+      if (!skuMap.has(sku)) skuMap.set(sku, []);
+      skuMap.get(sku).push(remote);
+    }
+    added++;
+  });
+  return { arr: rows, added, linked, conflicts };
+}
+
+function mergeCloudPartners(existing, incoming) {
+  const rows = Array.isArray(existing) ? existing : [];
+  const byIdentity = new Map();
+  rows.forEach(local => {
+    if (!local || typeof local !== "object") return;
+    const identity = local.cloudId || local.id;
+    if (identity != null) byIdentity.set(String(identity), local);
+  });
+  let added = 0, linked = 0, conflicts = 0;
+  (Array.isArray(incoming) ? incoming : []).forEach(remote => {
+    if (!remote || typeof remote !== "object") return;
+    const identity = remote.cloudId || remote.id;
+    if (identity == null) return;
+    const key = String(identity);
+    const remoteIsCustomer = remote.kind === "customer" || remote.c === 1;
+    const remoteIsSupplier = remote.kind === "supplier" || remote.s === 1;
+    const local = byIdentity.get(key);
+    if (local) {
+      if (remoteIsCustomer) local.c = 1;
+      if (remoteIsSupplier) local.s = 1;
+      return;
+    }
+    const name = String(remote.name || "").trim().toLocaleLowerCase();
+    const phone = String(remote.phone || "").trim();
+    const matches = rows.filter(item => {
+      const sameName = name && String(item.name || "").trim().toLocaleLowerCase() === name;
+      const samePhone = phone && String(item.phone || "").trim() === phone;
+      return sameName || samePhone;
+    });
+    if (matches.length === 1) {
+      const candidate = matches[0];
+      const sameName = String(candidate.name || "").trim().toLocaleLowerCase() === name;
+      const samePhone = !phone || !candidate.phone || String(candidate.phone).trim() === phone;
+      if (sameName && samePhone && (!candidate.cloudId || String(candidate.cloudId) === key)) {
+        candidate.cloudId = key;
+        if (remoteIsCustomer) candidate.c = 1;
+        if (remoteIsSupplier) candidate.s = 1;
+        byIdentity.set(key, candidate);
+        linked++;
+      } else {
+        candidate._cloudConflict = { reason: "partner_identity_mismatch", serverCopy: remote };
+        conflicts++;
+      }
+      return;
+    }
+    if (matches.length > 1) {
+      matches.forEach(candidate => { candidate._cloudConflict = { reason: "ambiguous_partner_identity", serverCopy: remote }; });
+      conflicts++;
+      return;
+    }
+    const normalized = { ...remote, id: remote.id ?? key, cloudId: key,
+      c: remoteIsCustomer ? 1 : Number(remote.c || 0),
+      s: remoteIsSupplier ? 1 : Number(remote.s || 0) };
+    rows.push(normalized);
+    byIdentity.set(key, normalized);
+    added++;
+  });
+  return { arr: rows, added, linked, conflicts };
+}
+
 function mergeCloudInvoices(existing, incoming) {
   const map = new Map();
   (existing || []).forEach(it => { const k = it && (it.id || it.no); if (k) map.set(String(k), it); });
@@ -152,6 +264,920 @@ function mergeCloudRecords(existing, incoming) {
     }
   });
   return { arr: [...map.values()], added, conflicts };
+}
+
+
+// Build a deterministic, source-scoped view of accounting/inventory effects.
+// This is intentionally a pure collector: it does not upload, mutate, or apply balances.
+function collectSourceEffects(state) {
+  const allowed = new Set(["doc", "po", "vch", "je", "wo"]);
+  const groups = new Map();
+  const invalid = [];
+  const ignored = [];
+  const add = (kind, row, index) => {
+    if (!row || typeof row !== "object") { invalid.push({ kind, index, reason: "invalid_row" }); return; }
+    const sourceType = String(row.src || "");
+    const hasSourceId = row.rid !== undefined && row.rid !== null && String(row.rid) !== "";
+    // First-launch opening balances predate source IDs and are baseline state, not replayable deltas.
+    if (!hasSourceId && (row.desc === "رصيد افتتاحي" || row.ref === "رصيد افتتاحي")) {
+      ignored.push({ kind, index, reason: "opening_baseline" }); return;
+    }
+    if (!allowed.has(sourceType)) { invalid.push({ kind, index, reason: "unsupported_source", sourceType }); return; }
+    if (!hasSourceId) { invalid.push({ kind, index, reason: "missing_source_id", sourceType }); return; }
+    const sourceId = String(row.rid);
+    const key = JSON.stringify([sourceType, sourceId]);
+    if (!groups.has(key)) groups.set(key, { sourceType, sourceId, ledger: [], movements: [] });
+    groups.get(key)[kind].push(row);
+  };
+  (Array.isArray(state?.L) ? state.L : []).forEach((row, index) => add("ledger", row, index));
+  (Array.isArray(state?.mv) ? state.mv : []).forEach((row, index) => add("movements", row, index));
+  const effects = [...groups.values()];
+  const stable = value => {
+    if (Array.isArray(value)) return "[" + value.map(stable).join(",") + "]";
+    if (value && typeof value === "object") return "{" + Object.keys(value).sort().map(k => JSON.stringify(k) + ":" + stable(value[k])).join(",") + "}";
+    return JSON.stringify(value);
+  };
+  for (const effect of effects) {
+    effect.ledger.sort((a, b) => stable(a).localeCompare(stable(b)));
+    effect.movements.sort((a, b) => stable(a).localeCompare(stable(b)));
+  }
+  effects.sort((a, b) => a.sourceType.localeCompare(b.sourceType) || a.sourceId.localeCompare(b.sourceId));
+  return { effects, invalid, ignored };
+}
+
+// Convert device-local foreign keys into the stable business keys already used by detail sync.
+// The function refuses ambiguous/missing references; it never guesses by item or account name.
+function normalizeSourceEffects(state) {
+  const collected = collectSourceEffects(state);
+  const invalid = [...collected.invalid];
+  const accountById = new Map();
+  const accountCodes = new Map();
+  for (const account of Array.isArray(state?.accts) ? state.accts : []) {
+    if (!account || account.id == null || account.code == null || String(account.code).trim() === "") continue;
+    const id = String(account.id), code = String(account.code).trim();
+    if (accountCodes.has(code) && accountCodes.get(code) !== id) {
+      invalid.push({ reason: "duplicate_account_code", code });
+      continue;
+    }
+    accountCodes.set(code, id);
+    accountById.set(id, {
+      code, name: String(account.name || ""), type: String(account.t || "A"),
+      key: String(account.k || ""), cash: Number(account.cash || 0),
+      currency: String(account.cur || "EGP")
+    });
+  }
+  const itemById = new Map();
+  const itemIds = new Set();
+  const itemSkuToId = new Map();
+  for (const item of Array.isArray(state?.items) ? state.items : []) {
+    if (!item || item.id == null) continue;
+    const id = String(item.id);
+    if (itemIds.has(id)) invalid.push({ reason: "duplicate_item_id", id });
+    itemIds.add(id);
+    const sku = String(item.sku || "").trim();
+    if (sku && itemSkuToId.has(sku) && itemSkuToId.get(sku) !== id) {
+      invalid.push({ reason: "duplicate_item_sku", sku });
+    } else if (sku) itemSkuToId.set(sku, id);
+    const itemInfo = {
+      localId: id,
+      externalId: String(item.cloudId || id),
+      name: String(item.name || ""),
+      sku,
+      warehouseId: item.wh == null ? null : String(item.wh),
+      warehouseName: (state.wh || []).find(w => String(w.id) === String(item.wh))?.name || "",
+      unit: String(item.unit || "")
+    };
+    for (const alias of new Set([id, itemInfo.externalId])) {
+      const previous = itemById.get(alias);
+      if (previous && previous.localId !== id) {
+        invalid.push({ reason: "ambiguous_item_identity_alias", alias });
+      } else itemById.set(alias, itemInfo);
+    }
+  }
+  const partnerById = new Map();
+  for (const partner of Array.isArray(state?.partners) ? state.partners : []) {
+    if (partner?.id != null) {
+      const info = { externalId: String(partner.cloudId || partner.id), name: String(partner.name || "") };
+      partnerById.set(String(partner.id), info);
+      partnerById.set(info.externalId, info);
+    }
+  }
+  const effects = collected.effects.map(effect => {
+    const ledger = effect.ledger.map(row => {
+      const account = accountById.get(String(row.a));
+      if (!account) { invalid.push({ sourceType: effect.sourceType, sourceId: effect.sourceId, reason: "unmapped_account", accountId: String(row.a) }); return null; }
+      let partner = null;
+      if (row.pid != null && Number(row.pid) !== 0) {
+        partner = partnerById.get(String(row.pid));
+        if (!partner) { invalid.push({ sourceType: effect.sourceType, sourceId: effect.sourceId, reason: "unmapped_partner", partnerId: String(row.pid) }); return null; }
+      }
+      return {
+        date: row.d || null, timestamp: Number(row.ts || 0), reference: String(row.ref || ""),
+        description: String(row.desc || ""), accountCode: account.code, accountName: account.name,
+        accountType: account.type, accountKey: account.key, accountIsCash: account.cash,
+        accountCurrency: account.currency,
+        debit: Number(row.dr || 0), credit: Number(row.cr || 0),
+        partnerExternalId: partner?.externalId || null, partnerName: partner?.name || "",
+        foreignCurrencyAmount: Number(row.fc || 0)
+      };
+    }).filter(Boolean);
+    const debitTotal = ledger.reduce((sum, row) => sum + row.debit, 0);
+    const creditTotal = ledger.reduce((sum, row) => sum + row.credit, 0);
+    if (ledger.length && Math.abs(debitTotal - creditTotal) > 0.005) {
+      invalid.push({ sourceType: effect.sourceType, sourceId: effect.sourceId, reason: "unbalanced_ledger_effect", debitTotal, creditTotal });
+    }
+    const movements = effect.movements.map(row => {
+      const item = itemById.get(String(row.iid));
+      if (!item) { invalid.push({ sourceType: effect.sourceType, sourceId: effect.sourceId, reason: "unmapped_item", itemId: String(row.iid) }); return null; }
+      let partner = null;
+      if (row.pid != null && Number(row.pid) !== 0) {
+        partner = partnerById.get(String(row.pid));
+        if (!partner) { invalid.push({ sourceType: effect.sourceType, sourceId: effect.sourceId, reason: "unmapped_movement_partner", partnerId: String(row.pid) }); return null; }
+      }
+      return {
+        date: row.d || null, timestamp: Number(row.ts || 0), itemExternalId: item.externalId,
+        itemName: item.name, sku: item.sku, warehouseId: item.warehouseId,
+        warehouseName: item.warehouseName, variant: String(row.v || "-"),
+        quantity: Number(row.q || 0), value: Number(row.val || 0),
+        reference: String(row.ref || ""), partnerExternalId: partner?.externalId || null
+      };
+    }).filter(Boolean);
+    return { sourceType: effect.sourceType, sourceId: effect.sourceId, ledger, movements };
+  });
+  return { effects, invalid, ignored: collected.ignored };
+}
+
+
+// Pure optimistic-concurrency planner. It never calls Supabase or mutates local state.
+function planSourceEffectSync(state, remoteRows, versionMap, tombstones) {
+  const normalized = normalizeSourceEffects(state);
+  const invalid = [...normalized.invalid];
+  const actions = [];
+  const conflicts = [];
+  const adoptedVersions = {};
+  const clearTombstones = [];
+  const keyOf = (type, id) => JSON.stringify([String(type), String(id)]);
+  const versions = versionMap && typeof versionMap === "object" ? versionMap : {};
+  const remote = new Map();
+  for (const row of Array.isArray(remoteRows) ? remoteRows : []) {
+    if (!row || !row.source_type || row.source_id == null) continue;
+    const key = keyOf(row.source_type, row.source_id);
+    if (remote.has(key)) conflicts.push({ key, reason: "duplicate_remote_effect" });
+    else remote.set(key, row);
+  }
+  const queued = new Map();
+  for (const item of Array.isArray(tombstones) ? tombstones : []) {
+    if (!item || !item.sourceType || item.sourceId == null) {
+      invalid.push({ reason: "invalid_tombstone" }); continue;
+    }
+    const key = keyOf(item.sourceType, item.sourceId);
+    if (queued.has(key)) continue;
+    queued.set(key, item);
+  }
+  const currentKeys = new Set(normalized.effects.map(e => keyOf(e.sourceType, e.sourceId)));
+  for (const key of currentKeys) {
+    if (queued.has(key)) conflicts.push({ key, reason: "source_present_and_tombstoned_locally" });
+  }
+  if (invalid.length) return { actions: [], conflicts, adoptedVersions, clearTombstones, invalid };
+
+  for (const effect of normalized.effects) {
+    const key = keyOf(effect.sourceType, effect.sourceId);
+    const localVersion = Number(versions[key] || 0);
+    const row = remote.get(key);
+    if (!row) {
+      if (localVersion > 0) conflicts.push({ key, reason: "remote_effect_missing", localVersion });
+      else actions.push({ op: "upsert", effect, expectedVersion: 0 });
+      continue;
+    }
+    const remoteVersion = Number(row.sync_version || 0);
+    if (!Number.isInteger(remoteVersion) || remoteVersion < 1) {
+      conflicts.push({ key, reason: "invalid_remote_version" }); continue;
+    }
+    if (row.deleted_at) {
+      conflicts.push({ key, reason: "remote_effect_deleted", localVersion, remoteVersion }); continue;
+    }
+    const remotePayload = row.payload || {};
+    const ledgerIncluded = remotePayload.ledgerIncluded !== false;
+    const movementsIncluded = remotePayload.movementsIncluded !== false;
+    const localComparable = {
+      sourceType: effect.sourceType, sourceId: effect.sourceId,
+      ledger: ledgerIncluded ? effect.ledger : [],
+      movements: movementsIncluded ? effect.movements : []
+    };
+    const remoteComparable = {
+      sourceType: effect.sourceType, sourceId: effect.sourceId,
+      ledger: ledgerIncluded ? (remotePayload.ledger || []) : [],
+      movements: movementsIncluded ? (remotePayload.movements || []) : []
+    };
+    const samePayload = stableJson(localComparable) === stableJson(remoteComparable);
+    if (localVersion === 0) {
+      if (samePayload) adoptedVersions[key] = remoteVersion;
+      else conflicts.push({ key, reason: "unknown_remote_baseline", remoteVersion });
+      continue;
+    }
+    if (remoteVersion !== localVersion) {
+      conflicts.push({ key, reason: "version_mismatch", localVersion, remoteVersion }); continue;
+    }
+    if (!samePayload) actions.push({ op: "upsert", effect, expectedVersion: localVersion });
+  }
+
+  for (const [key, item] of queued) {
+    if (currentKeys.has(key)) continue;
+    const localVersion = Number(versions[key] || 0);
+    const row = remote.get(key);
+    if (!row) {
+      if (localVersion > 0) conflicts.push({ key, reason: "remote_effect_missing_for_delete", localVersion });
+      else actions.push({ op: "delete", sourceType: String(item.sourceType), sourceId: String(item.sourceId), expectedVersion: 0 });
+      continue;
+    }
+    const remoteVersion = Number(row.sync_version || 0);
+    if (row.deleted_at) {
+      if (remoteVersion > 0) adoptedVersions[key] = remoteVersion;
+      clearTombstones.push(key);
+    } else if (!localVersion) {
+      conflicts.push({ key, reason: "unknown_remote_baseline_for_delete", remoteVersion });
+    } else if (remoteVersion !== localVersion) {
+      conflicts.push({ key, reason: "version_mismatch_for_delete", localVersion, remoteVersion });
+    } else {
+      actions.push({ op: "delete", sourceType: String(item.sourceType), sourceId: String(item.sourceId), expectedVersion: localVersion });
+    }
+  }
+  return { actions, conflicts, adoptedVersions, clearTombstones, invalid };
+}
+
+
+// Applies one already-conflict-checked canonical effect to a local cache.
+// The caller must first establish that product raw stock is not being double-counted.
+
+// Plans remote downloads without overwriting local edits or resurrecting tombstones.
+function planRemoteSourceEffectApply(state, remoteRows, versionMap) {
+  const normalized = normalizeSourceEffects(state);
+  const invalid = [...normalized.invalid];
+  const actions = [];
+  const conflicts = [];
+  const adoptedVersions = {};
+  const keyOf = (type, id) => JSON.stringify([String(type), String(id)]);
+  const versions = versionMap && typeof versionMap === "object" ? versionMap : {};
+  const local = new Map(normalized.effects.map(effect => [keyOf(effect.sourceType, effect.sourceId), effect]));
+  const seen = new Set();
+  for (const row of Array.isArray(remoteRows) ? remoteRows : []) {
+    if (!row || !["doc", "po", "vch", "je", "wo"].includes(row.source_type) || row.source_id == null) {
+      invalid.push({ reason: "invalid_remote_effect_identity" }); continue;
+    }
+    const key = keyOf(row.source_type, row.source_id);
+    if (seen.has(key)) { conflicts.push({ key, reason: "duplicate_remote_effect" }); continue; }
+    seen.add(key);
+    const remoteVersion = Number(row.sync_version || 0);
+    const localVersion = Number(versions[key] || 0);
+    if (!Number.isInteger(remoteVersion) || remoteVersion < 1) {
+      conflicts.push({ key, reason: "invalid_remote_version" }); continue;
+    }
+    const localEffect = local.get(key);
+    const sourceFields = { doc: "docs", po: "po", vch: "vch", je: "je", wo: "wo" };
+    const localSourceDocument = (state[sourceFields[row.source_type]] || [])
+      .some(document => String(document?.id) === String(row.source_id));
+    if (row.deleted_at) {
+      if (localVersion >= remoteVersion && localVersion > 0) {
+        conflicts.push({ key, reason: "remote_tombstone_is_stale", localVersion, remoteVersion });
+      } else if (localVersion === 0 && (localEffect || localSourceDocument)) {
+        conflicts.push({ key, reason: "untracked_local_effect_conflicts_with_remote_tombstone" });
+      } else {
+        actions.push({ op: "delete", sourceType: String(row.source_type),
+          sourceId: String(row.source_id), effect: localEffect || null, version: remoteVersion });
+      }
+      continue;
+    }
+    const effect = row.payload;
+    if (!effect || effect.sourceType !== row.source_type || String(effect.sourceId) !== String(row.source_id) ||
+        !Array.isArray(effect.ledger) || !Array.isArray(effect.movements)) {
+      invalid.push({ key, reason: "invalid_remote_effect_payload" }); continue;
+    }
+    if (!localEffect) {
+      if (localVersion > 0) conflicts.push({ key, reason: "local_effect_missing_for_known_version", localVersion, remoteVersion });
+      else actions.push({ op: "apply", effect, version: remoteVersion });
+      continue;
+    }
+    const ledgerIncluded = effect.ledgerIncluded !== false;
+    const movementsIncluded = effect.movementsIncluded !== false;
+    const localComparable = {
+      sourceType: localEffect.sourceType, sourceId: localEffect.sourceId,
+      ledger: ledgerIncluded ? localEffect.ledger : [],
+      movements: movementsIncluded ? localEffect.movements : []
+    };
+    const remoteComparable = {
+      sourceType: effect.sourceType, sourceId: String(effect.sourceId),
+      ledger: ledgerIncluded ? effect.ledger : [],
+      movements: movementsIncluded ? effect.movements : []
+    };
+    if (stableJson(localComparable) !== stableJson(remoteComparable)) {
+      conflicts.push({ key, reason: "local_effect_differs_from_remote", localVersion, remoteVersion });
+    } else if (localVersion > remoteVersion) {
+      conflicts.push({ key, reason: "remote_effect_is_stale", localVersion, remoteVersion });
+    } else adoptedVersions[key] = remoteVersion;
+  }
+  if (invalid.length) return { actions: [], conflicts, adoptedVersions, invalid };
+  return { actions, conflicts, adoptedVersions, invalid };
+}
+
+function applyCanonicalSourceEffect(state, effect) {
+  if (!state || typeof state !== "object" || !effect ||
+      !["doc", "po", "vch", "je", "wo"].includes(effect.sourceType) ||
+      effect.sourceId == null || !Array.isArray(effect.ledger) || !Array.isArray(effect.movements)) {
+    return { applied: false, reason: "invalid_effect" };
+  }
+  const includeLedger = effect.ledgerIncluded !== false;
+  const includeMovements = effect.movementsIncluded !== false;
+  if (!includeLedger && !includeMovements) return { applied: false, reason: "no_visible_effect_sections" };
+  if (!Array.isArray(state.accts)) state.accts = [];
+  if (!Array.isArray(state.items)) state.items = [];
+  if (!Array.isArray(state.partners)) state.partners = [];
+  if (!Array.isArray(state.L)) state.L = [];
+  if (!Array.isArray(state.mv)) state.mv = [];
+
+  const accountsByCode = new Map();
+  for (const account of state.accts) {
+    const code = String(account?.code || "").trim();
+    if (!code) continue;
+    if (accountsByCode.has(code)) return { applied: false, reason: "duplicate_local_account_code", code };
+    accountsByCode.set(code, account);
+  }
+  const itemsByExternalId = new Map();
+  for (const item of state.items) {
+    if (item?.id != null) itemsByExternalId.set(String(item.id), item);
+    if (item?.cloudId != null) itemsByExternalId.set(String(item.cloudId), item);
+  }
+  const partnersByExternalId = new Map();
+  for (const partner of state.partners) {
+    if (partner?.id != null) partnersByExternalId.set(String(partner.id), partner);
+    if (partner?.cloudId != null) partnersByExternalId.set(String(partner.cloudId), partner);
+  }
+  const accountPlans = new Map();
+  const ledgerRows = [];
+  const movementRows = [];
+
+  if (includeLedger) for (const row of effect.ledger) {
+    const code = String(row.accountCode || "").trim();
+    if (!code) return { applied: false, reason: "missing_account_code" };
+    if (!accountsByCode.has(code) && !accountPlans.has(code)) {
+      accountPlans.set(code, {
+        code, name: String(row.accountName || code), t: String(row.accountType || "A"),
+        k: String(row.accountKey || ""), cash: Number(row.accountIsCash || 0),
+        cur: String(row.accountCurrency || "EGP")
+      });
+    }
+    let partner = null;
+    if (row.partnerExternalId != null && String(row.partnerExternalId) !== "") {
+      partner = partnersByExternalId.get(String(row.partnerExternalId));
+      if (!partner) return { applied: false, reason: "unmapped_partner", partnerExternalId: String(row.partnerExternalId) };
+    }
+    ledgerRows.push({ sourceRow: row, code, partner });
+  }
+  if (includeMovements) for (const row of effect.movements) {
+    const item = itemsByExternalId.get(String(row.itemExternalId));
+    if (!item) return { applied: false, reason: "unmapped_item", itemExternalId: String(row.itemExternalId) };
+    let partner = null;
+    if (row.partnerExternalId != null && String(row.partnerExternalId) !== "") {
+      partner = partnersByExternalId.get(String(row.partnerExternalId));
+      if (!partner) return { applied: false, reason: "unmapped_movement_partner", partnerExternalId: String(row.partnerExternalId) };
+    }
+    movementRows.push({ sourceRow: row, item, partner });
+  }
+
+  for (const [code, plan] of accountPlans) {
+    let id = Date.now() + Math.floor(Math.random() * 100000);
+    while (state.accts.some(x => String(x.id) === String(id))) id++;
+    const account = { id, ...plan };
+    state.accts.push(account);
+    accountsByCode.set(code, account);
+  }
+
+  const sourceId = String(effect.sourceId), sourceType = effect.sourceType;
+  const matches = row => row && row.src === sourceType && String(row.rid) === sourceId;
+  if (includeMovements) {
+    const oldMovements = state.mv.filter(matches);
+    for (const movement of oldMovements) {
+      const item = itemsByExternalId.get(String(movement.iid));
+      if (item) {
+        if (!item.st || typeof item.st !== "object" || Array.isArray(item.st)) item.st = {};
+        item.st[movement.v] = (Number(item.st[movement.v]) || 0) - (Number(movement.q) || 0);
+        item.val = (Number(item.val) || 0) - (Number(movement.val) || 0);
+      }
+    }
+    state.mv = state.mv.filter(row => !matches(row));
+  }
+  if (includeLedger) state.L = state.L.filter(row => !matches(row));
+
+  if (includeLedger) for (const entry of ledgerRows) {
+    const row = entry.sourceRow, account = accountsByCode.get(entry.code);
+    state.L.push({
+      d: row.date || "", ts: Number(row.timestamp || 0), ref: String(row.reference || ""),
+      desc: String(row.description || ""), a: account.id, dr: Number(row.debit || 0),
+      cr: Number(row.credit || 0), pid: entry.partner?.id || 0, src: sourceType, rid: sourceId,
+      fc: Number(row.foreignCurrencyAmount || 0)
+    });
+  }
+  if (includeMovements) for (const entry of movementRows) {
+    const row = entry.sourceRow, item = entry.item;
+    if (!item.st || typeof item.st !== "object" || Array.isArray(item.st)) item.st = {};
+    const quantity = Number(row.quantity || 0), value = Number(row.value || 0), variant = String(row.variant || "-");
+    item.st[variant] = (Number(item.st[variant]) || 0) + quantity;
+    item.val = (Number(item.val) || 0) + value;
+    state.mv.push({
+      d: row.date || "", ts: Number(row.timestamp || 0), iid: item.id, v: variant,
+      q: quantity, val: value, ref: String(row.reference || ""), pid: entry.partner?.id || 0,
+      src: sourceType, rid: sourceId
+    });
+  }
+  return { applied: true, ledgerCount: ledgerRows.length, movementCount: movementRows.length, includeLedger, includeMovements };
+}
+
+// Absolute stock baseline helpers. These replace quantities; they never replay movements.
+function stockBaselineFingerprint(items) {
+  const input = stableJson(items);
+  let hash = 2166136261;
+  for (let i = 0; i < input.length; i++) {
+    hash ^= input.charCodeAt(i);
+    hash = Math.imul(hash, 16777619);
+  }
+  return "fnv1a32:" + (hash >>> 0).toString(16).padStart(8, "0");
+}
+
+function buildStockBaseline(state) {
+  const invalid = [];
+  if (!state || !Array.isArray(state.items)) {
+    return { baselineVersion: 1, items: [], fingerprint: null, invalid: [{ reason: "missing_items_array" }] };
+  }
+  const seen = new Set();
+  const items = [];
+  for (const item of state.items) {
+    if (!item || item.id == null || String(item.id).trim() === "") {
+      invalid.push({ reason: "missing_item_external_id" }); continue;
+    }
+    const id = String(item.cloudId || item.id);
+    if (seen.has(id)) { invalid.push({ reason: "duplicate_item_external_id", itemExternalId: id }); continue; }
+    seen.add(id);
+    if (item.st != null && (typeof item.st !== "object" || Array.isArray(item.st))) {
+      invalid.push({ reason: "invalid_item_stock_map", itemExternalId: id }); continue;
+    }
+    const variants = [];
+    for (const [variant, rawQuantity] of Object.entries(item.st || {})) {
+      const quantity = Number(rawQuantity);
+      if (!Number.isFinite(quantity)) {
+        invalid.push({ reason: "invalid_stock_quantity", itemExternalId: id, variant }); continue;
+      }
+      variants.push({ variant: String(variant), quantity });
+    }
+    variants.sort((a, b) => a.variant.localeCompare(b.variant));
+    const value = Number(item.val || 0);
+    if (!Number.isFinite(value)) {
+      invalid.push({ reason: "invalid_item_stock_value", itemExternalId: id }); continue;
+    }
+    items.push({
+      itemExternalId: id,
+      sku: String(item.sku || ""),
+      name: String(item.name || ""),
+      unit: String(item.unit || ""),
+      warehouseName: (state.wh || []).find(w => String(w.id) === String(item.wh))?.name || "",
+      variants,
+      value
+    });
+  }
+  items.sort((a, b) => a.itemExternalId.localeCompare(b.itemExternalId));
+  return {
+    baselineVersion: 1,
+    items,
+    fingerprint: invalid.length ? null : stockBaselineFingerprint(items),
+    invalid
+  };
+}
+
+function applyStockBaseline(state, baseline) {
+  if (!state || typeof state !== "object" || !Array.isArray(state.items) ||
+      !baseline || baseline.baselineVersion !== 1 || !Array.isArray(baseline.items) ||
+      !baseline.fingerprint || (Array.isArray(baseline.invalid) && baseline.invalid.length > 0) || baseline.fingerprint !== stockBaselineFingerprint(baseline.items)) {
+    return { applied: false, reason: "invalid_stock_baseline" };
+  }
+  const localById = new Map();
+  for (const item of state.items) {
+    if (!item || item.id == null) continue;
+    const id = String(item.cloudId || item.id);
+    if (localById.has(id)) return { applied: false, reason: "duplicate_local_item_external_id", itemExternalId: id };
+    localById.set(id, item);
+  }
+  const seen = new Set(), plan = [];
+  for (const row of baseline.items) {
+    if (!row || row.itemExternalId == null || seen.has(String(row.itemExternalId)) ||
+        !Array.isArray(row.variants) || !Number.isFinite(Number(row.value))) {
+      return { applied: false, reason: "invalid_baseline_item" };
+    }
+    const id = String(row.itemExternalId), item = localById.get(id);
+    if (!item) return { applied: false, reason: "baseline_item_not_synced", itemExternalId: id };
+    seen.add(id);
+    const stock = {};
+    for (const variant of row.variants) {
+      if (!variant || variant.variant == null || Object.prototype.hasOwnProperty.call(stock, String(variant.variant)) ||
+          !Number.isFinite(Number(variant.quantity))) {
+        return { applied: false, reason: "invalid_baseline_variant", itemExternalId: id };
+      }
+      stock[String(variant.variant)] = Number(variant.quantity);
+    }
+    plan.push({ item, stock, value: Number(row.value) });
+  }
+  // Validation completes before any local state is changed.
+  for (const row of plan) {
+    row.item.st = row.stock;
+    row.item.val = row.value;
+  }
+  return { applied: true, itemCount: plan.length, fingerprint: baseline.fingerprint };
+}
+
+function factoryBaselineFingerprint(baseline) {
+  return stockBaselineFingerprint({
+    baselineVersion: baseline.baselineVersion,
+    stock: baseline.stock,
+    accounts: baseline.accounts,
+    partners: baseline.partners,
+    openingLedger: baseline.openingLedger,
+    openingMovements: baseline.openingMovements
+  });
+}
+
+function buildFactoryBaseline(state) {
+  const invalid = [];
+  const stock = buildStockBaseline(state);
+  invalid.push(...stock.invalid);
+  const collected = collectSourceEffects(state);
+  invalid.push(...collected.invalid);
+  if (collected.effects.length) {
+    invalid.push({ reason: "source_effects_require_backfill_before_baseline", count: collected.effects.length });
+  }
+
+  const accountById = new Map(), accountCodes = new Set();
+  const accounts = [];
+  for (const account of Array.isArray(state?.accts) ? state.accts : []) {
+    if (!account || account.id == null || !String(account.code || "").trim()) {
+      invalid.push({ reason: "invalid_baseline_account" }); continue;
+    }
+    const code = String(account.code).trim();
+    if (accountCodes.has(code)) { invalid.push({ reason: "duplicate_account_code", code }); continue; }
+    accountCodes.add(code);
+    const cash = Number(account.cash || 0);
+    if (!Number.isFinite(cash)) { invalid.push({ reason: "invalid_baseline_account_cash", code }); continue; }
+    const row = {
+      code, name: String(account.name || code), type: String(account.t || "A"),
+      key: String(account.k || ""), cash,
+      currency: String(account.cur || "EGP")
+    };
+    accounts.push(row);
+    accountById.set(String(account.id), row);
+  }
+  accounts.sort((a, b) => a.code.localeCompare(b.code));
+
+  const partnerById = new Map(), partnerIds = new Set();
+  const partners = [];
+  for (const partner of Array.isArray(state?.partners) ? state.partners : []) {
+    if (!partner || partner.id == null) continue;
+    const externalId = String(partner.cloudId || partner.id);
+    if (!String(partner.name || "").trim()) { invalid.push({ reason: "invalid_baseline_partner_name", externalId }); continue; }
+    if (partnerIds.has(externalId)) { invalid.push({ reason: "duplicate_partner_external_id", externalId }); continue; }
+    partnerIds.add(externalId);
+    const row = {
+      externalId, name: String(partner.name || ""), phone: String(partner.phone || ""),
+      customer: Number(partner.c || 0) === 1, supplier: Number(partner.s || 0) === 1
+    };
+    partners.push(row);
+    partnerById.set(String(partner.id), row);
+    partnerById.set(externalId, row);
+  }
+  partners.sort((a, b) => a.externalId.localeCompare(b.externalId));
+
+  const openingLedger = [];
+  let debitTotal = 0, creditTotal = 0;
+  for (const row of Array.isArray(state?.L) ? state.L : []) {
+    if (row?.rid != null) continue;
+    if (row?.src !== "je" || String(row.desc || "").trim() !== "رصيد افتتاحي") {
+      invalid.push({ reason: "unclassified_legacy_ledger_row", reference: String(row?.ref || "") });
+      continue;
+    }
+    const account = accountById.get(String(row.a));
+    if (!account) { invalid.push({ reason: "unmapped_opening_account", accountId: String(row.a) }); continue; }
+    let partner = null;
+    if (row.pid != null && Number(row.pid) !== 0) {
+      partner = partnerById.get(String(row.pid));
+      if (!partner) { invalid.push({ reason: "unmapped_opening_partner", partnerId: String(row.pid) }); continue; }
+    }
+    const debit = Number(row.dr || 0), credit = Number(row.cr || 0), foreign = Number(row.fc || 0), timestamp = Number(row.ts || 0);
+    if (![debit, credit, foreign, timestamp].every(Number.isFinite) || debit < 0 || credit < 0) {
+      invalid.push({ reason: "invalid_opening_ledger_amount" }); continue;
+    }
+    debitTotal += debit; creditTotal += credit;
+    openingLedger.push({
+      date: row.d || null, timestamp, reference: String(row.ref || ""),
+      description: String(row.desc || ""), accountCode: account.code, debit, credit,
+      partnerExternalId: partner?.externalId || null, foreignCurrencyAmount: foreign
+    });
+  }
+  if (Math.abs(debitTotal - creditTotal) > 0.005) {
+    invalid.push({ reason: "unbalanced_opening_ledger", debitTotal, creditTotal });
+  }
+  openingLedger.sort((a, b) => stableJson(a).localeCompare(stableJson(b)));
+
+  const itemById = new Map();
+  for (const item of Array.isArray(state?.items) ? state.items : []) {
+    if (!item || item.id == null) continue;
+    const externalId = String(item.cloudId || item.id);
+    itemById.set(String(item.id), externalId);
+    itemById.set(externalId, externalId);
+  }
+  const openingMovements = [];
+  for (const row of Array.isArray(state?.mv) ? state.mv : []) {
+    if (row?.rid != null) continue;
+    if (row?.src != null || String(row?.ref || "").trim() !== "رصيد افتتاحي") {
+      invalid.push({ reason: "unclassified_legacy_stock_movement", reference: String(row?.ref || "") });
+      continue;
+    }
+    const itemExternalId = itemById.get(String(row.iid));
+    if (!itemExternalId) { invalid.push({ reason: "unmapped_opening_item", itemId: String(row.iid) }); continue; }
+    const quantity = Number(row.q || 0), value = Number(row.val || 0), timestamp = Number(row.ts || 0);
+    if (![quantity, value, timestamp].every(Number.isFinite)) {
+      invalid.push({ reason: "invalid_opening_stock_amount" }); continue;
+    }
+    openingMovements.push({
+      date: row.d || null, timestamp, itemExternalId,
+      variant: String(row.v || "-"), quantity, value, reference: String(row.ref || "")
+    });
+  }
+  openingMovements.sort((a, b) => stableJson(a).localeCompare(stableJson(b)));
+
+  const baseline = {
+    baselineVersion: 1, stock, accounts, partners, openingLedger, openingMovements
+  };
+  return { ...baseline, fingerprint: invalid.length ? null : factoryBaselineFingerprint(baseline), invalid };
+}
+
+function applyFactoryBaseline(state, baseline) {
+  if (!state || typeof state !== "object" || !Array.isArray(state.items) ||
+      !baseline || baseline.baselineVersion !== 1 || !baseline.stock ||
+      !Array.isArray(baseline.accounts) || !Array.isArray(baseline.partners) ||
+      !Array.isArray(baseline.openingLedger) || !Array.isArray(baseline.openingMovements) ||
+      !baseline.fingerprint || (Array.isArray(baseline.stock?.invalid) && baseline.stock.invalid.length > 0) || baseline.fingerprint !== factoryBaselineFingerprint(baseline)) {
+    return { applied: false, reason: "invalid_factory_baseline" };
+  }
+  const accounts = Array.isArray(state.accts) ? state.accts : [];
+  const partners = Array.isArray(state.partners) ? state.partners : [];
+  const ledger = Array.isArray(state.L) ? state.L : [];
+  const movements = Array.isArray(state.mv) ? state.mv : [];
+  const accountByCode = new Map();
+  for (const account of accounts) {
+    const code = String(account?.code || "").trim();
+    if (!code) continue;
+    if (accountByCode.has(code)) return { applied: false, reason: "duplicate_local_account_code", code };
+    accountByCode.set(code, account);
+  }
+  let nextAccountId = Math.max(0, ...accounts.map(x => Number(x?.id) || 0)) + 1;
+  const accountPlans = [];
+  for (const row of baseline.accounts) {
+    const code = String(row.code || "").trim();
+    const existingAccount = accountByCode.get(code);
+    if (!code || existingAccount && (
+      String(existingAccount.name || "") !== String(row.name || "") ||
+      String(existingAccount.t || "A") !== String(row.type || "A") ||
+      String(existingAccount.k || "") !== String(row.key || "") ||
+      Number(existingAccount.cash || 0) !== Number(row.cash || 0) ||
+      String(existingAccount.cur || "EGP") !== String(row.currency || "EGP")
+    )) {
+      return { applied: false, reason: "account_definition_conflict", code };
+    }
+    if (!accountByCode.has(code)) {
+      const account = { id: nextAccountId++, code, name: String(row.name || code), t: String(row.type || "A"),
+        k: String(row.key || ""), cash: Number(row.cash || 0), cur: String(row.currency || "EGP") };
+      accountPlans.push(account);
+      accountByCode.set(code, account);
+    }
+  }
+
+  const partnerByExternalId = new Map(), partnerLinks = [];
+  for (const partner of partners) {
+    if (partner?.id != null) partnerByExternalId.set(String(partner.id), partner);
+    if (partner?.cloudId != null) partnerByExternalId.set(String(partner.cloudId), partner);
+  }
+  let nextPartnerId = Math.max(0, ...partners.map(x => Number(x?.id) || 0)) + 1;
+  const partnerPlans = [];
+  for (const row of baseline.partners) {
+    const externalId = String(row.externalId || "");
+    if (!externalId) return { applied: false, reason: "invalid_baseline_partner" };
+    if (partnerByExternalId.has(externalId)) {
+      const existing = partnerByExternalId.get(externalId);
+      if (String(existing.name || "").trim().toLocaleLowerCase() !== String(row.name || "").trim().toLocaleLowerCase() ||
+          (row.phone && existing.phone && String(existing.phone).trim() !== String(row.phone).trim())) {
+        return { applied: false, reason: "partner_definition_conflict", externalId };
+      }
+      partnerLinks.push({ local: existing, externalId, customer: row.customer, supplier: row.supplier });
+      continue;
+    }
+    const name = String(row.name || "").trim().toLocaleLowerCase(), phone = String(row.phone || "").trim();
+    const matches = partners.filter(p =>
+      (name && String(p.name || "").trim().toLocaleLowerCase() === name) ||
+      (phone && String(p.phone || "").trim() === phone)
+    );
+    if (matches.length > 1) return { applied: false, reason: "ambiguous_local_partner", externalId };
+    if (matches.length === 1) {
+      const local = matches[0];
+      if (String(local.name || "").trim().toLocaleLowerCase() !== name ||
+          (phone && local.phone && String(local.phone).trim() !== phone) ||
+          (local.cloudId && String(local.cloudId) !== externalId)) {
+        return { applied: false, reason: "partner_definition_conflict", externalId };
+      }
+      partnerLinks.push({ local, externalId, customer: row.customer, supplier: row.supplier });
+      partnerByExternalId.set(externalId, local);
+    } else {
+      const partner = { id: nextPartnerId++, cloudId: externalId, name: row.name, phone: row.phone,
+        c: row.customer ? 1 : 0, s: row.supplier ? 1 : 0 };
+      partnerPlans.push(partner);
+      partnerByExternalId.set(externalId, partner);
+    }
+  }
+
+  const itemByExternalId = new Map();
+  for (const item of state.items) {
+    if (item?.id != null) itemByExternalId.set(String(item.id), item);
+    if (item?.cloudId != null) itemByExternalId.set(String(item.cloudId), item);
+  }
+  const ledgerKeys = new Set();
+  for (const row of ledger) {
+    const account = accounts.find(a => String(a.id) === String(row.a));
+    const partner = partners.find(p => String(p.id) === String(row.pid));
+    const key = stableJson({ date: row.d || null, timestamp: Number(row.ts || 0), reference: row.ref || "",
+      description: row.desc || "", accountCode: account?.code || "", debit: Number(row.dr || 0),
+      credit: Number(row.cr || 0), partnerExternalId: partner ? String(partner.cloudId || partner.id) : null,
+      foreignCurrencyAmount: Number(row.fc || 0) });
+    ledgerKeys.add(key);
+  }
+  const ledgerPlans = [];
+  for (const row of baseline.openingLedger) {
+    const account = accountByCode.get(String(row.accountCode));
+    const partner = row.partnerExternalId ? partnerByExternalId.get(String(row.partnerExternalId)) : null;
+    if (!account || row.partnerExternalId && !partner) return { applied: false, reason: "unmapped_baseline_ledger_reference" };
+    const key = stableJson(row);
+    if (ledgerKeys.has(key)) continue;
+    ledgerKeys.add(key);
+    ledgerPlans.push({ d: row.date || "", ts: Number(row.timestamp || 0), ref: String(row.reference || ""),
+      desc: String(row.description || ""), a: account.id, dr: Number(row.debit || 0), cr: Number(row.credit || 0),
+      pid: partner?.id || 0, fc: Number(row.foreignCurrencyAmount || 0), src: "je" });
+  }
+
+  const movementKeys = new Set();
+  for (const row of movements) {
+    const item = state.items.find(x => String(x.id) === String(row.iid));
+    const externalId = item ? String(item.cloudId || item.id) : "";
+    movementKeys.add(stableJson({ date: row.d || null, timestamp: Number(row.ts || 0), itemExternalId: externalId,
+      variant: String(row.v || "-"), quantity: Number(row.q || 0), value: Number(row.val || 0), reference: String(row.ref || "") }));
+  }
+  const movementPlans = [];
+  for (const row of baseline.openingMovements) {
+    const item = itemByExternalId.get(String(row.itemExternalId));
+    if (!item) return { applied: false, reason: "unmapped_baseline_stock_item", itemExternalId: String(row.itemExternalId) };
+    const key = stableJson(row);
+    if (movementKeys.has(key)) continue;
+    movementKeys.add(key);
+    movementPlans.push({ d: row.date || "", ts: Number(row.timestamp || 0), iid: item.id, v: String(row.variant || "-"),
+      q: Number(row.quantity || 0), val: Number(row.value || 0), ref: String(row.reference || "") });
+  }
+
+  const stockResult = applyStockBaseline(state, baseline.stock);
+  if (!stockResult.applied) return stockResult;
+  if (!Array.isArray(state.accts)) state.accts = [];
+  if (!Array.isArray(state.partners)) state.partners = [];
+  if (!Array.isArray(state.L)) state.L = [];
+  if (!Array.isArray(state.mv)) state.mv = [];
+  partnerLinks.forEach(link => {
+    link.local.cloudId = link.externalId;
+    link.local.c = Number(link.local.c || 0) === 1 || link.customer ? 1 : 0;
+    link.local.s = Number(link.local.s || 0) === 1 || link.supplier ? 1 : 0;
+  });
+  state.accts.push(...accountPlans);
+  state.partners.push(...partnerPlans);
+  state.L.push(...ledgerPlans);
+  state.mv.push(...movementPlans);
+  return { applied: true, fingerprint: baseline.fingerprint, accountsAdded: accountPlans.length,
+    partnersAdded: partnerPlans.length, ledgerAdded: ledgerPlans.length, movementsAdded: movementPlans.length };
+}
+
+
+function applyInventoryBaselineSection(state, section) {
+  if (!state || typeof state !== "object" || !section ||
+      section.baselineVersion !== 1 || !section.stock ||
+      !Array.isArray(section.openingMovements)) {
+    return { applied: false, reason: "invalid_inventory_baseline_section" };
+  }
+  const itemByExternalId = new Map();
+  for (const item of Array.isArray(state.items) ? state.items : []) {
+    if (item?.id == null) continue;
+    for (const id of [item.id, item.cloudId].filter(x => x != null).map(String)) {
+      if (itemByExternalId.has(id) && itemByExternalId.get(id) !== item) {
+        return { applied: false, reason: "duplicate_local_item_external_id", itemExternalId: id };
+      }
+      itemByExternalId.set(id, item);
+    }
+  }
+  const movements = Array.isArray(state.mv) ? state.mv : [];
+  const keys = new Set(movements.map(row => {
+    const item = state.items.find(x => String(x.id) === String(row.iid));
+    return stableJson({ date: row.d || null, timestamp: Number(row.ts || 0),
+      itemExternalId: item ? String(item.cloudId || item.id) : "",
+      variant: String(row.v || "-"), quantity: Number(row.q || 0),
+      value: Number(row.val || 0), reference: String(row.ref || "") });
+  }));
+  const planned = [];
+  for (const row of section.openingMovements) {
+    const item = itemByExternalId.get(String(row?.itemExternalId || ""));
+    if (!item || !Number.isFinite(Number(row.quantity)) ||
+        !Number.isFinite(Number(row.value)) || !Number.isFinite(Number(row.timestamp || 0)) ||
+        !String(row.variant || "").trim()) {
+      return { applied: false, reason: "invalid_or_unmapped_opening_movement",
+        itemExternalId: String(row?.itemExternalId || "") };
+    }
+    const key = stableJson(row);
+    if (keys.has(key)) continue;
+    keys.add(key);
+    planned.push({ d: row.date || "", ts: Number(row.timestamp || 0), iid: item.id,
+      v: String(row.variant), q: Number(row.quantity), val: Number(row.value),
+      ref: String(row.reference || "رصيد افتتاحي") });
+  }
+  // applyStockBaseline performs a complete preflight before changing any quantity.
+  const stockResult = applyStockBaseline(state, section.stock);
+  if (!stockResult.applied) return stockResult;
+  if (!Array.isArray(state.mv)) state.mv = [];
+  state.mv.push(...planned);
+  return { applied: true, fingerprint: section.fingerprint || section.stock.fingerprint,
+    movementsAdded: planned.length, stock: stockResult };
+}
+
+function applyAccountingBaselineSection(state, section) {
+  if (!state || typeof state !== "object" || !section ||
+      section.baselineVersion !== 1 || !Array.isArray(section.accounts) ||
+      !Array.isArray(section.partners) || !Array.isArray(section.openingLedger)) {
+    return { applied: false, reason: "invalid_accounting_baseline_section" };
+  }
+  // Reuse the full baseline's all-or-nothing mapping and ledger validation,
+  // while supplying a no-op absolute stock baseline from the current device.
+  const stock = buildStockBaseline(state);
+  if (stock.invalid.length) return { applied: false, reason: "invalid_local_stock_for_accounting_bootstrap" };
+  const combined = { baselineVersion: 1, stock, accounts: section.accounts,
+    partners: section.partners, openingLedger: section.openingLedger, openingMovements: [] };
+  combined.fingerprint = factoryBaselineFingerprint(combined);
+  return applyFactoryBaseline(state, combined);
+}
+
+function removeCanonicalSourceEffect(state, effect) {
+  if (!state || typeof state !== "object" || !effect ||
+      !["doc", "po", "vch", "je", "wo"].includes(effect.sourceType) ||
+      effect.sourceId == null || !Array.isArray(effect.ledger) || !Array.isArray(effect.movements)) {
+    return { applied: false, reason: "invalid_effect" };
+  }
+  const sourceType = String(effect.sourceType), sourceId = String(effect.sourceId);
+  const matches = row => row && row.src === sourceType && String(row.rid) === sourceId;
+  const itemByExternalId = new Map();
+  for (const item of Array.isArray(state.items) ? state.items : []) {
+    if (item?.id == null) continue;
+    itemByExternalId.set(String(item.id), item);
+    if (item.cloudId != null) itemByExternalId.set(String(item.cloudId), item);
+  }
+  const rows = (Array.isArray(state.mv) ? state.mv : []).filter(matches);
+  const plans = [];
+  for (const row of rows) {
+    const item = itemByExternalId.get(String(row.iid));
+    if (!item || !item.st || typeof item.st !== "object" ||
+        !Number.isFinite(Number(row.q)) || !Number.isFinite(Number(row.val)) ||
+        !Object.prototype.hasOwnProperty.call(item.st, row.v)) {
+      return { applied: false, reason: "invalid_or_unmapped_local_movement" };
+    }
+    plans.push({ row, item });
+  }
+  for (const { row, item } of plans) {
+    item.st[row.v] = Number(item.st[row.v] || 0) - Number(row.q || 0);
+    item.val = Number(item.val || 0) - Number(row.val || 0);
+  }
+  state.mv = (Array.isArray(state.mv) ? state.mv : []).filter(row => !matches(row));
+  state.L = (Array.isArray(state.L) ? state.L : []).filter(row => !matches(row));
+  return { applied: true, movementsReversed: plans.length };
+}
+
+function removeSourceDocument(state, sourceType, sourceId) {
+  const key = String(sourceId);
+  const fields = { doc: "docs", po: "po", vch: "vch", je: "je", wo: "wo" };
+  const field = fields[sourceType];
+  if (!field) return { applied: false, reason: "unsupported_source_type" };
+  if (!Array.isArray(state[field])) state[field] = [];
+  if (sourceType === "wo") {
+    const workOrder = state.wo.find(row => String(row.id) === key);
+    if (workOrder?.po != null) {
+      const order = (state.po || []).find(row => String(row.id) === String(workOrder.po));
+      if (order) order.wc = Number(order.wc || 0) - Number(workOrder.c || 0);
+    }
+  }
+  state[field] = state[field].filter(row => String(row?.id) !== key);
+  return { applied: true };
 }
 
 function stableJson(value) {
@@ -235,7 +1261,8 @@ async function uploadToTables(showAlert = false) {
         const table = isSup ? "suppliers" : "customers";
         const row = {
           user_id: owner,
-          external_id: String(getField(p, ["id", "no", "code"]) || name),
+          ...(p.id != null && !p.cloudId ? { cloudId: String(p.id) } : {}),
+          external_id: String(p.cloudId || getField(p, ["id", "no", "code"]) || name),
           name,
           phone: String(getField(p, ["phone", "tel", "mobile", "ph"]) || "") || null,
           email: String(getField(p, ["email", "mail"]) || "") || null,
@@ -387,7 +1414,8 @@ async function uploadToTables(showAlert = false) {
           if (!pr || typeof pr !== "object") continue;
           const name = String(getField(pr, ["name", "title", "product"]) || "");
           if (!name || isAccountName(name)) continue;
-          const externalId = String(getField(pr, ["id", "code", "sku"]) || name);
+          if (pr.id != null && !pr.cloudId) pr.cloudId = String(pr.id);
+          const externalId = String(pr.cloudId || getField(pr, ["id", "code", "sku"]) || name);
           if (!productMap.has(externalId)) productMap.set(externalId, pr);
         }
       }
@@ -421,6 +1449,97 @@ async function uploadToTables(showAlert = false) {
       }
     }
 
+
+    // Publish the immutable opening baseline only after master records were synced.
+    // Missing RPC means the draft migration has not been applied yet; keep legacy sync operational.
+    if (admin) {
+      const existingBaseline = await supabase.rpc("get_factory_baseline", { p_section: "inventory" });
+      const baselineRpcMissing = existingBaseline.error &&
+        ["PGRST202", "42883"].includes(String(existingBaseline.error.code || ""));
+      if (existingBaseline.error && !baselineRpcMissing) {
+        errors.push("factory baseline read: " + existingBaseline.error.message);
+      } else if (!baselineRpcMissing && !(Array.isArray(existingBaseline.data) && existingBaseline.data.length)) {
+        const baseline = buildFactoryBaseline(S);
+        if (baseline.invalid.length) {
+          errors.push("factory baseline not publishable: " + baseline.invalid.map(x => x.reason).join(", "));
+        } else {
+          const inventorySection = { baselineVersion: 1, stock: baseline.stock,
+            openingMovements: baseline.openingMovements };
+          const accountingSection = { baselineVersion: 1, accounts: baseline.accounts,
+            partners: baseline.partners, openingLedger: baseline.openingLedger };
+          const published = await supabase.rpc("publish_factory_baseline", {
+            p_expected_version: 0, p_inventory_section: inventorySection,
+            p_accounting_section: accountingSection
+          });
+          if (published.error && published.error.code !== "23505") {
+            errors.push("factory baseline publish: " + published.error.message);
+          }
+        }
+      }
+    }
+
+
+    // Synchronize source-scoped ledger/stock effects only when this client can write both sections.
+    if (["inventory", "invoices", "production", "settings"].some(canWrite)) {
+      const remoteResult = await supabase.rpc("get_source_effects");
+      const missingEffectsRpc = remoteResult.error && ["PGRST202", "42883"].includes(String(remoteResult.error.code || ""));
+      if (remoteResult.error && !missingEffectsRpc) errors.push("source effects read before write: " + remoteResult.error.message);
+      else if (!missingEffectsRpc) {
+        let versions = {};
+        try { versions = JSON.parse(localStorage.getItem("mgr6-source-effect-versions") || "{}") || {}; } catch(e) {}
+        let queuedTombstones = [];
+        try { queuedTombstones = JSON.parse(localStorage.getItem("mgr6-cloud-effect-tombstones") || "[]") || []; } catch(e) {}
+        const plan = planSourceEffectSync(S, remoteResult.data || [], versions, queuedTombstones);
+        if (plan.invalid.length) errors.push("source effects invalid: " + plan.invalid.map(x => x.reason).join(", "));
+        else {
+          const conflicts = [...plan.conflicts];
+          const completedTombstones = new Set();
+          for (const key of plan.clearTombstones) completedTombstones.add(key);
+          for (const action of plan.actions) {
+            const sourceType = action.effect?.sourceType || action.sourceType;
+            const sourceId = action.effect?.sourceId || action.sourceId;
+            const permission = ({ doc: "invoices", po: "production", vch: "invoices", je: "settings", wo: "inventory" })[sourceType];
+            const writeLedger = canWrite(permission);
+            const writeMovements = canWrite("inventory");
+            const isDelete = action.op === "delete";
+            if (isDelete && (!writeLedger || !writeMovements)) {
+              conflicts.push({ sourceType, sourceId, reason: "delete_requires_ledger_and_inventory_permissions" });
+              continue;
+            }
+            if (!isDelete && !writeLedger && !writeMovements) {
+              conflicts.push({ sourceType, sourceId, reason: "missing_source_effect_write_permission" });
+              continue;
+            }
+            const payload = isDelete ? null : {
+              sourceType, sourceId: String(sourceId),
+              ledgerIncluded: writeLedger, movementsIncluded: writeMovements,
+              ledger: writeLedger ? action.effect.ledger : [],
+              movements: writeMovements ? action.effect.movements : []
+            };
+            const saved = await supabase.rpc("sync_source_effect", {
+              p_source_type: sourceType, p_source_id: sourceId,
+              p_expected_version: action.expectedVersion, p_payload: payload, p_deleted: isDelete
+            });
+            if (saved.error) {
+              if (saved.error.code === "40001") conflicts.push({ sourceType, sourceId, reason: "write_version_conflict" });
+              else errors.push("source effect " + sourceType + "/" + sourceId + ": " + saved.error.message);
+              continue;
+            }
+            const row = Array.isArray(saved.data) ? saved.data[0] : saved.data;
+            if (row?.sync_version) versions[JSON.stringify([sourceType, sourceId])] = Number(row.sync_version);
+            if (isDelete) completedTombstones.add(JSON.stringify([sourceType, sourceId]));
+          }
+          if (conflicts.length) localStorage.setItem("mgr6-source-effect-conflicts", JSON.stringify(conflicts));
+          else localStorage.removeItem("mgr6-source-effect-conflicts");
+          const remainingTombstones = queuedTombstones.filter(item =>
+            !completedTombstones.has(JSON.stringify([String(item.sourceType), String(item.sourceId)]))
+          );
+          localStorage.setItem("mgr6-cloud-effect-tombstones", JSON.stringify(remainingTombstones));
+          localStorage.setItem("mgr6-source-effect-versions", JSON.stringify(versions));
+        }
+      }
+    }
+
     if (errors.length) {
       syncState = localStorage.getItem("mgr6-cloud-snapshot-conflict") ? "conflict" : "idle"; drawAll();
       const msg = (snapshotError
@@ -430,16 +1549,20 @@ async function uploadToTables(showAlert = false) {
       return msg;
     }
     const hasSnapshotConflict = snapshotConflict || !!localStorage.getItem("mgr6-cloud-snapshot-conflict");
+    const hasSourceEffectConflict = (() => { try { return (JSON.parse(localStorage.getItem("mgr6-source-effect-conflicts") || "[]") || []).length > 0; } catch(e) { return true; } })();
+    const hasAnyConflict = hasSnapshotConflict || hasSourceEffectConflict;
     const latestPend = Number(getCachedState().pend || 0);
-    if (!hasSnapshotConflict && latestPend === Number(S.pend || 0)) localStorage.removeItem(PENDING_SYNC_KEY);
-    else if (!hasSnapshotConflict) scheduleAutoSync(400);
+    if (!hasAnyConflict && latestPend === Number(S.pend || 0)) localStorage.removeItem(PENDING_SYNC_KEY);
+    else if (!hasAnyConflict) scheduleAutoSync(400);
     // Employee detail-only sync is deliberately not labelled fully synchronized.
-    syncState = hasSnapshotConflict ? "conflict" : (admin ? "synced" : "partial");
+    syncState = hasAnyConflict ? "conflict" : (admin ? "synced" : "partial");
     lastSyncTime = new Date().toLocaleTimeString(isEN() ? "en-US" : "ar-EG");
     drawAll();
     const msg = hasSnapshotConflict
       ? T("تمت مزامنة السجلات التفصيلية المتاحة، لكن النسخة الكاملة بها تعارض محفوظ ولم يتم استبدالها.", "Available detail records were synchronized; the full snapshot conflict was preserved without overwriting it.")
-      : admin
+      : hasSourceEffectConflict
+        ? T("تمت مزامنة البيانات المسموح بها، لكن توجد حركات محاسبية أو مخزنية تحتاج صلاحيات أو مراجعة تعارض.", "Allowed data was synchronized, but some accounting or inventory effects need permissions or conflict review.")
+        : admin
         ? T("تم حفظ نسخة المصنع الكاملة ومزامنة الجداول التفصيلية", "Full factory backup saved and detail tables synchronized")
         : T("تم رفع الجداول المسموح بها فقط. مزامنة القيود والحركات المحاسبية الكاملة لحساب الموظف لم تكتمل بعد.", "Only permitted detail tables were uploaded. Full accounting-ledger synchronization for employee accounts is not complete yet.");
     if (showAlert) alert(msg);
@@ -533,8 +1656,22 @@ async function loadFromTablesMerge(isAuto = false) {
     ]);
     const failed = results.find(r => r.error);
     if (failed) return isAuto ? "cloud read failed" : T("تعذر قراءة البيانات من السحابة: " + failed.error.message, "Cloud read failed: " + failed.error.message);
+
+    const baselineMissing = error => error && ["PGRST202", "42883"].includes(String(error.code || ""));
+    const canReadInventoryBaseline = admin || profile.permissions?.inventory === true;
+    const canReadAccountingBaseline = admin || profile.permissions?.settings === true;
+    const [inventoryBaselineResult, accountingBaselineResult] = await Promise.all([
+      canReadInventoryBaseline ? supabase.rpc("get_factory_baseline", { p_section: "inventory" }) : Promise.resolve(emptyResult),
+      canReadAccountingBaseline ? supabase.rpc("get_factory_baseline", { p_section: "accounting" }) : Promise.resolve(emptyResult)
+    ]);
+    if (inventoryBaselineResult.error && !baselineMissing(inventoryBaselineResult.error))
+      return isAuto ? "cloud baseline read failed" : T("تعذر قراءة أساس المخزون: " + inventoryBaselineResult.error.message, "Inventory baseline read failed: " + inventoryBaselineResult.error.message);
+    if (accountingBaselineResult.error && !baselineMissing(accountingBaselineResult.error))
+      return isAuto ? "cloud baseline read failed" : T("تعذر قراءة الأساس المحاسبي: " + accountingBaselineResult.error.message, "Accounting baseline read failed: " + accountingBaselineResult.error.message);
+    const inventoryBaselineRow = !inventoryBaselineResult.error && Array.isArray(inventoryBaselineResult.data) ? inventoryBaselineResult.data[0] : null;
+    const accountingBaselineRow = !accountingBaselineResult.error && Array.isArray(accountingBaselineResult.data) ? accountingBaselineResult.data[0] : null;
     const [{ data: custs }, { data: supps }, { data: invs }, { data: prods }, { data: returns }, { data: vouchers }, { data: productionOrders }] = results;
-    if (!custs?.length && !supps?.length && !invs?.length && !prods?.length && !returns?.length && !vouchers?.length && !productionOrders?.length) {
+    if (!custs?.length && !supps?.length && !invs?.length && !prods?.length && !returns?.length && !vouchers?.length && !productionOrders?.length && !inventoryBaselineRow && !accountingBaselineRow) {
       if (restoredSnapshot && isAuto) setTimeout(() => location.reload(), 500);
       return restoredSnapshot
         ? T("تمت استعادة نسخة المصنع الكاملة من السحابة", "Full factory backup restored from cloud")
@@ -544,15 +1681,15 @@ async function loadFromTablesMerge(isAuto = false) {
     const S = getCachedState();
     if (!S || typeof S !== "object" || Array.isArray(S)) return "bad local";
     let totalAdded = 0;
+    let recordConflicts = 0;
     const cloudPartners = [
-      ...(custs || []).map(c => ({ id: c.external_id, name: c.name, phone: c.phone, email: c.email, addr: c.address, type: "customer" })),
-      ...(supps || []).map(s => ({ id: s.external_id, name: s.name, phone: s.phone, email: s.email, addr: s.address, type: "supplier" })),
+      ...(custs || []).map(c => ({ id: c.external_id, cloudId: c.external_id, name: c.name, phone: c.phone, email: c.email, addr: c.address, kind: "customer" })),
+      ...(supps || []).map(s => ({ id: s.external_id, cloudId: s.external_id, name: s.name, phone: s.phone, email: s.email, addr: s.address, kind: "supplier" })),
     ];
     if (cloudPartners.length) {
-      const m = mergeByKey(S.partners || [], cloudPartners, x => x.id || x.name);
-      S.partners = m.arr; totalAdded += m.added;
+      const m = mergeCloudPartners(S.partners || [], cloudPartners);
+      S.partners = m.arr; totalAdded += m.added; recordConflicts += m.conflicts;
     }
-    let recordConflicts = 0;
     if (invs?.length) {
       const cloudDocs = invs
         .filter(inv => inv.raw && ["sale", "pur"].includes(inv.raw.t))
@@ -598,6 +1735,7 @@ async function loadFromTablesMerge(isAuto = false) {
       const cloudProducts = prods.map(p => {
         if (p.raw && typeof p.raw === "object" && !Array.isArray(p.raw)) {
           const raw = { ...p.raw };
+          if (!raw.cloudId) raw.cloudId = String(p.external_id || raw.id || p.id);
           if (!raw.st || typeof raw.st !== "object" || Array.isArray(raw.st)) raw.st = {};
           return raw;
         }
@@ -612,8 +1750,73 @@ async function loadFromTablesMerge(isAuto = false) {
         };
       });
       if (!Array.isArray(S.items)) S.items = [];
-      const m = mergeByKey(S.items, cloudProducts, x => x.id || x.sku || x.name);
-      S.items = m.arr; totalAdded += m.added;
+      const m = mergeCloudProducts(S.items, cloudProducts);
+      S.items = m.arr; totalAdded += m.added; recordConflicts += m.conflicts;
+    }
+
+    // Apply each authorized baseline section independently. A failed section does not advance its cursor.
+    for (const [sectionName, row, applySection] of [
+      ["inventory", inventoryBaselineRow, applyInventoryBaselineSection],
+      ["accounting", accountingBaselineRow, applyAccountingBaselineSection]
+    ]) {
+      if (!row) continue;
+      const cursorKey = "mgr6-cloud-baseline-" + sectionName + "-version";
+      const localVersion = Number(localStorage.getItem(cursorKey) || 0);
+      const remoteVersion = Number(row.baseline_version || 0);
+      if (remoteVersion < localVersion) {
+        recordConflicts++;
+        continue;
+      }
+      if (remoteVersion === localVersion) continue;
+      if (remoteVersion !== 1 || !row.section_payload || !applySection) {
+        recordConflicts++;
+        continue;
+      }
+      const applied = applySection(S, { ...row.section_payload, baselineVersion: remoteVersion,
+        fingerprint: row.fingerprint });
+      if (!applied.applied) {
+        recordConflicts++;
+        console.warn("Factory baseline section was not applied:", sectionName, applied.reason);
+        continue;
+      }
+      localStorage.setItem(cursorKey, String(remoteVersion));
+      totalAdded += Number(applied.movementsAdded || applied.accountsAdded || 0);
+    }
+
+    // Download role-redacted source effects after master records and baseline sections are ready.
+    const effectsResult = await supabase.rpc("get_source_effects");
+    const effectsRpcMissing = effectsResult.error && ["PGRST202", "42883"].includes(String(effectsResult.error.code || ""));
+    if (effectsResult.error && !effectsRpcMissing) {
+      return isAuto ? "cloud source effects read failed" : T("تعذر قراءة حركات المستندات: " + effectsResult.error.message, "Source effects read failed: " + effectsResult.error.message);
+    }
+    if (!effectsRpcMissing && Array.isArray(effectsResult.data) && effectsResult.data.length) {
+      let versions = {};
+      try { versions = JSON.parse(localStorage.getItem("mgr6-source-effect-versions") || "{}") || {}; } catch(e) {}
+      const plan = planRemoteSourceEffectApply(S, effectsResult.data, versions);
+      if (plan.invalid.length) {
+        recordConflicts += plan.invalid.length;
+      } else {
+        for (const action of plan.actions) {
+          const sourceType = action.effect?.sourceType || action.sourceType;
+          const sourceId = String(action.effect?.sourceId ?? action.sourceId);
+          const applied = action.op === "delete"
+            ? (action.effect ? removeCanonicalSourceEffect(S, action.effect) : { applied: true })
+            : applyCanonicalSourceEffect(S, action.effect);
+          if (!applied.applied) {
+            recordConflicts++;
+            console.warn("Source effect was not applied:", sourceType, sourceId, applied.reason);
+            continue;
+          }
+          if (action.op === "delete") removeSourceDocument(S, sourceType, sourceId);
+          versions[JSON.stringify([sourceType, sourceId])] = Number(action.version);
+        }
+        Object.assign(versions, plan.adoptedVersions);
+        if (plan.conflicts.length) {
+          recordConflicts += plan.conflicts.length;
+          localStorage.setItem("mgr6-source-effect-conflicts", JSON.stringify(plan.conflicts));
+        }
+        localStorage.setItem("mgr6-source-effect-versions", JSON.stringify(versions));
+      }
     }
     Object.getPrototypeOf(localStorage).setItem.call(localStorage, "mgr6", JSON.stringify(S));
     if (restoredSnapshot && isAuto) setTimeout(() => location.reload(), 500);
