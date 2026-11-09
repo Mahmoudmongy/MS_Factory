@@ -269,15 +269,12 @@ new MutationObserver(ms=>{if(!LANGEN)return;ms.forEach(m=>m.addedNodes.forEach(n
 function netUp(){const e=$g("#net"),status=$g("#net-status");if(status)status.textContent=navigator.onLine?"🟢 متصل":"🔴 غير متصل";else if(e)e.textContent=navigator.onLine?"🟢 متصل":"🔴 غير متصل";if(e)e.title="حالة الاتصال والمزامنة"}
 addEventListener("online",netUp);addEventListener("offline",netUp);
 function syncPage(){
-  const cp=cloudProfile();
+  let queued=0;
+  try{const q=JSON.parse(localStorage.getItem("ms-factory-db-queue-v1")||"[]");queued=Array.isArray(q)?q.length:0}catch(e){}
   const offline=!navigator.onLine||window.__factoryOfflineMode===true;
-  const badge=document.getElementById("cloud-badge");
-  const snapshotConflict=localStorage.getItem("mgr6-cloud-snapshot-conflict");
-  const cloudStatus=snapshotConflict?"⚠️ تعارض بين النسخة المحلية والسحابية":offline?"💾 محفوظ محليًا - انتظار عودة الإنترنت":(badge?.innerText||"🟡 تم التحقق من الحساب - في انتظار المزامنة").trim();
-  const role=!cp?"غير محدد":cp.is_admin===true?"مدير النظام":"حساب موظف";
-  const detail=cp?.is_admin===true
-    ?"حساب المدير يرفع النسخة الكاملة للمصنع، بالإضافة إلى الجداول التفصيلية المدعومة."
-    :"حساب الموظف يزامن الجداول المسموح بها حسب صلاحياته. دفتر الأستاذ والحركات التفصيلية الكاملة ما زالت مرتبطة بنسخة المدير الكاملة.";
+  const ready=window.__factoryDatabaseFirstReady===true;
+  const status=offline?(queued?"🔴 غير متصل - تغييرات محفوظة محليًا":"🔴 غير متصل - العمل دون اتصال"):queued?"🟡 توجد تغييرات في انتظار الإرسال":ready?"🟢 متصل - الحفظ المباشر على قاعدة البيانات":"🟡 جارٍ الاتصال بقاعدة البيانات";
+  const role=cloudProfile()?.is_admin===true?"مدير النظام":"حساب موظف";
   const c=[
     ["فواتير ومرتجعات",S.docs.length],
     ["سندات قبض ودفع",S.vch.length],
@@ -288,18 +285,17 @@ function syncPage(){
     ["عملاء وموردون",S.partners.length],
     ["هالك مخزون",S.wo.length]
   ];
-  sh(`<div class="ph"><h3>حالة الاتصال والمزامنة</h3>${bk}</div>
+  sh(`<div class="ph"><h3>حالة الاتصال وقاعدة البيانات</h3>${bk}</div>
   <div class="card">
     <p>الاتصال: <b>${navigator.onLine?"🟢 متصل بالإنترنت":"🔴 غير متصل"}</b></p>
-    <p>حالة حساب السحابة: <b>${cp?"تم التحقق من الحساب":"لم يتم التحقق من الحساب"}</b></p>
     <p>نوع الحساب: <b>${role}</b></p>
-    <p>حالة المزامنة: <b>${cloudStatus}</b></p>
-    <p>التغييرات المحلية المحفوظة: <b>${S.pend||0}</b></p>
+    <p>حالة الحفظ: <b>${status}</b></p>
+    <p>التغييرات المعلقة: <b>${queued}</b></p>
   </div>
-  ${snapshotConflict&&cp?.is_admin===true?`<div class="card"><b>⚠️ تعارض في نسخة المصنع الكاملة</b><p>توجد تغييرات أحدث على السحابة وتغييرات محلية على هذا الجهاز. لم يتم استبدال أي نسخة أو رفع بيانات قديمة فوق الأحدث.</p><p>يمكنك استعادة النسخة السحابية بعد حفظ نسخة محلية احتياطية.</p><button class="rd" onclick="resolveCloudSnapshotConflict()">حفظ نسخة الجهاز ثم استعادة النسخة السحابية</button></div>`:""}
   <table class="l"><tr><th>البيانات</th><th>العدد على هذا الجهاز</th></tr>${U(c,x=>`<tr><td>${x[0]}</td><td>${x[1]}</td></tr>`)}</table>
-  <p class="mu">${detail}</p>
-  <p class="mu">البيانات المحلية تظل محفوظة على الجهاز. عند عودة الإنترنت يحاول النظام تحميل التغييرات السحابية ودمجها ثم رفع ما تسمح به الصلاحيات. اضغط على مؤشر الاتصال أعلى الشاشة لعرض التفاصيل أو معالجة أي تعارض مزامنة.</p>`)
+  <p class="mu">عند الاتصال بالإنترنت، تتم قراءة البيانات وحفظ كل سجل متغير مباشرة في قاعدة البيانات. لا يتم رفع نسخة المصنع كاملة مع كل عملية حفظ.</p>
+  <p class="mu">عند انقطاع الإنترنت فقط، تُحفظ التغييرات محليًا في قائمة انتظار، ثم تُرسل عند عودة الاتصال مع التحقق من عدم الكتابة فوق تعديل أحدث من جهاز آخر.</p>
+  ${queued&& !offline?'<button class="g" onclick="window.__factoryDatabaseSyncNow && window.__factoryDatabaseSyncNow()">إرسال التغييرات المعلقة الآن</button>':""}`);
 }
 /* ---- tabbed workspace ---- */
 function newTab(kind,sid,title){const el=document.createElement("div");el.style.display="none";$g("#m").appendChild(el);const t={id:uid(),kind,sid,title,el,dirty:0,form:0,st:null};const mark=()=>{if(t.form&&!t.dirty){t.dirty=1;drawTabs()}};el.addEventListener("input",mark);el.addEventListener("change",mark);TB.push(t);return t}
