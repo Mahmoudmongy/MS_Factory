@@ -339,3 +339,34 @@ input::placeholder,textarea::placeholder{color:var(--mu);opacity:.72}
 }
 @media(max-width:860px){#top #bg{display:inline-flex!important}}
 @media(max-width:860px){#top #bg{display:block!important;text-align:center}#top #bg svg{display:block;margin:auto}}#sb .sb-controls{justify-content:flex-start!important}
+/* MS Factory mobile-first polish */
+.filter-card .filter-date-field{display:none!important}
+.filter-card.date-range-open .filter-date-field{display:flex!important}
+.filter-card .filter-date-toggle{border-color:var(--ac);color:var(--ac);font-weight:700}
+#tabs .tb{display:flex;align-items:center}
+#tabs .tb-label{order:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+html[dir="rtl"] #tabs .tb-close{order:2;margin-inline:4px 0}
+html[dir="ltr"] #tabs .tb-close{order:0;margin-inline:0 4px}
+html[dir="rtl"] #top .top-nav svg{transform:scaleX(-1)}
+#top #sync-btn{display:none!important}
+#top #net{background:#e8f5e9!important;color:#16834a!important;border:1px solid #b7e4c7!important;border-radius:9px!important;box-shadow:none!important}
+#top #net.offline{background:#fff1f2!important;color:#dc2626!important;border-color:#fecdd3!important}
+@media(max-width:860px){
+ #top{display:grid!important;grid-template-columns:26px 24px 24px minmax(0,1fr) 27px minmax(54px,68px) 27px 27px!important;gap:2px!important;padding:4px 3px!important;align-items:center!important}
+ #top>*{min-width:0!important;max-width:100%!important}
+ #top h1{font-size:11px!important;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+ #top button{padding:2px!important;min-height:27px!important;height:27px!important}
+ #top #who{font-size:10px!important;max-width:68px!important;padding:2px!important}
+ #top #net{width:27px!important;height:27px!important;min-width:27px!important;min-height:27px!important}
+ #top #thb,#top #logout-btn{width:27px!important;min-width:27px!important;height:27px!important}
+ #top #logout-btn{font-size:17px!important}
+ .filter-card>.row:first-child{grid-template-columns:repeat(2,minmax(0,1fr))!important;gap:7px!important}
+ .filter-card .row>div{min-width:0!important;width:100%!important;flex:1 1 calc(50% - 5px)!important}
+ .filter-card input,.filter-card select{width:100%!important;min-width:0!important;font-size:13px!important}
+ #tabs .tb{max-width:46vw;min-width:0}
+}
+@media(max-width:360px){
+ #top{grid-template-columns:23px 21px 21px minmax(0,1fr) 24px 58px 24px 24px!important;gap:1px!important;padding-inline:2px!important}
+ #top #who{max-width:58px!important;font-size:9px!important}
+ #top h1{font-size:10px!important}
+}

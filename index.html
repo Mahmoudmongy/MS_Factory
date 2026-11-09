@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#0f766e">
 <meta name="mobile-web-app-capable" content="yes">
-<title>مدير المصنع</title>
+<title>مدير الشركة</title>
 <link rel="manifest" href="./manifest.json">
 <link rel="icon" type="image/svg+xml" href="./assets/icon.svg">\n<link rel="apple-touch-icon" href="./assets/icon-192.png">
 <link rel="stylesheet" href="./css/style.css">
@@ -134,7 +134,7 @@ import { scopeFactoryStorage } from './js/account-storage.js';
       <button class="top-nav" onclick="bkw(-1)" title="رجوع" aria-label="رجوع"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg></button>
       <button class="top-nav" onclick="bkw(1)" title="تقدم" aria-label="تقدم"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg></button>
       <h1 id="ttl"></h1>
-      <button id="net" class="net-indicator online" onclick="syncPage()" type="button" aria-label="حالة الاتصال" title="حالة الاتصال"><svg id="net-cloud" viewBox="0 0 24 24" aria-hidden="true"><path d="M7.5 18.5h10a4.5 4.5 0 0 0 .5-8.97A6.5 6.5 0 0 0 5.4 8.2 5.2 5.2 0 0 0 7.5 18.5Z"/></svg></button><button id="sync-btn" type="button" onclick="syncPage()" aria-label="المزامنة" title="المزامنة"><svg id="sync-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 7v5h-5M4 17v-5h5M5.6 9A7 7 0 0 1 18 6l2 1M4 17l2 1a7 7 0 0 0 12.4-3"/></svg></button>
+      <button id="net" class="net-indicator online" onclick="syncPage()" type="button" aria-label="حالة الاتصال" title="حالة الاتصال"><svg id="net-cloud" viewBox="0 0 24 24" aria-hidden="true"><path d="M7.5 18.5h10a4.5 4.5 0 0 0 .5-8.97A6.5 6.5 0 0 0 5.4 8.2 5.2 5.2 0 0 0 7.5 18.5Z"/></svg></button>
       <select id="who" onchange="swho(this.value)" aria-label="الحساب"></select>
       <button id="thb" type="button" onclick="togTheme()" aria-label="تغيير المظهر" title="تغيير المظهر">🌙</button>
       <button id="logout-btn" type="button" onclick="signOutNow()" aria-label="خروج" title="خروج">✕</button>
@@ -172,7 +172,7 @@ import { scopeFactoryStorage } from './js/account-storage.js';
 })();
 window.addEventListener('factory-database-ready',()=>{document.getElementById('factory-boot-screen')?.classList.add('done');setTimeout(()=>document.getElementById('factory-boot-screen')?.remove(),180)});
 window.addEventListener('factory-db-startup-error',e=>{document.getElementById('factory-boot-screen')?.remove();window.__showFactoryBootError?.('تعذر الاتصال بقاعدة بيانات الإنتاج',e.detail?.message||'تحقق من الاتصال ثم أعد المحاولة')});
-setTimeout(()=>{const s=document.getElementById('factory-boot-screen');if(s&&!window.__factoryDatabaseFirstReady){s.remove();window.__showFactoryBootError?.('تأخر تحميل بيانات المصنع','انتهت مهلة تجهيز قاعدة البيانات بعد 12 ثانية. أعد المحاولة أو تحقق من اتصال الإنترنت.')}},12000);
+setTimeout(()=>{const s=document.getElementById('factory-boot-screen');if(s&&!window.__factoryDatabaseFirstReady){s.remove();window.__showFactoryBootError?.('تأخر تحميل بيانات الشركة','انتهت مهلة تجهيز قاعدة البيانات بعد 12 ثانية. أعد المحاولة أو تحقق من اتصال الإنترنت.')}},12000);
 if('serviceWorker' in navigator){
   window.addEventListener('load', ()=>{ navigator.serviceWorker.register('./sw.js').catch(()=>{}); });
 }
