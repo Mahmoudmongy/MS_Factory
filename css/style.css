@@ -277,3 +277,47 @@ button:disabled{opacity:.55;cursor:not-allowed}
  #sb{width:66vw!important;max-width:66vw!important}
  #sb.icons-only{width:64px!important;max-width:64px!important;min-width:64px!important}
 }
+
+/* Final compact shell: cloud status and sync are separate, legible controls */
+#top{grid-template-columns:34px 30px 30px minmax(0,1fr) 30px 32px minmax(82px,125px) 32px 32px;gap:4px;padding:4px 8px;min-height:40px}
+#top h1{font-size:14px;line-height:1.1}
+#top button{min-width:28px;min-height:30px;height:30px;padding:3px;display:inline-flex;align-items:center;justify-content:center}
+#top #bg svg,#top .top-nav svg{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+#top #net.net-indicator{width:30px;height:30px;min-width:30px;min-height:30px;padding:4px;border-radius:7px;display:grid;place-items:center}
+#top #net-cloud{width:20px;height:20px}
+#top #net.online{color:#16a34a;background:rgba(22,163,74,.13)}
+#top #net.offline{color:#dc2626;background:rgba(220,38,38,.13)}
+#top #net.offline:after{width:24px;height:2.5px;transform:rotate(-48deg)}
+#top #sync-btn{width:32px;min-width:32px;height:32px;min-height:32px;border-radius:50%;padding:5px;background:rgba(56,189,248,.18);border:1px solid rgba(56,189,248,.42);color:#38bdf8;box-shadow:0 0 0 2px rgba(56,189,248,.06)}
+#top #sync-icon{display:block!important;width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;font-size:20px}
+#top #sync-btn:active{transform:scale(.94)}
+#top #who{max-width:125px;min-width:0;height:30px;min-height:30px;padding:3px 5px;font-size:12px}
+#top #thb,#top #logout-btn{width:32px;min-width:32px;height:32px;min-height:32px}
+#top #logout-btn{border-radius:5px;font-size:20px}
+#sb .br img{max-width:112px;max-height:58px;object-fit:contain;margin:0 auto 5px;padding:1px}
+#tabs .tb{display:flex;align-items:center;gap:5px;max-width:min(220px,28vw);min-width:78px;padding:3px 6px;overflow:hidden}
+#tabs .tb-close{order:0;flex:none;width:22px;height:22px;min-width:22px;display:inline-grid;place-items:center;border:1px solid var(--bd);border-radius:5px;background:var(--bg);color:var(--rd);font-weight:bold;line-height:1;margin:0}
+#tabs .tb-label{order:1;display:block;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.filter-card>.row:first-child{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));width:100%;gap:8px;align-items:end}
+.filter-card>.row:first-child>div{min-width:0;width:100%}
+.filter-card label{display:block;font-size:12px;margin-bottom:1px}
+.filter-card input,.filter-card select{width:100%;min-width:0;margin:1px 0 4px}
+.filter-card input[type=date]{font-size:13px;padding:6px 5px}
+.filter-card input::placeholder{color:var(--mu);opacity:.72}
+input::placeholder,textarea::placeholder{color:var(--mu);opacity:.72}
+@media(min-width:861px){
+ #top{grid-template-columns:34px 30px 30px minmax(120px,1fr) 30px 32px minmax(90px,125px) 32px 32px}
+ #top h1{font-size:14px}
+}
+@media(max-width:860px){
+ #top{grid-template-columns:28px 25px 25px minmax(35px,1fr) 27px 29px minmax(65px,82px) 28px 28px;gap:3px;padding:4px 5px;min-height:38px}
+ #top h1{font-size:12px}
+ #top #who{font-size:11px;max-width:82px}
+ #top #net.net-indicator{width:27px;height:27px;min-width:27px;min-height:27px}
+ #top #sync-btn{width:29px;height:29px;min-width:29px;min-height:29px}
+ #top #sync-icon{width:18px;height:18px}
+}
+@media(max-width:380px){
+ #top{grid-template-columns:25px 22px 22px minmax(20px,1fr) 25px 27px minmax(58px,70px) 26px 26px;gap:2px;padding-inline:3px}
+ #top #who{max-width:70px}
+}
