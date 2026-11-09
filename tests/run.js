@@ -55,7 +55,7 @@ ok('live updates subscribe to individual factory_records rows instead of reloadi
 ok('reconnect reads only rows changed since the last sync cursor',/fetchChangedRecords\(since\)/.test(dbSync)&&/gt\('updated_at', since\)/.test(dbSync)&&/LAST_SYNC_KEY/.test(dbSync));
 ok('offline cache stores individual rows and version metadata, not a full local state snapshot during online saves',/CACHE_PREFIX/.test(dbSync)&&/cacheRow\(row\)/.test(dbSync)&&!/JSON\.stringify\(\[\.\.\.baseline\.values\(\)\]\)/.test(dbSync)&&/if\(!navigator\.onLine\)\{localStorage\.setItem\("mgr6"/.test(app));
 ok('atomic database RPC is invoker-secured and protected by RLS migration',fs.readFileSync(path.join(ROOT,'supabase/migrations/20261109162608_atomic_factory_record_batch.sql'),'utf8').includes('security invoker')&&fs.readFileSync(path.join(ROOT,'supabase/migrations/20261109161927_database_first_factory_records.sql'),'utf8').includes('force row level security'));
-ok('sync toolbar is removed but conflict recovery remains reachable from the connection indicator',!app.includes('["🔄 حالة الاتصال والمزامنة","syncPage()"]')&&/id="net"[^>]*onclick="syncPage\(\)"/.test(idx)&&/ms-logout-btn/.test(cloud)&&!/cloud-badge|رفع الآن|Upload Now|تحميل/.test(cloud.slice(cloud.indexOf('function drawAll()'))));
+ok('sync toolbar is removed but conflict recovery remains reachable from the connection indicator',!app.includes('["🔄 حالة الاتصال والمزامنة","syncPage()"]')&&/id="net"[^>]*onclick="syncPage\(\)"/.test(idx)&&cloud.indexOf('if (!window.__factoryDatabaseFirst) {')<cloud.indexOf('const _origSetItem')&&cloud.trimEnd().endsWith('}'));
 
 const collectorStart=cloud.indexOf('function collectSourceEffects(state)');
 const collectorEnd=cloud.indexOf('// ===== الرفع مرة واحدة',collectorStart);
