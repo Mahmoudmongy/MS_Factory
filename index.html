@@ -17,10 +17,10 @@
 </head>
 <script type="module">
 import { supabase } from './js/supabase.js';
-(async function bootstrapFactoryApp() {
+window.__factoryBootstrapReady = (async function bootstrapFactoryApp() {
     try {
       const { data, error } = supabase ? await supabase.auth.getSession() : { data: { session: null }, error: new Error('Supabase unavailable') };
-      if (!data?.session || (error && navigator.onLine)) location.replace('auth.html');
+      if (!data?.session || (error && navigator.onLine)) { location.replace('auth.html'); return false; }
       else {
         const { data: profile, error: profileError } = await supabase.from('profiles')
           .select('id,created_by,is_admin,permissions,must_change_password,username,full_name')
@@ -34,27 +34,30 @@ import { supabase } from './js/supabase.js';
           if (cachedProfile && cachedProfile.id === data.session.user.id) {
             if (cachedProfile.must_change_password === true && cachedProfile.is_admin !== true) {
               location.replace('change-password.html');
-              return;
+              return false;
             }
             window.__factoryAuthProfile = cachedProfile;
             window.__factoryAuthEmail = data.session.user.email || '';
             window.__factoryOfflineMode = true;
             document.documentElement.style.visibility = 'visible';
             if (typeof window.setFactoryAuthProfile === 'function') window.setFactoryAuthProfile(cachedProfile);
+            return true;
           } else if (navigator.onLine) {
             await supabase.auth.signOut();
             location.replace('auth.html');
+            return false;
           } else {
             document.documentElement.style.visibility = 'visible';
             document.body?.insertAdjacentHTML?.('afterbegin', '<div role="alert" style="padding:12px;background:#fee2e2;color:#991b1b;text-align:center">لا يوجد ملف حساب محفوظ على هذا الجهاز. اتصل بالإنترنت وسجّل الدخول مرة واحدة لتفعيل العمل دون اتصال.</div>');
             location.replace('auth.html');
+            return false;
           }
         } else {
           if (profile.must_change_password === true && profile.is_admin !== true) {
             window.__factoryAuthProfile = profile;
             try { localStorage.setItem('factory-profile:' + data.session.user.id, JSON.stringify(profile)); } catch (_) {}
             location.replace('change-password.html');
-            return;
+            return false;
           }
           window.__factoryAuthProfile = profile;
           window.__factoryAuthEmail = data.session.user.email || '';
@@ -62,11 +65,13 @@ import { supabase } from './js/supabase.js';
           try { localStorage.setItem('factory-profile:' + data.session.user.id, JSON.stringify(profile)); } catch (_) {}
           document.documentElement.style.visibility = 'visible';
           if (typeof window.setFactoryAuthProfile === 'function') window.setFactoryAuthProfile(profile);
+          return true;
         }
       }
     } catch (e) {
       console.error('Authentication bootstrap failed:', e);
       location.replace('auth.html');
+      return false;
     }
   
 })();
@@ -91,13 +96,33 @@ import { supabase } from './js/supabase.js';
 </div>
 <div id="toast"></div>
 <div id="pr" style="display:none"></div>
-<script src="./js/app.js"></script>
-<script type="module" src="./js/cloud-sync.js"></script>
-<script>
+<script type="module">
+import appUrl from './js/app.js?url';
+
+// Authentication and profile permissions must finish before app.js reads local data.
+const authenticated = await window.__factoryBootstrapReady;
+if (!authenticated || !window.__factoryAuthProfile?.id) {
+  if (!location.pathname.endsWith('/auth.html') && !location.pathname.endsWith('/change-password.html')) {
+    location.replace('auth.html');
+  }
+  throw new Error('Factory application startup stopped: no verified profile.');
+}
+
+const { scopeFactoryStorage } = await import('./js/account-storage.js');
+scopeFactoryStorage(window.__factoryAuthProfile);
+
+await new Promise((resolve, reject) => {
+  const script = document.createElement('script');
+  script.src = appUrl;
+  script.onload = resolve;
+  script.onerror = () => reject(new Error('Could not load the factory application.'));
+  document.body.appendChild(script);
+});
+
+await import('./js/cloud-sync.js');
 
 // إصلاح إغلاق القائمة - لا يغير الشكل
 (function(){
-  const origClose = window.closeSB;
   window.closeSB = function(){
     try{
       const sb=document.getElementById('sb');
@@ -107,7 +132,6 @@ import { supabase } from './js/supabase.js';
       document.body.style.overflow='';
     }catch(e){}
   };
-  const origOpen = window.openSB || function(){ document.getElementById('sb').classList.add('open'); };
   window.openSB = function(){
     try{
       document.getElementById('sb').classList.add('open');
