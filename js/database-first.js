@@ -342,6 +342,7 @@ async function bootstrap() {
     const cachedRows=loadCachedRows();
     if(cachedRows.length) hydrateFromRows(cachedRows);
     else snapshotBaseline(getState());
+    for (const op of getQueue()) applyOperationToState(op);
     stateReady = true;
     window.__factoryDatabaseFirstReady = true;
     window.dispatchEvent(new CustomEvent('factory-database-ready'));
