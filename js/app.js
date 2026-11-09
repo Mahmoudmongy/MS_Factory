@@ -14,7 +14,9 @@ partners:[{id:1,name:"عميل قطاعي (نقدي)",phone:"",c:1,s:0,type:"r",
 docs:[],po:[],vch:[],wo:[],codes:[],je:[{no:"JE-0001",date:d0,ts:n0,desc:"رصيد افتتاحي"}],emp:[],mv:[],L:[op(1,50000,0),op(2,150000,0),op(5,14200,0),op(8,0,214200)]};
 s.items.forEach(i=>Object.entries(i.st).forEach(([v,q])=>s.mv.push({d:d0,ts:n0,iid:i.id,v,q,val:q*i.buy,ref:"رصيد افتتاحي",pid:0})));return s}
 let S;try{S=JSON.parse(localStorage.getItem("mgr6"))}catch(e){}if(!S)S=seed();
-const sv=()=>{try{S.pend=(S.pend||0)+1;localStorage.setItem("mgr6",JSON.stringify(S));localStorage.setItem("mgr6-sync-pending",JSON.stringify({at:Date.now(),pend:S.pend}))}catch(e){}};
+window.__factoryGetState=()=>S;
+window.__factoryReplaceArrays=(data)=>{if(!data||typeof data!=="object")return;for(const [k,v] of Object.entries(data)){if(Array.isArray(v))S[k]=v;else if(k==="__meta"&&v&&typeof v==="object")Object.assign(S,v);}try{render()}catch(e){}};
+const sv=()=>{try{S.pend=(S.pend||0)+1;if(window.__factoryDatabaseFirstReady&&typeof window.__factoryPersistState==="function"){window.__factoryPersistState(S).catch(e=>console.error("Database save failed:",e));}else if(!navigator.onLine){localStorage.setItem("mgr6",JSON.stringify(S));localStorage.setItem("mgr6-sync-pending",JSON.stringify({at:Date.now(),pend:S.pend}));}else{localStorage.setItem("mgr6",JSON.stringify(S));}}catch(e){console.error("State save failed:",e)}};
 const TN={sale:"فاتورة بيع",pur:"فاتورة شراء",sret:"إشعار دائن (مرتجع بيع)",pret:"إشعار مدين (مرتجع شراء)"},PF={sale:"SA",pur:"PU",sret:"SR",pret:"RP"},CT={mfg:"تصنيع",sup:"مشتريات"},TT={A:"الأصول",L:"الالتزامات",Q:"حقوق الملكية",I:"الإيرادات",X:"المصروفات"};
 /* ===== ledger + stock core ===== */
 const ak=k=>S.accts.find(a=>a.k==k).id,ac_=id=>S.accts.find(a=>a.id==id)||{},an=id=>ac_(id).name||"",nat=a=>"AX".includes(a.t)?1:-1;
