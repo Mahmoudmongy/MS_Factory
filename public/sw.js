@@ -13,7 +13,6 @@ const CORE = [
   './change-password.html',
   './css/style.css',
   './manifest.json',
-  './js/app.js',
   './js/change-password.js'
 ];
 
