@@ -232,6 +232,7 @@ async function persistState(state) {
       localStorage.removeItem('mgr6-sync-pending');
     } catch (error) {
       if (error?.code === 'FACTORY_RECORD_CONFLICT') {
+        queueOperations(makeOperations(getState()));
         document.dispatchEvent(new CustomEvent('factory-db-conflict',{detail:{message:error.message}}));
         throw error;
       }
