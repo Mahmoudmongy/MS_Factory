@@ -662,7 +662,7 @@ function applySidebarMode(){const mode=localStorage.getItem("factory-sidebar-mod
 function toggleSidebarMode(){const next=(localStorage.getItem("factory-sidebar-mode")||"list")==="list"?"icons":"list";localStorage.setItem("factory-sidebar-mode",next);applySidebarMode();}
 async function signOutNow(){if(!confirm(LANGEN?"Sign out?":"هل تريد تسجيل الخروج؟"))return;try{const {supabase}=await import("./supabase.js");if(supabase)await supabase.auth.signOut();}catch(e){console.error("Sign out failed",e)}location.replace("auth.html")}
 window.signOutNow=signOutNow;window.toggleSidebarMode=toggleSidebarMode;
-window.history.pushState({factoryStay:true},"","#factory");window.addEventListener("popstate",()=>{window.history.pushState({factoryStay:true},"","#factory");});
+
 migrate();applyPref();netUp();go("home");
 
 // Mobile browser Back: require a deliberate second press and explicit confirmation before leaving the app.
