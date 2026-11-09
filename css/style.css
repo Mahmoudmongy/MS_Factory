@@ -212,3 +212,36 @@ button:disabled{opacity:.55;cursor:not-allowed}
  .ph .row button{min-height:34px;padding:5px 8px;font-size:12px}
 }
 @media(max-width:390px){#top{grid-template-columns:34px minmax(0,1fr) 34px 74px 34px 34px;gap:3px}#top #who{max-width:74px;font-size:11px}#sb{width:52vw;min-width:180px}#sb.icons-only{width:64px;min-width:64px}}
+
+/* Final usability refinements */
+#top{min-width:0;isolation:isolate}
+#top>*{min-width:0}
+#top #logout-btn{width:36px;height:36px;min-width:36px;max-width:36px;aspect-ratio:1;border-radius:5px;padding:0;line-height:1;font-size:21px}
+#sb .sb-controls{inset-inline:0}
+#sb .sb-mode{display:flex;align-items:center;justify-content:center;gap:7px}
+.filter-card input[type="search"],.filter-card input[type="text"],.row input[type="search"]{min-width:0;max-width:100%}
+.filter-card .row>div{min-width:0}
+@media(max-width:860px){
+  #sb{width:50vw;max-width:50vw;min-width:0}
+  #sb.icons-only{width:68px;max-width:68px;min-width:68px}
+  #sb a{min-width:0;overflow:hidden}
+  #sb-overlay{touch-action:manipulation}
+  #top{grid-template-columns:34px minmax(0,1fr) 34px minmax(64px,92px) 34px 34px;gap:3px;padding:5px}
+  #top h1{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  #top #who{max-width:92px}
+  #top #logout-btn{width:34px;height:34px;min-width:34px;max-width:34px}
+  .filter-card{overflow:hidden}
+  .filter-card .row>div{flex:1 1 calc(50% - 6px)}
+  .filter-card input,.filter-card select{width:100%;min-width:0;min-height:36px;padding:6px 7px;font-size:13px}
+  .filter-card button{min-height:32px;padding:4px 8px;font-size:12px}
+  .row>input[type="search"],.row>input[type="text"]{min-width:0}
+}
+@media(max-width:390px){
+  #sb{width:50vw;max-width:50vw}
+  #sb.icons-only{width:64px;max-width:64px;min-width:64px}
+  #top{grid-template-columns:32px minmax(0,1fr) 32px 68px 32px 32px;gap:2px}
+  #top #who{max-width:68px;font-size:10px}
+  #top #net{width:32px;min-width:32px}
+  #top #thb,#top #logout-btn{width:32px;min-width:32px;height:32px}
+  .filter-card .row>div{flex-basis:calc(50% - 6px)}
+}

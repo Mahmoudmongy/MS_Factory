@@ -4,6 +4,8 @@ const $ = (id) => document.getElementById(id);
 const status = $('auth-status');
 const msg = $('auth-msg');
 const form = $('auth-form');
+const rememberBox = $('auth-remember');
+if (rememberBox) rememberBox.checked = localStorage.getItem('factory-remember') !== '0';
 
 function say(text, isError = true) {
   if(!msg) return;
@@ -44,12 +46,21 @@ if (!supabase) {
     const storageKey = 'sb-' + projectRef + '-auth-token';
     try { if (remember) sessionStorage.removeItem(storageKey); else localStorage.removeItem(storageKey); } catch (_) {}
     say('جاري تسجيل الدخول...', false);
-    $('auth-login').disabled = true;
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
-    $('auth-login').disabled = false;
-    if (error) return say('خطأ دخول: ' + error.message);
-    say('تم الدخول بنجاح ✅', false);
-    setTimeout(()=> location.href='index.html', 800);
+    const button = $('auth-login');
+    button.disabled = true;
+    try {
+      const result = await Promise.race([
+        supabase.auth.signInWithPassword({ email, password }),
+        new Promise((_, reject) => setTimeout(() => reject(new Error('انتهت مهلة الاتصال. تحقق من الإنترنت وحاول مرة أخرى.')), 12000))
+      ]);
+      if (result.error) return say('خطأ دخول: ' + result.error.message);
+      say('تم الدخول بنجاح ✅', false);
+      location.replace('index.html');
+    } catch (error) {
+      say(error?.message || 'تعذر تسجيل الدخول. حاول مرة أخرى.');
+    } finally {
+      button.disabled = false;
+    }
   });
 
 }
