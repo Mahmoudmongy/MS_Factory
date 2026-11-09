@@ -126,7 +126,7 @@ function geoAdd(){const g=$("#ngv").value.trim(),c=$("#nct").value.trim();if(g&&
 const rdA=()=>({gov:$("#gv").value,city:$("#ct2").value,adr:$("#adr").value.trim()});
 /* ===== customers / suppliers (merged balances) ===== */
 /* ===== invoices / returns ===== */
-const sel=(v,a)=>U(a,x=>`<option value="${x[0]}" ${v==x[0]?"selected":""}>${x[1]}</option>`);
+const sel=(v,a)=>U(a,x=>`<option value="${escHtml(x[0])}" ${v==x[0]?"selected":""}>${escHtml(x[1])}</option>`);
 function retFrom(id){const d=S.docs.find(x=>x.id==id);docForm(d.t=="sale"?"sret":"pret",{pid:d.pid,cat:d.cat,ref:d.no,who:pn(d.pid),idate:d.date,lines:d.lines.filter(l=>l.iid).map(l=>({...l,max:l.qty,qty:0}))})}
 function editDoc(id){if(!can("edit"))return;const d=S.docs.find(x=>x.id==id);docForm(d.t,{edit:id,pid:d.pid,cat:d.cat,date:d.date,lines:d.lines.map(l=>({...l})),disc:d.disc,note:d.note,img:d.img,dest:d.dest})}
 function docForm(t,p){p=p||{};D={t,lines:p.lines||[],img:p.img||"",edit:p.edit||0,disc:p.disc||0};const s=t=="sale"||t=="sret",rt=t=="sret"||t=="pret",pur=t=="pur";
