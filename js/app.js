@@ -162,6 +162,7 @@ async function scanCam(){
  if(!window.BarcodeDetector||!navigator.mediaDevices){if(m)m.textContent="المتصفح لا يدعم مسح الباركود بالكاميرا — اكتب الكود";return}
  try{
   scanStream=await navigator.mediaDevices.getUserMedia({video:{facingMode:"environment"}});
+  if(document.hidden){stopCam();return}
   const v=document.createElement("video");scanVideo=v;v.srcObject=scanStream;v.setAttribute("playsinline","");v.style.width="100%";
   $("#bcam").appendChild(v);await v.play();const bd=new BarcodeDetector();
   const loop=async()=>{
