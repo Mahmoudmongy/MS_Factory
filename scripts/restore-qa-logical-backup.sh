@@ -166,13 +166,13 @@ for match in re.finditer(r'(?im)CREATE\s+TRIGGER\b', source):
     if prefix and not prefix.endswith(";"):
         raise SystemExit("Malformed auth-trigger.sql: preceding function statement is not terminated.")
 trigger_names = re.findall(
-    r'CREATE\\s+TRIGGER\\s+("(?:[^"]|"")*"|[A-Za-z_][A-Za-z0-9_$]*)\\s+.*?\\s+ON\\s+auth\\.users\\b',
+    r'CREATE\s+TRIGGER\s+("(?:[^"]|"")*"|[A-Za-z_][A-Za-z0-9_$]*)\s+.*?\s+ON\s+auth\.users\b',
     source, flags=re.IGNORECASE | re.DOTALL
 )
 if not trigger_names:
     raise SystemExit("No custom auth.users triggers were found in the exported trigger SQL.")
 drops = "".join(
-    f"DROP TRIGGER IF EXISTS {name} ON auth.users;\\n"
+    f"DROP TRIGGER IF EXISTS {name} ON auth.users;\n"
     for name in dict.fromkeys(trigger_names)
 )
 Path("auth-trigger-qa-idempotent.sql").write_text(drops + "\n" + source)
