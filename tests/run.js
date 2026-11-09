@@ -47,7 +47,7 @@ ok('index auth gate validates the Supabase profile before revealing the app',/ht
 ok('employee screen access is tied to the cloud profile permissions',/CLOUD_SCREEN_PERMISSIONS/.test(app)&&/setFactoryAuthProfile/.test(app));
 ok('full factory snapshot is restricted to administrator accounts',/if \(admin\)/.test(cloud)&&/factory_state/.test(cloud)&&/factory_state_admin_only/.test(fs.readFileSync(path.join(ROOT,'supabase/migrations/20261107081648_enforce_employee_permissions_20261107.sql'),'utf8')));
 const syncPageStart=app.indexOf('function syncPage(){'),syncPageEnd=app.indexOf('/* ---- tabbed workspace ---- */',syncPageStart),syncPageSource=syncPageStart>=0&&syncPageEnd>syncPageStart?app.slice(syncPageStart,syncPageEnd):'';
-ok('offline saves stay local and retry on reconnect; online saves use the direct write path without a 1.5s wait',/mgr6-sync-pending/.test(cloud)&&/function markPendingSync/.test(cloud)&&/function scheduleOnlineWrite\\(delay = 250\\)/.test(cloud)&&/scheduleOnlineWrite\\(250\\)/.test(cloud)&&/addEventListener\\("online"/.test(cloud)&&/visibilitychange/.test(cloud)&&!/scheduleAutoSync\\(1500\\)/.test(cloud));
+ok('offline saves stay local and retry on reconnect; online saves use the direct write path without a 1.5s wait',cloud.includes('mgr6-sync-pending')&&cloud.includes('function markPendingSync')&&cloud.includes('function scheduleOnlineWrite(delay = 250)')&&cloud.includes('scheduleOnlineWrite(250)')&&cloud.includes('addEventListener("online"')&&cloud.includes('visibilitychange')&&!cloud.includes('scheduleAutoSync(1500)'));
 ok('sync toolbar is removed but conflict recovery remains reachable from the connection indicator',!app.includes('["🔄 حالة الاتصال والمزامنة","syncPage()"]')&&/id="net" onclick="syncPage\(\)"/.test(idx)&&/ms-logout-btn/.test(cloud)&&!/cloud-badge|رفع الآن|Upload Now|تحميل/.test(cloud.slice(cloud.indexOf('function drawAll()'))));
 
 const collectorStart=cloud.indexOf('function collectSourceEffects(state)');
@@ -355,8 +355,8 @@ ok('employee detail-only sync remains marked partial in the background',/admin \
 ok('invoice sync does not delete invoice items through separate client requests',!/from\(["']invoice_items["']\)\.delete/.test(cloud));
 ok('returns are not misclassified as sale/purchase invoices',/\["sale", "pur"\]\.includes\(d\.t\)/.test(cloud));
 ok('cloud invoice merge preserves newer remote copies as explicit conflicts',/mergeCloudInvoices/.test(cloud)&&/serverCopy: remote/.test(cloud));
-ok('offline reconnect pulls remote changes before replaying pending local writes',/const pulled = await loadFromTablesMerge\\(true\\)/.test(cloud)&&cloud.indexOf('const pulled = await loadFromTablesMerge(true)')<cloud.indexOf('const pushed = await uploadToTables(false)'));
-ok('online startup reads database and enables realtime updates',/async function bootstrapDatabase\\(\\)/.test(cloud)&&/await loadFromTablesMerge\\(true\\)/.test(cloud)&&/startRealtimeDatabaseFeed/.test(cloud)&&/postgres_changes/.test(cloud));
+ok('offline reconnect pulls remote changes before replaying pending local writes',cloud.includes('const pulled = await loadFromTablesMerge(true)')&&cloud.indexOf('const pulled = await loadFromTablesMerge(true)')<cloud.indexOf('const pushed = await uploadToTables(false)'));
+ok('online startup reads database and enables realtime updates',cloud.includes('async function bootstrapDatabase()')&&cloud.includes('await loadFromTablesMerge(true)')&&cloud.includes('startRealtimeDatabaseFeed')&&cloud.includes('postgres_changes'));
 ok('offline boot permits only a previously verified cached profile for the same user',/factory-profile:/.test(idx)&&/cachedProfile\.id === data\.session\.user\.id/.test(idx)&&/if \(!navigator\.onLine\)/.test(idx));
 ok('reconnect refreshes the profile before using permissions for cloud sync',/myProfile = null; ownerIdCache = null; window\.__factoryAuthProfile = null;/.test(cloud)&&/const freshProfile = await getMyProfile\(\)/.test(cloud));
 
