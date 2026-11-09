@@ -51,18 +51,34 @@
 </head>
 <script type="module">
 import { supabase } from './js/supabase.js';
+import { scopeFactoryStorage } from './js/account-storage.js';
 (async function bootstrapFactoryApp() {
     try {
       const { data, error } = supabase ? await supabase.auth.getSession() : { data: { session: null }, error: new Error('Supabase unavailable') };
       if (!data?.session || (error && navigator.onLine)) location.replace('auth.html');
       else {
-        const { data: profile, error: profileError } = await supabase.from('profiles')
-          .select('id,created_by,is_admin,permissions,must_change_password,username,full_name')
-          .eq('id', data.session.user.id).maybeSingle();
+        // Always check for a verified local cached profile first for fast and resilient startup.
+        let cachedProfile = null;
+        try { cachedProfile = JSON.parse(localStorage.getItem('factory-profile:' + data.session.user.id) || 'null'); } catch (_) {}
+
+        let profile = null;
+        let profileError = null;
+        try {
+          const res = await supabase.from('profiles')
+            .select('id,created_by,is_admin,permissions,must_change_password,username,full_name')
+            .eq('id', data.session.user.id).maybeSingle();
+          profile = res.data;
+          profileError = res.error;
+        } catch (fetchErr) {
+          profileError = fetchErr;
+        }
+
         if (profileError || !profile) {
           // Offline use is allowed only for a profile previously verified online on this device.
           let cachedProfile = null;
           if (!navigator.onLine) {
+            try { cachedProfile = JSON.parse(localStorage.getItem('factory-profile:' + data.session.user.id) || 'null'); } catch (_) {}
+          } else {
             try { cachedProfile = JSON.parse(localStorage.getItem('factory-profile:' + data.session.user.id) || 'null'); } catch (_) {}
           }
           if (cachedProfile && cachedProfile.id === data.session.user.id) {
@@ -70,14 +86,14 @@ import { supabase } from './js/supabase.js';
               location.replace('change-password.html');
               return;
             }
+            try { scopeFactoryStorage(cachedProfile); } catch (e) { console.warn('Account storage scoping skipped:', e); }
             window.__factoryAuthProfile = cachedProfile;
             window.__factoryAuthEmail = data.session.user.email || '';
-            window.__factoryOfflineMode = true;
+            window.__factoryOfflineMode = !navigator.onLine;
             document.documentElement.style.visibility = 'visible';
             if (typeof window.setFactoryAuthProfile === 'function') window.setFactoryAuthProfile(cachedProfile);
           } else if (navigator.onLine) {
-            // Keep the authenticated session intact. A transient profile/API failure must
-            // not sign the user out or create an endless login loop.
+            // Only show diagnostic if we truly have no profile data at all
             window.__showFactoryBootError?.(
               'تعذر التحقق من ملف الحساب',
               profileError?.message || 'لم يتم العثور على ملف الحساب المرتبط بالمستخدم. لم يتم تسجيل الخروج.'
@@ -95,6 +111,7 @@ import { supabase } from './js/supabase.js';
             location.replace('change-password.html');
             return;
           }
+          try { scopeFactoryStorage(profile); } catch (e) { console.warn('Account storage scoping skipped:', e); }
           window.__factoryAuthProfile = profile;
           window.__factoryAuthEmail = data.session.user.email || '';
           window.__factoryOfflineMode = false;

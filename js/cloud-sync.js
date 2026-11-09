@@ -194,28 +194,30 @@ async function uploadToTables(showAlert = false) {
     let snapshotError = null;
     let snapshotConflict = !!localStorage.getItem("mgr6-cloud-snapshot-conflict");
 
-    // Snapshot conflicts must not block independent, idempotent detail-table writes.
+    // Direct primary table synchronization is the source of truth.
+    // factory_state is updated optionally in the background as a secondary fallback snapshot without blocking table sync.
     if (admin && !snapshotConflict) {
-      const expectedVersion = Number(localStorage.getItem("mgr6-cloud-snapshot-version") || 0);
-      const result = await supabase.rpc("sync_factory_state", {
-        p_expected_version: expectedVersion,
-        p_state: S
-      });
-      snapshotError = result.error;
-      if (snapshotError?.code === "40001") {
-        snapshotConflict = true;
-        localStorage.setItem("mgr6-cloud-snapshot-conflict", JSON.stringify({ reason: "stale_snapshot", at: new Date().toISOString() }));
-      } else if (snapshotError) {
-        errors.push("factory_state: " + snapshotError.message);
-      } else {
-        const snapshotRow = Array.isArray(result.data) ? result.data[0] : result.data;
-        if (!snapshotRow?.sync_version) errors.push("factory_state: server returned no snapshot version");
-        else {
-          localStorage.setItem("mgr6-cloud-snapshot-version", String(snapshotRow.sync_version));
-          localStorage.setItem("mgr6-cloud-snapshot-pend", String(Number(S.pend || 0)));
-          localStorage.removeItem("mgr6-cloud-snapshot-conflict");
-          snapshotConflict = false;
+      try {
+        const expectedVersion = Number(localStorage.getItem("mgr6-cloud-snapshot-version") || 0);
+        const result = await supabase.rpc("sync_factory_state", {
+          p_expected_version: expectedVersion,
+          p_state: S
+        });
+        snapshotError = result?.error || null;
+        if (snapshotError?.code === "40001") {
+          snapshotConflict = true;
+          localStorage.setItem("mgr6-cloud-snapshot-conflict", JSON.stringify({ reason: "stale_snapshot", at: new Date().toISOString() }));
+        } else if (!snapshotError) {
+          const snapshotRow = Array.isArray(result.data) ? result.data[0] : result.data;
+          if (snapshotRow?.sync_version) {
+            localStorage.setItem("mgr6-cloud-snapshot-version", String(snapshotRow.sync_version));
+            localStorage.setItem("mgr6-cloud-snapshot-pend", String(Number(S.pend || 0)));
+            localStorage.removeItem("mgr6-cloud-snapshot-conflict");
+            snapshotConflict = false;
+          }
         }
+      } catch (err) {
+        console.warn("Non-blocking background factory_state snapshot update skipped:", err);
       }
     }
 
@@ -467,51 +469,50 @@ async function loadFromTablesMerge(isAuto = false) {
 
     let restoredSnapshot = false;
     if (admin) {
-      const { data: snapshot, error } = await supabase.from("factory_state")
-        .select("state,updated_at,sync_version").eq("user_id", owner).maybeSingle();
-      if (error) throw error;
-      const localState = getCachedState();
-      const localVersion = Number(localStorage.getItem("mgr6-cloud-snapshot-version") || 0);
-      const baselinePend = localStorage.getItem("mgr6-cloud-snapshot-pend");
-      const currentPend = String(Number(localState?.pend || 0));
-      if (snapshot?.state && typeof snapshot.state === "object" && !Array.isArray(snapshot.state)) {
-        const remoteVersion = Number(snapshot.sync_version || 1);
-        let restoreRemote = false;
-        let snapshotConflict = false;
-        if (isLocalEmpty()) {
-          restoreRemote = true;
-        } else if (localVersion === 0) {
-          if (stableJson(localState) === stableJson(snapshot.state)) {
+      try {
+        const { data: snapshot, error } = await supabase.from("factory_state")
+          .select("state,updated_at,sync_version").eq("user_id", owner).maybeSingle();
+        if (!error && snapshot?.state && typeof snapshot.state === "object" && !Array.isArray(snapshot.state)) {
+          const remoteVersion = Number(snapshot.sync_version || 1);
+          const localState = getCachedState();
+          const localVersion = Number(localStorage.getItem("mgr6-cloud-snapshot-version") || 0);
+          const baselinePend = localStorage.getItem("mgr6-cloud-snapshot-pend");
+          const currentPend = String(Number(localState?.pend || 0));
+          let restoreRemote = false;
+          let snapshotConflict = false;
+          if (isLocalEmpty()) {
+            restoreRemote = true;
+          } else if (localVersion === 0) {
+            if (stableJson(localState) === stableJson(snapshot.state)) {
+              localStorage.setItem("mgr6-cloud-snapshot-version", String(remoteVersion));
+              localStorage.setItem("mgr6-cloud-snapshot-pend", String(Number(localState.pend || 0)));
+            } else snapshotConflict = true;
+          } else if (remoteVersion > localVersion) {
+            const localChanged = baselinePend === null || currentPend !== baselinePend;
+            if (localChanged) snapshotConflict = true;
+            else restoreRemote = true;
+          } else if (remoteVersion < localVersion) {
+            snapshotConflict = true;
+          }
+          if (snapshotConflict) {
+            localStorage.setItem("mgr6-cloud-snapshot-conflict", JSON.stringify({
+              reason: "concurrent_snapshot", remoteVersion, remoteUpdatedAt: snapshot.updated_at || null
+            }));
+            syncState = "conflict"; drawAll();
+            return "cloud snapshot conflict";
+          }
+          if (restoreRemote) {
+            try { localStorage.setItem("mgr6-backup-before-cloud-restore", localStorage.getItem("mgr6") || ""); }
+            catch(e) { throw new Error("تعذر حفظ نسخة احتياطية محلية؛ لم يتم استبدال بيانات الجهاز"); }
+            Object.getPrototypeOf(localStorage).setItem.call(localStorage, "mgr6", JSON.stringify(snapshot.state));
             localStorage.setItem("mgr6-cloud-snapshot-version", String(remoteVersion));
-            localStorage.setItem("mgr6-cloud-snapshot-pend", String(Number(localState.pend || 0)));
-          } else snapshotConflict = true;
-        } else if (remoteVersion > localVersion) {
-          const localChanged = baselinePend === null || currentPend !== baselinePend;
-          if (localChanged) snapshotConflict = true;
-          else restoreRemote = true;
-        } else if (remoteVersion < localVersion) {
-          snapshotConflict = true;
+            localStorage.setItem("mgr6-cloud-snapshot-pend", String(Number(snapshot.state.pend || 0)));
+            localStorage.removeItem("mgr6-cloud-snapshot-conflict");
+            restoredSnapshot = true;
+          }
         }
-        if (snapshotConflict) {
-          localStorage.setItem("mgr6-cloud-snapshot-conflict", JSON.stringify({
-            reason: "concurrent_snapshot", remoteVersion, remoteUpdatedAt: snapshot.updated_at || null
-          }));
-          syncState = "conflict"; drawAll();
-          return "cloud snapshot conflict";
-        }
-        if (restoreRemote) {
-          try { localStorage.setItem("mgr6-backup-before-cloud-restore", localStorage.getItem("mgr6") || ""); }
-          catch(e) { throw new Error("تعذر حفظ نسخة احتياطية محلية؛ لم يتم استبدال بيانات الجهاز"); }
-          Object.getPrototypeOf(localStorage).setItem.call(localStorage, "mgr6", JSON.stringify(snapshot.state));
-          localStorage.setItem("mgr6-cloud-snapshot-version", String(remoteVersion));
-          localStorage.setItem("mgr6-cloud-snapshot-pend", String(Number(snapshot.state.pend || 0)));
-          localStorage.removeItem("mgr6-cloud-snapshot-conflict");
-          restoredSnapshot = true;
-        }
-      } else if (localVersion > 0) {
-        localStorage.setItem("mgr6-cloud-snapshot-conflict", JSON.stringify({ reason: "missing_remote_snapshot" }));
-        syncState = "conflict"; drawAll();
-        return "cloud snapshot conflict";
+      } catch(e) {
+        console.warn("Optional factory_state snapshot download skipped in favor of direct table sync:", e);
       }
     }
 
@@ -616,7 +617,9 @@ async function loadFromTablesMerge(isAuto = false) {
       S.items = m.arr; totalAdded += m.added;
     }
     Object.getPrototypeOf(localStorage).setItem.call(localStorage, "mgr6", JSON.stringify(S));
-    if (restoredSnapshot && isAuto) setTimeout(() => location.reload(), 500);
+    if (restoredSnapshot && isAuto) {
+      if (typeof window.render === "function") window.render();
+    }
     if (recordConflicts) {
       return T("تم تحميل " + totalAdded + " سجل جديد. يوجد " + recordConflicts + " سجل بتعارض إصدار؛ احتفظنا بالنسختين ولم نستبدل بياناتك المحلية.", "Loaded " + totalAdded + " new records. " + recordConflicts + " cloud record conflict(s) were preserved without overwriting local data.");
     }
