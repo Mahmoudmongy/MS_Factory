@@ -157,7 +157,7 @@ button:disabled{opacity:.55;cursor:not-allowed}
 }
 
 /* === Refined responsive shell, cloud status and navigation === */
-#top{display:grid;grid-template-columns:40px 40px minmax(120px,1fr) 42px minmax(100px,150px) 40px 40px;gap:6px;padding:6px 10px;min-height:50px;align-items:center}
+#top{display:grid;grid-template-columns:40px 40px 40px minmax(120px,1fr) 42px minmax(100px,150px) 40px 40px;gap:6px;padding:6px 10px;min-height:50px;align-items:center}
 #top h1{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:16px}
 #top button{min-width:36px;min-height:36px;padding:4px 7px;display:inline-flex;align-items:center;justify-content:center;white-space:nowrap}
 #top #who{max-width:150px;min-width:0;min-height:36px;margin:0}
@@ -183,7 +183,7 @@ button:disabled{opacity:.55;cursor:not-allowed}
 #factory-boot-screen small{color:var(--mu,#667685)}
 .boot-spinner{width:27px;height:27px;border:3px solid var(--bd);border-top-color:var(--pr);border-radius:50%;animation:bootSpin .7s linear infinite}
 @keyframes bootSpin{to{transform:rotate(360deg)}}
-@media(min-width:861px){#top{grid-template-columns:38px 38px minmax(100px,1fr) 40px minmax(95px,140px) 38px 38px;gap:5px;padding:5px 9px;min-height:46px}#top h1{font-size:15px}#sb{transition:width .18s ease}#sb.icons-only{width:68px}}
+@media(min-width:861px){#top{grid-template-columns:38px 38px 38px minmax(100px,1fr) 40px minmax(95px,140px) 38px 38px;gap:5px;padding:5px 9px;min-height:46px}#top h1{font-size:15px}#sb{transition:width .18s ease}#sb.icons-only{width:68px}}
 @media(max-width:860px){
  #top{grid-template-columns:38px minmax(0,1fr) 38px minmax(70px,104px) 38px 38px;gap:4px;padding:6px;min-height:46px}
  #top .top-nav{display:none}
