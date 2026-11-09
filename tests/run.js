@@ -16,6 +16,9 @@ ok('customer/supplier rows expose permission-gated edit actions',app.includes('p
 ok('filter bar escapes dynamic labels, option values and entered filter text',/escHtml\(z\[0\]\)/.test(app)&&/escHtml\(z\[1\]\)/.test(app)&&/escHtml\(v\)/.test(app));
 ok('uploaded image previews use DOM properties and no insertAdjacentHTML sinks remain',app.includes('preview.src=v')&&app.includes('insertAdjacentElement("afterend",preview)')&&!app.includes('insertAdjacentHTML('));
 ok('ledger report labels are escaped by the shared row helper',/lr=\(n,v,fn\)=>`<div class="row sp lr"><span>\$\{escHtml\(n\)\}/.test(app));
+ok('remaining invoice, production and voucher form labels escape user-controlled values',app.includes('escHtml(p.note||"")')&&app.includes('escHtml(pre.desc||"")')&&app.includes('escHtml(o.no)')&&app.includes('escHtml(a.name)')&&app.includes('escHtml(S.logo)'));
+ok('no insertAdjacentHTML sink remains in the application',!/insertAdjacentHTML\s*\(/.test(app));
+ok('Code 128 B input is validated before pattern generation',/Array\.from\(t\)\.some\(ch=>ch\.length!==1\|\|ch\.charCodeAt\(0\)<32\|\|ch\.charCodeAt\(0\)>126\)/.test(app));
 ok('shared select helper escapes dynamic option values and labels',/const sel=\(v,a\)=>U\(a,x=>`<option value="\$\{escHtml\(x\[0\]\)\}"/.test(app)&&app.includes('${escHtml(x[1])}'));
 ok('clickable labels escape text by default and isolate the one trusted balance markup helper',/lk=\(t,fn\)=>[^;]*escHtml\(t\)/.test(app)&&/lkHtml=\(html,fn\)/.test(app)&&app.includes('lkHtml(btxt(pbal(p.id))'));
 const linkXss=await ev(()=>{const payload='<img data-xss="link" src=x onerror="window.__linkXss=1">',html=lk(payload,"void(0)"),parsed=new DOMParser().parseFromString(html,"text/html");return{noInjectedImage:parsed.querySelectorAll('img[data-xss="link"]').length===0,textPreserved:parsed.body.textContent.includes(payload)}});
