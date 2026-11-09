@@ -332,3 +332,9 @@ input::placeholder,textarea::placeholder{color:var(--mu);opacity:.72}
 #tabs .tb-close{cursor:pointer;transition:background .15s ease,color .15s ease}
 #tabs .tb-close:hover{background:var(--rd);color:#fff;border-color:var(--rd)}
 #top #sync-btn:hover{background:rgba(56,189,248,.28);box-shadow:0 0 0 3px rgba(56,189,248,.1)}
+
+@media(min-width:861px){
+ #top #bg{display:none!important}
+ #top{grid-template-columns:30px 30px minmax(120px,1fr) 30px 32px minmax(90px,125px) 32px 32px}
+}
+@media(max-width:860px){#top #bg{display:inline-flex!important}}
