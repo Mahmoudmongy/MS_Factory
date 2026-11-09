@@ -1119,14 +1119,131 @@ function applyAccountingBaselineSection(state, section) {
       !Array.isArray(section.partners) || !Array.isArray(section.openingLedger)) {
     return { applied: false, reason: "invalid_accounting_baseline_section" };
   }
-  // Reuse the full baseline's all-or-nothing mapping and ledger validation,
-  // while supplying a no-op absolute stock baseline from the current device.
-  const stock = buildStockBaseline(state);
-  if (stock.invalid.length) return { applied: false, reason: "invalid_local_stock_for_accounting_bootstrap" };
-  const combined = { baselineVersion: 1, stock, accounts: section.accounts,
-    partners: section.partners, openingLedger: section.openingLedger, openingMovements: [] };
-  combined.fingerprint = factoryBaselineFingerprint(combined);
-  return applyFactoryBaseline(state, combined);
+
+  // Accounting bootstrap is deliberately independent of inventory state and permissions.
+  const accounts = Array.isArray(state.accts) ? state.accts : [];
+  const partners = Array.isArray(state.partners) ? state.partners : [];
+  const ledger = Array.isArray(state.L) ? state.L : [];
+  const accountByCode = new Map();
+  for (const account of accounts) {
+    const code = String(account?.code || "").trim();
+    if (!code) continue;
+    if (accountByCode.has(code)) return { applied: false, reason: "duplicate_local_account_code", code };
+    accountByCode.set(code, account);
+  }
+
+  let nextAccountId = Math.max(0, ...accounts.map(x => Number(x?.id) || 0)) + 1;
+  const accountPlans = [];
+  for (const row of section.accounts) {
+    const code = String(row?.code || "").trim();
+    const cash = Number(row?.cash || 0);
+    if (!code || !Number.isFinite(cash)) return { applied: false, reason: "invalid_baseline_account", code };
+    const existing = accountByCode.get(code);
+    if (existing && (
+      String(existing.name || "") !== String(row.name || "") ||
+      String(existing.t || "A") !== String(row.type || "A") ||
+      String(existing.k || "") !== String(row.key || "") ||
+      Number(existing.cash || 0) !== cash ||
+      String(existing.cur || "EGP") !== String(row.currency || "EGP")
+    )) return { applied: false, reason: "account_definition_conflict", code };
+    if (!existing) {
+      const account = { id: nextAccountId++, code, name: String(row.name || code),
+        t: String(row.type || "A"), k: String(row.key || ""), cash,
+        cur: String(row.currency || "EGP") };
+      accountPlans.push(account);
+      accountByCode.set(code, account);
+    }
+  }
+
+  const partnerByExternalId = new Map();
+  for (const partner of partners) {
+    if (partner?.id != null) partnerByExternalId.set(String(partner.id), partner);
+    if (partner?.cloudId != null) partnerByExternalId.set(String(partner.cloudId), partner);
+  }
+  let nextPartnerId = Math.max(0, ...partners.map(x => Number(x?.id) || 0)) + 1;
+  const partnerPlans = [], partnerLinks = [];
+  const seenPartnerIds = new Set();
+  for (const row of section.partners) {
+    const externalId = String(row?.externalId || "");
+    const name = String(row?.name || "").trim();
+    if (!externalId || !name || seenPartnerIds.has(externalId))
+      return { applied: false, reason: "invalid_or_duplicate_baseline_partner", externalId };
+    seenPartnerIds.add(externalId);
+    if (partnerByExternalId.has(externalId)) {
+      const existing = partnerByExternalId.get(externalId);
+      if (String(existing.name || "").trim().toLocaleLowerCase() !== name.toLocaleLowerCase() ||
+          (row.phone && existing.phone && String(existing.phone).trim() !== String(row.phone).trim()))
+        return { applied: false, reason: "partner_definition_conflict", externalId };
+      partnerLinks.push({ local: existing, externalId, customer: row.customer, supplier: row.supplier });
+      continue;
+    }
+    const phone = String(row.phone || "").trim();
+    const matches = partners.filter(p =>
+      (name && String(p.name || "").trim().toLocaleLowerCase() === name.toLocaleLowerCase()) ||
+      (phone && String(p.phone || "").trim() === phone)
+    );
+    if (matches.length > 1) return { applied: false, reason: "ambiguous_local_partner", externalId };
+    if (matches.length === 1) {
+      const local = matches[0];
+      if (String(local.name || "").trim().toLocaleLowerCase() !== name.toLocaleLowerCase() ||
+          (phone && local.phone && String(local.phone).trim() !== phone) ||
+          (local.cloudId && String(local.cloudId) !== externalId))
+        return { applied: false, reason: "partner_definition_conflict", externalId };
+      partnerLinks.push({ local, externalId, customer: row.customer, supplier: row.supplier });
+      partnerByExternalId.set(externalId, local);
+    } else {
+      const partner = { id: nextPartnerId++, cloudId: externalId, name,
+        phone: String(row.phone || ""), c: row.customer ? 1 : 0, s: row.supplier ? 1 : 0 };
+      partnerPlans.push(partner);
+      partnerByExternalId.set(externalId, partner);
+    }
+  }
+
+  const ledgerKeys = new Set();
+  for (const row of ledger) {
+    const account = accounts.find(a => String(a.id) === String(row.a));
+    const partner = partners.find(p => String(p.id) === String(row.pid));
+    ledgerKeys.add(stableJson({ date: row.d || null, timestamp: Number(row.ts || 0),
+      reference: row.ref || "", description: row.desc || "", accountCode: account?.code || "",
+      debit: Number(row.dr || 0), credit: Number(row.cr || 0),
+      partnerExternalId: partner ? String(partner.cloudId || partner.id) : null,
+      foreignCurrencyAmount: Number(row.fc || 0) }));
+  }
+  const ledgerPlans = [];
+  let debitTotal = 0, creditTotal = 0;
+  for (const row of section.openingLedger) {
+    const account = accountByCode.get(String(row?.accountCode || ""));
+    const partner = row?.partnerExternalId ? partnerByExternalId.get(String(row.partnerExternalId)) : null;
+    const debit = Number(row?.debit || 0), credit = Number(row?.credit || 0);
+    const foreign = Number(row?.foreignCurrencyAmount || 0), timestamp = Number(row?.timestamp || 0);
+    if (!account || row?.partnerExternalId && !partner ||
+        ![debit, credit, foreign, timestamp].every(Number.isFinite) || debit < 0 || credit < 0)
+      return { applied: false, reason: "unmapped_or_invalid_baseline_ledger_reference" };
+    debitTotal += debit; creditTotal += credit;
+    const key = stableJson(row);
+    if (ledgerKeys.has(key)) continue;
+    ledgerKeys.add(key);
+    ledgerPlans.push({ d: row.date || "", ts: timestamp, ref: String(row.reference || ""),
+      desc: String(row.description || ""), a: account.id, dr: debit, cr: credit,
+      pid: partner?.id || 0, fc: foreign, src: "je" });
+  }
+  if (Math.abs(debitTotal - creditTotal) > 0.005)
+    return { applied: false, reason: "unbalanced_accounting_baseline" };
+
+  // All references and totals have been preflighted; mutate only after validation succeeds.
+  partnerLinks.forEach(link => {
+    link.local.cloudId = link.externalId;
+    link.local.c = Number(link.local.c || 0) === 1 || link.customer ? 1 : 0;
+    link.local.s = Number(link.local.s || 0) === 1 || link.supplier ? 1 : 0;
+  });
+  state.accts = accounts;
+  state.partners = partners;
+  state.L = ledger;
+  state.accts.push(...accountPlans);
+  state.partners.push(...partnerPlans);
+  state.L.push(...ledgerPlans);
+  return { applied: true, accountsAdded: accountPlans.length,
+    partnersAdded: partnerPlans.length, ledgerAdded: ledgerPlans.length };
 }
 
 function removeCanonicalSourceEffect(state, effect) {
