@@ -2,6 +2,11 @@ import { supabase } from './supabase.js';
 
 const QUEUE_KEY = 'ms-factory-db-queue-v1';
 const BASELINE_KEY = 'ms-factory-db-baseline-v1';
+const LAST_SYNC_KEY = 'ms-factory-db-last-sync-v1';
+let storageScope = 'anonymous';
+const scopedKey = key => key + ':' + storageScope;
+const getLastSyncAt = () => localStorage.getItem(scopedKey(LAST_SYNC_KEY)) || '';
+const setLastSyncAt = value => { try { localStorage.setItem(scopedKey(LAST_SYNC_KEY), value); } catch (_) {} };
 const PAGE_SIZE = 500;
 let ownerId = null;
 let actorId = null;
@@ -35,10 +40,10 @@ const cleanPayload = item => {
   return out;
 };
 const getQueue = () => {
-  try { const q = JSON.parse(localStorage.getItem(QUEUE_KEY) || '[]'); return Array.isArray(q) ? q : []; }
+  try { const q = JSON.parse(localStorage.getItem(scopedKey(QUEUE_KEY)) || '[]'); return Array.isArray(q) ? q : []; }
   catch (_) { return []; }
 };
-const setQueue = q => localStorage.setItem(QUEUE_KEY, JSON.stringify(q));
+const setQueue = q => localStorage.setItem(scopedKey(QUEUE_KEY), JSON.stringify(q));
 const mapKey = (type, id) => type + '\u0000' + id;
 const isNetworkFailure = error => {
   if (!navigator.onLine) return true;
@@ -59,12 +64,12 @@ function splitState(state) {
   return { arrays, meta };
 }
 function persistBaseline() {
-  try { localStorage.setItem(BASELINE_KEY, JSON.stringify([...baseline.values()])); } catch (e) { console.warn('Could not persist sync baseline',e); }
+  try { localStorage.setItem(scopedKey(BASELINE_KEY), JSON.stringify([...baseline.values()])); } catch (e) { console.warn('Could not persist sync baseline',e); }
 }
 function snapshotBaseline(state) {
   baseline = new Map();
   try {
-    const saved = JSON.parse(localStorage.getItem(BASELINE_KEY) || '[]');
+    const saved = JSON.parse(localStorage.getItem(scopedKey(BASELINE_KEY)) || '[]');
     if (Array.isArray(saved) && saved.length) {
       for (const row of saved) baseline.set(mapKey(row.type,row.id),row);
       return;
@@ -302,8 +307,11 @@ async function bootstrap() {
   if (!profileData) throw new Error('لم يتم العثور على ملف صلاحيات الحساب');
   profile=profileData;
   ownerId=profile.created_by || profile.id;
+  storageScope = ownerId;
+  storageScope = ownerId;
   const rows=await fetchAllRecords();
   hydrateFromRows(rows);
+  setLastSyncAt(new Date().toISOString());
   stateReady=true;
   window.__factoryDatabaseFirstReady = true;
   for (const op of getQueue()) applyOperationToState(op);
