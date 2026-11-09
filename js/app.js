@@ -684,15 +684,73 @@ function impForm(){
  $("#impw").innerHTML=sheetPicker+'<div class="card"><b>1) تحديد الأعمدة</b> — الشيت: '+WZ.sheet+' — '+WZ.rows.length+' صف<br>'+U(F,f_=>{const g=WZ.hd.findIndex(h=>f_[3].some(a=>h.toLowerCase().includes(a)));return '<div class="row"><label style="min-width:170px">'+f_[1]+(f_[2]?' *':'')+'</label><select id="mp_'+f_[0]+'"><option value="-1">— تجاهل —</option>'+U(WZ.hd,(h,i)=>'<option value="'+i+'" '+(i===g?'selected':'')+'>'+h+'</option>')+'</select></div>'})+'<button onclick="impCheck()">2) معاينة والتحقق</button></div><div id="impv"></div>';
 }function parseCsv(t){t=t.replace(/^\uFEFF/,"");const first=t.split(/\r?\n/)[0]||"",d=first.split("\t").length>first.split(",").length?"\t":first.split(";").length>first.split(",").length?";":",",rows=[];let r=[],c="",q=0;for(let i=0;i<t.length;i++){const ch=t[i];if(q){if(ch=='"'){if(t[i+1]=='"'){c+='"';i++}else q=0}else c+=ch}else if(ch=='"')q=1;else if(ch==d){r.push(c);c=""}else if(ch=="\n"||ch=="\r"){if(ch=="\r"&&t[i+1]=="\n")i++;r.push(c);c="";rows.push(r);r=[]}else c+=ch}if(c!==""||r.length){r.push(c);rows.push(r)}return rows.filter(x=>x.some(y=>String(y).trim()!==""))}
 async function exportFactoryWorkbook(){try{await ld("https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js");const wb=XLSX.utils.book_new(),meta={};Object.entries(S).forEach(([k,v])=>{if(Array.isArray(v)){const records=v.map(x=>JSON.stringify(x)),max=Math.max(1,...records.map(x=>Math.ceil(x.length/30000))),head=Array.from({length:max},(_,i)=>"json_part_"+(i+1)),rows=[head,...records.map(x=>head.map((_,i)=>x.slice(i*30000,(i+1)*30000)))];XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(rows),k.slice(0,31));}else if(k!=="pend")meta[k]=v;});XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet([["backup_type","version","created_at"],["MS_FACTORY_FULL_BACKUP",1,new Date().toISOString()]]),"__factory_backup");XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet([["meta_json"],[JSON.stringify(meta)]]),"__meta");XLSX.writeFile(wb,"MS_Factory_Full_Backup.xlsx");toast("تم تصدير نسخة المصنع الكاملة بكل القوائم والشاشات");}catch(e){toast("تعذر تصدير النسخة الكاملة؛ تحقق من الاتصال");}}
-function prepareFullImport(){const marker=WZ.sheets["__factory_backup"]||[];if(!marker[1]||marker[1][0]!=="MS_FACTORY_FULL_BACKUP"){toast("الملف ليس نسخة كاملة صادرة من مدير المصنع");return;}const current=Object.keys(S).filter(k=>Array.isArray(S[k]));const imported={};for(const k of current){const rows=WZ.sheets[k];if(!rows){toast("النسخة ناقصة: لا يوجد شيت "+k);return;}const values=[];for(let i=1;i<rows.length;i++){const raw=(rows[i]||[]).map(x=>String(x??"")).join("").trim();if(!raw)continue;let value;try{value=JSON.parse(raw)}catch(_){toast("بيانات غير سليمة في شيت "+k+"، الصف "+(i+1));return;}if(!value||typeof value!=="object"||Array.isArray(value)){toast("سجل غير صالح في شيت "+k+"، الصف "+(i+1));return;}values.push(value);}imported[k]=values;}const metaRows=WZ.sheets["__meta"]||[];let meta={};try{meta=JSON.parse(metaRows[1]?.[0]||"{}")}catch(_){toast("بيانات إعدادات النسخة غير سليمة");return;}WZ.fullImport={arrays:imported,meta};const summary=Object.entries(imported).map(([k,v])=>"<tr><td>"+k+"</td><td>"+v.length+"</td></tr>").join("");const box=document.querySelector("#impw");box.innerHTML="<div class='card'><b>تمت قراءة نسخة المصنع الكاملة</b><p>عدد القوائم: "+current.length+". سيتم استبدال بيانات القوائم الموجودة في الحساب بالبيانات الموجودة في الملف مع الحفاظ على بنية السجلات والمراجع.</p><table class='l'><tr><th>القائمة</th><th>عدد السجلات</th></tr>"+summary+"</table><button onclick='importFullConfirm()'>تأكيد استعادة نسخة المصنع</button></div>";}
+function prepareFullImport(){const marker=WZ.sheets["__factory_backup"]||[];if(!marker[1]||marker[1][0]!=="MS_FACTORY_FULL_BACKUP"){toast("الملف ليس نسخة كاملة صادرة من مدير المصنع");return;}const current=Object.keys(S).filter(k=>Array.isArray(S[k]));const imported={};for(const k of current){const rows=WZ.sheets[k];if(!rows){toast("النسخة ناقصة: لا يوجد شيت "+k);return;}const values=[];for(let i=1;i<rows.length;i++){const raw=(rows[i]||[]).map(x=>String(x??"")).join("").trim();if(!raw)continue;let value;try{value=JSON.parse(raw)}catch(_){toast("بيانات غير سليمة في شيت "+k+"، الصف "+(i+1));return;}if(value===undefined){toast("سجل غير صالح في شيت "+k+"، الصف "+(i+1));return;}values.push(value);}imported[k]=values;}const metaRows=WZ.sheets["__meta"]||[];let meta={};try{meta=JSON.parse(metaRows[1]?.[0]||"{}")}catch(_){toast("بيانات إعدادات النسخة غير سليمة");return;}WZ.fullImport={arrays:imported,meta};const summary=Object.entries(imported).map(([k,v])=>"<tr><td>"+k+"</td><td>"+v.length+"</td></tr>").join("");const box=document.querySelector("#impw");box.innerHTML="<div class='card'><b>تمت قراءة نسخة المصنع الكاملة</b><p>عدد القوائم: "+current.length+". سيتم استبدال بيانات القوائم الموجودة في الحساب بالبيانات الموجودة في الملف مع الحفاظ على بنية السجلات والمراجع.</p><table class='l'><tr><th>القائمة</th><th>عدد السجلات</th></tr>"+summary+"</table><button onclick='importFullConfirm()'>تأكيد استعادة نسخة المصنع</button></div>";}
 function importFullConfirm(){if(!WZ.fullImport){toast("لم يتم تجهيز ملف الاستيراد");return;}if(!guard())return;for(const [k,v] of Object.entries(WZ.fullImport.arrays))S[k]=v;Object.assign(S,WZ.fullImport.meta||{});sv();nav();toast("تم استيراد بيانات المصنع بالكامل؛ راجع الاتصال حتى يكتمل الحفظ السحابي");WZ.fullImport=null;}
-function impCheck(){const F=IMPF[WZ.t];F.forEach(f_=>{WZ.map[f_[0]]=+$("#mp_"+f_[0]).value});const seen=new Set(),out=[];WZ.rows.forEach((r,n)=>{const o={},er=[];F.forEach(f_=>{const ix=WZ.map[f_[0]];let v=ix>=0?String(r[ix]??"").trim():"";if(f_[4]){if(v==="")v=0;else{const x=parseFloat(v.replace(/,/g,""));if(isNaN(x)){er.push(f_[1]+" ليست رقمًا");v=0}else v=x}}o[f_[0]]=v;if(f_[2]&&v==="")er.push(f_[1]+" مطلوب")});let dup="";const kn=String(o.name).toLowerCase(),ks=WZ.t=="items"?(o.sku?nd(String(o.sku)).toLowerCase():""):(o.phone?String(o.phone):"");if(WZ.t=="items"){if(S.items.some(i=>(ks&&nd(i.sku).toLowerCase()==ks)||i.name.toLowerCase()==kn))dup="موجود بالفعل"}else{if(S.partners.some(p=>(ks&&p.phone==ks)||p.name.toLowerCase()==kn))dup="موجود بالفعل"}if(!dup&&(seen.has("n:"+kn)||(ks&&seen.has("k:"+ks))))dup="مكرر داخل الملف";seen.add("n:"+kn);if(ks)seen.add("k:"+ks);out.push({n:n+2,o,er,dup,st:er.length?"خطأ":dup?"مكرر (سيُتخطى)":"جديد"})});WZ.out=out;const ok=out.filter(x=>x.st=="جديد").length,du=out.filter(x=>x.dup&&!x.er.length).length,er=out.filter(x=>x.er.length).length;
- $("#impv").innerHTML=`<div class="card"><b>3) نتيجة التحقق:</b> جديد <b>${ok}</b> | مكرر <b>${du}</b> | أخطاء <b>${er}</b></div><table class="l"><tr><th>الصف</th><th>الاسم</th><th>الحالة</th><th>الأخطاء</th></tr>${U(out.slice(0,200),x=>`<tr><td>${x.n}</td><td>${x.o.name}</td><td>${x.st}</td><td>${x.er.join("، ")}${x.dup?x.dup:""}</td></tr>`)}</table><div class="row"><button onclick="importGo()">4) تأكيد الاستيراد (${ok} صف)</button></div>`;enh()}
-function importGo(){if(WZ.t==="all"){prepareFullImport();return;}const ok=WZ.out.filter(x=>x.st=="جديد");if(!ok.length){toast("لا توجد صفوف صالحة للاستيراد");return}if(!guard())return;let n=0;
- if(WZ.t==="items")ok.forEach(x=>{const o=x.o;let wh=S.wh.find(w=>w.name==o.type);if(!wh){if(o.type){wh={id:uid(),name:String(o.type)};S.wh.push(wh)}else wh=S.wh[0]}const i=ensureItem(String(o.name),wh.id,o.unit||"قطعة",o.buy);if(o.sku)i.sku=String(o.sku).replace(/[^\x20-\x7e]/g,"")||i.sku;Object.assign(i,{model:String(o.model||""),buy:o.buy,retail:o.retail,wholesale:o.wholesale});if(o.qty>0){const c=o.qty*o.buy;stk(td(),i,vk(String(o.color||""),String(o.size||"")),o.qty,c,"رصيد افتتاحي (استيراد)",0,i.id,"je");post(td(),"IM-"+i.id,"رصيد افتتاحي - استيراد",[{a:ak("inv"),dr:c},{a:ak("cap"),cr:c}],"je",i.id)}n++});
+function parseGenericImportValue(raw,field,errorList){
+ const text=String(raw??"").trim(),type=field[5]||(field[4]?"number":"string");
+ if(!text){if(type==="json-array")return [];if(type==="json-object")return {};if(type==="number")return 0;if(type==="boolean")return false;return "";}
+ if(type==="reference")return /^-?\d+(?:\.\d+)?$/.test(text)?Number(text):text;
+ if(type==="number"){const n=Number(text.replace(/,/g,""));if(!Number.isFinite(n)){errorList.push(field[1]+" ليست رقمًا");return 0;}return n;}
+ if(type==="boolean"){const v=text.toLowerCase();if(["1","true","yes","نعم","ن"].includes(v))return true;if(["0","false","no","لا","ل"].includes(v))return false;errorList.push(field[1]+" يجب أن تكون نعم أو لا");return false;}
+ if(type==="json-array"||type==="json-object"){try{const value=JSON.parse(text);if(type==="json-array"&&!Array.isArray(value))throw new Error();if(type==="json-object"&&(!value||typeof value!=="object"||Array.isArray(value)))throw new Error();return value;}catch(_){errorList.push(field[1]+" يجب أن تكون بصيغة JSON صحيحة");return type==="json-array"?[]:{};}}
+ return text;
+}
+function impCheck(){
+ const F=importFieldsFor(WZ.t),generic=WZ.t.startsWith("list:"),listKey=generic?WZ.t.slice(5):"",primitive=generic&&(listKey==="curs"||listKey==="hide");
+ F.forEach(f_=>{WZ.map[f_[0]]=+$("#mp_"+f_[0]).value});
+ const seen=new Set(),out=[];
+ WZ.rows.forEach((r,n)=>{
+  const o={},er=[];
+  F.forEach(f_=>{
+   const ix=WZ.map[f_[0]],raw=ix>=0?r[ix]:"";let v;
+   if(generic)v=parseGenericImportValue(raw,f_,er);
+   else{v=String(raw??"").trim();if(f_[4]){if(v==="")v=0;else{const x=parseFloat(v.replace(/,/g,""));if(isNaN(x)){er.push(f_[1]+" ليست رقمًا");v=0}else v=x}}}
+   o[f_[0]]=v;if(f_[2]&&(v===""||v===undefined||v===null||(Array.isArray(v)&&v.length===0)))er.push(f_[1]+" مطلوب");
+  });
+  let dup="";
+  if(generic){
+   const existing=S[listKey]||[],identity=primitive?"value":["no","code","sku","id","external_id","rid"].find(k=>o[k]!==undefined&&o[k]!==""&&o[k]!==null)||"name",identityValue=primitive?o.value:o[identity];
+   const same=x=>primitive?String(x)===String(identityValue):String(x?.[identity]??"").toLowerCase()===String(identityValue??"").toLowerCase();
+   if(identityValue!==undefined&&identityValue!==""&&existing.some(same))dup="موجود بالفعل";
+   const marker="g:"+identity+":"+String(identityValue??"").toLowerCase();
+   if(!dup&&identityValue!==undefined&&identityValue!==""&&seen.has(marker))dup="مكرر داخل الملف";
+   if(identityValue!==undefined&&identityValue!=="")seen.add(marker);
+  }else{
+   const kn=String(o.name||"").toLowerCase(),ks=WZ.t=="items"?(o.sku?nd(String(o.sku)).toLowerCase():""):(o.phone?String(o.phone):"");
+   if(WZ.t=="items"){if(S.items.some(i=>(ks&&nd(i.sku).toLowerCase()==ks)||i.name.toLowerCase()==kn))dup="موجود بالفعل"}
+   else if(S.partners.some(p=>(ks&&p.phone==ks)||p.name.toLowerCase()==kn))dup="موجود بالفعل";
+   if(!dup&&((kn&&seen.has("n:"+kn))||(ks&&seen.has("k:"+ks))))dup="مكرر داخل الملف";
+   if(kn)seen.add("n:"+kn);if(ks)seen.add("k:"+ks);
+  }
+  out.push({n:n+2,o,er,dup,st:er.length?"خطأ":dup?"مكرر (سيُتخطى)":"جديد"});
+ });
+ WZ.out=out;const ok=out.filter(x=>x.st==="جديد").length,du=out.filter(x=>x.dup&&!x.er.length).length,er=out.filter(x=>x.er.length).length;
+ const display=x=>x.o.name||x.o.no||x.o.code||x.o.value||x.o.ref||"—";
+ $("#impv").innerHTML=`<div class="card"><b>3) نتيجة التحقق:</b> جديد <b>${ok}</b> | مكرر <b>${du}</b> | أخطاء <b>${er}</b></div><table class="l"><tr><th>الصف</th><th>البيان</th><th>الحالة</th><th>الأخطاء</th></tr>${U(out.slice(0,200),x=>`<tr><td>${x.n}</td><td>${display(x)}</td><td>${x.st}</td><td>${x.er.join("، ")} ${x.dup||""}</td></tr>`)}</table><div class="row"><button onclick="importGo()">4) تأكيد الاستيراد (${ok} صف)</button></div>`;enh();
+}function importGo(){
+ if(WZ.t==="all"){prepareFullImport();return;}
+ const ok=WZ.out.filter(x=>x.st==="جديد");if(!ok.length){toast("لا توجد صفوف صالحة للاستيراد");return}if(!guard())return;let n=0;
+ if(WZ.t.startsWith("list:")){
+  const key=WZ.t.slice(5),primitive=key==="curs"||key==="hide",list=Array.isArray(S[key])?S[key]:[];
+  ok.forEach(x=>{
+   if(primitive){const value=String(x.o.value||"").trim();if(value&&!list.some(v=>String(v)===value)){list.push(value);n++;}return;}
+   const o={...x.o};if(o.id===undefined||o.id===null||o.id==="")o.id=uid();
+   if(o.pid!==undefined&&o.pid!==""){const p=S.partners.find(p=>p.id==o.pid||p.name.toLowerCase()===String(o.pid).toLowerCase()||p.phone===String(o.pid));if(p)o.pid=p.id;else if(/^\d+$/.test(String(o.pid)))o.pid=+o.pid;}
+   if(o.iid!==undefined&&o.iid!==""){const i=S.items.find(i=>i.id==o.iid||i.name.toLowerCase()===String(o.iid).toLowerCase()||i.sku===String(o.iid));if(i)o.iid=i.id;else if(/^\d+$/.test(String(o.iid)))o.iid=+o.iid;}
+   if(o.wh!==undefined&&o.wh!==""){const w=S.wh.find(w=>w.id==o.wh||w.name.toLowerCase()===String(o.wh).toLowerCase());if(w)o.wh=w.id;else if(/^\d+$/.test(String(o.wh)))o.wh=+o.wh;}
+   if(o.a!==undefined&&o.a!==""){const a=S.accts.find(a=>a.id==o.a||a.name.toLowerCase()===String(o.a).toLowerCase()||a.code===String(o.a));if(a)o.a=a.id;else if(/^\d+$/.test(String(o.a)))o.a=+o.a;}
+   if(key==="emp")o.perm=Array.isArray(o.perm)?o.perm:[];
+   if(key==="docs")o.lines=Array.isArray(o.lines)?o.lines:[];
+   if(key==="po"){o.subs=Array.isArray(o.subs)?o.subs:[];o.mats=Array.isArray(o.mats)?o.mats:[];o.x=Array.isArray(o.x)?o.x:[];o.rec=Array.isArray(o.rec)?o.rec:[];o.st=Number(o.st||0);}
+   if(key==="vch"){o.ac=Array.isArray(o.ac)?o.ac:[];o.ln=Array.isArray(o.ln)?o.ln:[];o.alloc=o.alloc&&typeof o.alloc==="object"?o.alloc:{};}
+   list.push(o);n++;
+  });
+  S[key]=list;sv();nav();toast("تم استيراد "+n+" سجل إلى قائمة "+(IMPORT_LISTS[key]||key));if(key==="emp")toast("تم استيراد بيانات الموظفين؛ إنشاء حسابات الدخول يتم من شاشة الموظفين.");WZ.out=[];impMap();return;
+ }
+ if(WZ.t==="items")ok.forEach(x=>{const o=x.o;let wh=S.wh.find(w=>w.name==o.type);if(!wh){if(o.type){wh={id:uid(),name:String(o.type)};S.wh.push(wh)}else wh=S.wh[0]}const i=ensureItem(String(o.name),wh.id,o.unit||"قطعة",o.buy);if(o.sku)i.sku=String(o.sku).replace(/[^\x20-\x7e]/g,"")||i.sku;Object.assign(i,{model:String(o.model||""),buy:o.buy,retail:o.retail,wholesale:o.wholesale});if(o.qty>0){const cost=o.qty*o.buy;stk(td(),i,vk(String(o.color||""),String(o.size||"")),o.qty,cost,"رصيد افتتاحي (استيراد)",0,i.id,"je");post(td(),"IM-"+i.id,"رصيد افتتاحي - استيراد",[{a:ak("inv"),dr:cost},{a:ak("cap"),cr:cost}],"je",i.id)}n++});
  else ok.forEach(x=>{const o=x.o,r=String(o.role||""),both=r.includes("كلاهما"),c=WZ.t==="customers"||both||r.includes("عميل")||(WZ.t!=="suppliers"&&!r),s=WZ.t==="suppliers"||both||r.includes("مورد");S.partners.push({id:uid(),name:String(o.name),phone:String(o.phone||""),c:c?1:0,s:s?1:0,type:String(o.kind).includes("جملة")?"w":"r",gov:String(o.gov||""),city:String(o.city||""),adr:String(o.adr||"")});n++});
- sv();toast("تم استيراد "+n+" صف من شيت "+WZ.sheet);WZ.out=[];impMap()}
-/* ---- settings ---- */
+ sv();toast("تم استيراد "+n+" صف من شيت "+WZ.sheet);WZ.out=[];impMap();
+}/* ---- settings ---- */
 function vSet(){return ph(N.set)+`<div class="tiles">${U([["🌳 شجرة الحسابات","go('coa')"],["ℹ️ بيانات العمل التجاري (الاسم + اللوجو)","bizForm()"],["🖨️ قوالب الطباعة","tplForm()"],["📥 استيراد من Excel","impForm()"],["💹 هامش الربح المقترح","pctForm()"],["🏬 مخازن فرعية","wForm()"],["🧩 تخصيص التبويبات","cust()"],["👥 الموظفون والصلاحيات","go('emp')"],["🌐 اللغة: عربي / English","togLang()"],["♻️ إعادة ضبط الديمو","resetAsk()"],...(canInstall()&&!isStandalone()?[["📲 تثبيت التطبيق","promptInstall()"]]:[])],t=>`<div class="tile" onclick="${t[1]}">${t[0]}</div>`)}</div>`}
 function resetAsk(){sh(`<h3>تأكيد إعادة الضبط</h3><p>سيتم حذف كل البيانات المسجلة في هذا الـ Demo والعودة للبيانات الافتراضية.</p><div class="row"><button class="rd" onclick="resetAll()">نعم، أعد الضبط</button>${bk}</div>`)}
 function resetAll(){try{localStorage.removeItem("mgr6")}catch(e){}S=seed();migrate();TB.filter(t=>t.kind=="page").forEach(t=>closeTab(t,1));go("home")}
