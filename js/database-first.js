@@ -173,6 +173,18 @@ function hydrateFromRows(rows) {
   if (!baseline.has(mapKey('__meta','main'))) baseline.set(mapKey('__meta','main'), { type:'__meta', id:'main', payload:meta, version:0, deleted_at:null });
   persistBaseline();
 }
+function buildInitialOperations(state) {
+  const { arrays, meta } = splitState(state);
+  const operations = [];
+  for (const [type,items] of Object.entries(arrays)) {
+    items.forEach((item,index) => operations.push({
+      type, id:recordKey(type,item,index), payload:cleanPayload(item),
+      expectedVersion:0, deleted:false
+    }));
+  }
+  operations.push({type:'__meta',id:'main',payload:meta,expectedVersion:0,deleted:false});
+  return operations;
+}
 function makeOperations(state) {
   const { arrays, meta } = splitState(state);
   const current = new Map();
@@ -359,9 +371,23 @@ async function bootstrap() {
   ownerId=profile.created_by || profile.id;
   storageScope = ownerId;
   storageScope = ownerId;
-  const rows=await fetchAllRecords();
-  hydrateFromRows(rows);
-  setLastSyncAt(new Date().toISOString());
+  let rows=await fetchAllRecords();
+  if (!rows.length && profile.is_admin === true) {
+    // One-time import only when this factory has no database records yet.
+    // All subsequent saves are record-level atomic writes; this path never runs again after the first batch.
+    snapshotBaseline(getState());
+    try {
+      await writeOperations(buildInitialOperations(getState()));
+      setLastSyncAt(new Date().toISOString());
+    } catch (error) {
+      if (error?.code !== 'FACTORY_RECORD_CONFLICT') throw error;
+      rows=await fetchAllRecords();
+      hydrateFromRows(rows);
+    }
+  } else {
+    hydrateFromRows(rows);
+    setLastSyncAt(new Date().toISOString());
+  }
   stateReady=true;
   window.__factoryDatabaseFirstReady = true;
   for (const op of getQueue()) applyOperationToState(op);
