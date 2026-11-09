@@ -40,7 +40,7 @@ if (!supabase) {
     if (!email || !password) return say('أدخل البريد الإلكتروني وكلمة المرور');
     const remember = $('auth-remember')?.checked !== false;
     try { localStorage.setItem('factory-remember', remember ? '1' : '0'); } catch (_) {}
-    const projectRef = new URL(import.meta.env.VITE_SUPABASE_URL || 'https://yvrislcbbhtruwdnuooz.supabase.co').hostname.split('.')[0];
+    const projectRef = new URL('https://yvrislcbbhtruwdnuooz.supabase.co').hostname.split('.')[0];
     const storageKey = 'sb-' + projectRef + '-auth-token';
     try { if (remember) sessionStorage.removeItem(storageKey); else localStorage.removeItem(storageKey); } catch (_) {}
     say('جاري تسجيل الدخول...', false);
