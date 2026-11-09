@@ -89,7 +89,7 @@ function resetLocalBusinessState() {
   const patch = {};
   for (const [type, items] of Object.entries(arrays)) {
     // Discard every seeded/demo business collection; only the authenticated production database may populate it.
-    patch[type] = [];
+    patch[type] = type === 'curs' ? ['EGP','USD','EUR'] : [];
   }
   window.__factoryReplaceArrays?.(patch);
 }
