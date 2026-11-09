@@ -1972,18 +1972,18 @@ async function onInternetBack() {
 const _origSetItem = localStorage.setItem.bind(localStorage);
 localStorage.setItem = function(key, value) {
   _origSetItem(key, value);
-  if (key === "mgr6") {
+  if (key === "mgr6" && !window.__factoryDatabaseFirst) {
     markPendingSync();
     if (!navigator.onLine) { syncState = "offline"; drawAll(); }
     else scheduleAutoSync(1500);
   }
   if (key === "mgr6pref") setTimeout(drawAll, 100);
 };
-window.addEventListener("online", () => { retryCount = 0; scheduleAutoSync(500); });
+window.addEventListener("online", () => { if (!window.__factoryDatabaseFirst) { retryCount = 0; scheduleAutoSync(500); } });
 window.addEventListener("offline", () => { syncState = "offline"; drawAll(); });
-window.addEventListener("focus", () => { if (navigator.onLine && localStorage.getItem(PENDING_SYNC_KEY)) scheduleAutoSync(500); });
-document.addEventListener("visibilitychange", () => { if (!document.hidden && navigator.onLine && localStorage.getItem(PENDING_SYNC_KEY)) scheduleAutoSync(500); });
-setInterval(() => { if (navigator.onLine && localStorage.getItem(PENDING_SYNC_KEY) && !localStorage.getItem("mgr6-cloud-snapshot-conflict")) scheduleAutoSync(0); }, 60000);
+window.addEventListener("focus", () => { if (!window.__factoryDatabaseFirst && navigator.onLine && localStorage.getItem(PENDING_SYNC_KEY)) scheduleAutoSync(500); });
+document.addEventListener("visibilitychange", () => { if (!window.__factoryDatabaseFirst && !document.hidden && navigator.onLine && localStorage.getItem(PENDING_SYNC_KEY)) scheduleAutoSync(500); });
+setInterval(() => { if (!window.__factoryDatabaseFirst && navigator.onLine && localStorage.getItem(PENDING_SYNC_KEY) && !localStorage.getItem("mgr6-cloud-snapshot-conflict")) scheduleAutoSync(0); }, 60000);
 if (navigator.onLine) {
   // Always refresh remote data on launch; pending local writes are retried automatically.
   scheduleAutoSync(1200);
