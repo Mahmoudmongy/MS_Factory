@@ -1,8 +1,8 @@
 /* Service Worker v10 - fast cache refresh and offline application shell.
  * Business data stays in Supabase. Authenticated API responses are never cached.
  */
-const VERSION = 'factory-v15';
-const CORE = ['./','./index.html','./auth.html','./change-password.html','./css/style.css','./manifest.json','./js/app.js','./js/change-password.js'];
+const VERSION = 'factory-v16';
+const CORE = ['./','./index.html','./auth.html','./change-password.html','./css/style.css','./manifest.json','./assets/icon-192.png','./assets/icon-512.png','./assets/icon.svg','./js/app.js','./js/change-password.js'];
 const PAGES = ['./index.html','./auth.html','./change-password.html'];
 // The HTML href scan also captures Vite modulepreload assets for offline use.
 async function fetchQuick(url){const controller=new AbortController();const timer=setTimeout(()=>controller.abort(),1800);try{return await fetch(url,{cache:'reload',signal:controller.signal})}finally{clearTimeout(timer)}}
