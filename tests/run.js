@@ -209,6 +209,8 @@ fs.writeFileSync('/tmp/_items.csv','\uFEFFاسم الصنف,كود,نوع,وحد
 await ev(()=>{go('set');impForm()});await p.setInputFiles('#impf','/tmp/_items.csv');await p.waitForTimeout(300);await ev(()=>impCheck());
 ok('import detects new / duplicate-in-file / invalid / already-existing rows',JSON.stringify(await ev(()=>WZ.out.map(x=>x.st)))==JSON.stringify(["جديد","جديد","مكرر (سيُتخطى)","خطأ","مكرر (سيُتخطى)"]));
 await ev(()=>importGo());ok('import creates only the valid rows with opening stock; ledger balanced',await ev(()=>!!S.items.find(i=>i.sku=="IMP001")&&!S.items.find(i=>i.sku=="IMP003")&&!S.items.find(i=>i.sku=="IMP004")&&tq(S.items.find(i=>i.sku=="IMP001"))==30)&&await bal());
+const importXss=await ev(()=>{const payload='<img src=x onerror="window.__importXss=1">';WZ.t="items";WZ.sheetNames=[payload,"<b>Header</b>"];WZ.sheet=payload;WZ.hd=["اسم الصنف"];WZ.rows=[[payload]];impMap();const mapSafe=ACT.querySelectorAll("#impw img").length===0&&ACT.querySelector("#impw").textContent.includes(payload);impCheck();return{mapSafe,previewSafe:ACT.querySelectorAll("#impv img").length===0&&ACT.querySelector("#impv").textContent.includes(payload),executed:window.__importXss===1}});
+ok('Excel sheet names, headers and imported cell text are rendered as text (XSS regression)',importXss.mapSafe&&importXss.previewSafe&&!importXss.executed,importXss);
 /* ---------- templates ---------- */
 await ev(()=>{tplForm();$("#tk").value="sale";tplFill();$("#t_title").value="فاتورة ضريبية";ACT.querySelector('.t_c[value="unit"]').checked=false;tplPrev()});
 ok('print-template preview reflects title and hidden column',await ev(()=>{const h=$("#tpv").innerHTML;return h.includes("فاتورة ضريبية")&&!h.includes("<th>الوحدة</th>")}));await ev(()=>closeTab(CUR,1));
