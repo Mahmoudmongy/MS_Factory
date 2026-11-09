@@ -279,7 +279,7 @@ function trTree(r){if(!r||(!LANGEN&&!TRON))return;const w=document.createTreeWal
 new MutationObserver(ms=>{if(!LANGEN)return;ms.forEach(m=>m.addedNodes.forEach(n=>trTree(n)))}).observe(document.body,{childList:true,subtree:true});
 /* ---- connection / sync indicator ---- */
 function netUp(){const e=$g("#net");if(!e)return;const connected=navigator.onLine&&window.__factoryDatabaseFirstReady===true&&!window.__factoryDatabaseFirstFailed;e.classList.toggle("online",connected);e.classList.toggle("offline",!connected);e.setAttribute("aria-label",connected?(LANGEN?"Connected":"متصل"):(LANGEN?"Disconnected":"غير متصل"));e.title=connected?(LANGEN?"Connected":"متصل"):(LANGEN?"Disconnected":"غير متصل")}
-addEventListener("online",netUp);addEventListener("offline",netUp);addEventListener("factory-database-ready",netUp);addEventListener("factory-db-startup-error",netUp);
+addEventListener("online",netUp);addEventListener("offline",netUp);addEventListener("factory-database-ready",netUp);addEventListener("factory-db-startup-error",netUp);addEventListener("factory-db-connection-state",netUp);
 function syncPage(){
   let queued=0;
   try{const q=JSON.parse(localStorage.getItem("ms-factory-db-queue-v1")||"[]");queued=Array.isArray(q)?q.length:0}catch(e){}
