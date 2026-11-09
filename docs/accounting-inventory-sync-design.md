@@ -128,6 +128,7 @@ The following supersedes the earlier rollout notes below, which described the pe
 - Supabase still reports leaked-password protection as disabled. This is an Auth dashboard setting and remains a security follow-up.
 - The two synchronization tables intentionally have RLS enabled with no direct table policies or grants; all access is through the permission-checking RPCs.
 - Both production and QA currently have **zero Storage buckets and zero Storage objects**. The current app code does not call Supabase Storage APIs; product images are kept in the application state/detail payload. Therefore there are no Storage objects missing from this restore.
+- A Vercel preview deployment was created for this exact branch. Branch-scoped `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY` point only to QA; existing production environment variables were not changed. The preview project has SSO protection enabled.
 
 ### Remaining end-to-end gate
 Automated CI and QA SQL checks are green, but an actual two-device browser session has not yet been completed. It must verify:
@@ -137,7 +138,7 @@ Automated CI and QA SQL checks are green, but an actual two-device browser sessi
 - duplicate prevention and optimistic conflict preservation;
 - inventory-only, accounting-only, and reports-only permission boundaries.
 
-The branch remains a Draft PR until this real two-device test passes. No production migration, production data write, deployment, DNS change, credential/secret change, or backup-schedule change has been made.
+The branch remains a Draft PR until this real two-device test passes. No production migration, production data write, production deployment, DNS change, production credential/secret change, or backup-schedule change has been made. Only a branch-scoped QA preview deployment and its QA-only public Supabase environment variables were created.
 
 ## Explicit safety boundaries
 - QA is the only database receiving the new synchronization migrations.
