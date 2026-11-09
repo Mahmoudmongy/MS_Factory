@@ -270,6 +270,33 @@ const SCR={home:()=>vHome(),bank:()=>vBank(),rc:()=>vVch("in"),py:()=>vVch("out"
 function savePref(){try{localStorage.setItem("mgr6pref",JSON.stringify(PRF))}catch(e){}}
 function applyPref(){const r=document.documentElement;if(PRF.theme)r.setAttribute("data-theme",PRF.theme);else r.removeAttribute("data-theme");LANGEN=PRF.lang=="en";r.lang=LANGEN?"en":"ar";r.dir=LANGEN?"ltr":"rtl";const dark=PRF.theme?PRF.theme==="dark":matchMedia("(prefers-color-scheme:dark)").matches,thb=$g("#thb");if(thb){thb.textContent=dark?"☀️":"🌙";thb.title=dark?"التبديل إلى الوضع الفاتح":"التبديل إلى الوضع الداكن";thb.setAttribute("aria-label",thb.title)}trTree(document.body)}
 function togTheme(){const dark=PRF.theme?PRF.theme=="dark":matchMedia("(prefers-color-scheme:dark)").matches;PRF.theme=dark?"light":"dark";savePref();applyPref();toast(PRF.theme=="dark"?"الوضع الليلي":"الوضع النهاري")}
+Object.assign(EN,{
+ "تحميل قالب لكل القوائم":"Download template for all lists",
+ "تقدر تستورد أي قائمة من الشاشات، كل شيت على حدة، أو تستعيد نسخة المصنع الكاملة بكل القوائم والمراجع دفعة واحدة.":"Import any screen list one sheet at a time, or restore the full factory backup with all lists and references at once.",
+ "نوع البيانات / الشاشة":"Data type / screen",
+ "باقي القوائم والشاشات":"Other lists and screens",
+ "المخازن الفرعية":"Sub-warehouses",
+ "الفواتير والمرتجعات":"Invoices and returns",
+ "سندات القبض والصرف":"Receipt and payment vouchers",
+ "أكواد الباركود":"Barcode codes",
+ "حركات المخزون":"Stock movements",
+ "دفتر الأستاذ":"General ledger",
+ "العملات":"Currencies",
+ "التبويبات المخفية":"Hidden tabs",
+ "اسم المستخدم (اختياري)":"Username (optional)",
+ "اتركه فارغًا لإنشاء اسم تلقائي":"Leave blank to generate a username automatically",
+ "لن تحتاج إلى بريد إلكتروني. سيظهر اسم الدخول بعد الحفظ.":"No email is needed. The login username will be shown after saving.",
+ "معرف الحساب":"Account ID","كود الحساب":"Account code","اسم الحساب":"Account name","نوع الحساب":"Account type","التصنيف الداخلي":"Internal classification","حساب نقدي":"Cash account",
+ "معرف المخزن":"Warehouse ID","اسم المخزن":"Warehouse name","معرف المستند":"Document ID","نوع الفاتورة":"Invoice type","كود العميل أو المورد":"Customer / supplier ID",
+ "الوجهة":"Destination","تفاصيل الأصناف (JSON)":"Item details (JSON)","الإجمالي قبل الخصم":"Gross total","معرف الأمر":"Order ID","رقم أمر الإنتاج":"Production order number",
+ "الألوان والمقاسات والكميات (JSON)":"Colors, sizes and quantities (JSON)","التكاليف الإضافية (JSON)":"Additional costs (JSON)","تكلفة الخامات":"Material cost",
+ "الكميات المستلمة (JSON)":"Received quantities (JSON)","تكلفة الهالك":"Waste cost","معرف السند":"Voucher ID","النوع (in / out)":"Type (in / out)",
+ "اسم المستلم":"Recipient name","الحسابات (JSON)":"Accounts (JSON)","التفاصيل (JSON)":"Details (JSON)","التوزيع (JSON)":"Allocation (JSON)",
+ "معرف الهالك":"Waste ID","رقم الهالك":"Waste number","معرف أمر الإنتاج":"Production order ID","كود الصنف":"Item ID","اللون والمقاس":"Color and size",
+ "رقم القيد":"Journal entry number","اسم الموظف":"Employee name","التليفون الأول":"Phone 1","التليفون الثاني":"Phone 2","الصلاحيات (JSON)":"Permissions (JSON)",
+ "صورة البطاقة":"ID card image","كود الطرف":"Party ID","معرف الحركة":"Movement ID","المصدر":"Source","كود الشاشة":"Screen key",
+ "العملة":"Currency","الباركود":"Barcode","ملاحظات":"Notes","وقت التسجيل":"Recorded at"
+});
 function togLang(){PRF.lang=LANGEN?"ar":"en";savePref();applyPref();nav();drawTabs()}
 /* ---- language engine (display translation only; stored data never changes) ---- */
 const AR=/[\u0600-\u06FF]/;let TRK=null;
@@ -662,9 +689,9 @@ function impForm(){
  try{
   await ld("https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js");
   const wb=XLSX.utils.book_new();
-  const sheets=[["العملاء",IMPF.customers],["الموردين",IMPF.suppliers],["عملاء وموردون",IMPF.partners],["الأصناف",IMPF.items],...Object.entries(IMPORT_LISTS).map(([k,label])=>[label,importFieldsFor("list:"+k)])];
-  sheets.forEach(([name,fields])=>XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet([fields.map(f=>f[1])]),name.slice(0,31)));
-  XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet([["تعليمات"],["املأ الشيت المطلوب، ثم اختر نوع القائمة المطابق في شاشة الاستيراد. الحقول التي تنتهي بـ JSON يجب أن تحتوي على JSON صحيح. لاستعادة كل البيانات والمراجع مرة واحدة استخدم تصدير نسخة Excel كاملة."]]),"تعليمات");
+  const sheets=[[LANGEN?trs("العملاء"):"العملاء",IMPF.customers],[LANGEN?trs("الموردين"):"الموردين",IMPF.suppliers],[LANGEN?"Partners":"عملاء وموردون",IMPF.partners],[LANGEN?trs("الأصناف"):"الأصناف",IMPF.items],...Object.entries(IMPORT_LISTS).map(([k,label])=>[LANGEN?trs(label):label,importFieldsFor("list:"+k)])];
+  sheets.forEach(([name,fields])=>XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet([fields.map(f=>LANGEN?trs(f[1]):f[1])]),(LANGEN?trs(name):name).slice(0,31)));
+  XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet([[LANGEN?"Instructions":"تعليمات"],[LANGEN?"Fill the required sheet, then select the matching list in the import screen. Fields ending in JSON must contain valid JSON. Use the full factory backup export to restore all data and references at once.":"املأ الشيت المطلوب، ثم اختر نوع القائمة المطابق في شاشة الاستيراد. الحقول التي تنتهي بـ JSON يجب أن تحتوي على JSON صحيح. لاستعادة كل البيانات والمراجع مرة واحدة استخدم تصدير نسخة Excel كاملة."]]),LANGEN?"Instructions":"تعليمات");
   XLSX.writeFile(wb,"قالب_كل_قوائم_مدير_المصنع.xlsx");
  }catch(e){toast("تعذر إنشاء القالب؛ يلزم الاتصال بالإنترنت لتحميل مكتبة Excel")}
 }async function impFile(inp){
