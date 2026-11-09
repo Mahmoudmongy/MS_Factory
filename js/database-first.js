@@ -305,6 +305,7 @@ async function bootstrap() {
   hydrateFromRows(rows);
   stateReady=true;
   window.__factoryDatabaseFirstReady = true;
+  for (const op of getQueue()) applyOperationToState(op);
   await flushQueue();
   await connectRealtime();
   window.dispatchEvent(new CustomEvent('factory-database-ready'));
