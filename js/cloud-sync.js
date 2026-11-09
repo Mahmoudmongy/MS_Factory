@@ -1946,48 +1946,139 @@ async function loadFromTablesMerge(isAuto = false) {
   finally { autoLoadRunning = false; }
 }
 
-// ===== التحميل التلقائي أول ما النت يرجع - زي ما اتفقنا =====
+// ===== قاعدة البيانات هي الأساس عند الاتصال؛ الطابور المحلي للطوارئ دون إنترنت فقط =====
+let realtimeChannel = null;
+let remoteRefreshTimer = null;
+
+function scheduleOnlineWrite(delay = 250) {
+  if (!navigator.onLine || window.__factoryOfflineMode === true) return;
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(async () => {
+    if (!navigator.onLine || uploadRunning) {
+      if (navigator.onLine) scheduleOnlineWrite(350);
+      return;
+    }
+    const result = await uploadToTables(false);
+    if (String(result).startsWith("خطأ:") || String(result).includes("فشلت")) {
+      if (navigator.onLine) scheduleAutoSync(2500);
+    }
+  }, delay);
+}
+
+async function refreshFromDatabase(reason = "realtime") {
+  if (!navigator.onLine || autoLoadRunning || uploadRunning) return;
+  clearTimeout(remoteRefreshTimer);
+  remoteRefreshTimer = setTimeout(async () => {
+    if (!navigator.onLine || autoLoadRunning || uploadRunning) return;
+    const result = await loadFromTablesMerge(true);
+    if (String(result).includes("conflict")) syncState = "conflict";
+    if (typeof window.render === "function") window.render();
+    drawAll();
+  }, reason === "startup" ? 0 : 650);
+}
+
+async function startRealtimeDatabaseFeed() {
+  if (!supabase || !navigator.onLine || realtimeChannel) return;
+  const owner = await getOwnerId();
+  if (!owner) return;
+  const tables = ["factory_state", "customers", "suppliers", "invoices", "products", "returns", "vouchers", "production_orders"];
+  let channel = supabase.channel("factory-live-" + owner);
+  for (const table of tables) {
+    channel = channel.on("postgres_changes", {
+      event: "*", schema: "public", table,
+      filter: "user_id=eq." + owner
+    }, () => refreshFromDatabase("realtime"));
+  }
+  realtimeChannel = channel;
+  channel.subscribe(status => {
+    if (status === "CHANNEL_ERROR" || status === "TIMED_OUT") {
+      realtimeChannel = null;
+      console.warn("Live database feed disconnected:", status);
+    }
+  });
+}
+
+async function revalidateCloudSession() {
+  myProfile = null; ownerIdCache = null; window.__factoryAuthProfile = null;
+  const profile = await getMyProfile();
+  if (!profile) throw new Error("تعذر التحقق من حسابك قبل الاتصال بقاعدة البيانات");
+  window.__factoryOfflineMode = false;
+  await startRealtimeDatabaseFeed();
+  return profile;
+}
+
 async function onInternetBack() {
   if (autoLoadRunning || uploadRunning) { scheduleAutoSync(1400); return "sync busy"; }
-  // Revalidate the session profile before using cached offline permissions for cloud writes.
-  myProfile = null; ownerIdCache = null; window.__factoryAuthProfile = null;
-  const freshProfile = await getMyProfile();
-  if (!freshProfile) { syncState = "idle"; drawAll(); return "profile revalidation failed"; }
-  window.__factoryOfflineMode = false;
-  syncState = "saving"; drawAll();
-  // Pull first, but never let a snapshot conflict block independent detail-table uploads.
-  const pulled = await loadFromTablesMerge(true);
-  if (pulled === "cloud read failed" || String(pulled).startsWith("تعذر قراءة")) {
-    syncState = "idle"; drawAll(); return pulled;
-  }
-  const pushed = await uploadToTables(false);
-  if (String(pushed).startsWith("خطأ:") || String(pushed).includes("فشلت")) {
-    syncState = localStorage.getItem("mgr6-cloud-snapshot-conflict") ? "conflict" : "idle"; drawAll();
-    if (!localStorage.getItem("mgr6-cloud-snapshot-conflict")) scheduleAutoSync(2500);
+  try {
+    await revalidateCloudSession();
+    syncState = "saving"; drawAll();
+    const pulled = await loadFromTablesMerge(true);
+    if (pulled === "cloud read failed" || String(pulled).startsWith("تعذر قراءة")) {
+      syncState = "idle"; drawAll(); return pulled;
+    }
+    if (!localStorage.getItem(PENDING_SYNC_KEY)) {
+      syncState = "synced"; drawAll(); return pulled;
+    }
+    const pushed = await uploadToTables(false);
+    if (String(pushed).startsWith("خطأ:") || String(pushed).includes("فشلت")) {
+      syncState = localStorage.getItem("mgr6-cloud-snapshot-conflict") ? "conflict" : "idle"; drawAll();
+      if (!localStorage.getItem("mgr6-cloud-snapshot-conflict")) scheduleAutoSync(2500);
+      return pushed;
+    }
+    if (localStorage.getItem(PENDING_SYNC_KEY) && !localStorage.getItem("mgr6-cloud-snapshot-conflict")) scheduleAutoSync(1500);
     return pushed;
+  } catch (error) {
+    syncState = "idle"; drawAll();
+    console.error("Database reconnect failed:", error);
+    return "خطأ: " + (error.message || String(error));
   }
-  if (localStorage.getItem(PENDING_SYNC_KEY) && !localStorage.getItem("mgr6-cloud-snapshot-conflict")) scheduleAutoSync(800);
-  return pushed;
 }
+
+async function bootstrapDatabase() {
+  try {
+    await revalidateCloudSession();
+    const result = await loadFromTablesMerge(true);
+    if (String(result).includes("conflict")) syncState = "conflict";
+    else syncState = "synced";
+    if (typeof window.render === "function") window.render();
+    drawAll();
+    if (localStorage.getItem(PENDING_SYNC_KEY)) scheduleAutoSync(300);
+  } catch (error) {
+    console.error("Database bootstrap failed:", error);
+    syncState = "idle"; drawAll();
+  }
+}
+
 const _origSetItem = localStorage.setItem.bind(localStorage);
 localStorage.setItem = function(key, value) {
   _origSetItem(key, value);
   if (key === "mgr6") {
     markPendingSync();
-    if (!navigator.onLine) { syncState = "offline"; drawAll(); }
-    else scheduleAutoSync(1500);
+    if (!navigator.onLine || window.__factoryOfflineMode === true) {
+      syncState = "offline"; drawAll();
+    } else {
+      syncState = "saving"; drawAll();
+      scheduleOnlineWrite(250);
+    }
   }
   if (key === "mgr6pref") setTimeout(drawAll, 100);
 };
-window.addEventListener("online", () => { retryCount = 0; scheduleAutoSync(500); });
-window.addEventListener("offline", () => { syncState = "offline"; drawAll(); });
-window.addEventListener("focus", () => { if (navigator.onLine && localStorage.getItem(PENDING_SYNC_KEY)) scheduleAutoSync(500); });
-document.addEventListener("visibilitychange", () => { if (!document.hidden && navigator.onLine && localStorage.getItem(PENDING_SYNC_KEY)) scheduleAutoSync(500); });
-setInterval(() => { if (navigator.onLine && localStorage.getItem(PENDING_SYNC_KEY) && !localStorage.getItem("mgr6-cloud-snapshot-conflict")) scheduleAutoSync(0); }, 60000);
-if (navigator.onLine) {
-  // Always refresh remote data on launch; pending local writes are retried automatically.
-  scheduleAutoSync(1200);
-}
+window.addEventListener("online", () => {
+  retryCount = 0;
+  if (realtimeChannel) { try { supabase.removeChannel(realtimeChannel); } catch(e) {} realtimeChannel = null; }
+  scheduleAutoSync(250);
+});
+window.addEventListener("offline", () => {
+  if (realtimeChannel) { try { supabase.removeChannel(realtimeChannel); } catch(e) {} realtimeChannel = null; }
+  syncState = "offline"; drawAll();
+});
+window.addEventListener("focus", () => {
+  if (navigator.onLine && localStorage.getItem(PENDING_SYNC_KEY)) scheduleAutoSync(300);
+});
+document.addEventListener("visibilitychange", () => {
+  if (!document.hidden && navigator.onLine && localStorage.getItem(PENDING_SYNC_KEY)) scheduleAutoSync(300);
+});
+if (navigator.onLine) setTimeout(bootstrapDatabase, 250);
 window.restoreCloud = async function() {
   if (!confirm(T("هتحمّل البيانات من الجداول؟ هيتضاف الناقص بس، مش هيمسح حاجة", "Load from tables? Only missing will be added, nothing will be deleted"))) return;
   const r = await loadFromTablesMerge(false);
