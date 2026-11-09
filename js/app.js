@@ -725,7 +725,7 @@ function prepareFullImport(){const marker=WZ.sheets["__factory_backup"]||[];if(!
 function importFullConfirm(){if(!WZ.fullImport){toast("لم يتم تجهيز ملف الاستيراد");return;}if(!guard())return;for(const [k,v] of Object.entries(WZ.fullImport.arrays))S[k]=v;Object.assign(S,WZ.fullImport.meta||{});sv();nav();toast("تم استيراد بيانات المصنع بالكامل؛ راجع الاتصال حتى يكتمل الحفظ السحابي");WZ.fullImport=null;}
 function parseGenericImportValue(raw,field,errorList){
  const text=String(raw??"").trim(),type=field[5]||(field[4]?"number":"string");
- if(!text){if(type==="json-array")return [];if(type==="json-object")return {};if(type==="number")return 0;if(type==="boolean")return false;return "";}
+ if(!text){if(type==="json-array")return [];if(type==="json-object")return {};if(type==="number")return field[0]==="id"||field[2]?"":0;if(type==="boolean")return false;return "";}
  if(type==="reference")return /^-?\d+(?:\.\d+)?$/.test(text)?Number(text):text;
  if(type==="number"){const n=Number(text.replace(/,/g,""));if(!Number.isFinite(n)){errorList.push(field[1]+" ليست رقمًا");return 0;}return n;}
  if(type==="boolean"){const v=text.toLowerCase();if(["1","true","yes","نعم","ن"].includes(v))return true;if(["0","false","no","لا","ل"].includes(v))return false;errorList.push(field[1]+" يجب أن تكون نعم أو لا");return false;}
@@ -767,7 +767,7 @@ function impCheck(){
   const key=WZ.t.slice(5),primitive=key==="curs"||key==="hide",list=Array.isArray(S[key])?S[key]:[];
   ok.forEach(x=>{
    if(primitive){const value=String(x.o.value||"").trim();if(value&&!list.some(v=>String(v)===value)){list.push(value);n++;}return;}
-   const o={...x.o};if(o.id===undefined||o.id===null||o.id==="")o.id=uid();
+   const o={...x.o};if(o.id===undefined||o.id===null||o.id===""||o.id===0)o.id=uid();
    if(o.pid!==undefined&&o.pid!==""){const p=S.partners.find(p=>p.id==o.pid||p.name.toLowerCase()===String(o.pid).toLowerCase()||p.phone===String(o.pid));if(p)o.pid=p.id;else if(/^\d+$/.test(String(o.pid)))o.pid=+o.pid;}
    if(o.iid!==undefined&&o.iid!==""){const i=S.items.find(i=>i.id==o.iid||i.name.toLowerCase()===String(o.iid).toLowerCase()||i.sku===String(o.iid));if(i)o.iid=i.id;else if(/^\d+$/.test(String(o.iid)))o.iid=+o.iid;}
    if(o.wh!==undefined&&o.wh!==""){const w=S.wh.find(w=>w.id==o.wh||w.name.toLowerCase()===String(o.wh).toLowerCase());if(w)o.wh=w.id;else if(/^\d+$/.test(String(o.wh)))o.wh=+o.wh;}
