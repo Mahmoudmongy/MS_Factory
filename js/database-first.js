@@ -365,6 +365,25 @@ async function connectRealtime() {
       applyRealtimeRow(payload.new);
     }).subscribe();
 }
+async function currentSessionUser() {
+  const { data, error } = await supabase.auth.getSession();
+  if (error || !data?.session?.user) throw error || new Error('لا يوجد مستخدم مسجل');
+  return data.session.user;
+}
+async function ensureProfile(userId, refresh = false) {
+  if (!refresh && window.__factoryAuthProfile?.id === userId) {
+    profile = window.__factoryAuthProfile;
+    return profile;
+  }
+  const { data, error } = await supabase.from('profiles')
+    .select('id,created_by,is_admin,permissions,must_change_password,username,full_name')
+    .eq('id', userId).maybeSingle();
+  if (error) throw error;
+  if (!data) throw new Error('لم يتم العثور على ملف صلاحيات الحساب');
+  profile = data;
+  window.__factoryAuthProfile = data;
+  return profile;
+}
 async function bootstrap() {
   if (!supabase || !navigator.onLine || window.__factoryOfflineMode === true) {
     profile = window.__factoryAuthProfile || null;
@@ -373,8 +392,8 @@ async function bootstrap() {
     storageScope = ownerId || 'anonymous';
     clearLegacyDeviceData();
     resetLocalBusinessState();
-    const cachedRows=loadCachedRows();
-    if(cachedRows.length) hydrateFromRows(cachedRows);
+    const cachedRows = loadCachedRows();
+    if (cachedRows.length) hydrateFromRows(cachedRows);
     else snapshotBaseline(getState());
     for (const op of getQueue()) applyOperationToState(op);
     stateReady = true;
@@ -383,24 +402,18 @@ async function bootstrap() {
     window.dispatchEvent(new CustomEvent('factory-database-ready'));
     return;
   }
-  const {data:{user},error:userError}=await supabase.auth.getUser();
-  if (userError || !user) throw userError || new Error('لا يوجد مستخدم مسجل');
-  actorId=user.id;
-  const {data:profileData,error:profileError}=await supabase.from('profiles')
-    .select('id,created_by,is_admin,permissions').eq('id',actorId).maybeSingle();
-  if (profileError) throw profileError;
-  if (!profileData) throw new Error('لم يتم العثور على ملف صلاحيات الحساب');
-  profile=profileData;
-  ownerId=profile.created_by || profile.id;
+  const user = await currentSessionUser();
+  actorId = user.id;
+  await ensureProfile(actorId, false);
+  ownerId = profile.created_by || profile.id;
   storageScope = ownerId;
   clearLegacyDeviceData();
   resetLocalBusinessState();
   const rows = await fetchAllRecords();
-  // Supabase is the only source of business records. An empty database stays empty;
-  // legacy data from this device or another device is never imported.
+  // Supabase is the only source of business records. An empty database stays empty.
   hydrateFromRows(rows);
   setLastSyncAt(new Date().toISOString());
-  stateReady=true;
+  stateReady = true;
   window.__factoryDatabaseFirstReady = true;
   window.__factoryDatabaseFirstFailed = false;
   for (const op of getQueue()) applyOperationToState(op);
@@ -411,31 +424,26 @@ async function bootstrap() {
 window.__factoryPersistState = persistState;
 window.__factoryDatabaseSyncNow = async () => { await flushQueue(); await persistState(getState()); };
 async function reconnectDatabase() {
-  const {data:{user},error:userError}=await supabase.auth.getUser();
-  if (userError || !user) throw userError || new Error('لا يوجد مستخدم مسجل');
-  actorId=user.id;
-  const {data:profileData,error:profileError}=await supabase.from('profiles')
-    .select('id,created_by,is_admin,permissions').eq('id',actorId).maybeSingle();
-  if (profileError) throw profileError;
-  if (!profileData) throw new Error('لم يتم العثور على ملف صلاحيات الحساب');
-  profile=profileData;
-  ownerId=profile.created_by || profile.id;
-  storageScope=ownerId;
-  const since=getLastSyncAt();
+  const user = await currentSessionUser();
+  actorId = user.id;
+  await ensureProfile(actorId, true);
+  ownerId = profile.created_by || profile.id;
+  storageScope = ownerId;
+  const since = getLastSyncAt();
   if (since) {
-    const changed=await fetchChangedRecords(since);
+    const changed = await fetchChangedRecords(since);
     for (const row of changed) applyRealtimeRow(row);
   } else {
-    const initialRows=await fetchAllRecords();
+    const initialRows = await fetchAllRecords();
     hydrateFromRows(initialRows);
     setLastSyncAt(new Date().toISOString());
   }
   for (const op of getQueue()) applyOperationToState(op);
   await flushQueue();
   await connectRealtime();
-  window.__factoryOfflineMode=false;
-  window.__factoryDatabaseFirstReady=true;
-  window.__factoryDatabaseFirstFailed=false;
+  window.__factoryOfflineMode = false;
+  window.__factoryDatabaseFirstReady = true;
+  window.__factoryDatabaseFirstFailed = false;
   window.dispatchEvent(new CustomEvent('factory-database-ready'));
 }
 window.addEventListener('online', async () => {
@@ -449,5 +457,5 @@ window.addEventListener('factory-db-conflict', event => {
 bootstrap().catch(error => {
   window.__factoryDatabaseFirstFailed = true;
   console.error('Database-first startup failed:',error);
-  document.dispatchEvent(new CustomEvent('factory-db-startup-error',{detail:{message:error.message || String(error)}}));
+  window.dispatchEvent(new CustomEvent('factory-db-startup-error',{detail:{message:error.message || String(error)}}));
 });
