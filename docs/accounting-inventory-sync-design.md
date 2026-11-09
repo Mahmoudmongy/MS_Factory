@@ -95,37 +95,51 @@ The RPC must validate source categories, ownership, payload shape/size, and perm
 - Deleting a source now persists an offline tombstone in `mgr6-cloud-effect-tombstones` before local reversal.
 - The draft migration creates versioned source-effect storage, a compare-and-swap write RPC, per-source locking, tombstones, and per-factory SKU uniqueness. Direct table reads are revoked; `get_source_effects()` returns role-redacted ledger/movement sections.
 
-The branch now wires the baseline and source-effect helpers into normal client upload/download. The latest verified GitHub Actions run on the tested head passed **213/213 browser checks** and `npm run build`. Backup-code validation passed, while B2 preflight and backup remained skipped because `BACKUP_ENABLED=false`.
+The branch wires the baseline and source-effect helpers into normal client upload/download. The latest verified application CI run #579 passed **220/220 checks**, and `npm run build` passed. Backup workflow validation passed; B2 preflight and the actual backup job were skipped, so no new backup was created.
 
-**Implemented on this isolated branch (not applied to Supabase):**
-- New migration `20261108213000_factory_sync_baseline.sql` creates an immutable, one-time version-1 baseline and separate inventory/accounting read RPCs. Publication validates synchronized master references, balanced opening ledger, empty source-effect history, and uses a factory-level advisory lock shared with source writes.
-- Client upload syncs products/partners first, then publishes the baseline once. Client download applies the inventory section as absolute stock plus history-only opening movements, and applies accounting definitions/partners/opening ledger separately. Each section has its own version cursor and failure does not advance that cursor.
-- Source effects are now wired into upload/download with per-source optimistic versions, conflict preservation, and queued tombstones. SQL merges only the authorized section and preserves the hidden section atomically.
-- Reports-only access is explicitly excluded from inventory/accounting source-effect and baseline reads. Deleting a transaction requires both its module permission and inventory permission because a tombstone removes both effect sections.
-- A source effect with populated sections that the current role cannot write is not partially uploaded; it is retained as a permission conflict.
+## Current QA status — 2026-11-09
 
-These paths remain dormant against Supabase until both draft migrations are reviewed and applied. The migration has not been executed against production or QA. The existing production data preflight found only opening ledger/movement rows and no source-scoped transactions, so the initial baseline is eligible once the migrations are safely validated. No two-device QA test has been performed.
+The following supersedes the earlier rollout notes below, which described the period before the QA restore.
 
-## Rollout sequence
+### Restore and database state
+- Encrypted backup restore run #53 completed successfully against QA project `bpkkzyjfkktkaadhmbdi`.
+- QA now contains the restored 11 public tables, one admin profile, 13 original migration records, and row counts matching the read-only production counts.
+- All public tables have RLS enabled.
+- The four synchronization migrations were applied to QA only:
+  1. `20261108201500_source_accounting_effects.sql`
+  2. `20261108213000_factory_sync_baseline.sql`
+  3. `20261109080000_harden_factory_baseline_publication.sql`
+  4. `20261109081000_prevent_source_effect_resurrection.sql`
+- The Auth-trigger permission hardening migration from PR #20 was also applied to QA and merged into `main`.
+- The source-effect and baseline tables remain empty after tests; all test writes were enclosed in rollback transactions.
+- Production has not received any of these migrations or data changes.
 
-1. Source-scoped effect collection, stable identities, baseline publication/read, section-specific local apply, normal upload/download wiring, optimistic versions, and conflict preservation are implemented on this isolated branch.
-2. The two feature migrations remain unapplied. Review them against the restored QA schema before applying them to QA.
-3. Run the new manual-only `restore-supabase-backup-to-qa.yml` workflow after a complete encrypted B2 backup with its checksum sidecar exists. It restores roles/schema/data through the Supabase logical-restore sequence, leaves Supabase-managed Auth/Storage schemas intact, restores durable Auth rows and the custom `auth.users` trigger separately, and restores migration history only when the target lacks that schema.
-4. The restore workflow refuses a non-empty target and hard-checks the QA project reference against the production reference. It verifies archive/file checksums, row counts, RLS coverage, Auth counts, migration counts, and the exact custom Auth trigger.
-5. Read-only preflight confirmed QA currently has zero public tables, zero Auth users, zero Storage buckets, and no `supabase_migrations` schema. Production and QA Auth table column sets match; production has no custom Auth/Storage policies and one custom `auth.users` trigger. The restore script recreates only the missing migration-history schema rather than replacing managed Auth/Storage schemas.
-6. The previous Run #36 archive is incomplete (no checksum sidecar), so the restore workflow will refuse it. The backup workflow now allows a one-time manual backup request while scheduled backups remain disabled by `BACKUP_ENABLED=false`.
-7. The restore workflow has not been run. It requires `QA_SUPABASE_DB_URL` and a secure way to make the external age identity available to the runner. The private age identity has not been copied into GitHub or requested in chat; no secret was created or changed.
-8. After a verified QA restore, apply both feature migrations to that restored QA copy only, then run two-device tests for baseline publication, section permissions, hidden-section preservation, create/edit/delete, tombstones, retries, offline/reconnect, idempotency, and version conflicts.
-9. Review results, then separately approve production migrations. Keep scheduled backup activation and deployment separately gated.
+### SQL defects found and fixed during QA validation
+- The first baseline publisher had an ambiguous `published_at` reference in its `INSERT ... RETURNING` clause. The follow-up migration qualifies the inserted table alias.
+- The baseline publisher initially accepted an empty/partial baseline. The follow-up migration now locks the factory snapshot and verifies that all opening products, accounts, partners, ledger rows, and stock movements are represented before publishing.
+- The source-effect writer initially allowed a deleted effect to be recreated by submitting its latest version. The follow-up migration now rejects any update to a tombstoned source identity permanently.
+- Baseline SQL tests: incomplete payload rejected; complete baseline built from the restored factory snapshot accepted inside a rolled-back transaction.
+- Source-effect SQL tests: authenticated write/read passed; stale optimistic version rejected; tombstone persisted and was readable; resurrection attempt rejected. All test writes were rolled back.
 
-## Explicitly out of scope for this branch
+### Auth and storage checks
+- `public.handle_new_user()` no longer grants direct execution to `PUBLIC`, `anon`, `authenticated`, or `service_role`. The existing `auth.users` trigger remains installed, and `postgres` retains execution permission.
+- The Auth security-advisor warnings for direct execution of this function are resolved on QA.
+- Supabase still reports leaked-password protection as disabled. This is an Auth dashboard setting and remains a security follow-up.
+- The two synchronization tables intentionally have RLS enabled with no direct table policies or grants; all access is through the permission-checking RPCs.
+- Both production and QA currently have **zero Storage buckets and zero Storage objects**. The current app code does not call Supabase Storage APIs; product images are kept in the application state/detail payload. Therefore there are no Storage objects missing from this restore.
 
-- No SQL execution or migration on the production Supabase project or QA.
-- No writes to production data.
-- No secrets, auth settings, or existing RLS policies changed.
-- No enabling scheduled backups or changing deployment settings.
-- No deployment or DNS changes.
+### Remaining end-to-end gate
+Automated CI and QA SQL checks are green, but an actual two-device browser session has not yet been completed. It must verify:
+- first-device baseline publication and second-device bootstrap;
+- edits and deletions across invoices, production, vouchers, and journal entries;
+- offline edits and reconnect retries;
+- duplicate prevention and optimistic conflict preservation;
+- inventory-only, accounting-only, and reports-only permission boundaries.
 
-## Remaining gate — QA restore and verification
+The branch remains a Draft PR until this real two-device test passes. No production migration, production data write, deployment, DNS change, credential/secret change, or backup-schedule change has been made.
 
-The combined `applyFactoryBaseline` helper remains an administrator-only utility. Employee clients use only the section-specific apply helpers. The FNV fingerprint is a deterministic corruption check, not an authentication mechanism; authorization and database-side validation are the security boundary.
+## Explicit safety boundaries
+- QA is the only database receiving the new synchronization migrations.
+- Production continues running the existing schema and application behavior.
+- Do not merge the synchronization PR or deploy it to production until the end-to-end QA gate passes.
+- Do not enable scheduled backups or change deployment settings as part of this work.
