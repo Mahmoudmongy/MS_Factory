@@ -440,12 +440,13 @@ function fbar(k,cfg){
   const typ=ty==="date"?"date":"search",handler=ty==="date"?'onchange="FL[\''+k+'\].'+id+'=this.value;render()"':'oninput="fbarType(\''+k+'\',\''+id+'\',this)" onblur="fbarCommit(\''+k+'\',\''+id+'\',this)" onkeydown="if(event.key===\'Enter\')fbarCommit(\''+k+'\',\''+id+'\',this)"';
   return '<div class="'+(ty==="date"?"filter-date-field":"filter-value-field")+'">'+(hideLabel?'':'<label>'+lb+'</label>')+'<input data-filter-key="'+k+'" data-filter-id="'+id+'" type="'+typ+'" inputmode="'+(ty==="text"?"search":"none")+'" autocomplete="off" autocapitalize="off" spellcheck="false" value="'+String(v).replace(/&/g,"&amp;").replace(/"/g,"&quot;")+'" placeholder="'+(ty==="text"?lb:"")+'" '+handler+'></div>';
  };
- const fields=cfg.map(renderField).join("");
+ const fields=cfg.filter(c=>c[1]!=="date").map(renderField).join("");
+ const dateFields=cfg.filter(c=>c[1]==="date").map(renderField).join("");
  const periods=hasD?[["d","اليوم"],["w","هذا الأسبوع"],["m","هذا الشهر"]].map(x=>'<button type="button" class="g filter-quick-period" onclick="fpr(\''+k+'\',\''+x[0]+'\')">'+x[1]+'</button>').join(""):"";
  const actions=(hasD?'<button type="button" class="g filter-date-toggle" aria-expanded="'+dateOpen+'" onclick="toggleFilterDates(this)">'+(dateOpen?"إخفاء الفترة":"تحديد الفترة")+'</button>':"")+periods+'<button type="button" class="g filter-clear" onclick="FL[\''+k+'\']={};render()">مسح الفلاتر</button>';
- return '<div class="card filter-card '+(dateOpen?"date-range-open":"")+'" data-filter-group="'+k+'"><div class="row filter-controls">'+fields+'<div class="filter-actions">'+actions+'</div></div></div>';
+ return '<div class="card filter-card '+(dateOpen?"date-range-open":"")+'" data-filter-group="'+k+'"><div class="row filter-controls">'+fields+'<div class="filter-actions">'+actions+'</div></div><div class="filter-date-panel" '+(dateOpen?'':'hidden')+' aria-hidden="'+(!dateOpen)+'">'+dateFields+'</div></div>';
 }
-function toggleFilterDates(btn){const card=btn?.closest(".filter-card");if(!card)return;const open=card.classList.toggle("date-range-open"),key=card.dataset.filterGroup;if(key){FL[key]=FL[key]||{};FL[key]._dateOpen=open;}btn.setAttribute("aria-expanded",String(open));btn.textContent=open?"إخفاء الفترة":"تحديد الفترة";}
+function toggleFilterDates(btn){const card=btn?.closest(".filter-card");if(!card)return;const open=card.classList.toggle("date-range-open"),key=card.dataset.filterGroup,panel=card.querySelector(".filter-date-panel");if(key){FL[key]=FL[key]||{};FL[key]._dateOpen=open;}if(panel){panel.hidden=!open;panel.setAttribute("aria-hidden",String(!open));}btn.setAttribute("aria-expanded",String(open));btn.textContent=open?"إخفاء الفترة":"تحديد الفترة";}
 function fbarType(k,id,el){FL[k]=FL[k]||{};FL[k][id]=el.value;}
 function fbarCommit(k,id,el){
  FL[k]=FL[k]||{};FL[k][id]=el.value;const key=k+":"+id;
