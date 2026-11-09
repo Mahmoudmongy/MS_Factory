@@ -603,15 +603,24 @@ function genericImportFields(key){
  if(key==="curs"||key==="hide")return [["value",IMPORT_FIELD_LABELS[key].value,1,["value",IMPORT_FIELD_LABELS[key].value.toLowerCase(),key],0,"string"]];
  const sample=(S[key]||[]).find(x=>x&&typeof x==="object"&&!Array.isArray(x));
  const fallback=IMPORT_FALLBACK[key]||[];
- const keys=sample?Object.keys(sample).filter(k=>!k.startsWith("_cloud")):fallback.map(x=>x[0]);
+ const keys=sample?Object.keys(sample).filter(k=>!k.startsWith("_cloud")&&!(key==="emp"&&["authUserId","username"].includes(k))):fallback.map(x=>x[0]);
  return keys.map(k=>{
   const spec=fallback.find(x=>x[0]===k),value=sample?.[k];
-  const type=spec?.[2]||(Array.isArray(value)?"json-array":value&&typeof value==="object"?"json-object":typeof value==="number"?"number":typeof value==="boolean"?"boolean":/^(id|pid|iid|wh|a|rid|qty|q|total|gross|disc|st|wc|matCost|buy|retail|wholesale|val|dr|cr|fc|ts|c)$/i.test(k)?"number":"string");
+  const inferred=spec?.[2]||(Array.isArray(value)?"json-array":value&&typeof value==="object"?"json-object":typeof value==="number"?"number":typeof value==="boolean"?"boolean":/^(id|rid|qty|q|total|gross|disc|st|wc|matCost|buy|retail|wholesale|val|dr|cr|fc|ts|c)$/i.test(k)?"number":"string");const type=["pid","iid","wh","a","po"].includes(k)?"reference":inferred;
   const label=IMPORT_FIELD_LABELS[key]?.[k]||spec?.[1]||k;
   const aliases=[k.toLowerCase(),label.toLowerCase(),...(IMPORT_FIELD_ALIASES[key]?.[k]||[])];
   const required=spec?.[3]??(["name","no","code"].includes(k)?1:0);
   return [k,label,required,aliases,type==="number"?1:0,type];
  });
+}
+function genericImportIdentity(key,value){
+ if(key==="curs"||key==="hide")return String(value??"").trim().toLowerCase();
+ const o=value&&typeof value==="object"?value:{};
+ if(key==="L")return JSON.stringify([o.d,o.ref,o.a,o.dr,o.cr,o.pid]);
+ if(key==="mv")return JSON.stringify([o.d,o.ref,o.iid,o.v,o.q,o.val,o.rid]);
+ const fields=key==="accts"?["code","id","name"]:key==="wh"||key==="emp"?["id","name"]:key==="wo"?["ref","id"]:["no","code","sku","id","external_id"];
+ const field=fields.find(k=>o[k]!==undefined&&o[k]!==""&&o[k]!==null);
+ return field?field+":"+String(o[field]).toLowerCase():"name:"+String(o.name||"").toLowerCase();
 }
 function importFieldsFor(type){
  if(IMPF[type])return IMPF[type];
@@ -709,12 +718,8 @@ function impCheck(){
   });
   let dup="";
   if(generic){
-   const existing=S[listKey]||[],identity=primitive?"value":["no","code","sku","id","external_id","rid"].find(k=>o[k]!==undefined&&o[k]!==""&&o[k]!==null)||"name",identityValue=primitive?o.value:o[identity];
-   const same=x=>primitive?String(x)===String(identityValue):String(x?.[identity]??"").toLowerCase()===String(identityValue??"").toLowerCase();
-   if(identityValue!==undefined&&identityValue!==""&&existing.some(same))dup="موجود بالفعل";
-   const marker="g:"+identity+":"+String(identityValue??"").toLowerCase();
-   if(!dup&&identityValue!==undefined&&identityValue!==""&&seen.has(marker))dup="مكرر داخل الملف";
-   if(identityValue!==undefined&&identityValue!=="")seen.add(marker);
+   const existing=S[listKey]||[],identity=genericImportIdentity(listKey,primitive?o.value:o);
+   if(identity&&!identity.endsWith(":")){if(existing.some(value=>genericImportIdentity(listKey,value)===identity))dup="موجود بالفعل";if(!dup&&seen.has(identity))dup="مكرر داخل الملف";seen.add(identity);}
   }else{
    const kn=String(o.name||"").toLowerCase(),ks=WZ.t=="items"?(o.sku?nd(String(o.sku)).toLowerCase():""):(o.phone?String(o.phone):"");
    if(WZ.t=="items"){if(S.items.some(i=>(ks&&nd(i.sku).toLowerCase()==ks)||i.name.toLowerCase()==kn))dup="موجود بالفعل"}
@@ -738,7 +743,7 @@ function impCheck(){
    if(o.pid!==undefined&&o.pid!==""){const p=S.partners.find(p=>p.id==o.pid||p.name.toLowerCase()===String(o.pid).toLowerCase()||p.phone===String(o.pid));if(p)o.pid=p.id;else if(/^\d+$/.test(String(o.pid)))o.pid=+o.pid;}
    if(o.iid!==undefined&&o.iid!==""){const i=S.items.find(i=>i.id==o.iid||i.name.toLowerCase()===String(o.iid).toLowerCase()||i.sku===String(o.iid));if(i)o.iid=i.id;else if(/^\d+$/.test(String(o.iid)))o.iid=+o.iid;}
    if(o.wh!==undefined&&o.wh!==""){const w=S.wh.find(w=>w.id==o.wh||w.name.toLowerCase()===String(o.wh).toLowerCase());if(w)o.wh=w.id;else if(/^\d+$/.test(String(o.wh)))o.wh=+o.wh;}
-   if(o.a!==undefined&&o.a!==""){const a=S.accts.find(a=>a.id==o.a||a.name.toLowerCase()===String(o.a).toLowerCase()||a.code===String(o.a));if(a)o.a=a.id;else if(/^\d+$/.test(String(o.a)))o.a=+o.a;}
+   if(o.a!==undefined&&o.a!==""){const a=S.accts.find(a=>a.id==o.a||a.name.toLowerCase()===String(o.a).toLowerCase()||a.code===String(o.a));if(a)o.a=a.id;else if(/^\d+$/.test(String(o.a)))o.a=+o.a;}if(o.po!==undefined&&o.po!==""){const p=S.po.find(p=>p.id==o.po||p.no==o.po);if(p)o.po=p.id;else if(/^\d+$/.test(String(o.po)))o.po=+o.po;}
    if(key==="emp")o.perm=Array.isArray(o.perm)?o.perm:[];
    if(key==="docs")o.lines=Array.isArray(o.lines)?o.lines:[];
    if(key==="po"){o.subs=Array.isArray(o.subs)?o.subs:[];o.mats=Array.isArray(o.mats)?o.mats:[];o.x=Array.isArray(o.x)?o.x:[];o.rec=Array.isArray(o.rec)?o.rec:[];o.st=Number(o.st||0);}
