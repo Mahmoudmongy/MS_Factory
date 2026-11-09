@@ -53,8 +53,31 @@ const mapKey = (type, id) => type + '\u0000' + id;
 const isNetworkFailure = error => {
   if (!navigator.onLine) return true;
   const message = String(error?.message || error || '').toLowerCase();
-  return error instanceof TypeError || /failed to fetch|network|fetch failed|load failed|timeout|timed out|502|503|504/.test(message) || [0, 502, 503, 504].includes(Number(error?.status));
+  return error instanceof TypeError ||
+    /failed to fetch|network|fetch failed|load failed|timeout|timed out|aborterror|pgrst001|57p01|database client error|connection terminated|502|503|504/.test(message) ||
+    [0, 502, 503, 504].includes(Number(error?.status));
 };
+const wait = ms => new Promise(resolve => setTimeout(resolve, ms));
+async function readWithRetry(makeQuery, label = 'database read') {
+  let lastError;
+  for (let attempt = 0; attempt < 3; attempt++) {
+    try {
+      let query = makeQuery();
+      if (typeof AbortSignal !== 'undefined' && AbortSignal.timeout && typeof query.abortSignal === 'function') {
+        query = query.abortSignal(6500);
+      }
+      const result = await query;
+      if (result?.error) throw result.error;
+      return result;
+    } catch (error) {
+      lastError = error;
+      if (!isNetworkFailure(error) || attempt === 2) throw error;
+      console.warn(label + ' temporarily unavailable; retrying', attempt + 1, error?.message || error);
+      await wait(400 * (2 ** attempt));
+    }
+  }
+  throw lastError || new Error('تعذر الاتصال بقاعدة البيانات');
+}
 function getState() {
   if (typeof window.__factoryGetState !== 'function') throw new Error('تطبيق المصنع لم يجهز حالة البيانات');
   return window.__factoryGetState();
@@ -139,11 +162,10 @@ function setBaselineRow(row) {
 async function fetchAllRecords() {
   const all = [];
   for (let from = 0; ; from += PAGE_SIZE) {
-    const { data, error } = await supabase.from('factory_records')
+    const { data } = await readWithRetry(() => supabase.from('factory_records')
       .select('user_id,record_type,record_id,payload,version,deleted_at,updated_at,updated_by')
       .eq('user_id', ownerId).order('record_type').order('record_id')
-      .range(from, from + PAGE_SIZE - 1);
-    if (error) throw error;
+      .range(from, from + PAGE_SIZE - 1), 'factory_records initial read');
     all.push(...(data || []));
     if (!data || data.length < PAGE_SIZE) break;
   }
@@ -153,12 +175,11 @@ async function fetchChangedRecords(since) {
   if (!since) return [];
   const all = [];
   for (let from = 0; ; from += PAGE_SIZE) {
-    const { data, error } = await supabase.from('factory_records')
+    const { data } = await readWithRetry(() => supabase.from('factory_records')
       .select('user_id,record_type,record_id,payload,version,deleted_at,updated_at,updated_by')
       .eq('user_id', ownerId).gt('updated_at', since)
       .order('updated_at').order('record_type').order('record_id')
-      .range(from, from + PAGE_SIZE - 1);
-    if (error) throw error;
+      .range(from, from + PAGE_SIZE - 1), 'factory_records delta read');
     all.push(...(data || []));
     if (!data || data.length < PAGE_SIZE) break;
   }
@@ -375,10 +396,9 @@ async function ensureProfile(userId, refresh = false) {
     profile = window.__factoryAuthProfile;
     return profile;
   }
-  const { data, error } = await supabase.from('profiles')
+  const { data } = await readWithRetry(() => supabase.from('profiles')
     .select('id,created_by,is_admin,permissions,must_change_password,username,full_name')
-    .eq('id', userId).maybeSingle();
-  if (error) throw error;
+    .eq('id', userId).maybeSingle(), 'profile lookup');
   if (!data) throw new Error('لم يتم العثور على ملف صلاحيات الحساب');
   profile = data;
   window.__factoryAuthProfile = data;
@@ -446,21 +466,57 @@ async function reconnectDatabase() {
   window.__factoryDatabaseFirstFailed = false;
   window.dispatchEvent(new CustomEvent('factory-database-ready'));
 }
-window.addEventListener('online', async () => {
-  if (!stateReady) return;
+let reconnectPromise = null;
+let reconnectTimer = null;
+let reconnectAttempts = 0;
+async function reconnectSafely() {
+  if (!stateReady || reconnectPromise || !navigator.onLine) return reconnectPromise;
   window.__factoryDatabaseFirstFailed = true;
   window.dispatchEvent(new Event('factory-db-connection-state'));
-  try { await saveChain.catch(()=>{}); await reconnectDatabase(); }
-  catch (error) {
-    window.__factoryDatabaseFirstFailed = true;
-    console.error('Database reconnect:',error);
-    window.dispatchEvent(new Event('factory-db-connection-state'));
-  }
-});
+  reconnectPromise = (async () => {
+    try {
+      await saveChain.catch(()=>{});
+      await reconnectDatabase();
+      reconnectAttempts = 0;
+      if (reconnectTimer) clearTimeout(reconnectTimer);
+      reconnectTimer = null;
+    } catch (error) {
+      window.__factoryDatabaseFirstFailed = true;
+      console.error('Database reconnect:', error);
+      window.dispatchEvent(new Event('factory-db-connection-state'));
+      if (isNetworkFailure(error) && reconnectAttempts < 5 && navigator.onLine) {
+        const delay = Math.min(30000, 1000 * (2 ** reconnectAttempts++));
+        if (reconnectTimer) clearTimeout(reconnectTimer);
+        reconnectTimer = setTimeout(() => { reconnectTimer = null; reconnectSafely(); }, delay);
+      }
+    } finally {
+      reconnectPromise = null;
+    }
+  })();
+  return reconnectPromise;
+}
+window.__factoryDatabaseRetryNow = reconnectSafely;
+window.addEventListener('online', reconnectSafely);
 window.addEventListener('factory-db-conflict', event => {
   console.warn('Factory database conflict:',event.detail?.message || event.detail);
 });
-bootstrap().catch(error => {
+async function startBootstrapWithRetry() {
+  let lastError;
+  for (let attempt = 0; attempt < 3; attempt++) {
+    try {
+      await bootstrap();
+      return;
+    } catch (error) {
+      lastError = error;
+      if (!isNetworkFailure(error) || attempt === 2) throw error;
+      window.__factoryDatabaseFirstFailed = true;
+      window.dispatchEvent(new Event('factory-db-connection-state'));
+      await wait(500 * (2 ** attempt));
+    }
+  }
+  throw lastError || new Error('تعذر تجهيز اتصال قاعدة البيانات');
+}
+startBootstrapWithRetry().catch(error => {
   window.__factoryDatabaseFirstFailed = true;
   console.error('Database-first startup failed:',error);
   window.dispatchEvent(new CustomEvent('factory-db-startup-error',{detail:{message:error.message || String(error)}}));

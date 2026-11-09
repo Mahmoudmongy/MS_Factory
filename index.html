@@ -1,6 +1,7 @@
 <!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
+<script>window.__factoryDatabaseFirst=true;</script>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#0f766e">
@@ -70,13 +71,29 @@ import { scopeFactoryStorage } from './js/account-storage.js';
     if (typeof window.setFactoryAuthProfile === 'function') window.setFactoryAuthProfile(profile);
     return true;
   };
+  const wait = ms => new Promise(resolve => setTimeout(resolve, ms));
+  const transient = error => {
+    const message = String(error?.message || error || '').toLowerCase();
+    return [0, 502, 503, 504].includes(Number(error?.status)) ||
+      /pgrst001|57p01|502|503|504|failed to fetch|network|timeout|aborterror|database client error|connection terminated/.test(message);
+  };
   const fetchProfile = async id => {
-    let query = supabase.from('profiles').select('id,created_by,is_admin,permissions,must_change_password,username,full_name').eq('id', id).maybeSingle();
-    if (typeof AbortSignal !== 'undefined' && AbortSignal.timeout) query = query.abortSignal(AbortSignal.timeout(9000));
-    const result = await query;
-    if (result.error) throw result.error;
-    if (!result.data) throw new Error('لم يتم العثور على ملف الحساب المرتبط بالمستخدم');
-    return result.data;
+    let lastError;
+    for (let attempt = 0; attempt < 3; attempt++) {
+      try {
+        let query = supabase.from('profiles').select('id,created_by,is_admin,permissions,must_change_password,username,full_name').eq('id', id).maybeSingle();
+        if (typeof AbortSignal !== 'undefined' && AbortSignal.timeout) query = query.abortSignal(AbortSignal.timeout(6500));
+        const result = await query;
+        if (result.error) throw result.error;
+        if (!result.data) throw new Error('لم يتم العثور على ملف الحساب المرتبط بالمستخدم');
+        return result.data;
+      } catch (error) {
+        lastError = error;
+        if (!transient(error) || attempt === 2) throw error;
+        await wait(350 * (2 ** attempt));
+      }
+    }
+    throw lastError || new Error('تعذر قراءة ملف الحساب');
   };
   try {
     if (!supabase) throw new Error('إعداد الاتصال بقاعدة بيانات الإنتاج غير متاح');
@@ -131,7 +148,7 @@ import { scopeFactoryStorage } from './js/account-storage.js';
   <aside id="sb"></aside>
   <div id="cn">
     <div id="top">
-      <button id="bg" onclick="$g('#sb').classList.toggle('open'); document.getElementById('sb-overlay').style.display=$g('#sb').classList.contains('open')?'block':'none'">☰</button>
+      <button id="bg" onclick="document.getElementById('sb').classList.contains('open')?closeSB():openSB()" aria-label="القائمة" title="القائمة">☰</button>
       <button class="top-nav" onclick="bkw(-1)" title="رجوع" aria-label="رجوع">▶</button>
       <button class="top-nav" onclick="bkw(1)" title="تقدم" aria-label="تقدم">◀</button>
       <h1 id="ttl"></h1>
@@ -147,7 +164,6 @@ import { scopeFactoryStorage } from './js/account-storage.js';
 <div id="toast"></div>
 <div id="pr" style="display:none"></div>
 <script src="./js/app.js"></script>
-<script type="module" src="./js/cloud-sync.js"></script>
 <script type="module" src="./js/database-first.js"></script>
 <script>
 
@@ -172,11 +188,25 @@ import { scopeFactoryStorage } from './js/account-storage.js';
     }catch(e){}
   };
 })();
-window.addEventListener('factory-database-ready',()=>{document.getElementById('factory-boot-screen')?.classList.add('done');setTimeout(()=>document.getElementById('factory-boot-screen')?.remove(),180)});
+window.addEventListener('factory-database-ready',()=>{document.getElementById('factory-boot-error')?.remove();document.getElementById('factory-boot-screen')?.classList.add('done');setTimeout(()=>document.getElementById('factory-boot-screen')?.remove(),180)});
 window.addEventListener('factory-db-startup-error',e=>{document.getElementById('factory-boot-screen')?.remove();window.__showFactoryBootError?.('تعذر الاتصال بقاعدة بيانات الإنتاج',e.detail?.message||'تحقق من الاتصال ثم أعد المحاولة')});
-setTimeout(()=>{const s=document.getElementById('factory-boot-screen');if(s&&!window.__factoryDatabaseFirstReady){s.remove();window.__showFactoryBootError?.('تأخر تحميل بيانات المصنع','انتهت مهلة تجهيز قاعدة البيانات بعد 12 ثانية. أعد المحاولة أو تحقق من اتصال الإنترنت.')}},12000);
+setTimeout(()=>{const s=document.getElementById('factory-boot-screen');if(s&&!window.__factoryDatabaseFirstReady){s.remove();window.__showFactoryBootError?.('تأخر تحميل بيانات المصنع','لم يكتمل الاتصال بقاعدة بيانات الإنتاج بعد المحاولات التلقائية. أعد المحاولة بعد لحظات.')}},22000);
 if('serviceWorker' in navigator){
-  window.addEventListener('load', ()=>{ navigator.serviceWorker.register('./sw.js').catch(()=>{}); });
+  let reloadedForController = false;
+  const hadPreviousController = !!navigator.serviceWorker.controller;
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    if (!hadPreviousController || reloadedForController) return;
+    reloadedForController = true;
+    location.reload();
+  });
+  window.addEventListener('load', async () => {
+    try {
+      const registration = await navigator.serviceWorker.register('./sw.js', { updateViaCache: 'none' });
+      await registration.update().catch(() => {});
+    } catch (error) {
+      console.warn('Service worker update deferred:', error);
+    }
+  });
 }
 </script>
 </body>

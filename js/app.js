@@ -17,7 +17,7 @@ let S=seed(); // Legacy local snapshots are intentionally ignored; Supabase hydr
 window.__factoryDatabaseFirst=true;
 window.__factoryGetState=()=>S;
 window.__factoryReplaceArrays=(data)=>{if(!data||typeof data!=="object")return;for(const [k,v] of Object.entries(data)){if(Array.isArray(v))S[k]=v;else if(k==="__meta"&&v&&typeof v==="object")Object.assign(S,v);}try{render()}catch(e){}};
-const sv=()=>{try{S.pend=(S.pend||0)+1;if(window.__factoryDatabaseFirstFailed&&navigator.onLine){alert("تعذر الاتصال بقاعدة البيانات. لم يتم تأكيد حفظ العملية؛ حاول مرة أخرى بعد عودة الاتصال.");return;}if(window.__factoryDatabaseFirstReady&&typeof window.__factoryPersistState==="function"){window.__factoryPersistState(S).catch(e=>{console.error("Database save failed:",e);alert(e.message||"تعذر حفظ التغييرات في قاعدة البيانات");});}else if(!navigator.onLine){localStorage.setItem("mgr6",JSON.stringify(S));localStorage.setItem("mgr6-sync-pending",JSON.stringify({at:Date.now(),pend:S.pend}));}else{alert("البرنامج لسه بيجهز الاتصال بقاعدة البيانات. انتظر لحظات ثم أعد المحاولة.");return;}}catch(e){console.error("State save failed:",e)}};
+const sv=()=>{try{S.pend=(S.pend||0)+1;if(window.__factoryDatabaseFirstReady&&typeof window.__factoryPersistState==="function"){window.__factoryPersistState(S).catch(e=>{console.error("Database save failed:",e);alert(e.message||"تعذر حفظ التغييرات في قاعدة البيانات");});}else if(!navigator.onLine){localStorage.setItem("mgr6",JSON.stringify(S));localStorage.setItem("mgr6-sync-pending",JSON.stringify({at:Date.now(),pend:S.pend}));}else{alert("البرنامج لسه بيجهز الاتصال بقاعدة البيانات. انتظر لحظات ثم أعد المحاولة.");return;}}catch(e){console.error("State save failed:",e)}};
 const TN={sale:"فاتورة بيع",pur:"فاتورة شراء",sret:"إشعار دائن (مرتجع بيع)",pret:"إشعار مدين (مرتجع شراء)"},PF={sale:"SA",pur:"PU",sret:"SR",pret:"RP"},CT={mfg:"تصنيع",sup:"مشتريات"},TT={A:"الأصول",L:"الالتزامات",Q:"حقوق الملكية",I:"الإيرادات",X:"المصروفات"};
 /* ===== ledger + stock core ===== */
 const ak=k=>S.accts.find(a=>a.k==k).id,ac_=id=>S.accts.find(a=>a.id==id)||{},an=id=>ac_(id).name||"",nat=a=>"AX".includes(a.t)?1:-1;
@@ -215,15 +215,16 @@ function eForm(id){
  if(id&&!can("edit"))return;const e=id?S.emp.find(x=>x.id==id):null;if(id&&!e)return;idImg=e?e.img||"":"";
  const escE=v=>String(v||"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/"/g,"&quot;");
  let h="<h3>"+(e?"تعديل بيانات موظف":"تعيين موظف")+"</h3><input id=\"e1\" placeholder=\"اسم الموظف\" value=\""+escE(e?.name)+"\"><input id=\"e2\" type=\"tel\" dir=\"ltr\" placeholder=\"رقم التليفون 1 (اختياري)\" value=\""+escE(e?.p1)+"\"><input id=\"e3\" type=\"tel\" dir=\"ltr\" placeholder=\"رقم التليفون 2 (اختياري)\" value=\""+escE(e?.p2)+"\">"+addrF(e||{})+"<label>صورة البطاقة (اختياري)</label><input type=\"file\" accept=\"image/*\" onchange=\"pick(this,v=>idImg=v)\">";
- if(!e)h+="<div class=\"card\"><label><input type=\"checkbox\" id=\"e-account\" onchange=\"toggleEmployeeAccount()\"> إنشاء حساب دخول للموظف</label><div id=\"e-account-fields\" hidden><label>اسم المستخدم (بدون بريد إلكتروني)</label><input id=\"e-username\" dir=\"ltr\" placeholder=\"اسم المستخدم\"><label>كلمة المرور الافتراضية</label><input id=\"e-default-password\" type=\"text\" dir=\"ltr\" value=\"1234567890\"><small class=\"mu\">سيُطلب من الموظف تغييرها عند أول دخول.</small></div></div>";
+ if(!e)h+="<div class=\"card\"><label><input type=\"checkbox\" id=\"e-account\" onchange=\"toggleEmployeeAccount()\"> إنشاء حساب دخول للموظف</label><div id=\"e-account-fields\" hidden><label>اسم المستخدم (اختياري)</label><input id=\"e-username\" dir=\"ltr\" placeholder=\"اتركه فارغًا لإنشاء اسم تلقائي\"><small class=\"mu\">لن تحتاج إلى بريد إلكتروني. سيظهر اسم الدخول بعد الحفظ.</small><label>كلمة المرور الافتراضية</label><input id=\"e-default-password\" type=\"text\" dir=\"ltr\" value=\"1234567890\"><small class=\"mu\">سيُطلب من الموظف تغييرها عند أول دخول.</small></div></div>";
  h+="<div><b>الصلاحيات</b></div>"+U(T,t=>"<label style=\"display:block\"><input type=\"checkbox\" class=\"pm\" value=\""+t[0]+"\" "+(e&&e.perm.includes(t[0])?"checked":"")+"> "+t[2]+"</label>")+"<label><input type=\"checkbox\" class=\"pm\" value=\"edit\" "+(e&&e.perm.includes("edit")?"checked":"")+"> تعديل المستندات</label><label><input type=\"checkbox\" class=\"pm\" value=\"del\" "+(e&&e.perm.includes("del")?"checked":"")+"> حذف الحركات</label><p id=\"er\" class=\"mu\"></p><div class=\"row\"><button onclick=\"saveE("+(id||0)+")\">حفظ</button>"+bk+"</div>";sh(h);if(e)gvChg(e.city||"");
 }
 function toggleEmployeeAccount(){const f=$g("#e-account-fields");if(f)f.hidden=!$g("#e-account")?.checked;}
+function makeEmployeeUsername(){const bytes=new Uint32Array(1);if(window.crypto?.getRandomValues)window.crypto.getRandomValues(bytes);else bytes[0]=Math.floor(Math.random()*0xffffffff);return "emp"+bytes[0].toString(36).padStart(7,"0").slice(0,9)}
 async function saveE(id){if(id&&!can("edit"))return;const n=$("#e1").value.trim(),a=$("#e2").value.trim(),b=$("#e3").value.trim(),old=id?S.emp.find(x=>x.id==id):null;if(!n){$("#er").textContent="اكتب اسم الموظف على الأقل";return;}if(!guard())return;
- const data={name:n,p1:a,p2:b,img:idImg,...rdA(),perm:[...document.querySelectorAll(".pm:checked")].map(x=>x.value)};let authUserId=old?.authUserId||null,createdUsername="";
- if(!id&&$("#e-account")?.checked){const username=$("#e-username").value.trim().toLowerCase(),password=$("#e-default-password").value;if(!/^[a-z0-9._-]{3,40}$/.test(username)){$("#er").textContent="اسم المستخدم من 3 إلى 40 حرفًا إنجليزيًا أو رقمًا أو . _ -";return;}if(password.length<10){$("#er").textContent="كلمة المرور لا تقل عن 10 أحرف";return;}const selected=data.perm;const permissions={invoices:selected.some(x=>["sale","sret","pur","pret","rc","py"].includes(x)),inventory:selected.includes("stock"),customers:selected.includes("cust"),suppliers:selected.includes("supp"),production:selected.includes("prod"),reports:selected.includes("rep")||selected.includes("tl")||selected.includes("ai"),settings:selected.some(x=>["set","coa","je","bank","emp"].includes(x))};
- try{const {supabase}=await import("./supabase.js");const {data:created,error}=await supabase.functions.invoke("create-employee-account",{body:{username,full_name:n,password,permissions}});if(error||created?.success!==true)throw new Error(created?.error||error?.message||"تعذر إنشاء الحساب");authUserId=created.user_id;createdUsername=username;}catch(error){$("#er").textContent=error.message||"فشل إنشاء الحساب";return;}}
- if(old)Object.assign(old,data,{authUserId});else S.emp.push({id:uid(),...data,...(authUserId?{authUserId,username:createdUsername}:{})});sv();nav();toast(old?"تم تعديل بيانات الموظف":createdUsername?"تم حفظ الموظف وإنشاء حساب الدخول: "+createdUsername:"تم حفظ الموظف");cl();
+ const data={name:n,p1:a,p2:b,img:idImg,...rdA(),perm:[...document.querySelectorAll(".pm:checked")].map(x=>x.value)};let authUserId=old?.authUserId||null,createdUsername="",createdPassword="";
+ if(!id&&$("#e-account")?.checked){const username=($("#e-username")?.value||"").trim().toLowerCase()||makeEmployeeUsername(),password=($("#e-default-password")?.value||"").trim()||"1234567890";if(!/^[a-z0-9._-]{3,40}$/.test(username)){$("#er").textContent="اسم المستخدم من 3 إلى 40 حرفًا إنجليزيًا أو رقمًا أو . _ -";return;}if(password.length<10){$("#er").textContent="كلمة المرور لا تقل عن 10 أحرف";return;}const selected=data.perm;const permissions={invoices:selected.some(x=>["sale","sret","pur","pret","rc","py"].includes(x)),inventory:selected.includes("stock"),customers:selected.includes("cust"),suppliers:selected.includes("supp"),production:selected.includes("prod"),reports:selected.includes("rep")||selected.includes("tl")||selected.includes("ai"),settings:selected.some(x=>["set","coa","je","bank","emp"].includes(x))};
+ try{const {supabase}=await import("./supabase.js");const {data:created,error}=await supabase.functions.invoke("create-employee-account",{body:{username,full_name:n,password,permissions}});if(error||created?.success!==true)throw new Error(created?.error||error?.message||"تعذر إنشاء الحساب");authUserId=created.user_id;createdUsername=created.username||username;createdPassword=password;}catch(error){$("#er").textContent=error.message||"فشل إنشاء الحساب";return;}}
+ if(old)Object.assign(old,data,{authUserId});else S.emp.push({id:uid(),...data,...(authUserId?{authUserId,username:createdUsername}:{})});sv();nav();toast(old?"تم تعديل بيانات الموظف":createdUsername?"تم حفظ الموظف وإنشاء حساب الدخول: "+createdUsername:"تم حفظ الموظف");cl();if(createdUsername)setTimeout(()=>alert("بيانات دخول الموظف الجديد:\nاسم المستخدم: "+createdUsername+"\nكلمة المرور المؤقتة: "+createdPassword+"\nسيُطلب منه تغيير كلمة المرور عند أول دخول."),80);
 }
 /* ===== settings ===== */
 /* ===== smart assistant ===== */
@@ -269,6 +270,33 @@ const SCR={home:()=>vHome(),bank:()=>vBank(),rc:()=>vVch("in"),py:()=>vVch("out"
 function savePref(){try{localStorage.setItem("mgr6pref",JSON.stringify(PRF))}catch(e){}}
 function applyPref(){const r=document.documentElement;if(PRF.theme)r.setAttribute("data-theme",PRF.theme);else r.removeAttribute("data-theme");LANGEN=PRF.lang=="en";r.lang=LANGEN?"en":"ar";r.dir=LANGEN?"ltr":"rtl";const dark=PRF.theme?PRF.theme==="dark":matchMedia("(prefers-color-scheme:dark)").matches,thb=$g("#thb");if(thb){thb.textContent=dark?"☀️":"🌙";thb.title=dark?"التبديل إلى الوضع الفاتح":"التبديل إلى الوضع الداكن";thb.setAttribute("aria-label",thb.title)}trTree(document.body)}
 function togTheme(){const dark=PRF.theme?PRF.theme=="dark":matchMedia("(prefers-color-scheme:dark)").matches;PRF.theme=dark?"light":"dark";savePref();applyPref();toast(PRF.theme=="dark"?"الوضع الليلي":"الوضع النهاري")}
+Object.assign(EN,{
+ "تحميل قالب لكل القوائم":"Download template for all lists",
+ "تقدر تستورد أي قائمة من الشاشات، كل شيت على حدة، أو تستعيد نسخة المصنع الكاملة بكل القوائم والمراجع دفعة واحدة.":"Import any screen list one sheet at a time, or restore the full factory backup with all lists and references at once.",
+ "نوع البيانات / الشاشة":"Data type / screen",
+ "باقي القوائم والشاشات":"Other lists and screens",
+ "المخازن الفرعية":"Sub-warehouses",
+ "الفواتير والمرتجعات":"Invoices and returns",
+ "سندات القبض والصرف":"Receipt and payment vouchers",
+ "أكواد الباركود":"Barcode codes",
+ "حركات المخزون":"Stock movements",
+ "دفتر الأستاذ":"General ledger",
+ "العملات":"Currencies",
+ "التبويبات المخفية":"Hidden tabs",
+ "اسم المستخدم (اختياري)":"Username (optional)",
+ "اتركه فارغًا لإنشاء اسم تلقائي":"Leave blank to generate a username automatically",
+ "لن تحتاج إلى بريد إلكتروني. سيظهر اسم الدخول بعد الحفظ.":"No email is needed. The login username will be shown after saving.",
+ "معرف الحساب":"Account ID","كود الحساب":"Account code","اسم الحساب":"Account name","نوع الحساب":"Account type","التصنيف الداخلي":"Internal classification","حساب نقدي":"Cash account",
+ "معرف المخزن":"Warehouse ID","اسم المخزن":"Warehouse name","معرف المستند":"Document ID","نوع الفاتورة":"Invoice type","كود العميل أو المورد":"Customer / supplier ID",
+ "الوجهة":"Destination","تفاصيل الأصناف (JSON)":"Item details (JSON)","الإجمالي قبل الخصم":"Gross total","معرف الأمر":"Order ID","رقم أمر الإنتاج":"Production order number",
+ "الألوان والمقاسات والكميات (JSON)":"Colors, sizes and quantities (JSON)","التكاليف الإضافية (JSON)":"Additional costs (JSON)","تكلفة الخامات":"Material cost",
+ "الكميات المستلمة (JSON)":"Received quantities (JSON)","تكلفة الهالك":"Waste cost","معرف السند":"Voucher ID","النوع (in / out)":"Type (in / out)",
+ "اسم المستلم":"Recipient name","الحسابات (JSON)":"Accounts (JSON)","التفاصيل (JSON)":"Details (JSON)","التوزيع (JSON)":"Allocation (JSON)",
+ "معرف الهالك":"Waste ID","رقم الهالك":"Waste number","معرف أمر الإنتاج":"Production order ID","كود الصنف":"Item ID","اللون والمقاس":"Color and size",
+ "رقم القيد":"Journal entry number","اسم الموظف":"Employee name","التليفون الأول":"Phone 1","التليفون الثاني":"Phone 2","الصلاحيات (JSON)":"Permissions (JSON)",
+ "صورة البطاقة":"ID card image","كود الطرف":"Party ID","معرف الحركة":"Movement ID","المصدر":"Source","كود الشاشة":"Screen key",
+ "العملة":"Currency","الباركود":"Barcode","ملاحظات":"Notes","وقت التسجيل":"Recorded at"
+});
 function togLang(){PRF.lang=LANGEN?"ar":"en";savePref();applyPref();nav();drawTabs()}
 /* ---- language engine (display translation only; stored data never changes) ---- */
 const AR=/[\u0600-\u06FF]/;let TRK=null;
@@ -282,7 +310,7 @@ function netUp(){const e=$g("#net");if(!e)return;const connected=navigator.onLin
 addEventListener("online",netUp);addEventListener("offline",netUp);addEventListener("factory-database-ready",netUp);addEventListener("factory-db-startup-error",netUp);addEventListener("factory-db-connection-state",netUp);
 function syncPage(){
   let queued=0;
-  try{const q=JSON.parse(localStorage.getItem("ms-factory-db-queue-v1")||"[]");queued=Array.isArray(q)?q.length:0}catch(e){}
+  try{for(let i=0;i<localStorage.length;i++){const key=localStorage.key(i);if(key&&key.startsWith("ms-factory-db-queue-v1:")){const q=JSON.parse(localStorage.getItem(key)||"[]");if(Array.isArray(q))queued+=q.length;}}}catch(e){}
   const offline=!navigator.onLine||window.__factoryOfflineMode===true;
   const ready=window.__factoryDatabaseFirstReady===true;
   const status=window.__factoryDatabaseFirstFailed?"🔴 فشل الاتصال بقاعدة البيانات":offline?(queued?"🔴 غير متصل - تغييرات محفوظة محليًا":"🔴 غير متصل - العمل دون اتصال"):queued?"🟡 توجد تغييرات في انتظار الإرسال":ready?"🟢 متصل - الحفظ المباشر على قاعدة البيانات":"🟡 جارٍ الاتصال بقاعدة البيانات";
@@ -361,7 +389,8 @@ function pvh(v){const s=`${f(Math.abs(v))} ج.م`;return Math.abs(v)<.005?`${f(0
 function lgTbl(ls,sg,pm){let b=0;return `<table class="l"><tr><th>التاريخ / الوقت</th><th>المرجع</th><th>البيان</th><th>الطرف</th><th>مدين</th><th>دائن</th><th>الرصيد</th><th></th></tr>${U(ls,l=>{b+=(l.dr-l.cr)*sg;return `<tr><td>${l.ts?fts(l.ts):dfm(l.d)}</td><td>${l.ref}</td><td>${l.desc||""}</td><td>${l.pid?pn(l.pid):""}</td><td>${l.dr?f(l.dr):""}</td><td>${l.cr?f(l.cr):""}</td><td>${pm?pvh(b):f(b)}</td><td>${rb(l)}</td></tr>`})}</table>`}
 function drillPartner(id){sh(`<div class="ph"><h3>كشف حساب ${pn(id)} (عميل / مورد مدمج)</h3><div class="row"><button class="g" onclick="stPrint(${id})">🖨️ طباعة</button>${bk}</div></div>${lgTbl(srt(S.L.filter(l=>l.pid==id)),-1,1)}<b>الرصيد: ${btxt(pbal(id))}</b><p class="mu">القاعدة الموحدة: الرصيد الموجب = له علينا (يظهر عاديًا)، والسالب بالأحمر = عليه لنا.</p>`)}
 /* ---- currencies per account (no mixing of different currencies in one total) ---- */
-const cur_=a=>(typeof a=="object"?a:ac_(a)).cur||"EGP",cf=(a,v)=>`${f(v)} ${cur_(a)=="EGP"?"ج.م":cur_(a)}`;
+function cur_(a){return (typeof a=="object"?a:ac_(a)).cur||"EGP";}
+function cf(a,v){return `${f(v)} ${cur_(a)=="EGP"?"ج.م":cur_(a)}`;}
 function balc(id,fr,to){const a=ac_(id);if(cur_(a)=="EGP")return bal(id,fr,to);return S.L.filter(l=>l.a==id&&(!fr||l.d>=fr)&&(!to||l.d<=to)).reduce((s,l)=>s+(l.fc||0),0)*nat(a)}
 function post(d,ref,desc,ls,src,rid,ts){const dr=ls.reduce((a,l)=>a+(l.dr||0),0),cr=ls.reduce((a,l)=>a+(l.cr||0),0);if(Math.abs(dr-cr)>.005)return false;ls.forEach(l=>{if(l.dr||l.cr)S.L.push({d,ts:ts||Date.now(),ref,desc:l.desc||desc||"",a:l.a,dr:l.dr||0,cr:l.cr||0,pid:l.pid||0,src,rid,fc:l.fc||0})});return true}
 const curSel=id=>`<div class="row"><select id="${id}">${U(S.curs,c=>`<option>${c}</option>`)}</select><input id="${id}n" placeholder="عملة أخرى: SAR"><button class="g" onclick="curAdd('${id}')">+ إضافة عملة</button></div>`;
@@ -553,23 +582,208 @@ const IMPF={
  customers:[["name","اسم العميل",1,["اسم","عميل","customer","client"]],["phone","الموبايل",0,["موبايل","تليفون","هاتف","phone","mobile"]],["kind","التعامل (جملة / قطاعي)",0,["تعامل","جملة","kind"]],["gov","المحافظة",0,["محافظة","gov"]],["city","المدينة",0,["مدينة","city"]],["adr","العنوان",0,["عنوان","address","adr"]]],
  suppliers:[["name","اسم المورد",1,["اسم","مورد","supplier"]],["phone","الموبايل",0,["موبايل","تليفون","هاتف","phone","mobile"]],["gov","المحافظة",0,["محافظة","gov"]],["city","المدينة",0,["مدينة","city"]],["adr","العنوان",0,["عنوان","address","adr"]]]
 };
-function impForm(){WZ={t:"items",hd:[],rows:[],map:{},out:[],sheets:{},sheetNames:[],sheet:"",fullImport:null};sh('<h3>استيراد بيانات من Excel / CSV</h3><div class="row"><button class="g" onclick="templateExcel()">⬇️ تحميل قالب نقل البيانات</button><button class="g" onclick="exportFactoryWorkbook()">⬇️ تصدير نسخة Excel كاملة</button></div><label>نوع البيانات</label><select id="imt" onchange="WZ.t=this.value;if(WZ.hd.length&&this.value!==\'all\')impMap()"><option value="items">أصناف المخزون</option><option value="customers">العملاء</option><option value="suppliers">الموردون</option><option value="partners">عملاء وموردون معًا</option><option value="all">نسخة كاملة لكل بيانات المصنع والشاشات</option></select><label>ملف Excel متعدد الشيتات أو CSV — الصف الأول عناوين الأعمدة</label><input type="file" id="impf" accept=".xlsx,.xls,.csv" onchange="impFile(this)"><div id="impw"></div>')}
-async function templateExcel(){try{await ld("https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js");const wb=XLSX.utils.book_new();const sheets=[["العملاء",[["اسم العميل","الموبايل","التعامل (جملة / قطاعي)","المحافظة","المدينة","العنوان"]]],["الموردين",[["اسم المورد","الموبايل","المحافظة","المدينة","العنوان"]]],["الأصناف",[["اسم الصنف","الكود / الباركود","النوع (المخزن الفرعي)","الوحدة","الموديل","سعر الشراء","سعر القطاعي","سعر الجملة","الكمية الافتتاحية","اللون","المقاس"]]]];sheets.forEach(x=>XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(x[1]),x[0]));XLSX.writeFile(wb,"قالب_نقل_البيانات_إلى_مدير_المصنع.xlsx")}catch(e){toast("تعذر إنشاء القالب؛ يلزم الاتصال بالإنترنت لتحميل مكتبة Excel")}}
-async function impFile(inp){const fl=inp.files[0];if(!fl)return;try{WZ.sheets={};if(/\.csv$/i.test(fl.name)){WZ.sheets["CSV"]=parseCsv(await fl.text())}else{await ld("https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js");const wb=XLSX.read(await fl.arrayBuffer(),{type:"array"});wb.SheetNames.forEach(name=>WZ.sheets[name]=XLSX.utils.sheet_to_json(wb.Sheets[name],{header:1,blankrows:false,defval:""}))}WZ.sheetNames=Object.keys(WZ.sheets);if(!WZ.sheetNames.length){toast("الملف فارغ أو بدون شيتات");return}if(WZ.t==="all"){prepareFullImport();return}const first=WZ.sheetNames.find(n=>/عميل|customer|client|مورد|supplier|صنف|مخزون|item/i.test(n))||WZ.sheetNames[0];impSheet(first)}catch(e){toast("تعذر قراءة الملف (ملفات Excel تحتاج اتصالًا لتحميل مكتبة القراءة)")}}
-function impSheet(name){const rows=WZ.sheets[name]||[];WZ.sheet=name;if(rows.length<2){toast("الشيت المحدد لا يحتوي على صفوف بيانات");return}WZ.hd=rows[0].map(x=>String(x).trim());WZ.rows=rows.slice(1);const n=String(name).toLowerCase();if(/عملاء.?وموردون|partners/.test(n))WZ.t="partners";else if(/عميل|customer|client/.test(n))WZ.t="customers";else if(/مورد|supplier/.test(n))WZ.t="suppliers";else if(/صنف|مخزون|item|stock/.test(n))WZ.t="items";const sel=$("#imt");if(sel)sel.value=WZ.t;impMap()}
-function impMap(){const F=IMPF[WZ.t],sheetPicker=WZ.sheetNames.length>1?'<label>الشيت الحالي</label><select id="imps" onchange="impSheet(this.value)">'+WZ.sheetNames.map(n=>'<option value="'+n.replace(/"/g,'&quot;')+'" '+(n===WZ.sheet?'selected':'')+'>'+n+'</option>').join("")+'</select>':'';
- $("#impw").innerHTML=sheetPicker+'<div class="card"><b>1) تحديد الأعمدة</b> — الشيت: '+WZ.sheet+' — '+WZ.rows.length+' صف<br>'+U(F,f_=>{const g=WZ.hd.findIndex(h=>f_[3].some(a=>h.toLowerCase().includes(a)));return '<div class="row"><label style="min-width:170px">'+f_[1]+(f_[2]?' *':'')+'</label><select id="mp_'+f_[0]+'"><option value="-1">— تجاهل —</option>'+U(WZ.hd,(h,i)=>'<option value="'+i+'" '+(i===g?'selected':'')+'>'+h+'</option>')+'</select></div>'})+'<button onclick="impCheck()">2) معاينة والتحقق</button></div><div id="impv"></div>'}
-function parseCsv(t){t=t.replace(/^\uFEFF/,"");const first=t.split(/\r?\n/)[0]||"",d=first.split("\t").length>first.split(",").length?"\t":first.split(";").length>first.split(",").length?";":",",rows=[];let r=[],c="",q=0;for(let i=0;i<t.length;i++){const ch=t[i];if(q){if(ch=='"'){if(t[i+1]=='"'){c+='"';i++}else q=0}else c+=ch}else if(ch=='"')q=1;else if(ch==d){r.push(c);c=""}else if(ch=="\n"||ch=="\r"){if(ch=="\r"&&t[i+1]=="\n")i++;r.push(c);c="";rows.push(r);r=[]}else c+=ch}if(c!==""||r.length){r.push(c);rows.push(r)}return rows.filter(x=>x.some(y=>String(y).trim()!==""))}
+const IMPORT_LISTS={
+ accts:"شجرة الحسابات",wh:"المخازن الفرعية",docs:"الفواتير والمرتجعات",po:"أوامر الإنتاج",
+ vch:"سندات القبض والصرف",wo:"الهالك",codes:"أكواد الباركود",je:"قيود اليومية",
+ emp:"الموظفون",mv:"حركات المخزون",L:"دفتر الأستاذ",curs:"العملات",hide:"التبويبات المخفية"
+};
+const IMPORT_FIELD_LABELS={
+ accts:{id:"معرف الحساب",code:"كود الحساب",name:"اسم الحساب",t:"نوع الحساب",k:"التصنيف الداخلي",cash:"حساب نقدي",cur:"العملة"},
+ wh:{id:"معرف المخزن",name:"اسم المخزن"},
+ docs:{id:"معرف المستند",t:"نوع الفاتورة",no:"رقم الفاتورة",date:"التاريخ",ts:"وقت التسجيل",pid:"كود العميل أو المورد",cat:"التصنيف",dest:"الوجهة",lines:"تفاصيل الأصناف (JSON)",gross:"الإجمالي قبل الخصم",disc:"الخصم",total:"الصافي",note:"ملاحظات",img:"المرفق"},
+ po:{id:"معرف الأمر",no:"رقم أمر الإنتاج",date:"التاريخ",ts:"وقت التسجيل",desc:"البيان",iname:"الصنف",wh:"المخزن",subs:"الألوان والمقاسات والكميات (JSON)",mats:"الخامات (JSON)",x:"التكاليف الإضافية (JSON)",st:"الحالة",matCost:"تكلفة الخامات",rec:"الكميات المستلمة (JSON)",wc:"تكلفة الهالك"},
+ vch:{id:"معرف السند",no:"رقم السند",date:"التاريخ",ts:"وقت التسجيل",dir:"النوع",title:"البيان",pid:"كود الطرف",who:"اسم المستلم",desc:"ملاحظات",ac:"الحسابات (JSON)",ln:"التفاصيل (JSON)",link:"المرجع",img:"المرفق",total:"الإجمالي",alloc:"التوزيع (JSON)"},
+ wo:{id:"معرف الهالك",ts:"وقت التسجيل",ref:"رقم الهالك",c:"التكلفة",desc:"البيان",po:"أمر الإنتاج"},
+ codes:{code:"الباركود",iid:"كود الصنف",v:"اللون والمقاس"},
+ je:{id:"معرف القيد",no:"رقم القيد",date:"التاريخ",ts:"وقت التسجيل",desc:"البيان"},
+ emp:{id:"معرف الموظف",name:"اسم الموظف",p1:"التليفون الأول",p2:"التليفون الثاني",gov:"المحافظة",city:"المدينة",adr:"العنوان",perm:"الصلاحيات (JSON)",img:"صورة البطاقة"},
+ mv:{d:"التاريخ",ts:"وقت التسجيل",iid:"كود الصنف",v:"اللون والمقاس",q:"الكمية",val:"القيمة",ref:"المرجع",pid:"كود الطرف",rid:"معرف الحركة",src:"المصدر"},
+ L:{d:"التاريخ",ts:"وقت التسجيل",ref:"المرجع",desc:"البيان",a:"كود الحساب",dr:"مدين",cr:"دائن",pid:"كود الطرف",src:"المصدر",rid:"معرف الحركة",fc:"قيمة العملة"},
+ curs:{value:"العملة"},hide:{value:"كود الشاشة"}
+};
+const IMPORT_FIELD_ALIASES={
+ docs:{no:["رقم","invoice"],t:["نوع","type"],date:["تاريخ"],pid:["الطرف","عميل","مورد","partner"],lines:["الأصناف","التفاصيل","items"]},
+ po:{no:["كود الأمر","رقم الأمر","production"],iname:["اسم الصنف"],subs:["تفاصيل الإنتاج"],mats:["الخامات"]},
+ vch:{no:["رقم","voucher"],dir:["اتجاه","نوع السند"],date:["تاريخ"],pid:["الطرف","partner"]},
+ accts:{code:["رقم الحساب","account code"],name:["الحساب","account name"]},
+ mv:{iid:["الصنف","item"],q:["كمية","quantity"],val:["قيمة","value"]},
+ L:{a:["الحساب","account"],dr:["مدين","debit"],cr:["دائن","credit"]}
+};
+const IMPORT_FALLBACK={
+ po:[
+  ["id","معرف الأمر","number",0],["no","رقم أمر الإنتاج","string",1],["date","التاريخ","string",0],["ts","وقت التسجيل","number",0],
+  ["desc","البيان","string",0],["iname","الصنف","string",1],["wh","معرف المخزن","number",0],
+  ["subs","الألوان والمقاسات والكميات (JSON)","json-array",1],["mats","الخامات (JSON)","json-array",0],["x","التكاليف الإضافية (JSON)","json-array",0],
+  ["st","الحالة","number",0],["matCost","تكلفة الخامات","number",0],["rec","الكميات المستلمة (JSON)","json-array",0],["wc","تكلفة الهالك","number",0]
+ ],
+ vch:[
+  ["id","معرف السند","number",0],["no","رقم السند","string",1],["date","التاريخ","string",1],["ts","وقت التسجيل","number",0],
+  ["dir","النوع (in / out)","string",1],["title","البيان","string",0],["pid","معرف الطرف","number",0],["who","اسم المستلم","string",0],
+  ["desc","ملاحظات","string",0],["ac","الحسابات (JSON)","json-array",0],["ln","التفاصيل (JSON)","json-array",0],
+  ["link","المرجع","string",0],["img","المرفق","string",0],["total","الإجمالي","number",0],["alloc","التوزيع (JSON)","json-object",0]
+ ],
+ wo:[
+  ["id","معرف الهالك","number",0],["ts","وقت التسجيل","number",0],["ref","رقم الهالك","string",1],
+  ["c","التكلفة","number",0],["desc","البيان","string",0],["po","معرف أمر الإنتاج","number",0]
+ ]
+};
+function genericImportFields(key){
+ if(key==="curs"||key==="hide")return [["value",IMPORT_FIELD_LABELS[key].value,1,["value",IMPORT_FIELD_LABELS[key].value.toLowerCase(),key],0,"string"]];
+ const sample=(S[key]||[]).find(x=>x&&typeof x==="object"&&!Array.isArray(x));
+ const fallback=IMPORT_FALLBACK[key]||[];
+ const keys=sample?Object.keys(sample).filter(k=>!k.startsWith("_cloud")&&!(key==="emp"&&["authUserId","username"].includes(k))):fallback.map(x=>x[0]);
+ return keys.map(k=>{
+  const spec=fallback.find(x=>x[0]===k),value=sample?.[k];
+  const inferred=spec?.[2]||(Array.isArray(value)?"json-array":value&&typeof value==="object"?"json-object":typeof value==="number"?"number":typeof value==="boolean"?"boolean":/^(id|rid|qty|q|total|gross|disc|st|wc|matCost|buy|retail|wholesale|val|dr|cr|fc|ts|c)$/i.test(k)?"number":"string");const type=["pid","iid","wh","a","po"].includes(k)?"reference":inferred;
+  const label=IMPORT_FIELD_LABELS[key]?.[k]||spec?.[1]||k;
+  const aliases=[k.toLowerCase(),label.toLowerCase(),...(IMPORT_FIELD_ALIASES[key]?.[k]||[])];
+  const required=spec?.[3]??(key==="L"?["d","ref","a"].includes(k):key==="mv"?["d","iid","q"].includes(k):key==="codes"?["code","iid"].includes(k):key==="emp"?k==="name":["name","no","code"].includes(k)?1:0);
+  return [k,label,required,aliases,type==="number"?1:0,type];
+ });
+}
+function genericImportIdentity(key,value){
+ if(key==="curs"||key==="hide")return String(value??"").trim().toLowerCase();
+ const o=value&&typeof value==="object"?value:{};
+ if(key==="L")return JSON.stringify([o.d,o.ref,o.a,o.dr,o.cr,o.pid]);
+ if(key==="mv")return JSON.stringify([o.d,o.ref,o.iid,o.v,o.q,o.val,o.rid]);
+ const fields=key==="accts"?["code","id","name"]:key==="wh"||key==="emp"?["id","name"]:key==="wo"?["ref","id"]:["no","code","sku","id","external_id"];
+ const field=fields.find(k=>o[k]!==undefined&&o[k]!==""&&o[k]!==null);
+ return field?field+":"+String(o[field]).toLowerCase():"name:"+String(o.name||"").toLowerCase();
+}
+function importFieldsFor(type){
+ if(IMPF[type])return IMPF[type];
+ return type.startsWith("list:")?genericImportFields(type.slice(5)):[];
+}
+function detectImportTarget(sheetName){
+ const n=String(sheetName||"").toLowerCase();
+ if(/عملاء.?وموردون|partners/.test(n))return "partners";
+ if(/عميل|customer|client/.test(n))return "customers";
+ if(/مورد|supplier/.test(n))return "suppliers";
+ if(/صنف|مخزون|item|stock/.test(n))return "items";
+ if(/شجرة.?الحسابات|دليل.?الحسابات|account.?tree|accounts/.test(n))return "list:accts";
+ if(/مخازن.?فرعية|المخازن|warehouse|warehouses/.test(n))return "list:wh";
+ if(/فواتير|مرتجعات|invoice|invoices|documents/.test(n))return "list:docs";
+ if(/أوامر.?الإنتاج|اوامر.?الانتاج|production.?orders|^po$/i.test(n))return "list:po";
+ if(/سندات|voucher|vouchers/.test(n))return "list:vch";
+ if(/هالك|waste/.test(n))return "list:wo";
+ if(/باركود|أكواد|اكواد|codes/.test(n))return "list:codes";
+ if(/قيود.?اليومية|journal.?entries/.test(n))return "list:je";
+ if(/موظفين|الموظفون|employees/.test(n))return "list:emp";
+ if(/حركات.?المخزون|stock.?movements/.test(n))return "list:mv";
+ if(/دفتر.?الأستاذ|دفتر.?الاستاذ|ledger/.test(n))return "list:L";
+ if(/عملات|currencies/.test(n))return "list:curs";
+ if(/تبويبات.?مخفية|hidden.?tabs/.test(n))return "list:hide";
+ return "";
+}
+function impForm(){
+ WZ={t:"items",hd:[],rows:[],map:{},out:[],sheets:{},sheetNames:[],sheet:"",fullImport:null,manualTarget:false};
+ const other=Object.entries(IMPORT_LISTS).map(([k,v])=>'<option value="list:'+k+'">'+v+'</option>').join("");
+ sh(`<h3>استيراد بيانات من Excel / CSV</h3>
+ <div class="row"><button class="g" onclick="templateExcel()">⬇️ تحميل قالب لكل القوائم</button><button class="g" onclick="exportFactoryWorkbook()">⬇️ تصدير نسخة Excel كاملة</button></div>
+ <p class="mu">تقدر تستورد أي قائمة من الشاشات، كل شيت على حدة، أو تستعيد نسخة المصنع الكاملة بكل القوائم والمراجع دفعة واحدة.</p>
+ <label>نوع البيانات / الشاشة</label>
+ <select id="imt" onchange="WZ.t=this.value;WZ.manualTarget=this.value!=='all';if(WZ.hd.length&&this.value!=='all')impMap()">
+ <option value="items">أصناف المخزون</option><option value="customers">العملاء</option><option value="suppliers">الموردون</option><option value="partners">عملاء وموردون معًا</option>
+ <optgroup label="باقي القوائم والشاشات">${other}</optgroup><option value="all">نسخة كاملة لكل بيانات المصنع والشاشات</option></select>
+ <label>ملف Excel متعدد الشيتات أو CSV — الصف الأول عناوين الأعمدة</label><input type="file" id="impf" accept=".xlsx,.xls,.csv" onchange="impFile(this)"><div id="impw"></div>`);
+}async function templateExcel(){
+ try{
+  await ld("https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js");
+  const wb=XLSX.utils.book_new();
+  const sheets=[[LANGEN?trs("العملاء"):"العملاء",IMPF.customers],[LANGEN?trs("الموردين"):"الموردين",IMPF.suppliers],[LANGEN?"Partners":"عملاء وموردون",IMPF.partners],[LANGEN?trs("الأصناف"):"الأصناف",IMPF.items],...Object.entries(IMPORT_LISTS).map(([k,label])=>[LANGEN?trs(label):label,importFieldsFor("list:"+k)])];
+  sheets.forEach(([name,fields])=>XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet([fields.map(f=>LANGEN?trs(f[1]):f[1])]),(LANGEN?trs(name):name).slice(0,31)));
+  XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet([[LANGEN?"Instructions":"تعليمات"],[LANGEN?"Fill the required sheet, then select the matching list in the import screen. Fields ending in JSON must contain valid JSON. Use the full factory backup export to restore all data and references at once.":"املأ الشيت المطلوب، ثم اختر نوع القائمة المطابق في شاشة الاستيراد. الحقول التي تنتهي بـ JSON يجب أن تحتوي على JSON صحيح. لاستعادة كل البيانات والمراجع مرة واحدة استخدم تصدير نسخة Excel كاملة."]]),LANGEN?"Instructions":"تعليمات");
+  XLSX.writeFile(wb,"قالب_كل_قوائم_مدير_المصنع.xlsx");
+ }catch(e){toast("تعذر إنشاء القالب؛ يلزم الاتصال بالإنترنت لتحميل مكتبة Excel")}
+}async function impFile(inp){
+ const fl=inp.files[0];if(!fl)return;
+ try{
+  WZ.sheets={};
+  if(/\.csv$/i.test(fl.name))WZ.sheets["CSV"]=parseCsv(await fl.text());
+  else{await ld("https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js");const wb=XLSX.read(await fl.arrayBuffer(),{type:"array"});wb.SheetNames.forEach(name=>WZ.sheets[name]=XLSX.utils.sheet_to_json(wb.Sheets[name],{header:1,blankrows:false,defval:""}))}
+  WZ.sheetNames=Object.keys(WZ.sheets);if(!WZ.sheetNames.length){toast("الملف فارغ أو بدون شيتات");return}
+  const marker=WZ.sheets["__factory_backup"]?.[1]?.[0]==="MS_FACTORY_FULL_BACKUP";
+  if(WZ.t==="all"&&marker){prepareFullImport();return}
+  if(WZ.t==="all")WZ.manualTarget=false;
+  const first=WZ.sheetNames.find(n=>detectImportTarget(n))||WZ.sheetNames[0];
+  impSheet(first);
+  if(WZ.t.startsWith("list:")&&WZ.sheetNames.length>1)toast("تم التعرف على القائمة. اختر شيتًا آخر لاستيراد بقية القوائم واحدة تلو الأخرى، أو استخدم ملف النسخة الكاملة دفعة واحدة.");
+ }catch(e){toast("تعذر قراءة الملف: "+(e.message||"تحقق من صيغة Excel"))}
+}function impSheet(name){
+ const rows=WZ.sheets[name]||[];WZ.sheet=name;
+ if(rows.length<2){toast("الشيت المحدد لا يحتوي على صفوف بيانات");return}
+ WZ.hd=rows[0].map(x=>String(x).trim());WZ.rows=rows.slice(1);
+ if(!WZ.manualTarget){const detected=detectImportTarget(name);if(detected)WZ.t=detected;}
+ const sel=$("#imt");if(sel)sel.value=WZ.t;impMap();
+}function impMap(){
+ const F=importFieldsFor(WZ.t),sheetPicker=WZ.sheetNames.length>1?'<label>الشيت الحالي</label><select id="imps" onchange="impSheet(this.value)">'+WZ.sheetNames.map(n=>'<option value="'+n.replace(/"/g,'&quot;')+'" '+(n===WZ.sheet?'selected':'')+'>'+n+'</option>').join("")+'</select>':'';
+ if(!F.length){$("#impw").innerHTML='<div class="card">اختر نوع القائمة من القائمة العلوية أولاً.</div>';return;}
+ $("#impw").innerHTML=sheetPicker+'<div class="card"><b>1) تحديد الأعمدة</b> — الشيت: '+WZ.sheet+' — '+WZ.rows.length+' صف<br>'+U(F,f_=>{const g=WZ.hd.findIndex(h=>f_[3].some(a=>h.toLowerCase().includes(a)));return '<div class="row"><label style="min-width:170px">'+f_[1]+(f_[2]?' *':'')+'</label><select id="mp_'+f_[0]+'"><option value="-1">— تجاهل —</option>'+U(WZ.hd,(h,i)=>'<option value="'+i+'" '+(i===g?'selected':'')+'>'+h+'</option>')+'</select></div>'})+'<button onclick="impCheck()">2) معاينة والتحقق</button></div><div id="impv"></div>';
+}function parseCsv(t){t=t.replace(/^\uFEFF/,"");const first=t.split(/\r?\n/)[0]||"",d=first.split("\t").length>first.split(",").length?"\t":first.split(";").length>first.split(",").length?";":",",rows=[];let r=[],c="",q=0;for(let i=0;i<t.length;i++){const ch=t[i];if(q){if(ch=='"'){if(t[i+1]=='"'){c+='"';i++}else q=0}else c+=ch}else if(ch=='"')q=1;else if(ch==d){r.push(c);c=""}else if(ch=="\n"||ch=="\r"){if(ch=="\r"&&t[i+1]=="\n")i++;r.push(c);c="";rows.push(r);r=[]}else c+=ch}if(c!==""||r.length){r.push(c);rows.push(r)}return rows.filter(x=>x.some(y=>String(y).trim()!==""))}
 async function exportFactoryWorkbook(){try{await ld("https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js");const wb=XLSX.utils.book_new(),meta={};Object.entries(S).forEach(([k,v])=>{if(Array.isArray(v)){const records=v.map(x=>JSON.stringify(x)),max=Math.max(1,...records.map(x=>Math.ceil(x.length/30000))),head=Array.from({length:max},(_,i)=>"json_part_"+(i+1)),rows=[head,...records.map(x=>head.map((_,i)=>x.slice(i*30000,(i+1)*30000)))];XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(rows),k.slice(0,31));}else if(k!=="pend")meta[k]=v;});XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet([["backup_type","version","created_at"],["MS_FACTORY_FULL_BACKUP",1,new Date().toISOString()]]),"__factory_backup");XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet([["meta_json"],[JSON.stringify(meta)]]),"__meta");XLSX.writeFile(wb,"MS_Factory_Full_Backup.xlsx");toast("تم تصدير نسخة المصنع الكاملة بكل القوائم والشاشات");}catch(e){toast("تعذر تصدير النسخة الكاملة؛ تحقق من الاتصال");}}
-function prepareFullImport(){const marker=WZ.sheets["__factory_backup"]||[];if(!marker[1]||marker[1][0]!=="MS_FACTORY_FULL_BACKUP"){toast("الملف ليس نسخة كاملة صادرة من مدير المصنع");return;}const current=Object.keys(S).filter(k=>Array.isArray(S[k]));const imported={};for(const k of current){const rows=WZ.sheets[k];if(!rows){toast("النسخة ناقصة: لا يوجد شيت "+k);return;}const values=[];for(let i=1;i<rows.length;i++){const raw=(rows[i]||[]).map(x=>String(x??"")).join("").trim();if(!raw)continue;let value;try{value=JSON.parse(raw)}catch(_){toast("بيانات غير سليمة في شيت "+k+"، الصف "+(i+1));return;}if(!value||typeof value!=="object"||Array.isArray(value)){toast("سجل غير صالح في شيت "+k+"، الصف "+(i+1));return;}values.push(value);}imported[k]=values;}const metaRows=WZ.sheets["__meta"]||[];let meta={};try{meta=JSON.parse(metaRows[1]?.[0]||"{}")}catch(_){toast("بيانات إعدادات النسخة غير سليمة");return;}WZ.fullImport={arrays:imported,meta};const summary=Object.entries(imported).map(([k,v])=>"<tr><td>"+k+"</td><td>"+v.length+"</td></tr>").join("");const box=document.querySelector("#impw");box.innerHTML="<div class='card'><b>تمت قراءة نسخة المصنع الكاملة</b><p>عدد القوائم: "+current.length+". سيتم استبدال بيانات القوائم الموجودة في الحساب بالبيانات الموجودة في الملف مع الحفاظ على بنية السجلات والمراجع.</p><table class='l'><tr><th>القائمة</th><th>عدد السجلات</th></tr>"+summary+"</table><button onclick='importFullConfirm()'>تأكيد استعادة نسخة المصنع</button></div>";}
+function prepareFullImport(){const marker=WZ.sheets["__factory_backup"]||[];if(!marker[1]||marker[1][0]!=="MS_FACTORY_FULL_BACKUP"){toast("الملف ليس نسخة كاملة صادرة من مدير المصنع");return;}const current=Object.keys(S).filter(k=>Array.isArray(S[k]));const imported={};for(const k of current){const rows=WZ.sheets[k];if(!rows){toast("النسخة ناقصة: لا يوجد شيت "+k);return;}const values=[];for(let i=1;i<rows.length;i++){const raw=(rows[i]||[]).map(x=>String(x??"")).join("").trim();if(!raw)continue;let value;try{value=JSON.parse(raw)}catch(_){toast("بيانات غير سليمة في شيت "+k+"، الصف "+(i+1));return;}if(value===undefined){toast("سجل غير صالح في شيت "+k+"، الصف "+(i+1));return;}values.push(value);}imported[k]=values;}const metaRows=WZ.sheets["__meta"]||[];let meta={};try{meta=JSON.parse(metaRows[1]?.[0]||"{}")}catch(_){toast("بيانات إعدادات النسخة غير سليمة");return;}WZ.fullImport={arrays:imported,meta};const summary=Object.entries(imported).map(([k,v])=>"<tr><td>"+k+"</td><td>"+v.length+"</td></tr>").join("");const box=document.querySelector("#impw");box.innerHTML="<div class='card'><b>تمت قراءة نسخة المصنع الكاملة</b><p>عدد القوائم: "+current.length+". سيتم استبدال بيانات القوائم الموجودة في الحساب بالبيانات الموجودة في الملف مع الحفاظ على بنية السجلات والمراجع.</p><table class='l'><tr><th>القائمة</th><th>عدد السجلات</th></tr>"+summary+"</table><button onclick='importFullConfirm()'>تأكيد استعادة نسخة المصنع</button></div>";}
 function importFullConfirm(){if(!WZ.fullImport){toast("لم يتم تجهيز ملف الاستيراد");return;}if(!guard())return;for(const [k,v] of Object.entries(WZ.fullImport.arrays))S[k]=v;Object.assign(S,WZ.fullImport.meta||{});sv();nav();toast("تم استيراد بيانات المصنع بالكامل؛ راجع الاتصال حتى يكتمل الحفظ السحابي");WZ.fullImport=null;}
-function impCheck(){const F=IMPF[WZ.t];F.forEach(f_=>{WZ.map[f_[0]]=+$("#mp_"+f_[0]).value});const seen=new Set(),out=[];WZ.rows.forEach((r,n)=>{const o={},er=[];F.forEach(f_=>{const ix=WZ.map[f_[0]];let v=ix>=0?String(r[ix]??"").trim():"";if(f_[4]){if(v==="")v=0;else{const x=parseFloat(v.replace(/,/g,""));if(isNaN(x)){er.push(f_[1]+" ليست رقمًا");v=0}else v=x}}o[f_[0]]=v;if(f_[2]&&v==="")er.push(f_[1]+" مطلوب")});let dup="";const kn=String(o.name).toLowerCase(),ks=WZ.t=="items"?(o.sku?nd(String(o.sku)).toLowerCase():""):(o.phone?String(o.phone):"");if(WZ.t=="items"){if(S.items.some(i=>(ks&&nd(i.sku).toLowerCase()==ks)||i.name.toLowerCase()==kn))dup="موجود بالفعل"}else{if(S.partners.some(p=>(ks&&p.phone==ks)||p.name.toLowerCase()==kn))dup="موجود بالفعل"}if(!dup&&(seen.has("n:"+kn)||(ks&&seen.has("k:"+ks))))dup="مكرر داخل الملف";seen.add("n:"+kn);if(ks)seen.add("k:"+ks);out.push({n:n+2,o,er,dup,st:er.length?"خطأ":dup?"مكرر (سيُتخطى)":"جديد"})});WZ.out=out;const ok=out.filter(x=>x.st=="جديد").length,du=out.filter(x=>x.dup&&!x.er.length).length,er=out.filter(x=>x.er.length).length;
- $("#impv").innerHTML=`<div class="card"><b>3) نتيجة التحقق:</b> جديد <b>${ok}</b> | مكرر <b>${du}</b> | أخطاء <b>${er}</b></div><table class="l"><tr><th>الصف</th><th>الاسم</th><th>الحالة</th><th>الأخطاء</th></tr>${U(out.slice(0,200),x=>`<tr><td>${x.n}</td><td>${x.o.name}</td><td>${x.st}</td><td>${x.er.join("، ")}${x.dup?x.dup:""}</td></tr>`)}</table><div class="row"><button onclick="importGo()">4) تأكيد الاستيراد (${ok} صف)</button></div>`;enh()}
-function importGo(){if(WZ.t==="all"){prepareFullImport();return;}const ok=WZ.out.filter(x=>x.st=="جديد");if(!ok.length){toast("لا توجد صفوف صالحة للاستيراد");return}if(!guard())return;let n=0;
- if(WZ.t==="items")ok.forEach(x=>{const o=x.o;let wh=S.wh.find(w=>w.name==o.type);if(!wh){if(o.type){wh={id:uid(),name:String(o.type)};S.wh.push(wh)}else wh=S.wh[0]}const i=ensureItem(String(o.name),wh.id,o.unit||"قطعة",o.buy);if(o.sku)i.sku=String(o.sku).replace(/[^\x20-\x7e]/g,"")||i.sku;Object.assign(i,{model:String(o.model||""),buy:o.buy,retail:o.retail,wholesale:o.wholesale});if(o.qty>0){const c=o.qty*o.buy;stk(td(),i,vk(String(o.color||""),String(o.size||"")),o.qty,c,"رصيد افتتاحي (استيراد)",0,i.id,"je");post(td(),"IM-"+i.id,"رصيد افتتاحي - استيراد",[{a:ak("inv"),dr:c},{a:ak("cap"),cr:c}],"je",i.id)}n++});
+function parseGenericImportValue(raw,field,errorList){
+ const text=String(raw??"").trim(),type=field[5]||(field[4]?"number":"string");
+ if(!text){if(type==="json-array")return [];if(type==="json-object")return {};if(type==="number")return 0;if(type==="boolean")return false;return "";}
+ if(type==="reference")return /^-?\d+(?:\.\d+)?$/.test(text)?Number(text):text;
+ if(type==="number"){const n=Number(text.replace(/,/g,""));if(!Number.isFinite(n)){errorList.push(field[1]+" ليست رقمًا");return 0;}return n;}
+ if(type==="boolean"){const v=text.toLowerCase();if(["1","true","yes","نعم","ن"].includes(v))return true;if(["0","false","no","لا","ل"].includes(v))return false;errorList.push(field[1]+" يجب أن تكون نعم أو لا");return false;}
+ if(type==="json-array"||type==="json-object"){try{const value=JSON.parse(text);if(type==="json-array"&&!Array.isArray(value))throw new Error();if(type==="json-object"&&(!value||typeof value!=="object"||Array.isArray(value)))throw new Error();return value;}catch(_){errorList.push(field[1]+" يجب أن تكون بصيغة JSON صحيحة");return type==="json-array"?[]:{};}}
+ return text;
+}
+function impCheck(){
+ const F=importFieldsFor(WZ.t),generic=WZ.t.startsWith("list:"),listKey=generic?WZ.t.slice(5):"",primitive=generic&&(listKey==="curs"||listKey==="hide");
+ F.forEach(f_=>{WZ.map[f_[0]]=+$("#mp_"+f_[0]).value});
+ const seen=new Set(),out=[];
+ WZ.rows.forEach((r,n)=>{
+  const o={},er=[];
+  F.forEach(f_=>{
+   const ix=WZ.map[f_[0]],raw=ix>=0?r[ix]:"";let v;
+   if(generic)v=parseGenericImportValue(raw,f_,er);
+   else{v=String(raw??"").trim();if(f_[4]){if(v==="")v=0;else{const x=parseFloat(v.replace(/,/g,""));if(isNaN(x)){er.push(f_[1]+" ليست رقمًا");v=0}else v=x}}}
+   o[f_[0]]=v;if(f_[2]&&(v===""||v===undefined||v===null||(Array.isArray(v)&&v.length===0)))er.push(f_[1]+" مطلوب");
+  });
+  let dup="";
+  if(generic){
+   const existing=S[listKey]||[],identity=genericImportIdentity(listKey,primitive?o.value:o);
+   if(identity&&!identity.endsWith(":")){if(existing.some(value=>genericImportIdentity(listKey,value)===identity))dup="موجود بالفعل";if(!dup&&seen.has(identity))dup="مكرر داخل الملف";seen.add(identity);}
+  }else{
+   const kn=String(o.name||"").toLowerCase(),ks=WZ.t=="items"?(o.sku?nd(String(o.sku)).toLowerCase():""):(o.phone?String(o.phone):"");
+   if(WZ.t=="items"){if(S.items.some(i=>(ks&&nd(i.sku).toLowerCase()==ks)||i.name.toLowerCase()==kn))dup="موجود بالفعل"}
+   else if(S.partners.some(p=>(ks&&p.phone==ks)||p.name.toLowerCase()==kn))dup="موجود بالفعل";
+   if(!dup&&((kn&&seen.has("n:"+kn))||(ks&&seen.has("k:"+ks))))dup="مكرر داخل الملف";
+   if(kn)seen.add("n:"+kn);if(ks)seen.add("k:"+ks);
+  }
+  out.push({n:n+2,o,er,dup,st:er.length?"خطأ":dup?"مكرر (سيُتخطى)":"جديد"});
+ });
+ WZ.out=out;const ok=out.filter(x=>x.st==="جديد").length,du=out.filter(x=>x.dup&&!x.er.length).length,er=out.filter(x=>x.er.length).length;
+ const display=x=>x.o.name||x.o.no||x.o.code||x.o.value||x.o.ref||"—";
+ $("#impv").innerHTML=`<div class="card"><b>3) نتيجة التحقق:</b> جديد <b>${ok}</b> | مكرر <b>${du}</b> | أخطاء <b>${er}</b></div><table class="l"><tr><th>الصف</th><th>البيان</th><th>الحالة</th><th>الأخطاء</th></tr>${U(out.slice(0,200),x=>`<tr><td>${x.n}</td><td>${display(x)}</td><td>${x.st}</td><td>${x.er.join("، ")} ${x.dup||""}</td></tr>`)}</table><div class="row"><button onclick="importGo()">4) تأكيد الاستيراد (${ok} صف)</button></div>`;enh();
+}function importGo(){
+ if(WZ.t==="all"){prepareFullImport();return;}
+ const ok=WZ.out.filter(x=>x.st==="جديد");if(!ok.length){toast("لا توجد صفوف صالحة للاستيراد");return}if(!guard())return;let n=0;
+ if(WZ.t.startsWith("list:")){
+  const key=WZ.t.slice(5),primitive=key==="curs"||key==="hide",list=Array.isArray(S[key])?S[key]:[];
+  ok.forEach(x=>{
+   if(primitive){const value=String(x.o.value||"").trim();if(value&&!list.some(v=>String(v)===value)){list.push(value);n++;}return;}
+   const o={...x.o};if(o.id===undefined||o.id===null||o.id==="")o.id=uid();
+   if(o.pid!==undefined&&o.pid!==""){const p=S.partners.find(p=>p.id==o.pid||p.name.toLowerCase()===String(o.pid).toLowerCase()||p.phone===String(o.pid));if(p)o.pid=p.id;else if(/^\d+$/.test(String(o.pid)))o.pid=+o.pid;}
+   if(o.iid!==undefined&&o.iid!==""){const i=S.items.find(i=>i.id==o.iid||i.name.toLowerCase()===String(o.iid).toLowerCase()||i.sku===String(o.iid));if(i)o.iid=i.id;else if(/^\d+$/.test(String(o.iid)))o.iid=+o.iid;}
+   if(o.wh!==undefined&&o.wh!==""){const w=S.wh.find(w=>w.id==o.wh||w.name.toLowerCase()===String(o.wh).toLowerCase());if(w)o.wh=w.id;else if(/^\d+$/.test(String(o.wh)))o.wh=+o.wh;}
+   if(o.a!==undefined&&o.a!==""){const a=S.accts.find(a=>a.id==o.a||a.name.toLowerCase()===String(o.a).toLowerCase()||a.code===String(o.a));if(a)o.a=a.id;else if(/^\d+$/.test(String(o.a)))o.a=+o.a;}if(o.po!==undefined&&o.po!==""){const p=S.po.find(p=>p.id==o.po||p.no==o.po);if(p)o.po=p.id;else if(/^\d+$/.test(String(o.po)))o.po=+o.po;}
+   if(key==="emp")o.perm=Array.isArray(o.perm)?o.perm:[];
+   if(key==="docs")o.lines=Array.isArray(o.lines)?o.lines:[];
+   if(key==="po"){o.subs=Array.isArray(o.subs)?o.subs:[];o.mats=Array.isArray(o.mats)?o.mats:[];o.x=Array.isArray(o.x)?o.x:[];o.rec=Array.isArray(o.rec)?o.rec:[];o.st=Number(o.st||0);}
+   if(key==="vch"){o.ac=Array.isArray(o.ac)?o.ac:[];o.ln=Array.isArray(o.ln)?o.ln:[];o.alloc=o.alloc&&typeof o.alloc==="object"?o.alloc:{};}
+   list.push(o);n++;
+  });
+  S[key]=list;sv();nav();toast("تم استيراد "+n+" سجل إلى قائمة "+(IMPORT_LISTS[key]||key));if(key==="emp")toast("تم استيراد بيانات الموظفين؛ إنشاء حسابات الدخول يتم من شاشة الموظفين.");WZ.out=[];impMap();return;
+ }
+ if(WZ.t==="items")ok.forEach(x=>{const o=x.o;let wh=S.wh.find(w=>w.name==o.type);if(!wh){if(o.type){wh={id:uid(),name:String(o.type)};S.wh.push(wh)}else wh=S.wh[0]}const i=ensureItem(String(o.name),wh.id,o.unit||"قطعة",o.buy);if(o.sku)i.sku=String(o.sku).replace(/[^\x20-\x7e]/g,"")||i.sku;Object.assign(i,{model:String(o.model||""),buy:o.buy,retail:o.retail,wholesale:o.wholesale});if(o.qty>0){const cost=o.qty*o.buy;stk(td(),i,vk(String(o.color||""),String(o.size||"")),o.qty,cost,"رصيد افتتاحي (استيراد)",0,i.id,"je");post(td(),"IM-"+i.id,"رصيد افتتاحي - استيراد",[{a:ak("inv"),dr:cost},{a:ak("cap"),cr:cost}],"je",i.id)}n++});
  else ok.forEach(x=>{const o=x.o,r=String(o.role||""),both=r.includes("كلاهما"),c=WZ.t==="customers"||both||r.includes("عميل")||(WZ.t!=="suppliers"&&!r),s=WZ.t==="suppliers"||both||r.includes("مورد");S.partners.push({id:uid(),name:String(o.name),phone:String(o.phone||""),c:c?1:0,s:s?1:0,type:String(o.kind).includes("جملة")?"w":"r",gov:String(o.gov||""),city:String(o.city||""),adr:String(o.adr||"")});n++});
- sv();toast("تم استيراد "+n+" صف من شيت "+WZ.sheet);WZ.out=[];impMap()}
-/* ---- settings ---- */
+ sv();toast("تم استيراد "+n+" صف من شيت "+WZ.sheet);WZ.out=[];impMap();
+}/* ---- settings ---- */
 function vSet(){return ph(N.set)+`<div class="tiles">${U([["🌳 شجرة الحسابات","go('coa')"],["ℹ️ بيانات العمل التجاري (الاسم + اللوجو)","bizForm()"],["🖨️ قوالب الطباعة","tplForm()"],["📥 استيراد من Excel","impForm()"],["💹 هامش الربح المقترح","pctForm()"],["🏬 مخازن فرعية","wForm()"],["🧩 تخصيص التبويبات","cust()"],["👥 الموظفون والصلاحيات","go('emp')"],["🌐 اللغة: عربي / English","togLang()"],["♻️ إعادة ضبط الديمو","resetAsk()"],...(canInstall()&&!isStandalone()?[["📲 تثبيت التطبيق","promptInstall()"]]:[])],t=>`<div class="tile" onclick="${t[1]}">${t[0]}</div>`)}</div>`}
 function resetAsk(){sh(`<h3>تأكيد إعادة الضبط</h3><p>سيتم حذف كل البيانات المسجلة في هذا الـ Demo والعودة للبيانات الافتراضية.</p><div class="row"><button class="rd" onclick="resetAll()">نعم، أعد الضبط</button>${bk}</div>`)}
 function resetAll(){try{localStorage.removeItem("mgr6")}catch(e){}S=seed();migrate();TB.filter(t=>t.kind=="page").forEach(t=>closeTab(t,1));go("home")}
