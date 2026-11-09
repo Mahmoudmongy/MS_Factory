@@ -156,6 +156,13 @@ ok('baseline SQL validates synced item/partner references, source-effect backfil
   /Source effects exist; backfill them before baseline publication/.test(baselineMigration)&&/Opening ledger is not balanced/.test(baselineMigration)&&/products pr/.test(baselineMigration)&&/public\.customers c/.test(baselineMigration)&&/public\.suppliers s/.test(baselineMigration));
 
 const sourceEffectMigration=fs.readFileSync(path.join(ROOT,'supabase/migrations/20261108201500_source_accounting_effects.sql'),'utf8');
+const baselineHardeningMigration=fs.readFileSync(path.join(ROOT,'supabase/migrations/20261109080000_harden_factory_baseline_publication.sql'),'utf8');
+ok('baseline publisher locks and compares the complete opening snapshot and qualifies its RETURNING column',
+  baselineHardeningMigration.includes('for share')&&baselineHardeningMigration.includes('Baseline is incomplete compared with the factory opening snapshot')&&baselineHardeningMigration.includes('Baseline omits or changes a factory master-record identity')&&baselineHardeningMigration.includes('returning b.published_at into v_published_at'));
+const tombstoneHardeningMigration=fs.readFileSync(path.join(ROOT,'supabase/migrations/20261109081000_prevent_source_effect_resurrection.sql'),'utf8');
+ok('database rejects every attempt to resurrect a tombstoned source effect',
+  tombstoneHardeningMigration.includes('v_current_deleted_at')&&tombstoneHardeningMigration.includes('A tombstoned source effect cannot be resurrected'));
+
 ok('baseline section reads are requested only with explicit inventory/settings permission',cloud.includes('admin || profile.permissions?.inventory === true')&&cloud.includes('admin || profile.permissions?.settings === true'));
 ok('reports-only permission cannot read inventory or accounting source-effect sections',sourceEffectMigration.includes("can_access_factory_owner_strict(v_owner_id, 'inventory')")&&sourceEffectMigration.includes("can_access_factory_owner_strict(\n      v_owner_id,")&&!sourceEffectMigration.includes("private.can_access_factory_owner(v_owner_id, 'inventory', false)"));
 ok('source-effect SQL merges authorized sections and preserves the hidden section atomically',
