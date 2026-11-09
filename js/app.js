@@ -358,12 +358,20 @@ const cl=()=>{if(CUR&&CUR.kind=="page")closeTab(CUR,1);else render()};
 function askClose(t){const d=document.createElement("div");d.id="cfm";d.innerHTML=`<div class="cb"><p>هذه الصفحة بها تغييرات غير محفوظة. هل تريد إغلاقها؟</p><div class="row"><button class="rd" id="cf1">إغلاق بدون حفظ</button><button class="g" id="cf2">متابعة التعديل</button></div></div>`;document.body.appendChild(d);d.querySelector("#cf1").onclick=()=>{d.remove();closeTab(t,1)};d.querySelector("#cf2").onclick=()=>{d.remove();actTab(t,1)}}
 function drawTabs(){$g("#tabs").innerHTML=U(TB,t=>{const title=String(t.title||"").replace(/^\s*\d{2,}\s*[-–—ـ:|]+\s*/,"");return `<span class="tb ${t===CUR?"on":""}" onclick="actTab(TB.find(x=>x.id==${t.id}))"><b class="tb-close" onclick="event.stopPropagation();closeTab(TB.find(x=>x.id==${t.id}))">✕</b><span class="tb-label">${t.dirty?"● ":""}${title}</span></span>`})}
 function bkw(d){let n=hi+d;while(n>=0&&n<hs.length&&!TB.some(x=>x.id===hs[n]))n+=d;if(n<0||n>=hs.length)return;hi=n;actTab(TB.find(x=>x.id===hs[n]),1)}
-function nav(){document.title=S.name;const cp=cloudProfile();if(cp&&!cp.is_admin){$g("#who").innerHTML='<option value="0">حساب الموظف</option>';$g("#who").disabled=true;}else{$g("#who").disabled=false;$g("#who").innerHTML=`<option value="0">الأدمن / Admin</option>`+U(S.emp,e=>`<option value="${e.id}" ${who==e.id?"selected":""}>${e.name}</option>`);}const cs=CUR&&CUR.kind=="screen"?CUR.sid:tab;$g("#sb").innerHTML=`<span class="br">${S.logo?`<img src="${S.logo}">`:"🧵 "}${S.name}</span>`+U(allowed(),t=>`<a class="${t[0]==cs?"on":""}" 
+function nav(){
+ document.title=S.name;
+ const cp=cloudProfile();
+ if(cp&&!cp.is_admin){$g("#who").innerHTML='<option value="0">حساب الموظف</option>';$g("#who").disabled=true;}
+ else{$g("#who").disabled=false;$g("#who").innerHTML=`<option value="0">الأدمن / Admin</option>`+U(S.emp,e=>`<option value="${e.id}" ${who==e.id?"selected":""}>${e.name}</option>`);}
+ const cs=CUR&&CUR.kind=="screen"?CUR.sid:tab,items=allowed();
+ const renderLink=t=>`<a class="${t[0]==cs?"on":""}" 
   onclick="handleNavClick(event, '${t[0]}')" 
   ondblclick="event.preventDefault(); go('${t[0]}',0,true);"
   onauxclick="if(event.button==1){event.preventDefault(); go('${t[0]}',0,true);}" 
   onmousedown="if(event.button==1) event.preventDefault()"
->${t[1]} ${t[2]}</a>`)}
+>${t[1]} ${t[2]}</a>`;
+ $g("#sb").innerHTML=`<span class="br">${S.logo?`<img src="${S.logo}">`:"🧵 "}${S.name}</span><div class="sb-nav-scroll">`+U(items.filter(t=>t[0]!=="set"),renderLink)+`</div><div class="sb-footer">`+U(items.filter(t=>t[0]==="set"),renderLink)+`</div>`;
+}
 window.setFactoryAuthProfile=function(profile){window.__factoryAuthProfile=profile||null;if(profile&&!profile.is_admin){who="0";const tabs=allowed();if(!tabs.some(t=>t[0]===tab))tab=tabs[0]?.[0]||"home";}nav();render();};
 function migrate(){S.curs=S.curs||["EGP","USD","EUR"];S.codes=S.codes||[];S.accts.forEach(a=>{if(!a.cur)a.cur="EGP"});S.items.forEach(i=>{if(i.model===undefined)i.model="";Object.keys(i.st).forEach(v=>codeFor(i.id,v))});if(!S.tpl)S.tpl=TPL0();S.pend=S.pend||0}
 /* ---- unified balance display: positive = له علينا (plain), negative = عليه لنا (red) ---- */
