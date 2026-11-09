@@ -1,7 +1,7 @@
 /* Real browser tests: they load the actual index.html / js/app.js / sw.js through a local static server
  * and exercise the real functions. No mocks of app logic. Exit code != 0 if any check fails.
  * Run: npm test   (requires: npm install  -> playwright)                                         */
-const http=require('http'),fs=require('fs'),path=require('path');let pw;try{pw=require('playwright')}catch(e){console.error('playwright is not installed. Run: npm install && npx playwright install chromium');process.exit(2)}
+const http=require('http'),fs=require('fs'),path=require('path'),vm=require('vm');let pw;try{pw=require('playwright')}catch(e){console.error('playwright is not installed. Run: npm install && npx playwright install chromium');process.exit(2)}
 const ROOT=path.join(__dirname,'..'),MIME={'.html':'text/html','.js':'text/javascript','.css':'text/css','.json':'application/json','.png':'image/png','.svg':'image/svg+xml','.md':'text/plain'};
 const server=http.createServer((q,r)=>{let u=decodeURIComponent(q.url.split('?')[0]);if(u.endsWith('/'))u+='index.html';if(u==='/index.html'){let html=fs.readFileSync(path.join(ROOT,'index.html'),'utf8');html=html.replace('<style>html{visibility:hidden}</style>','');html=html.replace(/<script type="module">[\s\S]*?<\/script>/,'');html=html.replace('<script type="module" src="./js/cloud-sync.js"></script>','');r.writeHead(200,{'Content-Type':'text/html'});r.end(html);return}const f=path.join(ROOT,u);if(!f.startsWith(ROOT)||!fs.existsSync(f)||fs.statSync(f).isDirectory()){r.writeHead(404);r.end('nf');return}r.writeHead(200,{'Content-Type':MIME[path.extname(f)]||'application/octet-stream'});fs.createReadStream(f).pipe(r)});
 const R=[];let fails=0;const ok=(n,c,x)=>{R.push(`${c?'PASS':'FAIL'}  ${n}${x!==undefined?'  => '+(typeof x=='object'?JSON.stringify(x):x):''}`);if(!c)fails++};
@@ -17,6 +17,7 @@ ok('partner edit preserves the stable record ID and updates the existing object'
 ok('employee edit preserves the existing employee record',app.includes('function saveE(id)')&&app.includes('if(old)Object.assign(old,data)'));
 ok('warehouse names can be edited without replacing warehouse IDs',app.includes('function saveWh(id)')&&app.includes('w.name=n'));
 ok('chart-of-account names can be edited while preserving their account IDs',app.includes('function saveAccName(id)')&&app.includes('a.name=n'));
+ok('cloud transaction deletion requires both its module and inventory permissions',/effectPermission=\(\{doc:"invoices",po:"production",vch:"invoices",je:"settings",wo:"inventory"\}\)\[src\]/.test(app)&&/cp\.permissions\?\.inventory!==true\|\|cp\.permissions\?\.\[effectPermission\]!==true/.test(app));
 ok('master-data edit handlers enforce edit permission when called directly',[
   'function saveP(id){if(id&&!can("edit"))return;',
   'function saveItem(id){if(id&&!can("edit"))return;',
@@ -49,6 +50,293 @@ const syncPageStart=app.indexOf('function syncPage(){'),syncPageEnd=app.indexOf(
 ok('offline saves are durably queued and retried on reconnect, focus and visibility',/mgr6-sync-pending/.test(cloud)&&/function markPendingSync/.test(cloud)&&/function scheduleAutoSync/.test(cloud)&&/addEventListener\("online", \(\) => \{ retryCount = 0; scheduleAutoSync\(500\); \}\)/.test(cloud)&&/addEventListener\("focus"/.test(cloud)&&/visibilitychange/.test(cloud)&&/scheduleAutoSync\(1500\)/.test(cloud));
 ok('sync toolbar is removed but conflict recovery remains reachable from the connection indicator',!app.includes('["🔄 حالة الاتصال والمزامنة","syncPage()"]')&&/id="net" onclick="syncPage\(\)"/.test(idx)&&/ms-logout-btn/.test(cloud)&&!/cloud-badge|رفع الآن|Upload Now|تحميل/.test(cloud.slice(cloud.indexOf('function drawAll()'))));
 
+const collectorStart=cloud.indexOf('function collectSourceEffects(state)');
+const collectorEnd=cloud.indexOf('// ===== الرفع مرة واحدة',collectorStart);
+const effectHelpersContext=vm.createContext({});
+let collectSourceEffects=null, normalizeSourceEffects=null, planSourceEffectSync=null, applyCanonicalSourceEffect=null, removeCanonicalSourceEffect=null, removeSourceDocument=null, planRemoteSourceEffectApply=null, buildStockBaseline=null, applyStockBaseline=null, buildFactoryBaseline=null, applyFactoryBaseline=null, applyInventoryBaselineSection=null, applyAccountingBaselineSection=null;
+try {
+  vm.runInContext(cloud.slice(collectorStart,collectorEnd)+';this.collectSourceEffects=collectSourceEffects;this.normalizeSourceEffects=normalizeSourceEffects;this.planSourceEffectSync=planSourceEffectSync;this.applyCanonicalSourceEffect=applyCanonicalSourceEffect;this.removeCanonicalSourceEffect=removeCanonicalSourceEffect;this.removeSourceDocument=removeSourceDocument;this.planRemoteSourceEffectApply=planRemoteSourceEffectApply;this.buildStockBaseline=buildStockBaseline;this.applyStockBaseline=applyStockBaseline;this.buildFactoryBaseline=buildFactoryBaseline;this.applyFactoryBaseline=applyFactoryBaseline;this.applyInventoryBaselineSection=applyInventoryBaselineSection;this.applyAccountingBaselineSection=applyAccountingBaselineSection;',effectHelpersContext);
+  collectSourceEffects=effectHelpersContext.collectSourceEffects;
+  normalizeSourceEffects=effectHelpersContext.normalizeSourceEffects;
+  planSourceEffectSync=effectHelpersContext.planSourceEffectSync;
+  applyCanonicalSourceEffect=effectHelpersContext.applyCanonicalSourceEffect;
+  removeCanonicalSourceEffect=effectHelpersContext.removeCanonicalSourceEffect;
+  removeSourceDocument=effectHelpersContext.removeSourceDocument;
+  planRemoteSourceEffectApply=effectHelpersContext.planRemoteSourceEffectApply;
+  buildStockBaseline=effectHelpersContext.buildStockBaseline;
+  applyStockBaseline=effectHelpersContext.applyStockBaseline;
+  buildFactoryBaseline=effectHelpersContext.buildFactoryBaseline;
+  applyFactoryBaseline=effectHelpersContext.applyFactoryBaseline;
+  applyInventoryBaselineSection=effectHelpersContext.applyInventoryBaselineSection;
+  applyAccountingBaselineSection=effectHelpersContext.applyAccountingBaselineSection;
+} catch(e) {}
+const stockBaselineFixture={
+  wh:[{id:1,name:'المخزن الرئيسي'}],
+  items:[
+    {id:11,sku:'FB011',name:'قماش',unit:'متر',wh:1,st:{'أبيض':12,'كحلي':4},val:1600},
+    {id:12,sku:'ZIP012',name:'سوستة',unit:'قطعة',wh:1,st:{'-':50},val:250}
+  ]
+};
+const stockBaseline=buildStockBaseline?buildStockBaseline(stockBaselineFixture):{invalid:[{reason:'helper_unavailable'}]};
+ok('stock baseline captures absolute item/variant quantities and values',stockBaseline.invalid.length===0&&stockBaseline.items.length===2&&stockBaseline.items[0].variants.length===2);
+ok('stock baseline fingerprint is deterministic',!!buildStockBaseline&&stockBaseline.fingerprint===buildStockBaseline(stockBaselineFixture).fingerprint);
+ok('stock baseline rejects duplicate item identities',buildStockBaseline({...stockBaselineFixture,items:[...stockBaselineFixture.items,{...stockBaselineFixture.items[0]}]}).invalid.some(x=>x.reason==='duplicate_item_external_id'));
+ok('stock baseline rejects invalid quantities',buildStockBaseline({...stockBaselineFixture,items:[{...stockBaselineFixture.items[0],st:{'-':'not-a-number'}}]}).invalid.some(x=>x.reason==='invalid_stock_quantity'));
+const baselineTarget={items:[{id:11,st:{'أبيض':99},val:9999,keep:'unchanged'},{id:12,st:{'-':1},val:1},{id:13,st:{'-':7},val:70}]};
+const baselineApply1=applyStockBaseline?applyStockBaseline(baselineTarget,stockBaseline):{applied:false};
+const baselineApply2=applyStockBaseline?applyStockBaseline(baselineTarget,stockBaseline):{applied:false};
+ok('absolute stock baseline replaces quantities rather than adding movement deltas',baselineApply1.applied&&baselineTarget.items[0].st['أبيض']===12&&baselineTarget.items[0].val===1600);
+ok('reapplying the same stock baseline is idempotent',baselineApply2.applied&&baselineTarget.items[0].st['أبيض']===12&&baselineTarget.items[1].st['-']===50);
+ok('stock baseline preserves non-stock fields and local-only items',baselineTarget.items[0].keep==='unchanged'&&baselineTarget.items[2].st['-']===7);
+const baselineMissingTarget={items:[{id:11,st:{'-':4},val:4}]};
+const baselineBefore=JSON.stringify(baselineMissingTarget);
+const baselineMissing=applyStockBaseline?applyStockBaseline(baselineMissingTarget,stockBaseline):{applied:true};
+ok('stock baseline refuses partial application when an item is missing',!baselineMissing.applied&&JSON.stringify(baselineMissingTarget)===baselineBefore);
+const tamperedBaseline={...stockBaseline,items:stockBaseline.items.map(x=>({...x,value:x.value+1}))};
+ok('stock baseline rejects a modified manifest checksum',!applyStockBaseline(baselineTarget,tamperedBaseline).applied);
+const factoryBaselineFixture={
+  wh:[{id:1,name:'المخزن الرئيسي'}],
+  accts:[{id:1,code:'1001',name:'الخزنة',t:'A',k:'cash',cash:1,cur:'EGP'},{id:2,code:'1100',name:'العملاء',t:'A',k:'ar',cash:0,cur:'EGP'}],
+  partners:[{id:31,cloudId:'partner-31',name:'عميل افتتاحي',phone:'01000000000',c:1,s:0}],
+  items:[{id:11,cloudId:'item-11',sku:'FB011',name:'قماش',unit:'متر',wh:1,st:{'-':5},val:50}],
+  L:[
+    {src:'je',d:'2026-11-01',ts:1,ref:'JE-0001',desc:'رصيد افتتاحي',a:1,dr:100,cr:0,pid:0,fc:0},
+    {src:'je',d:'2026-11-01',ts:1,ref:'JE-0001',desc:'رصيد افتتاحي',a:2,dr:0,cr:100,pid:31,fc:0}
+  ],
+  mv:[{d:'2026-11-01',ts:1,iid:11,v:'-',q:5,val:50,ref:'رصيد افتتاحي',pid:0}]
+};
+const factoryBaseline=buildFactoryBaseline?buildFactoryBaseline(factoryBaselineFixture):{invalid:[{}]};
+ok('factory baseline captures opening ledger, opening stock history, accounts and partners',factoryBaseline.invalid.length===0&&factoryBaseline.openingLedger.length===2&&factoryBaseline.openingMovements.length===1&&factoryBaseline.accounts.length===2);
+ok('factory baseline refuses non-opening legacy ledger rows',buildFactoryBaseline({...factoryBaselineFixture,L:[{src:'je',desc:'قيد غير مصنف',a:1,dr:1,cr:1}]}).invalid.some(x=>x.reason==='unclassified_legacy_ledger_row'));
+ok('factory baseline refuses source effects that were not backfilled',buildFactoryBaseline({...factoryBaselineFixture,L:[...factoryBaselineFixture.L,{src:'doc',rid:99,a:1,dr:1,cr:1}]}).invalid.some(x=>x.reason==='source_effects_require_backfill_before_baseline'));
+const factoryTarget={
+  accts:[{id:1,code:'1001',name:'الخزنة',t:'A',k:'cash',cash:1,cur:'EGP'}],
+  partners:[{id:501,name:'عميل افتتاحي',phone:'01000000000',c:1,s:0}],
+  items:[{id:999,cloudId:'item-11',st:{'-':0},val:0}],
+  L:[],mv:[]
+};
+const factoryApply1=applyFactoryBaseline?applyFactoryBaseline(factoryTarget,factoryBaseline):{applied:false};
+const factoryApply2=applyFactoryBaseline?applyFactoryBaseline(factoryTarget,factoryBaseline):{applied:false};
+ok('factory baseline creates missing account, links partner and imports opening ledger',factoryApply1.applied&&factoryTarget.accts.length===2&&factoryTarget.partners[0].cloudId==='partner-31'&&factoryTarget.L.length===2);
+ok('factory baseline restores opening stock and movement history without double-counting',factoryApply1.applied&&factoryTarget.items[0].st['-']===5&&factoryTarget.mv.length===1);
+ok('factory baseline reapplication is idempotent',factoryApply2.applied&&factoryTarget.L.length===2&&factoryTarget.mv.length===1&&factoryTarget.items[0].st['-']===5);
+const missingFactoryTarget={accts:[],partners:[],items:[],L:[],mv:[]};
+const missingFactoryBefore=JSON.stringify(missingFactoryTarget);
+const missingFactoryApply=applyFactoryBaseline?applyFactoryBaseline(missingFactoryTarget,factoryBaseline):{applied:true};
+ok('factory baseline refuses partial restore when a product is missing',!missingFactoryApply.applied&&JSON.stringify(missingFactoryTarget)===missingFactoryBefore);
+
+const inventorySectionState={
+  items:[{id:11,cloudId:'item-11',st:{'-':0},val:0}],
+  mv:[]
+};
+const inventorySection={baselineVersion:1,stock:buildStockBaseline({items:[{id:11,cloudId:'item-11',st:{'-':8},val:80}],wh:[]}),
+  openingMovements:[{date:'2026-11-01',timestamp:1,itemExternalId:'item-11',variant:'-',quantity:8,value:80,reference:'رصيد افتتاحي'}]};
+const inventorySectionApply=applyInventoryBaselineSection?applyInventoryBaselineSection(inventorySectionState,inventorySection):{applied:false};
+const inventorySectionApplyAgain=applyInventoryBaselineSection?applyInventoryBaselineSection(inventorySectionState,inventorySection):{applied:false};
+ok('inventory-only baseline applies absolute stock and imports opening history without replaying quantities',
+  inventorySectionApply.applied&&inventorySectionState.items[0].st['-']===8&&inventorySectionState.mv.length===1&&inventorySectionApplyAgain.applied&&inventorySectionState.mv.length===1);
+const inventorySectionBadState={items:[{id:11,cloudId:'item-11',st:{'-':2},val:20}],mv:[]};
+const inventorySectionBefore=JSON.stringify(inventorySectionBadState);
+const inventorySectionBad=applyInventoryBaselineSection?applyInventoryBaselineSection(inventorySectionBadState,{...inventorySection,openingMovements:[...inventorySection.openingMovements,{itemExternalId:'missing',variant:'-',quantity:1,value:1}]}):{applied:true};
+ok('inventory-only baseline preflights all history before mutation',!inventorySectionBad.applied&&JSON.stringify(inventorySectionBadState)===inventorySectionBefore);
+const accountingSectionState={accts:[],partners:[],items:[{id:11,cloudId:'item-11',st:{'-':4},val:40}],L:[],mv:[]};
+const accountingSection={baselineVersion:1,accounts:factoryBaseline.accounts,partners:factoryBaseline.partners,openingLedger:factoryBaseline.openingLedger};
+const accountingSectionApply=applyAccountingBaselineSection?applyAccountingBaselineSection(accountingSectionState,accountingSection):{applied:false};
+const accountingSectionApplyAgain=applyAccountingBaselineSection?applyAccountingBaselineSection(accountingSectionState,accountingSection):{applied:false};
+ok('accounting-only baseline restores accounts, partners and balanced opening ledger without exposing inventory section',
+  accountingSectionApply.applied&&accountingSectionState.accts.length===2&&accountingSectionState.partners.length===1&&accountingSectionState.L.length===2&&accountingSectionState.items[0].st['-']===4&&accountingSectionApplyAgain.applied&&accountingSectionState.L.length===2);
+const accountingWithoutInventory={accts:[],partners:[],items:[],L:[],mv:[]};
+const accountingWithoutInventoryApply=applyAccountingBaselineSection?applyAccountingBaselineSection(accountingWithoutInventory,accountingSection):{applied:false};
+ok('accounting-only baseline does not require inventory products, quantities or movement state',
+  accountingWithoutInventoryApply.applied&&accountingWithoutInventory.accts.length===2&&accountingWithoutInventory.partners.length===1&&accountingWithoutInventory.L.length===2&&accountingWithoutInventory.items.length===0&&accountingWithoutInventory.mv.length===0);
+const baselineMigration=fs.readFileSync(path.join(ROOT,'supabase/migrations/20261108213000_factory_sync_baseline.sql'),'utf8');
+ok('baseline SQL provides immutable one-time publication and independently authorized section reads',
+  /p_expected_version is distinct from 0/.test(baselineMigration)&&/Opening baseline is already published and immutable/.test(baselineMigration)&&/p_section = 'inventory'/.test(baselineMigration)&&/p_section = 'accounting'/.test(baselineMigration)&&baselineMigration.includes("can_access_factory_owner_strict(v_owner_id, 'inventory')")&&baselineMigration.includes("can_access_factory_owner_strict(v_owner_id, 'settings')"));
+ok('baseline SQL validates synced item/partner references, source-effect backfill and balanced opening ledger',
+  /Source effects exist; backfill them before baseline publication/.test(baselineMigration)&&/Opening ledger is not balanced/.test(baselineMigration)&&/products pr/.test(baselineMigration)&&/public\.customers c/.test(baselineMigration)&&/public\.suppliers s/.test(baselineMigration));
+
+const sourceEffectMigration=fs.readFileSync(path.join(ROOT,'supabase/migrations/20261108201500_source_accounting_effects.sql'),'utf8');
+ok('baseline section reads are requested only with explicit inventory/settings permission',cloud.includes('admin || profile.permissions?.inventory === true')&&cloud.includes('admin || profile.permissions?.settings === true'));
+ok('reports-only permission cannot read inventory or accounting source-effect sections',sourceEffectMigration.includes("can_access_factory_owner_strict(v_owner_id, 'inventory')")&&sourceEffectMigration.includes("can_access_factory_owner_strict(\n      v_owner_id,")&&!sourceEffectMigration.includes("private.can_access_factory_owner(v_owner_id, 'inventory', false)"));
+ok('source-effect SQL merges authorized sections and preserves the hidden section atomically',
+  sourceEffectMigration.includes("else coalesce(v_existing_payload -> 'ledger', '[]'::jsonb)")&&sourceEffectMigration.includes("else coalesce(v_existing_payload -> 'movements', '[]'::jsonb)")&&sourceEffectMigration.includes("v_write_ledger and not v_can_write_ledger")&&sourceEffectMigration.includes("v_write_movements and not v_can_write_movements"));
+ok('source-effect client sends only the sections allowed by the employee permission set',
+  cloud.includes('ledgerIncluded: writeLedger, movementsIncluded: writeMovements')&&cloud.includes('ledger: writeLedger ? action.effect.ledger : []')&&cloud.includes('movements: writeMovements ? action.effect.movements : []'));
+ok('inventory-only and finance-only clients can upload their authorized effect section while SQL preserves the hidden section',
+  cloud.includes('ledgerIncluded: writeLedger, movementsIncluded: writeMovements')&&
+  !cloud.includes('complete_effect_requires_all_populated_section_permissions')&&
+  sourceEffectMigration.includes("else coalesce(v_existing_payload -> 'ledger', '[]'::jsonb)")&&
+  sourceEffectMigration.includes("else coalesce(v_existing_payload -> 'movements', '[]'::jsonb)"));
+ok('source-effect deletion uses queued tombstones and requires both sections before clearing',
+  cloud.includes('mgr6-cloud-effect-tombstones')&&cloud.includes('if (isDelete && (!writeLedger || !writeMovements))')&&sourceEffectMigration.includes('Deleting a complete source effect requires ledger and inventory write permissions'));
+ok('source effects are downloaded after master data and opening baseline application',
+  cloud.indexOf('const effectsResult = await supabase.rpc("get_source_effects")')>cloud.indexOf('for (const [sectionName, row, applySection]')&&cloud.indexOf('for (const [sectionName, row, applySection]')>cloud.indexOf('mergeCloudProducts(S.items'));
+
+const accountConflictTarget={accts:[{id:1,code:'1001',name:'الخزنة',t:'A',k:'bank',cash:1,cur:'EGP'}],partners:[],items:[{id:11,cloudId:'item-11',st:{'-':4},val:40}],L:[],mv:[]};
+const accountConflictBefore=JSON.stringify(accountConflictTarget);
+const accountConflictApply=applyAccountingBaselineSection?applyAccountingBaselineSection(accountConflictTarget,accountingSection):{applied:true};
+ok('accounting baseline refuses a same-code account with a conflicting definition without mutation',
+  !accountConflictApply.applied&&JSON.stringify(accountConflictTarget)===accountConflictBefore);
+const partnerRoleBaseline=buildFactoryBaseline({...factoryBaselineFixture,partners:[{...factoryBaselineFixture.partners[0],s:1}]});
+const partnerRoleTarget={accts:[],partners:[{id:501,name:'عميل افتتاحي',phone:'01000000000',c:1,s:0}],items:[{id:11,cloudId:'item-11',st:{'-':4},val:40}],L:[],mv:[]};
+const partnerRoleApply=applyFactoryBaseline?applyFactoryBaseline(partnerRoleTarget,partnerRoleBaseline):{applied:false};
+ok('accounting baseline merges customer/supplier roles when linking a known partner',
+  partnerRoleApply.applied&&partnerRoleTarget.partners[0].cloudId==='partner-31'&&partnerRoleTarget.partners[0].c===1&&partnerRoleTarget.partners[0].s===1);
+
+const qaRestoreScript=fs.readFileSync(path.join(ROOT,'scripts/restore-qa-logical-backup.sh'),'utf8');
+const qaRestoreWorkflow=fs.readFileSync(path.join(ROOT,'.github/workflows/restore-supabase-backup-to-qa.yml'),'utf8');
+const backupWorkflow=fs.readFileSync(path.join(ROOT,'.github/workflows/backup-supabase-to-b2.yml'),'utf8');
+ok('QA restore is hard-locked to the QA project and rejects the production project reference',
+  qaRestoreScript.includes('EXPECTED_QA_PROJECT_REF')&&qaRestoreScript.includes('FORBIDDEN_PRODUCTION_PROJECT_REF')&&qaRestoreWorkflow.includes('bpkkzyjfkktkaadhmbdi')&&qaRestoreWorkflow.includes('yvrislcbbhtruwdnuooz'));
+ok('QA restore uses logical schema/data plus separately exported Auth and migration history',
+  qaRestoreScript.includes('--file roles.sql')&&qaRestoreScript.includes('--file schema.sql')&&qaRestoreScript.includes('--file data.sql')&&qaRestoreScript.includes('--file auth-users.sql')&&qaRestoreScript.includes('--file migration-history.sql')&&qaRestoreScript.includes('--file auth-trigger-qa-idempotent.sql'));
+ok('QA restore refuses non-empty targets and verifies row counts, RLS, and custom Auth trigger',
+  qaRestoreScript.includes('Never overwrite an existing QA dataset')&&qaRestoreScript.includes('public-row-counts.txt')&&qaRestoreScript.includes('auth-row-counts.txt')&&qaRestoreScript.includes('relrowsecurity')&&qaRestoreScript.includes('expected_trigger_names.issubset(actual_trigger_names)'));
+ok('manual backup requires its explicit gate and remains independent of the scheduled-backup gate',
+  backupWorkflow.includes("github.event_name == 'schedule' && vars.BACKUP_SCHEDULE_ENABLED == 'true'")&&backupWorkflow.includes("github.event_name == 'workflow_dispatch' && inputs.run_backup == true && vars.BACKUP_ENABLED == 'true'")&&!backupWorkflow.includes("github.event_name == 'schedule' && vars.BACKUP_ENABLED == 'true'"));
+const productMergeStart=cloud.indexOf('function mergeCloudProducts(existing, incoming)');
+const productMergeEnd=cloud.indexOf('function mergeCloudInvoices(existing, incoming)',productMergeStart);
+const productMergeContext=vm.createContext({});
+let mergeCloudProducts=null;
+try {
+  vm.runInContext(cloud.slice(productMergeStart,productMergeEnd)+';this.mergeCloudProducts=mergeCloudProducts;',productMergeContext);
+  mergeCloudProducts=productMergeContext.mergeCloudProducts;
+} catch(e) {}
+const legacyProduct=[{id:101,sku:'FB101',name:'قماش أبيض',st:{'-':5},val:50}];
+const remoteProduct=[{id:1,cloudId:'factory-item-1',sku:'FB101',name:'قماش أبيض',st:{'-':9},val:90}];
+const linkedProduct=mergeCloudProducts?mergeCloudProducts(legacyProduct,remoteProduct):{arr:legacyProduct,linked:0,conflicts:0};
+ok('remote product links to a unique local SKU without duplicating the item',linkedProduct.linked===1&&linkedProduct.arr.length===1&&legacyProduct[0].cloudId==='factory-item-1');
+const mismatchedProduct=[{id:102,sku:'FB102',name:'قماش مختلف'}];
+const mismatchResult=mergeCloudProducts?mergeCloudProducts(mismatchedProduct,[{id:2,cloudId:'factory-item-2',sku:'FB102',name:'اسم مختلف'}]):{conflicts:0,added:1};
+ok('product SKU match with a different name is preserved as a conflict',mismatchResult.conflicts===1&&mismatchedProduct.length===1);
+const ambiguousProducts=[{id:103,sku:'FB103',name:'قماش'},{id:104,sku:'FB103',name:'قماش'}];
+const ambiguousResult=mergeCloudProducts?mergeCloudProducts(ambiguousProducts,[{id:3,cloudId:'factory-item-3',sku:'FB103',name:'قماش'}]):{conflicts:0,added:1};
+ok('ambiguous duplicate local SKUs are not auto-merged',ambiguousResult.conflicts===1&&ambiguousProducts.length===2);
+const cloudIdFixture={...stockBaselineFixture,items:[{...stockBaselineFixture.items[0],cloudId:'canonical-fabric-11'}]};
+const cloudIdBaseline=buildStockBaseline?buildStockBaseline(cloudIdFixture):{items:[]};
+ok('stock baseline uses canonical cloud identity rather than device-local numeric ID',cloudIdBaseline.items.some(x=>x.itemExternalId==='canonical-fabric-11'));
+const cloudIdTarget={items:[{id:999,cloudId:'canonical-fabric-11',st:{'أبيض':0},val:0}]};
+const cloudIdApply=applyStockBaseline?applyStockBaseline(cloudIdTarget,cloudIdBaseline):{applied:false};
+ok('stock baseline resolves canonical identity on a device with a different local ID',cloudIdApply.applied&&cloudIdTarget.items[0].st['أبيض']===12);
+ok('new inventory items receive a stable cloud identity at creation',/cloudId:String\(itemId\)/.test(app));
+ok('default item SKUs are derived from the unique local item ID rather than item count',/if\(!o\.sku\)o\.sku="IT"\+itemId\.toString\(36\)\.toUpperCase\(\)/.test(app)&&/sku:"IT"\+itemId\.toString\(36\)\.toUpperCase\(\)/.test(app));
+ok('product uploads and ledger effects use canonical cloud identities',cloud.includes('pr.cloudId = String(pr.id)')&&cloud.includes('externalId: String(item.cloudId || id)'));
+const partnerMergeStart=cloud.indexOf('function mergeCloudPartners(existing, incoming)');
+const partnerMergeEnd=cloud.indexOf('function mergeCloudInvoices(existing, incoming)',partnerMergeStart);
+const partnerMergeContext=vm.createContext({});
+let mergeCloudPartners=null;
+try {
+  vm.runInContext(cloud.slice(partnerMergeStart,partnerMergeEnd)+';this.mergeCloudPartners=mergeCloudPartners;',partnerMergeContext);
+  mergeCloudPartners=partnerMergeContext.mergeCloudPartners;
+} catch(e) {}
+const legacyPartner=[{id:201,name:'عميل واحد',phone:'01000000000',c:1,s:0}];
+const remotePartner=[{id:'partner-201',cloudId:'partner-201',name:'عميل واحد',phone:'01000000000',kind:'supplier'}];
+const partnerLink=mergeCloudPartners?mergeCloudPartners(legacyPartner,remotePartner):{linked:0,conflicts:0};
+ok('partner sync links a unique local contact to the canonical cloud identity',partnerLink.linked===1&&legacyPartner[0].cloudId==='partner-201'&&legacyPartner[0].c===1&&legacyPartner[0].s===1);
+const ambiguousPartnerRows=[{id:202,name:'عميل مكرر',phone:''},{id:203,name:'عميل مكرر',phone:''}];
+const partnerAmbiguous=mergeCloudPartners?mergeCloudPartners(ambiguousPartnerRows,[{id:'partner-amb',cloudId:'partner-amb',name:'عميل مكرر',phone:'',kind:'customer'}]):{conflicts:0};
+ok('ambiguous partner matches are preserved as conflicts',partnerAmbiguous.conflicts===1&&ambiguousPartnerRows.length===2);
+const partnerEffectState={accts:[{id:1,code:'1001',name:'الخزنة'}],items:[],partners:[{id:31,cloudId:'partner-canonical-31',name:'عميل'}],L:[{src:'je',rid:91,a:1,dr:10,cr:10,pid:31}],mv:[]};
+const partnerEffect=normalizeSourceEffects?normalizeSourceEffects(partnerEffectState):{effects:[],invalid:[{}]};
+ok('ledger effect references canonical partner identity',partnerEffect.invalid.length===0&&partnerEffect.effects[0]?.ledger[0]?.partnerExternalId==='partner-canonical-31');
+ok('new partner records receive stable cloud identity',/cloudId:String\(partnerId\)/.test(app));
+const effectFixture={
+  L:[
+    {src:'doc',rid:7,a:1,dr:100,cr:0},
+    {src:'doc',rid:7,a:2,dr:0,cr:100},
+    {src:'je',rid:7,a:3,dr:50,cr:50}
+  ],
+  mv:[
+    {src:'doc',rid:7,iid:11,v:'أزرق / M',q:-2,val:-40},
+    {src:'po',rid:7,iid:12,v:'-',q:3,val:30}
+  ]
+};
+const effectResult=collectSourceEffects?collectSourceEffects(effectFixture):{effects:[],invalid:[{reason:'collector_unavailable'}]};
+ok('effect collector groups ledger and stock rows by source type plus source ID',effectResult.effects.length===3&&effectResult.effects.find(x=>x.sourceType==='doc'&&x.sourceId==='7')?.ledger.length===2&&effectResult.effects.find(x=>x.sourceType==='doc'&&x.sourceId==='7')?.movements.length===1);
+ok('effect collector keeps identical source IDs separate across source categories',effectResult.effects.some(x=>x.sourceType==='je'&&x.sourceId==='7')&&effectResult.effects.some(x=>x.sourceType==='po'&&x.sourceId==='7'));
+const effectAgain=collectSourceEffects?collectSourceEffects(effectFixture):{effects:[]};
+ok('effect collection is deterministic and does not mutate source state',JSON.stringify(effectResult.effects)===JSON.stringify(effectAgain.effects)&&effectFixture.L.length===3&&effectFixture.mv.length===2);
+const invalidEffectResult=collectSourceEffects?collectSourceEffects({L:[{src:'doc',a:1}],mv:[{src:'unknown',rid:1}]}):{invalid:[]};
+ok('effect collector reports missing IDs and unsupported source types instead of silently dropping them',invalidEffectResult.invalid.length===2);
+const canonicalFixture={
+  accts:[{id:1,code:'1001',name:'الخزنة'},{id:2,code:'1100',name:'العملاء'}],
+  items:[{id:21,name:'قماش',sku:'FB021',wh:1,unit:'متر',st:{أبيض:10}}],
+  wh:[{id:1,name:'قماش'}],
+  partners:[{id:31,name:'عميل تجريبي'}],
+  L:[{src:'doc',rid:91,d:'2026-11-08',ts:1,ref:'S-1',desc:'بيع',a:1,dr:100,cr:0,pid:0,fc:0},
+     {src:'doc',rid:91,d:'2026-11-08',ts:1,ref:'S-1',desc:'عميل',a:2,dr:0,cr:100,pid:31,fc:0}],
+  mv:[{src:'doc',rid:91,d:'2026-11-08',ts:1,iid:21,v:'أبيض',q:-2,val:-20,ref:'S-1',pid:31}]
+};
+const normalized=normalizeSourceEffects?normalizeSourceEffects(canonicalFixture):{effects:[],invalid:[{reason:'normalizer_unavailable'}]};
+ok('normalizer maps local ledger account IDs to account codes and partner IDs to external IDs',normalized.invalid.length===0&&normalized.effects[0]?.ledger[0]?.accountCode==='1001'&&normalized.effects[0]?.ledger.some(x=>x.partnerExternalId==='31'));
+ok('normalizer maps stock movements to item external ID, SKU and warehouse identity',normalized.invalid.length===0&&normalized.effects[0]?.movements[0]?.itemExternalId==='21'&&normalized.effects[0]?.movements[0]?.warehouseName==='قماش');
+const unmapped=normalizeSourceEffects?normalizeSourceEffects({...canonicalFixture,L:[{src:'je',rid:92,a:999,dr:1,cr:0}],mv:[{src:'wo',rid:93,iid:999,q:-1,val:-5}]}):{invalid:[]};
+ok('normalizer rejects unmapped account and item references rather than guessing',unmapped.invalid.some(x=>x.reason==='unmapped_account')&&unmapped.invalid.some(x=>x.reason==='unmapped_item'));
+const duplicateCodes=normalizeSourceEffects?normalizeSourceEffects({...canonicalFixture,accts:[...canonicalFixture.accts,{id:3,code:'1001',name:'حساب مكرر'}],L:[]}):{invalid:[]};
+const unbalanced=normalizeSourceEffects?normalizeSourceEffects({...canonicalFixture,L:[{src:'doc',rid:94,a:1,dr:100,cr:0}]}):{invalid:[]};
+ok('normalizer rejects an unbalanced source ledger before it can be synchronized',unbalanced.invalid.some(x=>x.reason==='unbalanced_ledger_effect'));
+const duplicateSku=normalizeSourceEffects?normalizeSourceEffects({...canonicalFixture,items:[...canonicalFixture.items,{id:22,name:'قماش آخر',sku:'FB021',wh:1,unit:'متر',st:{}}],L:[]}):{invalid:[]};
+ok('normalizer rejects duplicate item SKUs that could map different local IDs to one business code',duplicateSku.invalid.some(x=>x.reason==='duplicate_item_sku'));
+ok('normalizer rejects duplicate account codes',duplicateCodes.invalid.some(x=>x.reason==='duplicate_account_code'));
+const openingRows=collectSourceEffects?collectSourceEffects({L:[{src:'je',desc:'رصيد افتتاحي',a:1,dr:10,cr:0}],mv:[{ref:'رصيد افتتاحي',iid:1,v:'-',q:10,val:10}]}):{ignored:[]};
+ok('legacy opening-balance baseline rows are not replayed as transaction effects',openingRows.ignored.length===2&&openingRows.effects.length===0);
+const plannedNew=planSourceEffectSync?planSourceEffectSync(canonicalFixture,{},[],[]):{actions:[],conflicts:[{}]};
+ok('planner schedules a new source effect with expected version zero',plannedNew.actions.length===1&&plannedNew.actions[0].op==='upsert'&&plannedNew.actions[0].expectedVersion===0);
+const sameRemote={source_type:'doc',source_id:'91',sync_version:3,payload:normalized.effects[0],deleted_at:null};
+const adopted=planSourceEffectSync?planSourceEffectSync(canonicalFixture,[sameRemote],{},[]):{adoptedVersions:{}};
+ok('planner adopts a matching remote baseline without overwriting it',adopted.actions.length===0&&adopted.adoptedVersions['["doc","91"]']===3);
+const stale=planSourceEffectSync?planSourceEffectSync(canonicalFixture,[{...sameRemote,sync_version:4}],{'["doc","91"]':3},[]):{conflicts:[{}]};
+ok('planner preserves a newer remote version as a conflict',stale.actions.length===0&&stale.conflicts.some(x=>x.reason==='version_mismatch'));
+const changed=planSourceEffectSync?planSourceEffectSync({...canonicalFixture,L:[...canonicalFixture.L,{src:'doc',rid:91,a:1,dr:5,cr:5}]},[sameRemote],{'["doc","91"]':3},[]):{actions:[]};
+ok('planner replaces changed effects only against the exact known remote version',changed.actions.length===1&&changed.actions[0].op==='upsert'&&changed.actions[0].expectedVersion===3);
+const deleteNew=planSourceEffectSync?planSourceEffectSync({accts:[],items:[],partners:[],wh:[],L:[],mv:[]},[],{},[{sourceType:'doc',sourceId:'91'}]):{actions:[]};
+ok('planner emits a version-zero tombstone for a locally deleted unsynced source',deleteNew.actions.length===1&&deleteNew.actions[0].op==='delete'&&deleteNew.actions[0].expectedVersion===0);
+const deleteKnown=planSourceEffectSync?planSourceEffectSync({accts:[],items:[],partners:[],wh:[],L:[],mv:[]},[sameRemote],{'["doc","91"]':3},[{sourceType:'doc',sourceId:'91'}]):{actions:[]};
+ok('planner tombstones a known source using its exact current version',deleteKnown.actions.length===1&&deleteKnown.actions[0].op==='delete'&&deleteKnown.actions[0].expectedVersion===3);
+const deletedRemote=planSourceEffectSync?planSourceEffectSync({accts:[],items:[],partners:[],wh:[],L:[],mv:[]},[{...sameRemote,sync_version:4,deleted_at:'2026-11-08T00:00:00Z',payload:null}],{'["doc","91"]':3},[{sourceType:'doc',sourceId:'91'}]):{clearTombstones:[]};
+ok('planner adopts an existing remote tombstone instead of recreating it',deletedRemote.clearTombstones.length===1&&deletedRemote.adoptedVersions['["doc","91"]']===4);
+const resurrect=planSourceEffectSync?planSourceEffectSync(canonicalFixture,[{...sameRemote,sync_version:4,deleted_at:'2026-11-08T00:00:00Z',payload:null}],{'["doc","91"]':3},[]):{conflicts:[{}]};
+ok('planner never resurrects a remotely deleted source automatically',resurrect.actions.length===0&&resurrect.conflicts.some(x=>x.reason==='remote_effect_deleted'));
+ok('source deletions are queued as durable offline tombstones before local reversal',/function queueCloudEffectTombstone\(src,id\)/.test(app)&&/mgr6-cloud-effect-tombstones/.test(app)&&/queueCloudEffectTombstone\(src,id\);rev\(id,src\)/.test(app));
+ok('editing and deleting transactions reverses only matching source type plus ID',/function rev\(rid,src\)/.test(app)&&/rev\(id,src\)/.test(app)&&/rev\(old\.id,"doc"\)/.test(app)&&/rev\(old\.id,"vch"\)/.test(app)&&/rev\(old\.id,"po"\)/.test(app)&&/rev\(old\.id,"je"\)/.test(app));
+const applyState={accts:[{id:1,code:'1001',name:'الخزنة',t:'A'},{id:2,code:'1100',name:'العملاء',t:'A'}],items:[{id:21,name:'قماش',sku:'FB021',wh:1,unit:'متر',st:{'أبيض':8},val:80}],partners:[{id:31,name:'عميل تجريبي'}],L:[{src:'doc',rid:91,a:1,dr:100,cr:0},{src:'doc',rid:91,a:2,dr:0,cr:100,pid:31}],mv:[{src:'doc',rid:91,iid:21,v:'أبيض',q:-2,val:-20}]};
+const replacementEffect={...normalized.effects[0],movements:[{...normalized.effects[0].movements[0],quantity:-3,value:-30}]};
+const appliedOnce=applyCanonicalSourceEffect?applyCanonicalSourceEffect(applyState,replacementEffect):{applied:false};
+const qtyAfterFirst=applyState.items[0].st['أبيض'],valAfterFirst=applyState.items[0].val,ledgerCountAfterFirst=applyState.L.filter(x=>x.src==='doc'&&String(x.rid)==='91').length;
+const appliedTwice=applyCanonicalSourceEffect?applyCanonicalSourceEffect(applyState,replacementEffect):{applied:false};
+ok('applying a replacement effect reverses old movement then applies the new quantity and value',appliedOnce.applied&&qtyAfterFirst===7&&valAfterFirst===70);
+ok('reapplying the same source effect is idempotent for stock and ledger rows',appliedTwice.applied&&applyState.items[0].st['أبيض']===7&&applyState.items[0].val===70&&applyState.L.filter(x=>x.src==='doc'&&String(x.rid)==='91').length===ledgerCountAfterFirst);
+const missingItemState={accts:[{id:1,code:'1001',name:'الخزنة'}],items:[],partners:[],L:[],mv:[]};
+const missingItemApply=applyCanonicalSourceEffect?applyCanonicalSourceEffect(missingItemState,replacementEffect):{applied:true};
+ok('effect application refuses missing item mappings before mutating the local ledger',!missingItemApply.applied&&missingItemState.L.length===0);
+const localWithoutEffect={...canonicalFixture,L:[],mv:[]};
+const remoteNew=planRemoteSourceEffectApply?planRemoteSourceEffectApply(localWithoutEffect,[sameRemote],{}):{actions:[]};
+ok('remote planner downloads a source absent from the local device',remoteNew.actions.length===1&&remoteNew.actions[0].op==='apply'&&remoteNew.actions[0].version===3);
+const localSame=planRemoteSourceEffectApply?planRemoteSourceEffectApply(canonicalFixture,[sameRemote],{}):{adoptedVersions:{}};
+ok('remote planner adopts an identical local effect without applying it twice',localSame.actions.length===0&&localSame.adoptedVersions['["doc","91"]']===3);
+const localDiff=planRemoteSourceEffectApply?planRemoteSourceEffectApply({...canonicalFixture,L:[...canonicalFixture.L,{src:'doc',rid:91,a:1,dr:1,cr:1}]},[sameRemote],{}):{conflicts:[{}]};
+ok('remote planner preserves local edits as conflicts instead of overwriting them',localDiff.actions.length===0&&localDiff.conflicts.some(x=>x.reason==='local_effect_differs_from_remote'));
+const remoteDeletedAbsent=planRemoteSourceEffectApply?planRemoteSourceEffectApply(localWithoutEffect,[{...sameRemote,deleted_at:'2026-11-08T00:00:00Z',payload:null}],{}):{adoptedVersions:{}};
+ok('remote planner adopts tombstones when the local source is already absent',remoteDeletedAbsent.actions.length===1&&remoteDeletedAbsent.actions[0].op==='delete'&&remoteDeletedAbsent.actions[0].version===3);
+const remoteDeletePlan=planRemoteSourceEffectApply?planRemoteSourceEffectApply(canonicalFixture,[{...sameRemote,sync_version:4,deleted_at:'2026-11-08T00:00:00Z',payload:null}],{'["doc","91"]':3}):{actions:[],conflicts:[{}]};
+ok('remote tombstone schedules a safe reversal when the local effect version is known',
+  remoteDeletePlan.actions.length===1&&remoteDeletePlan.actions[0].op==='delete'&&remoteDeletePlan.actions[0].version===4);
+const remoteDeleteState={...canonicalFixture,docs:[{id:91,no:'S-1'}],L:canonicalFixture.L.map(x=>({...x})),mv:canonicalFixture.mv.map(x=>({...x})),items:canonicalFixture.items.map(x=>({...x,st:{...x.st}}))};
+const remoteDeleteReversal=removeCanonicalSourceEffect?removeCanonicalSourceEffect(remoteDeleteState,normalized.effects[0]):{applied:false};
+const remoteDeleteDocument=removeSourceDocument?removeSourceDocument(remoteDeleteState,'doc','91'):{applied:false};
+ok('remote tombstone reverses stock and ledger effects and removes the deleted local document',
+  remoteDeleteReversal.applied&&remoteDeleteState.items[0].st['أبيض']===12&&remoteDeleteState.L.length===0&&remoteDeleteState.mv.length===0&&remoteDeleteDocument.applied&&remoteDeleteState.docs.length===0);
+const untrackedDocumentState={...canonicalFixture,docs:[{id:91}],L:[],mv:[]};
+const untrackedDocumentTombstone=planRemoteSourceEffectApply?planRemoteSourceEffectApply(untrackedDocumentState,[{...sameRemote,deleted_at:'2026-11-08T00:00:00Z',payload:null}],{}):{actions:[{}],conflicts:[]};
+ok('remote tombstone preserves a local document when its local version is unknown, even if no effect rows exist',
+  untrackedDocumentTombstone.actions.length===0&&untrackedDocumentTombstone.conflicts.some(x=>x.reason==='untracked_local_effect_conflicts_with_remote_tombstone')&&untrackedDocumentState.docs.length===1);
+const movementOnlyPayload={sourceType:'doc',sourceId:'91',ledgerIncluded:false,movementsIncluded:true,ledger:[],movements:normalized.effects[0].movements};
+const movementOnlyRemote={...sameRemote,payload:movementOnlyPayload};
+const partialDownload=planRemoteSourceEffectApply?planRemoteSourceEffectApply(canonicalFixture,[movementOnlyRemote],{}):{conflicts:[{}]};
+ok('role-redacted inventory payload compares movements without exposing ledger lines',partialDownload.actions.length===0&&partialDownload.adoptedVersions['["doc","91"]']===3);
+const partialState={accts:canonicalFixture.accts.map(x=>({...x})),items:[{...canonicalFixture.items[0],st:{'أبيض':8},val:80}],partners:canonicalFixture.partners.map(x=>({...x})),L:[{src:'doc',rid:91,a:1,dr:100,cr:0},{src:'doc',rid:91,a:2,dr:0,cr:100,pid:31}],mv:[{src:'doc',rid:91,iid:21,v:'أبيض',q:-2,val:-20}]};
+const partialApply=applyCanonicalSourceEffect?applyCanonicalSourceEffect(partialState,{...normalized.effects[0],...movementOnlyPayload}):{applied:false};
+ok('partial inventory application preserves hidden ledger rows while replacing movements',partialApply.applied&&partialState.L.length===2&&partialState.items[0].st['أبيض']===8);
 ok('production-only employees are allowed through the cloud upload permission gate',/!admin && !\["customers", "suppliers", "invoices", "inventory", "production"\]\.some\(canWrite\)/.test(cloud));
 ok('production-only employees are allowed through the cloud download permission gate',/!\["customers","suppliers","invoices","inventory","production","reports"\]\.some\(canRead\)/.test(cloud));
 ok('invoice cloud sync uses the atomic versioned RPC',/rpc\(["']sync_invoice["']/.test(cloud)&&/p_expected_version/.test(cloud)&&/sync_version/.test(cloud));
