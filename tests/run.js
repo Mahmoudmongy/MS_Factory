@@ -564,6 +564,6 @@ ok('database startup reuses the cached profile and avoids duplicate getUser requ
 ok('profile cache prevents repeated startup requests and uses a bounded timeout',idx.includes('factory-profile-verified:')&&idx.includes('Date.now() - last > 120000')&&idx.includes('AbortSignal.timeout(9000)'));
 ok('database startup errors reach the window listeners',dbSync.includes("window.dispatchEvent(new CustomEvent('factory-db-startup-error'"));
 ok('full Excel backup includes every app array and supports large JSON rows',app.includes('exportFactoryWorkbook')&&app.includes('json_part_')&&app.includes('prepareFullImport')&&app.includes('importFullConfirm'));
-ok('first-login password change clears the cached must-change-password flag before returning to the app',changePasswordFn.includes('factory-profile-verified:')&&changePasswordFn.includes('currentProfile.must_change_password = false'));
+ok('first-login password change clears the cached must-change-password flag before returning to the app',changePasswordPage.includes('factory-profile-verified:')&&changePasswordPage.includes('currentProfile.must_change_password = false'));
 console.log(R.join('\n'));console.log(`\n${R.length-fails}/${R.length} checks passed, ${fails} failed`);process.exit(fails?1:0);
 })().catch(e=>{console.error('TEST RUN CRASHED:',e.message);process.exit(2)});
