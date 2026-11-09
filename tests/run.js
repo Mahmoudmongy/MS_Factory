@@ -559,11 +559,10 @@ await m.click('#sb a:nth-child(5)');await m.waitForTimeout(300);const closed=awa
 await m.evaluate(()=>{go('sale');docForm('sale')});const fw=await m.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1);ok('mobile: invoice form fits the screen width',fw);
 ok('mobile: no JavaScript errors',merr.length==0,merr.slice(0,2));await mc.close();
 await browser.close();server.close();
-console.log(R.join('\n'));console.log(`\n${R.length-fails}/${R.length} checks passed, ${fails} failed`);process.exit(fails?1:0);
-})().catch(e=>{console.error('TEST RUN CRASHED:',e.message);process.exit(2)});
-
 ok('legacy cloud-sync polling is disabled in database-first mode',cloud.includes('if (!window.__factoryDatabaseFirst) {')&&cloud.indexOf('if (!window.__factoryDatabaseFirst) {')<cloud.indexOf('const _origSetItem')&&cloud.includes('setInterval(() => {'));
 ok('database startup reuses the cached profile and avoids duplicate getUser requests',dbSync.includes('ensureProfile(actorId, false)')&&dbSync.includes('supabase.auth.getSession()')&&!dbSync.includes('supabase.auth.getUser()'));
 ok('profile cache prevents repeated startup requests and uses a bounded timeout',idx.includes('factory-profile-verified:')&&idx.includes('Date.now() - last > 120000')&&idx.includes('AbortSignal.timeout(9000)'));
 ok('database startup errors reach the window listeners',dbSync.includes("window.dispatchEvent(new CustomEvent('factory-db-startup-error'"));
 ok('full Excel backup includes every app array and supports large JSON rows',app.includes('exportFactoryWorkbook')&&app.includes('json_part_')&&app.includes('prepareFullImport')&&app.includes('importFullConfirm'));
+console.log(R.join('\n'));console.log(`\n${R.length-fails}/${R.length} checks passed, ${fails} failed`);process.exit(fails?1:0);
+})().catch(e=>{console.error('TEST RUN CRASHED:',e.message);process.exit(2)});
