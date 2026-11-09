@@ -109,6 +109,7 @@ function setBaselineRow(row) {
     type: row.record_type, id: row.record_id, payload: clone(row.payload),
     version: Number(row.version || 1), deleted_at: row.deleted_at || null
   });
+  cacheRow(row);
 }
 async function fetchAllRecords() {
   const all = [];
@@ -338,7 +339,9 @@ async function bootstrap() {
     actorId = profile?.id || null;
     ownerId = profile?.created_by || profile?.id || null;
     storageScope = ownerId || 'anonymous';
-    snapshotBaseline(getState());
+    const cachedRows=loadCachedRows();
+    if(cachedRows.length) hydrateFromRows(cachedRows);
+    else snapshotBaseline(getState());
     stateReady = true;
     window.__factoryDatabaseFirstReady = true;
     window.dispatchEvent(new CustomEvent('factory-database-ready'));
