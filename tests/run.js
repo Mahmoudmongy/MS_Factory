@@ -570,6 +570,14 @@ ok('profile cache prevents repeated startup requests and uses a bounded timeout'
 ok('database startup errors reach the window listeners',dbSync.includes("window.dispatchEvent(new CustomEvent('factory-db-startup-error'"));
 ok('full Excel backup uses structured worksheets and restores complete record JSON',app.includes('exportFactoryWorkbook')&&app.includes('flattenExcelRecord')&&app.includes('__record_json')&&app.includes('prepareFullImport')&&app.includes('importFullConfirm'));
 ok('Excel transfer template covers all business lists and parses structured legacy rows',app.includes('async function templateExcel')&&app.includes('schemas={accts:')&&app.includes('legacyChunks')&&app.includes('headers.forEach'));
+ok('full Excel worksheets expose primitive settings lists as visible columns',app.includes('else if(value!==undefined){out.value=value??"";}'));
+ok('custom reports support multiple selected fields and show their relationships',app.includes('toggleCustomField')&&app.includes('R.fields')&&app.includes('العلاقة بين الأعمدة المختارة'));
+ok('operational assistant responds locally with period-aware business figures',app.includes('function localAssistantAnswer')&&app.includes('function askPreset')&&app.includes('const inPeriod=d=>')&&!app.includes('window.claude.use("sample")'));
+ok('additional management reports cover cash, aging, stock and sales/purchases analysis',['cash','ar','ap','sv','sc','si','ps','ex'].every(k=>app.includes(k+':()=>')));
+ok('production bootstrap empties all business arrays but preserves standard currencies',dbSync.includes("patch[type] = type === 'curs' ? ['EGP','USD','EUR'] : [];")&&dbSync.includes('ms-factory-empty-device-v2:'));
+ok('summary screen uses only a custom date range',app.includes('القوائم المالية — تحديد الفترة')&&!app.includes('prs("hpr")'));
+ok('mobile double-back uses one exit confirmation',app.includes('signOutNow(true)'));
+
 ok('first-login password change clears the cached must-change-password flag before returning to the app',changePasswordPage.includes('factory-profile-verified:')&&changePasswordPage.includes('currentProfile.must_change_password = false'));
 console.log(R.join('\n'));console.log(`\n${R.length-fails}/${R.length} checks passed, ${fails} failed`);process.exit(fails?1:0);
 })().catch(e=>{console.error('TEST RUN CRASHED:',e.message);process.exit(2)});
