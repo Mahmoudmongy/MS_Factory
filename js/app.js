@@ -389,7 +389,8 @@ function pvh(v){const s=`${f(Math.abs(v))} ج.م`;return Math.abs(v)<.005?`${f(0
 function lgTbl(ls,sg,pm){let b=0;return `<table class="l"><tr><th>التاريخ / الوقت</th><th>المرجع</th><th>البيان</th><th>الطرف</th><th>مدين</th><th>دائن</th><th>الرصيد</th><th></th></tr>${U(ls,l=>{b+=(l.dr-l.cr)*sg;return `<tr><td>${l.ts?fts(l.ts):dfm(l.d)}</td><td>${l.ref}</td><td>${l.desc||""}</td><td>${l.pid?pn(l.pid):""}</td><td>${l.dr?f(l.dr):""}</td><td>${l.cr?f(l.cr):""}</td><td>${pm?pvh(b):f(b)}</td><td>${rb(l)}</td></tr>`})}</table>`}
 function drillPartner(id){sh(`<div class="ph"><h3>كشف حساب ${pn(id)} (عميل / مورد مدمج)</h3><div class="row"><button class="g" onclick="stPrint(${id})">🖨️ طباعة</button>${bk}</div></div>${lgTbl(srt(S.L.filter(l=>l.pid==id)),-1,1)}<b>الرصيد: ${btxt(pbal(id))}</b><p class="mu">القاعدة الموحدة: الرصيد الموجب = له علينا (يظهر عاديًا)، والسالب بالأحمر = عليه لنا.</p>`)}
 /* ---- currencies per account (no mixing of different currencies in one total) ---- */
-const cur_=a=>(typeof a=="object"?a:ac_(a)).cur||"EGP",cf=(a,v)=>`${f(v)} ${cur_(a)=="EGP"?"ج.م":cur_(a)}`;
+function cur_(a){return (typeof a=="object"?a:ac_(a)).cur||"EGP";}
+function cf(a,v){return `${f(v)} ${cur_(a)=="EGP"?"ج.م":cur_(a)}`;}
 function balc(id,fr,to){const a=ac_(id);if(cur_(a)=="EGP")return bal(id,fr,to);return S.L.filter(l=>l.a==id&&(!fr||l.d>=fr)&&(!to||l.d<=to)).reduce((s,l)=>s+(l.fc||0),0)*nat(a)}
 function post(d,ref,desc,ls,src,rid,ts){const dr=ls.reduce((a,l)=>a+(l.dr||0),0),cr=ls.reduce((a,l)=>a+(l.cr||0),0);if(Math.abs(dr-cr)>.005)return false;ls.forEach(l=>{if(l.dr||l.cr)S.L.push({d,ts:ts||Date.now(),ref,desc:l.desc||desc||"",a:l.a,dr:l.dr||0,cr:l.cr||0,pid:l.pid||0,src,rid,fc:l.fc||0})});return true}
 const curSel=id=>`<div class="row"><select id="${id}">${U(S.curs,c=>`<option>${c}</option>`)}</select><input id="${id}n" placeholder="عملة أخرى: SAR"><button class="g" onclick="curAdd('${id}')">+ إضافة عملة</button></div>`;
