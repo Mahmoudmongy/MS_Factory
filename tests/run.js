@@ -374,7 +374,7 @@ ok('local save writes a durable pending-sync marker before network recovery',/mg
 ok('sync indicator is a separate small icon and turns blue while syncing',/id="sync-icon"/.test(idx)&&/syncIcon\.classList\.toggle\('syncing', syncState === 'saving'\)/.test(cloud)&&/#sync-icon\.syncing\{color:#38bdf8/.test(css));
 ok('header uses an icon-only light/dark toggle and language stays out of the header',/<button id="thb"/.test(idx)&&!idx.includes('id="lgb"')&&/togLang\(\)/.test(app)&&/التبديل إلى الوضع الداكن/.test(app));
 ok('admin selector is labelled Admin in Arabic and English',/الأدمن \/ Admin/.test(app));
-ok('search filters update while typing and restore cursor focus after filtering',/function fbarType\(/.test(app)&&/oninput="fbarType\(/.test(app)&&/setSelectionRange\(start,end\)/.test(app));
+ok('search filters retain typed values and commit on Enter or blur',/function fbarType\(k,id,el\)\{FL\[k\]=FL\[k\]\|\|\{\};FL\[k\]\[id\]=el\.value;\}/.test(app)&&/oninput="fbarType\(/.test(app)&&/onblur="fbarCommit/.test(app));
 ok('opening an existing screen in a separate tab activates it instead of duplicating it',/let x=TB\.find\(y=>y\.kind=="screen"&&y\.sid==t\)/.test(app));
 ok('Excel export splits currency labels into a separate adjacent cell and keeps amounts numeric',/function exportCurrencyCell/.test(app)&&/\[h\+" \(قيمة\)","العملة"\]/.test(app));
 ok('legacy Excel importer supports multiple named sheets for customers, suppliers and inventory',/function impSheet\(/.test(app)&&/function templateExcel\(/.test(app)&&/customers:\[/.test(app)&&/suppliers:\[/.test(app)&&/WZ\.sheetNames/.test(app));
