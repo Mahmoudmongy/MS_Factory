@@ -577,10 +577,24 @@ await c2.setOffline(false);await c2.close();
 /* ---------- D. mobile ---------- */
 const mc=await browser.newContext({viewport:{width:390,height:800},isMobile:true,hasTouch:true}),m=await mc.newPage(),merr=[];m.on('pageerror',e=>merr.push(e.message));await m.goto(BASE);await m.waitForTimeout(400);
 const mob=await m.evaluate(()=>({pos:getComputedStyle(document.querySelector('#sb')).position,bg:getComputedStyle(document.querySelector('#bg')).display,over:document.documentElement.scrollWidth<=innerWidth+1}));
+const toolbarRects=await m.evaluate(()=>{const sels=['#bg','#top .top-nav:nth-child(1)','#top .top-nav:nth-child(2)','#ttl','#net','#who','#thb','#logout-btn'];const boxes=sels.map(s=>{const e=document.querySelector(s),r=e?.getBoundingClientRect();return {s,visible:!!e&&!!r&&r.width>0&&r.height>0,x:r?.x||0,y:r?.y||0,right:r?.right||0,bottom:r?.bottom||0}}).filter(x=>x.visible);const overlaps=[];for(let i=0;i<boxes.length;i++)for(let j=i+1;j<boxes.length;j++){const a=boxes[i],b=boxes[j];if(Math.min(a.right,b.right)-Math.max(a.x,b.x)>1&&Math.min(a.bottom,b.bottom)-Math.max(a.y,b.y)>1)overlaps.push([a.s,b.s]);}return {boxes,overlaps,scroll:document.documentElement.scrollWidth<=innerWidth+1};});
+ok('mobile toolbar controls have separate visible hit areas without overlap or horizontal overflow',toolbarRects.boxes.length===8&&toolbarRects.overlaps.length===0&&toolbarRects.scroll,toolbarRects);
+
 ok('mobile: sidebar is a drawer with burger button and the page does not scroll sideways',mob.pos=='fixed'&&mob.bg=='block'&&mob.over,mob);
-await m.click('#bg');await m.waitForTimeout(250);const open=await m.evaluate(()=>({sb:document.querySelector('#sb').classList.contains('open'),ov:getComputedStyle(document.querySelector('#sb-overlay')).display}));ok('mobile: burger opens the drawer and shows the overlay',open.sb&&open.ov!='none',open);
+await m.click('#bg');await m.waitForTimeout(250);const open=await m.evaluate(()=>({sb:document.querySelector('#sb').classList.contains('open'),ov:getComputedStyle(document.querySelector('#sb-overlay')).display}));
+const settingsFlow=await m.evaluate(()=>{const a=[...document.querySelectorAll('#sb a')].find(x=>(x.getAttribute('onclick')||'').includes('set'));return a?{found:true,position:getComputedStyle(a).position,display:getComputedStyle(a).display}: {found:false};});
+ok('mobile settings entry stays in the normal sidebar list and is not sticky or floating',settingsFlow.found&&settingsFlow.position==='static',settingsFlow);
+ok('mobile: burger opens the drawer and shows the overlay',open.sb&&open.ov!='none',open);
 await m.click('#sb a:nth-child(5)');await m.waitForTimeout(300);const closed=await m.evaluate(()=>({sb:document.querySelector('#sb').classList.contains('open'),ov:getComputedStyle(document.querySelector('#sb-overlay')).display}));ok('mobile: choosing a screen closes the drawer and hides the overlay',!closed.sb&&closed.ov=='none',closed);
-await m.evaluate(()=>{go('sale');docForm('sale')});const fw=await m.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1);ok('mobile: invoice form fits the screen width',fw);
+
+await m.evaluate(()=>go('sale'));
+const datePanelClosed=await m.evaluate(()=>{const card=document.querySelector('#m .filter-card'),panel=card?.querySelector('.filter-date-panel'),btn=card?.querySelector('.filter-date-toggle');return !!panel&&panel.hidden&&!!btn&&btn.textContent.includes('تحديد الفترة')&&card.querySelectorAll('input[type="date"]').length===2;});
+await m.locator('#m .filter-date-toggle').first().click();
+const datePanelOpened=await m.evaluate(()=>{const card=document.querySelector('#m .filter-card'),panel=card?.querySelector('.filter-date-panel');return !!panel&&!panel.hidden&&getComputedStyle(panel).display!=='none'&&card.querySelectorAll('.filter-date-field').length===2;});
+await m.locator('#m .filter-date-toggle').first().click();
+ok('mobile date fields remain hidden until the separate period button is pressed',datePanelClosed&&datePanelOpened,{datePanelClosed,datePanelOpened});
+await m.evaluate(()=>docForm('sale'));const fw=await m.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1);
+ok('mobile: invoice form fits the screen width',fw);
 ok('mobile: no JavaScript errors',merr.length==0,merr.slice(0,2));await mc.close();
 await browser.close();server.close();
 ok('legacy cloud-sync polling is disabled in database-first mode',cloud.includes('if (!window.__factoryDatabaseFirst) {')&&cloud.indexOf('if (!window.__factoryDatabaseFirst) {')<cloud.indexOf('const _origSetItem')&&cloud.includes('setInterval(() => {'));
