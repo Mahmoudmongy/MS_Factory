@@ -3,10 +3,15 @@ import { supabase } from './supabase.js';
 const QUEUE_KEY = 'ms-factory-db-queue-v1';
 const BASELINE_KEY = 'ms-factory-db-baseline-v1';
 const LAST_SYNC_KEY = 'ms-factory-db-last-sync-v1';
+const CACHE_PREFIX = 'ms-factory-db-cache-v1:';
 let storageScope = 'anonymous';
 const scopedKey = key => key + ':' + storageScope;
 const getLastSyncAt = () => localStorage.getItem(scopedKey(LAST_SYNC_KEY)) || '';
 const setLastSyncAt = value => { try { localStorage.setItem(scopedKey(LAST_SYNC_KEY), value); } catch (_) {} };
+const cachePrefix = () => CACHE_PREFIX + storageScope + ':';
+const cacheKey = (type,id) => cachePrefix() + encodeURIComponent(type) + ':' + encodeURIComponent(id);
+function cacheRow(row) { try { localStorage.setItem(cacheKey(row.record_type,row.record_id), JSON.stringify(row)); } catch (e) { console.warn('Local offline cache write failed',e); } }
+function loadCachedRows() { const rows=[]; const prefix=cachePrefix(); for(let i=0;i<localStorage.length;i++){const key=localStorage.key(i);if(!key||!key.startsWith(prefix))continue;try{const row=JSON.parse(localStorage.getItem(key)||'null');if(row&&row.record_type&&row.record_id)rows.push(row)}catch(_){}} return rows; }
 const PAGE_SIZE = 500;
 let ownerId = null;
 let actorId = null;
@@ -64,25 +69,39 @@ function splitState(state) {
   return { arrays, meta };
 }
 function persistBaseline() {
-  try { localStorage.setItem(scopedKey(BASELINE_KEY), JSON.stringify([...baseline.values()])); } catch (e) { console.warn('Could not persist sync baseline',e); }
+  try {
+    localStorage.setItem(scopedKey(BASELINE_KEY), JSON.stringify([...baseline.values()].map(row => ({
+      type:row.type,id:row.id,version:Number(row.version||0),deleted_at:row.deleted_at||null
+    }))));
+  } catch (e) { console.warn('Could not persist sync versions',e); }
 }
 function snapshotBaseline(state) {
   baseline = new Map();
+  const { arrays, meta } = splitState(state);
+  const current = new Map();
+  for (const [type,items] of Object.entries(arrays)) {
+    items.forEach((item,index) => {
+      const id=recordKey(type,item,index);
+      current.set(mapKey(type,id),{type,id,payload:cleanPayload(item)});
+    });
+  }
+  current.set(mapKey('__meta','main'),{type:'__meta',id:'main',payload:meta});
   try {
-    const saved = JSON.parse(localStorage.getItem(scopedKey(BASELINE_KEY)) || '[]');
-    if (Array.isArray(saved) && saved.length) {
-      for (const row of saved) baseline.set(mapKey(row.type,row.id),row);
+    const saved=JSON.parse(localStorage.getItem(scopedKey(BASELINE_KEY))||'[]');
+    if(Array.isArray(saved)&&saved.length){
+      for(const row of saved){
+        const item=current.get(mapKey(row.type,row.id));
+        baseline.set(mapKey(row.type,row.id),{
+          type:row.type,id:row.id,payload:item?.payload??null,
+          version:Number(row.version||0),deleted_at:row.deleted_at||null
+        });
+      }
+      for(const [key,item] of current) if(!baseline.has(key)) baseline.set(key,{...item,version:0,deleted_at:null});
+      persistBaseline();
       return;
     }
   } catch (_) {}
-  const { arrays, meta } = splitState(state);
-  for (const [type, items] of Object.entries(arrays)) {
-    items.forEach((item, index) => {
-      const id = recordKey(type, item, index);
-      baseline.set(mapKey(type, id), { type, id, payload: cleanPayload(item), version: 0, deleted_at: null });
-    });
-  }
-  baseline.set(mapKey('__meta', 'main'), { type: '__meta', id: 'main', payload: meta, version: 0, deleted_at: null });
+  for (const [key,item] of current) baseline.set(key,{...item,version:0,deleted_at:null});
   persistBaseline();
 }
 function setBaselineRow(row) {
