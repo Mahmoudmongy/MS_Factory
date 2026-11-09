@@ -88,10 +88,11 @@ import { scopeFactoryStorage } from './js/account-storage.js';
       return;
     }
     const user = session.user;
-    let cached = null;
-    try { cached = JSON.parse(localStorage.getItem(profileKey(user.id)) || 'null'); } catch (_) {}
-    if (cached && cached.id === user.id) {
-      if (!showProfile(cached, user, !navigator.onLine)) return;
+    let cachedProfile = null;
+    try { cachedProfile = JSON.parse(localStorage.getItem(profileKey(user.id)) || 'null'); } catch (_) {}
+    if (cachedProfile && cachedProfile.id === data.session.user.id) {
+      if (cachedProfile.must_change_password === true && cachedProfile.is_admin !== true) { location.replace('change-password.html'); return; }
+      if (!showProfile(cachedProfile, user, !navigator.onLine)) return;
       if (navigator.onLine) {
         const last = Number(localStorage.getItem(verifiedKey(user.id)) || 0);
         if (Date.now() - last > 120000) {
