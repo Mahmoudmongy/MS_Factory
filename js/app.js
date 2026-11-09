@@ -434,7 +434,7 @@ function docLb(id){const d=S.docs.find(x=>x.id==id);labels(d.lines.filter(l=>l.i
 const fv=(k,i)=>(FL[k]||{})[i]||"",ci=(s,q)=>!q||String(s||"").toLowerCase().includes(String(q).toLowerCase()),fin=(k,d)=>(!fv(k,"from")||d>=fv(k,"from"))&&(!fv(k,"to")||d<=fv(k,"to"));
 function fpr(k,x){FL[k]=FL[k]||{};[FL[k].from,FL[k].to]=rng(x);render()}
 function fbar(k,cfg){
- FL[k]=FL[k]||{};const hasD=cfg.some(c=>c[0]==="from");
+ FL[k]=FL[k]||{};const hasD=cfg.some(c=>c[0]==="from"),dateOpen=!!FL[k]._dateOpen;
  const renderField=c=>{const id=c[0],ty=c[1],lb=c[2],op=c[3],hideLabel=!!c[4]||ty==="text",v=FL[k][id]||"";
   if(ty==="sel")return '<div class="filter-value-field">'+(hideLabel?'':'<label>'+lb+'</label>')+'<select data-filter-key="'+k+'" data-filter-id="'+id+'" onchange="FL[\''+k+'\'].'+id+'=this.value;render()">'+op.map(o=>{const z=Array.isArray(o)?o:[o,o||"الكل"];return '<option value="'+z[0]+'" '+(String(v)==String(z[0])?"selected":"")+'>'+z[1]+'</option>'}).join("")+'</select></div>';
   const typ=ty==="date"?"date":"search",handler=ty==="date"?'onchange="FL[\''+k+'\'].'+id+'=this.value;render()"':'oninput="fbarType(\''+k+'\',\''+id+'\',this)" onblur="fbarCommit(\''+k+'\',\''+id+'\',this)" onkeydown="if(event.key===\'Enter\')fbarCommit(\''+k+'\',\''+id+'\',this)"';
@@ -442,9 +442,9 @@ function fbar(k,cfg){
  };
  const fields=cfg.map(renderField).join("");
  const periods=hasD?[["d","اليوم"],["w","هذا الأسبوع"],["m","هذا الشهر"]].map(x=>'<button class="g" onclick="fpr(\''+k+'\',\''+x[0]+'\')">'+x[1]+'</button>').join(""):"";
- return '<div class="card filter-card"><div class="row">'+fields+'</div><div class="row">'+(hasD?'<button type="button" class="g filter-date-toggle" aria-expanded="false" onclick="toggleFilterDates(this)">تحديد الفترة</button>':"")+periods+'<button class="g" onclick="FL[\''+k+'\']={};render()">مسح الفلاتر</button></div></div>';
+ return '<div class="card filter-card '+(dateOpen?"date-range-open":"")+'" data-filter-group="'+k+'"><div class="row">'+fields+'</div><div class="row">'+(hasD?'<button type="button" class="g filter-date-toggle" aria-expanded="'+dateOpen+'" onclick="toggleFilterDates(this)">'+(dateOpen?"إخفاء الفترة":"تحديد الفترة")+'</button>':"")+periods+'<button class="g" onclick="FL[\''+k+'\']={};render()">مسح الفلاتر</button></div></div>';
 }
-function toggleFilterDates(btn){const card=btn?.closest(".filter-card");if(!card)return;const open=card.classList.toggle("date-range-open");btn.setAttribute("aria-expanded",String(open));btn.textContent=open?"إخفاء الفترة":"تحديد الفترة";}
+function toggleFilterDates(btn){const card=btn?.closest(".filter-card");if(!card)return;const open=card.classList.toggle("date-range-open"),key=card.dataset.filterGroup;if(key){FL[key]=FL[key]||{};FL[key]._dateOpen=open;}btn.setAttribute("aria-expanded",String(open));btn.textContent=open?"إخفاء الفترة":"تحديد الفترة";}
 function fbarType(k,id,el){FL[k]=FL[k]||{};FL[k][id]=el.value;}
 function fbarCommit(k,id,el){
  FL[k]=FL[k]||{};FL[k][id]=el.value;const key=k+":"+id;
