@@ -156,43 +156,26 @@ function makeOperations(state) {
   }
   return operations;
 }
-async function checkVersions(type, operations) {
-  const ids = operations.map(o => o.id);
-  if (!ids.length) return;
-  const { data, error } = await supabase.from('factory_records')
-    .select('record_id,version').eq('user_id',ownerId).eq('record_type',type).in('record_id',ids);
-  if (error) throw error;
-  const actual = new Map((data || []).map(row => [row.record_id, Number(row.version || 0)]));
-  for (const op of operations) {
-    const current = actual.get(op.id) || 0;
-    if (current !== Number(op.expectedVersion || 0)) {
-      const conflict = new Error('تعارض تعديل: السجل ' + op.type + '/' + op.id + ' اتغير من جهاز آخر. لم يتم الكتابة فوق النسخة الأحدث.');
+async function writeOperations(operations) {
+  if (!operations.length) return;
+  const records = operations.map(op => ({
+    user_id: ownerId,
+    record_type: op.type,
+    record_id: op.id,
+    payload: op.deleted ? {} : op.payload,
+    expected_version: Number(op.expectedVersion || 0),
+    deleted_at: op.deleted ? new Date().toISOString() : null
+  }));
+  const { data, error } = await supabase.rpc('apply_factory_record_batch', { p_records: records });
+  if (error) {
+    if (error.code === '40001' || String(error.message || '').includes('FACTORY_RECORD_CONFLICT')) {
+      const conflict = new Error('تعارض تعديل: سجل اتغير من جهاز آخر. لم يتم الكتابة فوق النسخة الأحدث.');
       conflict.code = 'FACTORY_RECORD_CONFLICT';
       throw conflict;
     }
+    throw error;
   }
-}
-async function writeOperations(operations) {
-  const grouped = new Map();
-  for (const op of operations) {
-    if (!grouped.has(op.type)) grouped.set(op.type, []);
-    grouped.get(op.type).push(op);
-  }
-  for (const [type, ops] of grouped) {
-    await checkVersions(type, ops);
-    const rows = ops.map(op => ({
-      user_id: ownerId, record_type: op.type, record_id: op.id,
-      payload: op.deleted ? {} : op.payload,
-      version: Number(op.expectedVersion || 0) + 1,
-      deleted_at: op.deleted ? new Date().toISOString() : null,
-      updated_at: new Date().toISOString(), updated_by: actorId
-    }));
-    const { data, error } = await supabase.from('factory_records')
-      .upsert(rows, { onConflict:'user_id,record_type,record_id' })
-      .select('record_type,record_id,payload,version,deleted_at');
-    if (error) throw error;
-    for (const row of data || []) setBaselineRow(row);
-  }
+  for (const row of data || []) setBaselineRow(row);
   persistBaseline();
 }
 function queueOperations(operations) {
