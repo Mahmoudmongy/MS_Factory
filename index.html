@@ -14,6 +14,40 @@
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:image" content="https://bolt.new/static/og_default.png">
   <style>html{visibility:hidden}</style>
+<script>
+(function(){
+  function showFactoryBootError(title, detail) {
+    try {
+      document.documentElement.style.visibility = 'visible';
+      const render = function() {
+        if (!document.body || document.getElementById('factory-boot-error')) return;
+        const box = document.createElement('section');
+        box.id = 'factory-boot-error';
+        box.setAttribute('role', 'alert');
+        box.style.cssText = 'position:fixed;z-index:2147483647;inset:12px;overflow:auto;background:#fff7ed;color:#7c2d12;border:2px solid #c2410c;border-radius:12px;padding:20px;font:16px/1.7 Arial,sans-serif;direction:rtl;text-align:right;box-shadow:0 8px 30px #0003';
+        const safe = String(detail || 'خطأ غير محدد').replace(/[&<>"]/g, function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]});
+        box.innerHTML = '<h2 style="margin-top:0">' + title + '</h2><p>تم إيقاف تحميل الشاشة لحماية بياناتك. لم يتم حذف الحساب أو تغيير صلاحياته.</p><pre style="white-space:pre-wrap;word-break:break-word;background:#ffedd5;padding:10px;border-radius:8px">' + safe + '</pre><button id="factory-boot-retry" style="padding:10px 18px;margin-left:8px">إعادة المحاولة</button><a href="auth.html">العودة لتسجيل الدخول</a>';
+        document.body.appendChild(box);
+        document.getElementById('factory-boot-retry').onclick = function(){ location.reload(); };
+      };
+      if (document.body) render();
+      else document.addEventListener('DOMContentLoaded', render, {once:true});
+      console.error('[Factory bootstrap diagnostic]', title, detail);
+    } catch (diagnosticError) {
+      document.documentElement.style.visibility = 'visible';
+      console.error('Could not render bootstrap diagnostic', diagnosticError);
+    }
+  }
+  window.__showFactoryBootError = showFactoryBootError;
+  window.addEventListener('error', function(event) {
+    showFactoryBootError('حدث خطأ أثناء تشغيل البرنامج', event.message || event.error?.message || 'JavaScript error');
+  });
+  window.addEventListener('unhandledrejection', function(event) {
+    const reason = event.reason;
+    showFactoryBootError('تعذر إكمال تهيئة البرنامج', reason?.message || String(reason || 'Unhandled promise rejection'));
+  });
+})();
+</script>
 </head>
 <script type="module">
 import { supabase } from './js/supabase.js';
@@ -42,8 +76,13 @@ import { supabase } from './js/supabase.js';
             document.documentElement.style.visibility = 'visible';
             if (typeof window.setFactoryAuthProfile === 'function') window.setFactoryAuthProfile(cachedProfile);
           } else if (navigator.onLine) {
-            await supabase.auth.signOut();
-            location.replace('auth.html');
+            // Keep the authenticated session intact. A transient profile/API failure must
+            // not sign the user out or create an endless login loop.
+            window.__showFactoryBootError?.(
+              'تعذر التحقق من ملف الحساب',
+              profileError?.message || 'لم يتم العثور على ملف الحساب المرتبط بالمستخدم. لم يتم تسجيل الخروج.'
+            );
+            return;
           } else {
             document.documentElement.style.visibility = 'visible';
             document.body?.insertAdjacentHTML?.('afterbegin', '<div role="alert" style="padding:12px;background:#fee2e2;color:#991b1b;text-align:center">لا يوجد ملف حساب محفوظ على هذا الجهاز. اتصل بالإنترنت وسجّل الدخول مرة واحدة لتفعيل العمل دون اتصال.</div>');
@@ -66,7 +105,7 @@ import { supabase } from './js/supabase.js';
       }
     } catch (e) {
       console.error('Authentication bootstrap failed:', e);
-      location.replace('auth.html');
+      window.__showFactoryBootError?.('فشل تجهيز شاشة البرنامج', e?.message || String(e));
     }
   
 })();
