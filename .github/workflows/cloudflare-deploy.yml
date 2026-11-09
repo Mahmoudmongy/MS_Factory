@@ -61,10 +61,17 @@ jobs:
               exit 1
             fi
           done
-          if ! grep -q 'manifest-' dist/index.html; then
-            echo "::error::PWA manifest reference is missing from the built application shell"
+          if ! grep -q 'href="/manifest.json"' dist/index.html; then
+            echo "::error::The app must reference the stable public PWA manifest at /manifest.json"
             exit 1
           fi
+          for file in dist/manifest.json dist/assets/icon-192.png dist/assets/icon-512.png; do
+            if [[ ! -s "$file" ]]; then
+              echo "::error::Required PWA install asset is missing or empty: $file"
+              exit 1
+            fi
+          done
+          node -e "const fs=require('fs');const m=JSON.parse(fs.readFileSync('dist/manifest.json','utf8'));if(m.display!=='standalone'||!m.start_url||!m.scope||!m.icons.some(x=>x.sizes==='192x192')||!m.icons.some(x=>x.sizes==='512x512'))process.exit(1);console.log('PWA manifest and install icons verified')";
 
       - name: Deploy static application to Cloudflare Workers
         if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'

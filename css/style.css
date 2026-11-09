@@ -428,3 +428,38 @@ main{padding-bottom:calc(20px + env(safe-area-inset-bottom,0px))}
  #top{grid-template-columns:25px 22px 22px minmax(24px,1fr) 26px minmax(78px,84px) 26px 26px!important;gap:1px!important;padding-inline:2px!important}
  #top #who{min-width:78px!important;max-width:84px!important;font-size:10px!important}
 }
+
+
+/* Corrected mobile toolbar: two deliberate rows, no overlapping controls. */
+@media(max-width:860px){
+ #top{display:grid!important;direction:rtl!important;grid-template-columns:36px 32px 32px minmax(0,1fr) 36px 36px!important;grid-template-areas:"menu back forward title title title" "net who who who theme logout"!important;grid-auto-rows:minmax(34px,auto)!important;gap:5px!important;padding:7px 8px!important;min-height:76px!important;align-items:center!important;}
+ #top>*{min-width:0!important;max-width:100%!important;margin:0!important;justify-self:stretch!important;align-self:center!important;}
+ #top #bg{grid-area:menu!important;width:36px!important;min-width:36px!important;height:34px!important;min-height:34px!important;}
+ #top>.top-nav:nth-child(2){grid-area:back!important;width:32px!important;min-width:32px!important;height:34px!important;min-height:34px!important;}
+ #top>.top-nav:nth-child(3){grid-area:forward!important;width:32px!important;min-width:32px!important;height:34px!important;min-height:34px!important;}
+ #top #ttl{grid-area:title!important;min-width:0!important;width:100%!important;font-size:14px!important;line-height:1.2!important;overflow:hidden!important;text-overflow:ellipsis!important;white-space:nowrap!important;}
+ #top #net{grid-area:net!important;width:36px!important;min-width:36px!important;height:34px!important;min-height:34px!important;}
+ #top #who{grid-area:who!important;width:100%!important;min-width:0!important;max-width:none!important;height:34px!important;min-height:34px!important;font-size:13px!important;padding:4px 8px!important;}
+ #top #thb{grid-area:theme!important;width:36px!important;min-width:36px!important;height:34px!important;min-height:34px!important;}
+ #top #logout-btn{grid-area:logout!important;width:36px!important;min-width:36px!important;height:34px!important;min-height:34px!important;}
+ #top button svg{max-width:22px;max-height:22px;}
+}
+@media(max-width:390px){
+ #top{grid-template-columns:32px 28px 28px minmax(0,1fr) 32px 32px!important;gap:4px!important;padding:6px!important;}
+ #top #bg,#top #net,#top #thb,#top #logout-btn{width:32px!important;min-width:32px!important;}
+ #top>.top-nav:nth-child(2),#top>.top-nav:nth-child(3){width:28px!important;min-width:28px!important;}
+ #top #ttl{font-size:12px!important;}
+ #top #who{font-size:12px!important;}
+}
+
+/* The period picker is a separate collapsible panel, not always-visible fields. */
+.filter-card .filter-date-panel[hidden]{display:none!important;}
+.filter-card .filter-date-panel:not([hidden]){display:grid!important;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px!important;margin-top:9px;padding-top:9px;border-top:1px solid var(--bd);}
+.filter-card .filter-date-panel .filter-date-field{display:flex!important;min-width:0!important;width:100%;}
+@media(max-width:360px){.filter-card .filter-date-panel:not([hidden]){grid-template-columns:1fr!important;}}
+
+/* Settings stays in its natural navigation position; it is not a floating/sticky button. */
+@media(max-width:860px){
+ #sb{padding-bottom:calc(16px + env(safe-area-inset-bottom,0px))!important;}
+ #sb a[onclick*="'set'"]{position:static!important;inset:auto!important;top:auto!important;right:auto!important;bottom:auto!important;left:auto!important;z-index:auto!important;box-shadow:none!important;margin-top:0!important;}
+}
