@@ -69,7 +69,7 @@ function splitState(state) {
   return { arrays, meta };
 }
 function clearLegacyDeviceData() {
-  const marker = 'ms-factory-empty-device-v1:' + storageScope;
+  const marker = 'ms-factory-empty-device-v2:' + storageScope;
   if (localStorage.getItem(marker) === '1') return;
   const remove = [];
   for (let i = 0; i < localStorage.length; i++) {
@@ -88,8 +88,8 @@ function resetLocalBusinessState() {
   const { arrays } = splitState(state);
   const patch = {};
   for (const [type, items] of Object.entries(arrays)) {
-    // Keep only the built-in chart-of-accounts and warehouse templates; all device business data is discarded.
-    patch[type] = type === 'accts' || type === 'wh' ? items : [];
+    // Discard every seeded/demo business collection; only the authenticated production database may populate it.
+    patch[type] = type === 'curs' ? ['EGP','USD','EUR'] : [];
   }
   window.__factoryReplaceArrays?.(patch);
 }

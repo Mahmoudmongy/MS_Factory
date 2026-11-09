@@ -1,7 +1,7 @@
-/* Service Worker v9 - fast cache refresh and offline application shell.
+/* Service Worker v10 - fast cache refresh and offline application shell.
  * Business data stays in Supabase. Authenticated API responses are never cached.
  */
-const VERSION = 'factory-v14';
+const VERSION = 'factory-v15';
 const CORE = ['./','./index.html','./auth.html','./change-password.html','./css/style.css','./manifest.json','./js/app.js','./js/change-password.js'];
 const PAGES = ['./index.html','./auth.html','./change-password.html'];
 // The HTML href scan also captures Vite modulepreload assets for offline use.
