@@ -33,6 +33,8 @@ ok('manifest has start_url/scope/display standalone/rtl',man.start_url&&man.scop
 
 ok('PWA manifest uses the company app name and explicit standalone install behavior',man.name==='مدير الشركة'&&man.short_name==='مدير الشركة'&&man.display_override.includes('standalone')&&man.prefer_related_applications===false);
 ok('PWA document includes Apple install metadata and a valid touch icon link',idx.includes('apple-mobile-web-app-capable')&&idx.includes('apple-mobile-web-app-title')&&idx.includes('<link rel="apple-touch-icon" href="./assets/icon-192.png">'));
+ok('PWA document points directly to the stable root manifest instead of Vite hashing it under /assets/',idx.includes('<link rel="manifest" href="/manifest.json">'));
+
 const publicManifestPath=path.join(ROOT,'public','manifest.json');
 ok('production public directory contains the exact PWA manifest served by the app',fs.existsSync(publicManifestPath)&&JSON.stringify(JSON.parse(fs.readFileSync(publicManifestPath,'utf8')))==JSON.stringify(man));
 ok('both install icons are present in the production public assets directory',man.icons.every(ic=>fs.existsSync(path.join(ROOT,'public',ic.src.replace(/^\.\//,'')))));
