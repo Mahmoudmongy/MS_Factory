@@ -30,6 +30,15 @@ for(const id of ['pgst','toast','tabs','sb','m','sb-overlay','top','ttl'])ok(`in
 const man=JSON.parse(fs.readFileSync(path.join(ROOT,'manifest.json'),'utf8'));
 for(const ic of man.icons){const f=path.join(ROOT,ic.src),b=fs.existsSync(f)?fs.readFileSync(f):Buffer.alloc(0),w=b.length>24&&b.readUInt32BE(16),h=b.length>24&&b.readUInt32BE(20);ok(`manifest icon ${ic.src} exists and is a PNG of ${ic.sizes}`,b.slice(1,4).toString()=='PNG'&&`${w}x${h}`==ic.sizes,`${w}x${h}`)}
 ok('manifest has start_url/scope/display standalone/rtl',man.start_url&&man.scope&&man.display=='standalone'&&man.dir=='rtl');
+
+ok('PWA manifest uses the company app name and explicit standalone install behavior',man.name==='مدير الشركة'&&man.short_name==='مدير الشركة'&&man.display_override.includes('standalone')&&man.prefer_related_applications===false);
+ok('PWA document includes Apple install metadata and a valid touch icon link',idx.includes('apple-mobile-web-app-capable')&&idx.includes('apple-mobile-web-app-title')&&/<link rel="apple-touch-icon" href="\\.\/assets\/icon-192\\.png">/.test(idx));
+ok('mobile header reserves a wider account selector and adapts the icon columns',css.includes('minmax(92px,116px)')&&css.includes('minmax(86px,98px)')&&css.includes('#top #who{width:100%'));
+ok('mobile settings link remains reachable above the bottom safe area',css.includes('#sb a[onclick*="\'set\'"]{position:sticky')&&css.includes('padding-bottom:calc(76px + env(safe-area-inset-bottom'));
+ok('company name and logo are centered in the mobile navigation drawer',css.includes('#sb .br{text-align:center!important;display:flex!important')&&css.includes('align-items:center;justify-content:center'));
+ok('filter clear and date controls share the filter-fields row',app.includes('class="row filter-controls"')&&app.includes('class="filter-actions"')&&app.includes('class="g filter-clear"'));
+ok('date range remains hidden until the date-range button is pressed',css.includes('.filter-card .filter-date-field{display:none!important}')&&css.includes('.filter-card.date-range-open .filter-date-field{display:flex!important}')&&app.includes('toggleFilterDates(this)'));
+
 const sw=fs.readFileSync(path.join(ROOT,'sw.js'),'utf8'),builtSw=fs.readFileSync(path.join(ROOT,'public/sw.js'),'utf8');ok('Vite production build receives the service worker from public/',builtSw===sw);ok('service worker is versioned, GET-only and same-origin only',/const VERSION\s*=/.test(sw)&&/request\.method\s*!==\s*'GET'/.test(sw)&&/url\.origin\s*!==\s*self\.location\.origin/.test(sw)&&/caches\.delete/.test(sw));
 ok('no secrets / service role keys in shipped files',!/service_role|eyJ[A-Za-z0-9_-]{20,}|sk_live|SUPABASE_SERVICE/i.test(app+idx+sw));
 ok('login screen does not expose public self-registration',!/auth-signup|signUp\(/.test(fs.readFileSync(path.join(ROOT,'auth.html'),'utf8')+fs.readFileSync(path.join(ROOT,'js/auth.js'),'utf8')));
@@ -368,7 +377,7 @@ ok('online startup sync runs even when local cache already has data',/if \(navig
 ok('offline boot permits only a previously verified cached profile for the same user',/factory-profile:/.test(idx)&&/cachedProfile\.id === data\.session\.user\.id/.test(idx)&&/if \(!navigator\.onLine\)/.test(idx));
 ok('reconnect refreshes the profile before using permissions for cloud sync',/myProfile = null; ownerIdCache = null; window\.__factoryAuthProfile = null;/.test(cloud)&&/const freshProfile = await getMyProfile\(\)/.test(cloud));
 
-ok('offline shell precaches the stable production app and first-login password page',/auth\.html/.test(sw)&&/change-password\.html/.test(sw)&&/js\/change-password\.js/.test(sw)&&/js\/app\.js/.test(sw)&&/factory-v15/.test(sw));
+ok('offline shell precaches the stable production app and first-login password page',/auth\.html/.test(sw)&&/change-password\.html/.test(sw)&&/js\/change-password\.js/.test(sw)&&/js\/app\.js/.test(sw)&&/factory-v16/.test(sw));
 ok('mobile and desktop usability includes visible keyboard focus and safe-area spacing',/focus-visible/.test(css)&&/safe-area-inset-bottom/.test(css));
 ok('offline-created detail records are uploaded even when the full snapshot has a preserved conflict',/if \(admin && !snapshotConflict\)/.test(cloud)&&/for \(const \{ key, arr \} of partnerArrays\)/.test(cloud)&&/hasSnapshotConflict/.test(cloud));
 ok('local save writes a durable pending-sync marker before network recovery',/mgr6-sync-pending/.test(app)&&/localStorage\.setItem\("mgr6-sync-pending"/.test(app));
