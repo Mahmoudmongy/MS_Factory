@@ -560,3 +560,17 @@ button,input,select,table,textarea{font-family:inherit}
  #sb a .nav-ico,.tiles .tile{transition:none}
  #sb a:hover .nav-ico,.tiles .tile:hover{transform:none}
 }
+
+
+/* Sidebar behavior shared by desktop and mobile. Settings is part of the same scrollable list. */
+#sb .sb-nav-scroll{flex:1 1 auto;min-height:0;overflow-y:auto;overscroll-behavior:contain;-webkit-overflow-scrolling:touch}
+#sb.icons-only{width:56px!important;min-width:56px!important;max-width:56px!important}
+#sb.icons-only .br{display:none!important}
+#sb.icons-only .sb-controls{justify-content:center!important;padding-inline:4px}
+#sb.icons-only .sb-mode{width:32px;min-width:32px;height:32px;min-height:32px;padding:0}
+#sb.icons-only .sb-nav-scroll>a{justify-content:center;padding-inline:5px;gap:0}
+#sb.icons-only .sb-nav-scroll>a .nav-ico{width:25px;height:25px}
+@media(max-width:860px){
+  #sb.icons-only{width:56px!important;min-width:56px!important;max-width:56px!important}
+  #sb.icons-only .sb-nav-scroll>a{min-height:48px}
+}
