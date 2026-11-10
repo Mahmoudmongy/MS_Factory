@@ -60,7 +60,16 @@ const APP_ICONS={
  ai:'<path d="M12 3v3m0 12v3M3 12h3m12 0h3M5.6 5.6l2.1 2.1m8.6 8.6 2.1 2.1m0-12.8-2.1 2.1m-8.6 8.6-2.1 2.1"/><circle cx="12" cy="12" r="4"/>',
  settings:'<path d="M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8z"/><path d="m19 13 2 1-2 3-2-1-2 1v2h-4v-2l-2-1-2 1-2-3 2-1v-2l-2-1 2-3 2 1 2-1V5h4v2l2 1 2-1 2 3-2 1z"/>'
 };
-const ico=k=>'<svg class="nav-ico" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">'+(APP_ICONS[k]||APP_ICONS.settings)+'</svg>';
+const APP_ICON_COLORS={
+ home:"#5eead4",bank:"#93c5fd",receipt:"#86efac",payment:"#fdba74",
+ customer:"#c4b5fd",supplier:"#fcd34d",sale:"#f0abfc",return:"#fb7185",
+ purchase:"#7dd3fc",returnPurchase:"#fda4af",inventory:"#a5b4fc",production:"#fdba74",
+ coa:"#c4b5fd",journal:"#a5b4fc",timeline:"#94a3b8",employee:"#86efac",
+ report:"#7dd3fc",ai:"#d8b4fe",settings:"#cbd5e1",company:"#5eead4",print:"#93c5fd",
+ import:"#86efac",margin:"#fcd34d",warehouse:"#f0abfc",customize:"#a5b4fc",
+ language:"#7dd3fc",install:"#2dd4bf"
+};
+const ico=k=>'<svg class="nav-ico" data-ico="'+k+'" style="--icon-color:'+(APP_ICON_COLORS[k]||"#cbd5e1")+'" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">'+(APP_ICONS[k]||APP_ICONS.settings)+'</svg>';
 const T=[["home",ico("home"),"الملخص"],["bank",ico("bank"),"الحسابات النقدية والبنوك"],["rc",ico("receipt"),"المقبوضات"],["py",ico("payment"),"المدفوعات"],["cust",ico("customer"),"العملاء"],["supp",ico("supplier"),"الموردون"],["sale",ico("sale"),"فواتير البيع"],["sret",ico("return"),"إشعارات دائنة (مرتجع بيع)"],["pur",ico("purchase"),"فواتير الشراء"],["pret",ico("returnPurchase"),"إشعارات مدينة (مرتجع شراء)"],["stock",ico("inventory"),"أصناف المخزون"],["prod",ico("production"),"أوامر الإنتاج"],["coa",ico("coa"),"شجرة الحسابات"],["je",ico("journal"),"قيود اليومية"],["tl",ico("timeline"),"السجل الزمني"],["emp",ico("employee"),"الموظفون"],["rep",ico("report"),"التقارير"],["ai",ico("ai"),"المساعد الذكي"],["set",ico("settings"),"الإعدادات"]];
 const N=Object.fromEntries(T.map(t=>[t[0],t[2]])),ph=(t,b)=>`<div class="ph"><h2>${t}</h2><div class="row">${b||""}</div></div>`;
 function allowed(){const cp=cloudProfile();if(cp&&!cp.is_admin){return T.filter(t=>{if(t[0]==="home")return true;const key=CLOUD_SCREEN_PERMISSIONS[t[0]];return !!key&&cloudCan(key)===true;});}const e=S.emp.find(x=>x.id==who);return T.filter(t=>(t[0]=="home"||t[0]=="set"||!S.hide.includes(t[0]))&&(!e||t[0]=="home"||e.perm.includes(t[0])));}
@@ -659,7 +668,17 @@ function importGo(){if(WZ.t==="all"){prepareFullImport();return;}const ok=WZ.out
  else ok.forEach(x=>{const o=x.o,r=String(o.role||""),both=r.includes("كلاهما"),c=WZ.t==="customers"||both||r.includes("عميل")||(WZ.t!=="suppliers"&&!r),s=WZ.t==="suppliers"||both||r.includes("مورد");S.partners.push({id:uid(),name:String(o.name),phone:String(o.phone||""),c:c?1:0,s:s?1:0,type:String(o.kind).includes("جملة")?"w":"r",gov:String(o.gov||""),city:String(o.city||""),adr:String(o.adr||"")});n++});
  sv();toast("تم استيراد "+n+" صف من شيت "+WZ.sheet);WZ.out=[];impMap()}
 /* ---- settings ---- */
-function vSet(){return ph(N.set)+`<div class="tiles">${U([["🌳 شجرة الحسابات","go('coa')"],["🏢 بيانات الشركة","bizForm()"],["🖨️ قوالب الطباعة","tplForm()"],["📥 استيراد من Excel","impForm()"],["💹 هامش الربح المقترح","pctForm()"],["🏬 مخازن فرعية","wForm()"],["🧩 تخصيص التبويبات","cust()"],["👥 الموظفون والصلاحيات","go('emp')"],["🌐 اللغة: عربي / English","togLang()"],...(canInstall()&&!isStandalone()?[["📲 تثبيت التطبيق","promptInstall()"]]:[])],t=>`<div class="tile" onclick="${t[1]}">${t[0]}</div>`)}</div>`}
+function vSet(){
+ const tiles=[
+  ["coa","شجرة الحسابات","go('coa')"],["company","بيانات الشركة","bizForm()"],
+  ["print","قوالب الطباعة","tplForm()"],["import","استيراد من Excel","impForm()"],
+  ["margin","هامش الربح المقترح","pctForm()"],["warehouse","مخازن فرعية","wForm()"],
+  ["customize","تخصيص التبويبات","cust()"],["employee","الموظفون والصلاحيات","go('emp')"],
+  ["language","اللغة: عربي / English","togLang()"]
+ ];
+ if(canInstall()&&!isStandalone())tiles.push(["install","تثبيت التطبيق","promptInstall()"]);
+ return ph(N.set)+'<div class="tiles">'+U(tiles,t=>'<button type="button" class="tile" onclick="'+t[2]+'"><span class="tile-ico">'+ico(t[0])+'</span><span>'+t[1]+'</span></button>')+'</div>';
+}
 function resetAsk(){sh(`<h3>تأكيد إعادة الضبط</h3><p>سيتم حذف كل البيانات المسجلة في هذا الـ Demo والعودة للبيانات الافتراضية.</p><div class="row"><button class="rd" onclick="resetAll()">نعم، أعد الضبط</button>${bk}</div>`)}
 function resetAll(){try{localStorage.removeItem("mgr6")}catch(e){}S=seed();for(const k of ["accts","wh","items","partners","docs","po","vch","wo","codes","je","emp","mv","L"])S[k]=[];migrate();TB.filter(t=>t.kind=="page").forEach(t=>closeTab(t,1));go("home")}
 function bizForm(){const b=S.biz||{},safe=v=>String(v||"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/"/g,"&quot;");sh(`<h3>بيانات الشركة</h3><p class="mu">بيانات الشركة القانونية والاتصالية، مع الاسم التجاري والشعار، تظهر في المستندات والتقارير الرسمية.</p><div class="g2"><div><label>اسم الشركة</label><input id="biz_name" value="${safe(S.name)}" placeholder="اسم الشركة"></div><div><label>شعار الشركة</label><input type="file" accept="image/*" onchange="pick(this,v=>{S.logo=v;sv();nav()})"><small class="mu">اتركه دون اختيار للاحتفاظ بالشعار الحالي.</small>${S.logo?`<img src="${S.logo}" alt="شعار الشركة" style="max-width:100px;max-height:65px;object-fit:contain">`:""}</div><div><label>رقم السجل التجاري</label><input id="biz_cr" value="${b.commercial_no||""}" placeholder="رقم السجل التجاري"></div><div><label>رقم البطاقة الضريبية</label><input id="biz_tax" value="${b.tax_no||""}" placeholder="رقم البطاقة الضريبية"></div><div><label>رقم التسجيل الضريبي / القيمة المضافة</label><input id="biz_vat" value="${b.vat_no||""}" placeholder="رقم التسجيل الضريبي"></div><div><label>الشكل القانوني</label><input id="biz_legal" value="${b.legal_form||""}" placeholder="منشأة فردية / شركة ..."></div><div><label>النشاط التجاري</label><input id="biz_activity" value="${b.activity||""}" placeholder="تصنيع وتجارة الملابس"></div><div><label>رقم الهاتف</label><input id="biz_phone" value="${b.phone||""}" placeholder="رقم التواصل"></div><div><label>البريد الإلكتروني</label><input id="biz_email" type="email" value="${b.email||""}" placeholder="البريد الإلكتروني"></div><div><label>الموقع الإلكتروني</label><input id="biz_web" value="${b.website||""}" placeholder="www.example.com"></div><div><label>المحافظة</label><input id="biz_gov" value="${b.governorate||""}" placeholder="المحافظة"></div><div><label>المدينة</label><input id="biz_city" value="${b.city||""}" placeholder="المدينة"></div></div><label>العنوان التفصيلي</label><textarea id="biz_address" rows="2" placeholder="العنوان المسجل">${b.address||""}</textarea><label>ملاحظات وبيانات إضافية</label><textarea id="biz_notes" rows="2" placeholder="بيانات إضافية">${b.notes||""}</textarea><div class="row"><button onclick="saveBiz()">حفظ البيانات</button>${bk}</div>`)}
