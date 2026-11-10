@@ -524,7 +524,7 @@ function closeFilterDatePanel(card){
 function dismissDatePanels(event){
  if(event.type==="pointerdown"){
   const target=event.target instanceof Element?event.target:null;
-  if(target?.closest(".filter-card, .home-period-card"))return;
+  if(target?.closest(".filter-date-panel:not([hidden]), .home-period-fields, .filter-date-toggle, .home-period-toggle"))return;
  }else if(event.key!=="Escape")return;
  document.querySelectorAll(".filter-card.date-range-open").forEach(closeFilterDatePanel);
  document.querySelectorAll(".home-period-card.is-open").forEach(closeHomePeriod);
