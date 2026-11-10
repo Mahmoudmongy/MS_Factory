@@ -16,6 +16,9 @@ const names=[...app.matchAll(/^(?:async )?function ([A-Za-z0-9_$]+)\(/gm)].map(m
 ok('app.js has no duplicate top-level function definitions',dup.length==0,dup);
 ok('customer/supplier names open details and edit stays permission-gated inside details',app.includes('partyView(${p.id})')&&app.includes('pForm(${p.c?1:0},${id})')&&app.includes('can("edit")'));
 ok('partner edit preserves the stable record ID and updates the existing object',app.includes('function saveP(id)')&&app.includes('if(old)Object.assign(old,data)'));
+const stmtStart=app.indexOf('function partnerStatementRows(pid)'),stmtEnd=app.indexOf('function sampleHtml(k)',stmtStart),stmtCode=stmtStart>=0&&stmtEnd>stmtStart?app.slice(stmtStart,stmtEnd):'';
+ok('partner statements combine double-entry ledger lines into readable transaction rows with a running balance',stmtCode.includes('const groups=new Map()')&&stmtCode.includes('<th>نوع الحركة</th>')&&stmtCode.includes('الرصيد النهائي:')&&!stmtCode.includes('<th>مدين</th>')&&!stmtCode.includes('<th>دائن</th>'));
+ok('voucher PDF filename uses the customer or supplier name',app.includes('vchPrintHtml(v),"",v.who'));
 ok('employee edit preserves the existing employee record',app.includes('function saveE(id)')&&app.includes('if(old)Object.assign(old,data)'));
 ok('warehouse names can be edited without replacing warehouse IDs',app.includes('function saveWh(id)')&&app.includes('w.name=n'));
 ok('chart-of-account names can be edited while preserving their account IDs',app.includes('function saveAccName(id)')&&app.includes('a.name=n'));
