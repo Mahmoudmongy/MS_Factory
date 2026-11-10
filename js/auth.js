@@ -26,12 +26,12 @@ function credentials() {
 }
 
 if (!supabase) {
-  if(status) status.textContent = 'غير متصل';
-  say('غير متصل');
+  if(status) status.textContent = 'تعذر الاتصال بخدمة تسجيل الدخول';
+  say('تعذر الاتصال بخدمة تسجيل الدخول');
 } else {
-  if(status) status.textContent = 'متصل';
+  if(status) status.textContent = 'خدمة تسجيل الدخول جاهزة';
 
-  $('auth-login').addEventListener('click', async (e) => {
+  form.addEventListener('submit', async (e) => {
     e.preventDefault();
     const { email, password } = credentials();
     if (!email || !password) return say('أدخل اسم المستخدم أو البريد الإلكتروني وكلمة المرور');
@@ -40,7 +40,7 @@ if (!supabase) {
     const projectRef = new URL('https://yvrislcbbhtruwdnuooz.supabase.co').hostname.split('.')[0];
     const storageKey = 'sb-' + projectRef + '-auth-token';
     try { if (remember) sessionStorage.removeItem(storageKey); else localStorage.removeItem(storageKey); } catch (_) {}
-    say('جاري تسجيل الدخول...', false);
+    say('جارٍ تسجيل الدخول...', false);
     const button = $('auth-login');
     button.disabled = true;
     try {
@@ -48,7 +48,7 @@ if (!supabase) {
         supabase.auth.signInWithPassword({ email, password }),
         new Promise((_, reject) => setTimeout(() => reject(new Error('انتهت مهلة الاتصال. تحقق من الإنترنت وحاول مرة أخرى.')), 12000))
       ]);
-      if (result.error) return say('خطأ دخول: ' + result.error.message);
+      if (result.error) return say('تعذر تسجيل الدخول: ' + result.error.message);
       say('تم الدخول بنجاح ✅', false);
       location.replace('index.html');
     } catch (error) {
