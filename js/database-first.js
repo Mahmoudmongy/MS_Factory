@@ -40,7 +40,8 @@ function idbRequest(store, mode, action) {
 async function initOfflineStorage() {
   offlineDb = await openOfflineDatabase();
   const queueKey = scopedKey(QUEUE_KEY);
-  const legacyQueue = JSON.parse(localStorage.getItem(queueKey) || '[]');
+  let legacyQueue = [];
+  try { legacyQueue = JSON.parse(localStorage.getItem(queueKey) || '[]'); } catch (error) { console.warn('Legacy offline queue is unreadable and was retained for diagnosis:',error); }
   if (Array.isArray(legacyQueue) && legacyQueue.length) {
     const stored = await idbRequest('kv','readonly',store=>store.get('queue:'+storageScope));
     const merged = new Map((Array.isArray(stored?.value)?stored.value:[]).map(op=>[op.type+'\\u0000'+op.id,op]));
