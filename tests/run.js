@@ -419,7 +419,7 @@ ok('invoice sync fix qualifies child-row deletion columns',/DELETE FROM public\.
 const ctx=await browser.newContext({viewport:{width:1280,height:900},acceptDownloads:true}),p=await ctx.newPage(),errs=[];p.on('pageerror',e=>errs.push(e.message));
 await p.goto(BASE);await p.waitForTimeout(500);
 const ev=(f,a)=>p.evaluate(()=>{SAVING=0}).then(()=>p.evaluate(f,a)),bal=()=>ev(()=>Math.abs(S.L.reduce((a,l)=>a+l.dr-l.cr,0))<.01);
-const scr=await ev(()=>allowed().map(t=>t[0]));for(const s of scr){await ev(x=>go(x),s)}ok(`all ${scr.length} screens render without errors`,errs.length==0,errs.slice(0,2));
+const scr=await ev(()=>window.allowed().map(t=>t[0]));for(const s of scr){await ev(x=>go(x),s)}ok(`all ${scr.length} screens render without errors`,errs.length==0,errs.slice(0,2));
 
 /* Search typing and duplicate screen-tab regression, including a narrow mobile viewport. */
 await ev(()=>go('cust'));
@@ -505,15 +505,15 @@ const det=await ev(()=>{itemDet(S.items.find(i=>i.name=="جاكيت اختبار
 const n0=await ev(()=>S.docs.length);await ev(id=>delGo('doc',id),invId);ok('delete removes the invoice and reverses its effects (ledger balanced)',await ev(()=>S.docs.length)==n0-1&&await bal());
 /* ---------- permissions ---------- */
 await ev(()=>{S.emp.push({id:77,name:"موظف اختبار",p1:"1",p2:"2",img:"x",perm:["home","sale"]});who="77";nav()});
-const pm=await ev(()=>{const d=S.docs.length,pg=TB.length;const first=S.docs[0];editRef('doc',first.id);delRef('doc',first.id);delGo('doc',first.id);return{can:[can("edit"),can("del")],docsSame:S.docs.length==d,noNewTab:TB.length==pg,tabs:allowed().map(t=>t[0]).join()}});
+const pm=await ev(()=>{const d=S.docs.length,pg=TB.length;const first=S.docs[0];editRef('doc',first.id);delRef('doc',first.id);delGo('doc',first.id);return{can:[can("edit"),can("del")],docsSame:S.docs.length==d,noNewTab:TB.length==pg,tabs:window.allowed().map(t=>t[0]).join()}});
 ok('employee without permissions cannot edit/delete (even by calling the functions directly)',pm.can[0]===false&&pm.can[1]===false&&pm.docsSame&&pm.noNewTab,pm);ok('employee sees only permitted screens',pm.tabs.split(',').every(x=>['home','sale','set'].includes(x)),pm.tabs);
 await ev(()=>{who="0";S.emp=[];nav()});
 /* ---------- Supabase employee permissions ---------- */
 await ev(()=>{window.setFactoryAuthProfile({id:"cloud-test",is_admin:false,permissions:{invoices:true}});tab="sale";nav();render()});
-const cloudInvoicePerm=await ev(()=>({screens:allowed().map(t=>t[0]),edit:can("edit")}));
+const cloudInvoicePerm=await ev(()=>({screens:window.allowed().map(t=>t[0]),edit:can("edit")}));
 ok('Supabase employee sees only the assigned invoice screens and can edit within that module',cloudInvoicePerm.screens.includes("sale")&&!cloudInvoicePerm.screens.includes("stock")&&cloudInvoicePerm.edit,cloudInvoicePerm);
 await ev(()=>{window.setFactoryAuthProfile({id:"cloud-test",is_admin:false,permissions:{reports:true}});tab="rep";nav();render()});
-const cloudReportPerm=await ev(()=>({screens:allowed().map(t=>t[0]),edit:can("edit"),del:can("del")}));
+const cloudReportPerm=await ev(()=>({screens:window.allowed().map(t=>t[0]),edit:can("edit"),del:can("del")}));
 ok('reports-only Supabase employee is read-only',cloudReportPerm.screens.includes("rep")&&!cloudReportPerm.screens.includes("sale")&&!cloudReportPerm.edit&&!cloudReportPerm.del,cloudReportPerm);
 await ev(()=>{window.setFactoryAuthProfile(null);who="0";tab="home";nav();render()});
 /* ---------- duplicate click ---------- */
