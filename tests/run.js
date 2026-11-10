@@ -42,7 +42,7 @@ ok('public PWA icons have valid PNG signatures and declared dimensions',man.icon
 
 ok('mobile header reserves a wider account selector and adapts the icon columns',css.includes('minmax(92px,116px)')&&css.includes('minmax(86px,98px)')&&css.includes('#top #who{width:100%'));
 ok('mobile toolbar uses a two-row named grid with separate slots for every control',css.includes('grid-template-areas:"menu back forward title title title" "net who who who theme logout"')&&css.includes('#top #ttl{grid-area:title')&&css.includes('#top #logout-btn{grid-area:logout'));
-ok('settings is rendered in a dedicated non-floating sidebar footer',app.includes('class="sb-nav-scroll"')&&app.includes('class="sb-footer"')&&css.includes('#sb .sb-footer{flex:0 0 auto')&&css.includes('#sb .sb-footer a{position:static!important'));
+ok('settings is rendered in the scrollable sidebar navigation',app.includes('class="sb-nav-scroll"')&&app.includes('U(items,renderLink)')&&!app.includes('class="sb-footer"')&&css.includes('#sb .sb-nav-scroll{flex:1 1 auto;min-height:0;overflow-y:auto'));
 
 ok('mobile settings link remains reachable above the bottom safe area',css.includes('#sb a[onclick*="\'set\'"]{position:sticky')&&css.includes('padding-bottom:calc(76px + env(safe-area-inset-bottom'));
 ok('company name and logo are centered in the mobile navigation drawer',css.includes('#sb .br{text-align:center!important;display:flex!important')&&css.includes('align-items:center;justify-content:center'));
@@ -585,8 +585,8 @@ ok('mobile toolbar controls have separate visible hit areas without overlap or h
 
 ok('mobile: sidebar is a drawer with burger button and the page does not scroll sideways',mob.pos=='fixed'&&mob.bg=='block'&&mob.over,mob);
 await m.click('#bg');await m.waitForTimeout(250);const open=await m.evaluate(()=>({sb:document.querySelector('#sb').classList.contains('open'),ov:getComputedStyle(document.querySelector('#sb-overlay')).display}));
-const settingsFlow=await m.evaluate(()=>{const a=document.querySelector('#sb .sb-footer a');const sb=document.querySelector('#sb'),f=a?.parentElement,r=f?.getBoundingClientRect(),s=sb?.getBoundingClientRect();return a?{found:true,position:getComputedStyle(a).position,footer:!!f?.classList.contains('sb-footer'),bottomGap:s.bottom-r.bottom,display:getComputedStyle(f).display}: {found:false};});
-ok('mobile settings entry stays in the normal sidebar list and is not sticky or floating',settingsFlow.found&&settingsFlow.position==='static'&&settingsFlow.footer&&settingsFlow.display==='block'&&settingsFlow.bottomGap>=0&&settingsFlow.bottomGap<24,settingsFlow);
+const settingsFlow=await m.evaluate(()=>{const a=[...document.querySelectorAll('#sb .sb-nav-scroll a')].find(x=>x.getAttribute('onclick')?.includes("'set'")),list=a?.closest('.sb-nav-scroll');return a?{found:true,position:getComputedStyle(a).position,inList:!!list,overflow:list?getComputedStyle(list).overflowY:'',footer:!!a.closest('.sb-footer')}: {found:false};});
+ok('mobile settings entry stays inside the scrollable sidebar list and is not sticky or floating',settingsFlow.found&&settingsFlow.position==='static'&&settingsFlow.inList&&settingsFlow.overflow==='auto'&&!settingsFlow.footer,settingsFlow);
 ok('mobile: burger opens the drawer and shows the overlay',open.sb&&open.ov!='none',open);
 await m.click('#sb a:nth-child(5)');await m.waitForTimeout(300);const closed=await m.evaluate(()=>({sb:document.querySelector('#sb').classList.contains('open'),ov:getComputedStyle(document.querySelector('#sb-overlay')).display}));ok('mobile: choosing a screen closes the drawer and hides the overlay',!closed.sb&&closed.ov=='none',closed);
 
