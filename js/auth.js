@@ -5,6 +5,30 @@ const status = $('auth-status');
 const msg = $('auth-msg');
 const form = $('auth-form');
 const rememberBox = $('auth-remember');
+
+function applyFactoryBranding() {
+  const nameNode = $('auth-brand-name');
+  const logoNode = $('auth-brand-logo');
+  try {
+    const brand = JSON.parse(localStorage.getItem('factory-branding') || '{}');
+    const name = typeof brand.name === 'string' ? brand.name.trim().slice(0, 120) : '';
+    if (name && nameNode) {
+      nameNode.textContent = name;
+      document.title = name + ' - تسجيل الدخول';
+    }
+    const logo = typeof brand.logo === 'string' ? brand.logo : '';
+    if (logoNode && /^data:image\/(?:jpeg|png|webp);base64,/i.test(logo)) {
+      logoNode.src = logo;
+      logoNode.hidden = false;
+      logoNode.onerror = () => { logoNode.hidden = true; logoNode.removeAttribute('src'); };
+    }
+  } catch (_) {}
+}
+
+applyFactoryBranding();
+window.addEventListener('storage', (event) => {
+  if (event.key === 'factory-branding') applyFactoryBranding();
+});
 if (rememberBox) rememberBox.checked = localStorage.getItem('factory-remember') !== '0';
 try { $('auth-email').value = localStorage.getItem('factory-login-name') || ''; } catch (_) {}
 
