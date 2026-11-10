@@ -615,7 +615,7 @@ ok('custom reports support multiple selected fields and show their relationships
 ok('operational assistant responds locally with period-aware business figures',app.includes('function localAssistantAnswer')&&app.includes('function askPreset')&&app.includes('const inPeriod=d=>')&&!app.includes('window.claude.use("sample")'));
 ok('additional management reports cover cash, aging, stock and sales/purchases analysis',['cash','ar','ap','sv','sc','si','ps','ex'].every(k=>app.includes(k+':()=>')));
 ok('production bootstrap empties all business arrays but preserves standard currencies',dbSync.includes("patch[type] = type === 'curs' ? ['EGP','USD','EUR'] : [];")&&dbSync.includes('ms-factory-empty-device-v2:'));
-ok('summary screen uses only a custom date range',app.includes('القوائم المالية — تحديد الفترة')&&!app.includes('prs("hpr")'));
+ok('summary screen keeps the selected date range in a collapsible panel',app.includes('let HOME_PERIOD_OPEN=false')&&app.includes('الفترة الحالية:')&&app.includes('home-period-fields')&&app.includes('dismissDatePanels')&&!app.includes('prs("hpr")'));
 ok('mobile double-back uses one exit confirmation',app.includes('signOutNow(true)'));
 
 ok('first-login password change clears the cached must-change-password flag before returning to the app',changePasswordPage.includes('factory-profile-verified:')&&changePasswordPage.includes('currentProfile.must_change_password = false'));
