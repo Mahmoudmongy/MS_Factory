@@ -358,6 +358,7 @@ const cl=()=>{if(CUR&&CUR.kind=="page")closeTab(CUR,1);else render()};
 function askClose(t){const d=document.createElement("div");d.id="cfm";d.innerHTML=`<div class="cb"><p>هذه الصفحة بها تغييرات غير محفوظة. هل تريد إغلاقها؟</p><div class="row"><button class="rd" id="cf1">إغلاق بدون حفظ</button><button class="g" id="cf2">متابعة التعديل</button></div></div>`;document.body.appendChild(d);d.querySelector("#cf1").onclick=()=>{d.remove();closeTab(t,1)};d.querySelector("#cf2").onclick=()=>{d.remove();actTab(t,1)}}
 function drawTabs(){$g("#tabs").innerHTML=U(TB,t=>{const title=String(t.title||"").replace(/^\s*\d{2,}\s*[-–—ـ:|]+\s*/,"");return `<span class="tb ${t===CUR?"on":""}" onclick="actTab(TB.find(x=>x.id==${t.id}))"><b class="tb-close" onclick="event.stopPropagation();closeTab(TB.find(x=>x.id==${t.id}))">✕</b><span class="tb-label">${t.dirty?"● ":""}${title}</span></span>`})}
 function bkw(d){let n=hi+d;while(n>=0&&n<hs.length&&!TB.some(x=>x.id===hs[n]))n+=d;if(n<0||n>=hs.length)return;hi=n;actTab(TB.find(x=>x.id===hs[n]),1)}
+// Mirror only the public company identity so the logged-out login screen can show it.
 function cachePublicFactoryBranding(){
  const name=String(S?.name||"").trim().slice(0,120);
  if(!name)return;
