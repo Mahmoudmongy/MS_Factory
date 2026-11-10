@@ -135,7 +135,8 @@ function splitState(state) {
 }
 function clearLegacyDeviceData() {
   const marker = 'ms-factory-empty-device-v2:' + storageScope;
-  if (localStorage.getItem(marker) === '1') return;
+  // Run cleanup even when an older build already wrote the marker: stale mgr6 snapshots
+  // can themselves consume the mobile localStorage quota.
   const remove = [];
   for (let i = 0; i < localStorage.length; i++) {
     const key = localStorage.key(i);
@@ -146,7 +147,7 @@ function clearLegacyDeviceData() {
         key.startsWith('ms-factory-db-cache-v1:')) remove.push(key);
   }
   for (const key of remove) localStorage.removeItem(key);
-  localStorage.setItem(marker, '1');
+  try { localStorage.setItem(marker, '1'); } catch (_) {}
 }
 function resetLocalBusinessState() {
   const state = getState();
