@@ -631,8 +631,8 @@ function partnerStatementRows(pid){
   if(Number(l.ts)&&(!row.ts||Number(l.ts)<row.ts))row.ts=Number(l.ts);
  });
  return [...groups.values()].map(row=>{
-  const doc=S.docs.find(x=>String(x.id)===String(row.rid))||S.docs.find(x=>x.no==row.ref&&x.pid==pid);
-  const voucher=S.vch.find(x=>String(x.id)===String(row.rid))||S.vch.find(x=>x.no==row.ref&&x.pid==pid);
+  const doc=row.src==="doc"?(S.docs.find(x=>String(x.id)===String(row.rid))||S.docs.find(x=>x.no==row.ref&&x.pid==pid)):null;
+  const voucher=row.src==="vch"?(S.vch.find(x=>String(x.id)===String(row.rid))||S.vch.find(x=>x.no==row.ref&&x.pid==pid)):null;
   const type=doc?(TN[doc.t]||"فاتورة"):voucher?(voucher.dir==="in"?"سند قبض":"سند دفع"):row.src==="je"?"قيد يومية":row.src==="manager"?"حركة مستوردة":"حركة حساب";
   const detail=row.desc||(doc&&Array.isArray(doc.lines)?doc.lines.map(x=>(x.name||"بند")+(x.qty?" × "+qf(x.qty):"")).join("، "):"")||(voucher&&voucher.desc)||"";
   return {...row,type,detail,delta:row.cr-row.dr};
