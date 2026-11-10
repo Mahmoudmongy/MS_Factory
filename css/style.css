@@ -507,3 +507,7 @@ button,input,select,table,textarea{font-family:inherit}
   #top #who{height:40px!important;min-height:40px!important;font-size:14px!important}
   #tabs{top:calc(env(safe-area-inset-top,0px) + 100px)!important}
 }
+
+.auth-page #auth-status{display:inline-block;width:fit-content;margin:0 0 8px;padding:3px 8px;border-radius:99px;background:var(--pr2);color:var(--pr);font-size:13px}
+.auth-page #auth-msg[data-kind="error"]{color:var(--rd)!important}
+.auth-page #auth-msg[data-kind="success"]{color:var(--pr)!important}
