@@ -485,7 +485,7 @@ ok('voucher with unequal accounts/lines totals is rejected',await ev(()=>S.vch.l
 /* ---------- currency ---------- */
 await ev(()=>{go('bank');bForm();$("#bn").value="الخزنة بالدولار";$("#bcu").value="USD";saveAcc(1)});const usd=await ev(()=>S.accts.find(a=>a.name=="الخزنة بالدولار"));
 ok('USD account created',usd&&usd.cur=="USD");
-await ev(id=>{go('rc');vForm('in');$("#vt").value="o";vpt();$("#vo").value="جهة";$("#va").value=String(id);vcur();$("#vm").value="10";vAc();window.__n=V.ac.length;},usd.id);
+await ev(id=>{go('rc');vForm('in');$("#vt").value="o";vpt();$("#lkc").checked=false;lkTog();$("#vo").value="جهة";$("#va").value=String(id);vcur();$("#vm").value="10";vAc();window.__n=V.ac.length;},usd.id);
 ok('foreign-currency amount without exchange rate is rejected',await ev(()=>window.__n==0));
 await ev(()=>{$("#vfx").value="50";vAc();$("#la").value=String(ak("sales"));$("#lm").value="500";vLn();saveV()});
 ok('USD voucher: balance 10 USD and 500 EGP equivalent kept separately; ledger balanced',await ev(id=>balc(id,"",td())==10&&bal(id,"",td())==500,usd.id)&&await bal());
@@ -519,12 +519,12 @@ const cloudReportPerm=await ev(()=>({screens:allowed().map(t=>t[0]),edit:can("ed
 ok('reports-only Supabase employee is read-only',cloudReportPerm.screens.includes("rep")&&!cloudReportPerm.screens.includes("sale")&&!cloudReportPerm.edit&&!cloudReportPerm.del,cloudReportPerm);
 await ev(()=>{window.setFactoryAuthProfile(null);who="0";tab="home";nav();render()});
 /* ---------- duplicate click ---------- */
-const v0=await ev(()=>S.vch.length);await ev(()=>{go('rc');vForm('in');$("#va").value="1";$("#vm").value="100";vAc();$("#la").value=String(ak("sales"));$("#lm").value="100";vLn()});await p.evaluate(()=>{const b=[...ACT.querySelectorAll("button")].find(x=>x.textContent.trim()=="حفظ");b.click();b.click()});
+const v0=await ev(()=>S.vch.length);await ev(()=>{go('rc');vForm('in');$("#lkc").checked=false;lkTog();$("#va").value="1";$("#vm").value="100";vAc();$("#la").value=String(ak("sales"));$("#lm").value="100";vLn()});await p.evaluate(()=>{const b=[...ACT.querySelectorAll("button")].find(x=>x.textContent.trim()=="حفظ");b.click();b.click()});
 ok('double click on Save registers the voucher once',await ev(()=>S.vch.length)==v0+1);
 /* ---------- tabs: unsaved data ---------- */
 await ev(()=>{go('sale');docForm('sale');$("#q").value="7";$("#q").dispatchEvent(new Event("input",{bubbles:true}))});await ev(()=>go('cust'));
 ok('unsaved form data survives switching to another screen',await ev(()=>{const t=TB.filter(x=>x.kind=="page"&&x.el.querySelector("#q")).slice(-1)[0];return t?t.el.querySelector("#q").value:null})=="7");
-const salePageId=await ev(()=>TB.filter(t=>t.kind=="page"&&t.el.querySelector("#q")).slice(-1)[0]?.id);await ev(id=>{actTab(TB.find(t=>t.id==id));tryClose()},salePageId);ok('closing a dirty sales form tab asks for confirmation',!!(await p.$('#cfm')));await p.click('#cf1');ok('discarding closes the tab',await ev(()=>!TB.some(t=>t.kind=="page")));
+const salePageId=await ev(()=>TB.filter(t=>t.kind=="page"&&t.el.querySelector("#q")).slice(-1)[0]?.id);await ev(id=>{actTab(TB.find(t=>t.id==id));tryClose()},salePageId);ok('closing a dirty sales form tab asks for confirmation',!!(await p.$('#cfm')));await p.click('#cf1');ok('discarding closes the dirty sales form tab',await ev(id=>!TB.some(t=>t.id==id),salePageId));
 /* ---------- real CSV export download ---------- */
 await ev(()=>go('stock'));const [dl]=await Promise.all([p.waitForEvent('download',{timeout:8000}).catch(()=>null),ev(async()=>{const b=[...ACT.querySelectorAll("button")].find(x=>x.textContent.includes("تصدير Excel"));await b.onclick()})]);
 let csv='';if(dl){const f=await dl.path();csv=fs.readFileSync(f,'utf8')}ok('CSV export triggers a real browser download with BOM and data rows',!!dl&&csv.charCodeAt(0)==0xFEFF&&csv.split('\n').length>2,dl&&dl.suggestedFilename());
