@@ -136,15 +136,15 @@ function closeHomePeriod(card){
 }
 function vHome(){
  const p=S.per,open=HOME_PERIOD_OPEN;
- const from=dfm(p.from),to=dfm(p.to),panelId="home-period-fields-"+(CUR?.id||"main");
+ const from=dfm(p.from),to=dfm(p.to),panelId="home-period-fields-"+(CUR?.id||"main"),fromId=panelId+"-from",toId=panelId+"-to";
  return ph("الملخص")+
   '<section class="card home-period-card filter-card'+(open?' is-open':'')+'">'+
    '<div class="home-period-heading"><span class="mu">الفترة الحالية: '+from+' إلى '+to+'</span>'+
     '<button type="button" class="g home-period-toggle" aria-expanded="'+open+'" aria-controls="'+panelId+'" onclick="toggleHomePeriod(this)">'+(open?"إخفاء الفترة":"تحديد الفترة")+'</button>'+
    '</div>'+
    '<div id="'+panelId+'" class="home-period-fields" '+(open?'':'hidden')+'>'+
-    '<div><label for="home-period-from">من تاريخ</label><input id="home-period-from" type="date" value="'+p.from+'" onchange="S.per.from=this.value;sv();render()"></div>'+
-    '<div><label for="home-period-to">إلى تاريخ</label><input id="home-period-to" type="date" value="'+p.to+'" onchange="S.per.to=this.value;sv();render()"></div>'+
+    '<div><label for="'+fromId+'">من تاريخ</label><input id="'+fromId+'" type="date" value="'+p.from+'" onchange="S.per.from=this.value;sv();render()"></div>'+
+    '<div><label for="'+toId+'">إلى تاريخ</label><input id="'+toId+'" type="date" value="'+p.to+'" onchange="S.per.to=this.value;sv();render()"></div>'+
    '</div>'+
   '</section>'+
   '<div class="g2"><div>'+bsHtml(p.to)+'</div><div>'+isHtml(p.from,p.to)+'</div></div>';
