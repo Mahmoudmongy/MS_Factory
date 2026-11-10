@@ -12,7 +12,7 @@ const cachePrefix = () => CACHE_PREFIX + storageScope + ':';
 const cacheKey = (type,id) => cachePrefix() + encodeURIComponent(type) + ':' + encodeURIComponent(id);
 function cacheRow(row) { try { localStorage.setItem(cacheKey(row.record_type,row.record_id), JSON.stringify(row)); } catch (e) { console.warn('Local offline cache write failed',e); } }
 function loadCachedRows() { const rows=[]; const prefix=cachePrefix(); for(let i=0;i<localStorage.length;i++){const key=localStorage.key(i);if(!key||!key.startsWith(prefix))continue;try{const row=JSON.parse(localStorage.getItem(key)||'null');if(row&&row.record_type&&row.record_id)rows.push(row)}catch(_){}} return rows; }
-const PAGE_SIZE = 500;
+const PAGE_SIZE = 1000;
 let ownerId = null;
 let actorId = null;
 let profile = null;
@@ -136,33 +136,38 @@ function setBaselineRow(row) {
   });
   cacheRow(row);
 }
-async function fetchAllRecords() {
+async function fetchPagedRecords(buildQuery) {
   const all = [];
-  for (let from = 0; ; from += PAGE_SIZE) {
-    const { data, error } = await supabase.from('factory_records')
-      .select('user_id,record_type,record_id,payload,version,deleted_at,updated_at,updated_by')
-      .eq('user_id', ownerId).order('record_type').order('record_id')
-      .range(from, from + PAGE_SIZE - 1);
-    if (error) throw error;
-    all.push(...(data || []));
-    if (!data || data.length < PAGE_SIZE) break;
+  const first = await buildQuery().range(0, PAGE_SIZE - 1);
+  if (first.error) throw first.error;
+  all.push(...(first.data || []));
+  if (!first.data || first.data.length < PAGE_SIZE) return all;
+  const concurrentPages = 4;
+  for (let base = PAGE_SIZE; ; base += PAGE_SIZE * concurrentPages) {
+    const pages = await Promise.all(Array.from({ length: concurrentPages }, (_, index) =>
+      buildQuery().range(base + index * PAGE_SIZE, base + (index + 1) * PAGE_SIZE - 1)
+    ));
+    for (const page of pages) {
+      if (page.error) throw page.error;
+      all.push(...(page.data || []));
+    }
+    if (pages.some(page => !page.data || page.data.length < PAGE_SIZE)) break;
   }
   return all;
 }
+async function fetchAllRecords() {
+  return fetchPagedRecords(() => supabase.from('factory_records')
+    .select('user_id,record_type,record_id,payload,version,deleted_at,updated_at,updated_by')
+    .eq('user_id', ownerId).neq('record_type', 'manager_archive_095620')
+    .order('record_type').order('record_id'));
+}
 async function fetchChangedRecords(since) {
   if (!since) return [];
-  const all = [];
-  for (let from = 0; ; from += PAGE_SIZE) {
-    const { data, error } = await supabase.from('factory_records')
-      .select('user_id,record_type,record_id,payload,version,deleted_at,updated_at,updated_by')
-      .eq('user_id', ownerId).gt('updated_at', since)
-      .order('updated_at').order('record_type').order('record_id')
-      .range(from, from + PAGE_SIZE - 1);
-    if (error) throw error;
-    all.push(...(data || []));
-    if (!data || data.length < PAGE_SIZE) break;
-  }
-  return all;
+  return fetchPagedRecords(() => supabase.from('factory_records')
+    .select('user_id,record_type,record_id,payload,version,deleted_at,updated_at,updated_by')
+    .eq('user_id', ownerId).neq('record_type', 'manager_archive_095620')
+    .gt('updated_at', since)
+    .order('updated_at').order('record_type').order('record_id'));
 }
 function hydrateFromRows(rows) {
   const grouped = {};
