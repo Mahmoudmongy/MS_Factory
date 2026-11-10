@@ -16,6 +16,7 @@ ok('customer/supplier names open details and edit stays permission-gated inside 
 ok('partner edit preserves the stable record ID and updates the existing object',app.includes('function saveP(id)')&&app.includes('if(old)Object.assign(old,data)'));
 const statementStart=app.indexOf('function partnerStatementRows(pid)'),statementEnd=app.indexOf('/* ---- currencies per account',statementStart),statementCode=statementStart>=0&&statementEnd>statementStart?app.slice(statementStart,statementEnd):'';
 ok('partner statements show one readable transaction per document/payment with a running balance instead of double-entry rows',statementCode.includes('const groups=new Map()')&&statementCode.includes('const rows=partnerStatementRows(pid)')&&statementCode.includes('<th>نوع الحركة</th>')&&statementCode.includes('الرصيد النهائي:')&&!statementCode.includes('<th>مدين</th>')&&!statementCode.includes('<th>دائن</th>'));
+ok('voucher PDF filenames use the linked customer or supplier name',/function vPrint\(id\)\{const v=S\.vch\.find\(x=>x\.id==id\);ppage\([^;]*,v\.who\)\}/.test(app));
 ok('employee edit preserves the existing employee record',app.includes('function saveE(id)')&&app.includes('if(old)Object.assign(old,data)'));
 ok('warehouse names can be edited without replacing warehouse IDs',app.includes('function saveWh(id)')&&app.includes('w.name=n'));
 ok('chart-of-account names can be edited while preserving their account IDs',app.includes('function saveAccName(id)')&&app.includes('a.name=n'));
