@@ -9,6 +9,14 @@ const rememberBox = $('auth-remember');
 function applyFactoryBranding() {
   const nameNode = $('auth-brand-name');
   const logoNode = $('auth-brand-logo');
+  if (nameNode) {
+    nameNode.textContent = 'مدير المصنع';
+    document.title = 'مدير المصنع - تسجيل الدخول';
+  }
+  if (logoNode) {
+    logoNode.hidden = true;
+    logoNode.removeAttribute('src');
+  }
   try {
     const brand = JSON.parse(localStorage.getItem('factory-branding') || '{}');
     const name = typeof brand.name === 'string' ? brand.name.trim().slice(0, 120) : '';
