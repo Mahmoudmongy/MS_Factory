@@ -2,7 +2,7 @@
 <html lang="ar" dir="rtl">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>تسجيل الدخول - مدير المصنع</title>
 <link rel="stylesheet" href="./css/style.css">
 <style>
@@ -16,21 +16,23 @@
 <body>
 <main class="auth-page">
   <section class="card auth-card">
-    <h1>مدير المصنع</h1>
-    <p id="auth-status" class="mu"></p>
-    <p id="auth-msg" class="mu" role="status"></p>
+    <header id="auth-brand" class="auth-brand">
+      <img id="auth-brand-logo" alt="شعار الشركة" hidden>
+      <h1 id="auth-brand-name">مدير المصنع</h1>
+    </header>
+    <p id="auth-status" class="mu" role="status" aria-live="polite"></p>
+    <p id="auth-msg" class="mu" role="status" aria-live="polite"></p>
 
-    <!-- استخدمنا div مش form عشان مفيش Refresh يحصل -->
-    <div id="auth-form" class="auth-form">
+    <form id="auth-form" class="auth-form" novalidate>
       <label for="auth-email">اسم المستخدم أو البريد الإلكتروني</label>
-      <input id="auth-email" type="text" dir="ltr" autocomplete="email">
+      <input id="auth-email" name="username" type="text" dir="ltr" autocomplete="username" autocapitalize="off" spellcheck="false">
       <label for="auth-password">كلمة المرور</label>
-      <input id="auth-password" type="password" dir="ltr" autocomplete="current-password" minlength="6">
-      <label class="remember-row"><input type="checkbox" id="auth-remember" checked> تذكرني على هذا المتصفح</label>
+      <input id="auth-password" name="password" type="password" dir="ltr" autocomplete="current-password" minlength="6">
+      <label class="remember-row"><input type="checkbox" id="auth-remember" checked> تذكرني</label>
       <div class="row">
-        <button type="button" id="auth-login">تسجيل الدخول</button>
+        <button type="submit" id="auth-login">تسجيل الدخول</button>
       </div>
-    </div>
+    </form>
 
   </section>
 </main>
