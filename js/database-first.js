@@ -4,14 +4,78 @@ const QUEUE_KEY = 'ms-factory-db-queue-v1';
 const BASELINE_KEY = 'ms-factory-db-baseline-v1';
 const LAST_SYNC_KEY = 'ms-factory-db-last-sync-v1';
 const CACHE_PREFIX = 'ms-factory-db-cache-v1:';
+const OFFLINE_DB_NAME = 'ms-factory-offline-v2';
+const OFFLINE_DB_VERSION = 1;
 let storageScope = 'anonymous';
+let offlineDb = null;
+let queueMemory = [];
 const scopedKey = key => key + ':' + storageScope;
 const getLastSyncAt = () => localStorage.getItem(scopedKey(LAST_SYNC_KEY)) || '';
 const setLastSyncAt = value => { try { localStorage.setItem(scopedKey(LAST_SYNC_KEY), value); } catch (_) {} };
 const cachePrefix = () => CACHE_PREFIX + storageScope + ':';
-const cacheKey = (type,id) => cachePrefix() + encodeURIComponent(type) + ':' + encodeURIComponent(id);
-function cacheRow(row) { try { localStorage.setItem(cacheKey(row.record_type,row.record_id), JSON.stringify(row)); } catch (e) { console.warn('Local offline cache write failed',e); } }
-function loadCachedRows() { const rows=[]; const prefix=cachePrefix(); for(let i=0;i<localStorage.length;i++){const key=localStorage.key(i);if(!key||!key.startsWith(prefix))continue;try{const row=JSON.parse(localStorage.getItem(key)||'null');if(row&&row.record_type&&row.record_id)rows.push(row)}catch(_){}} return rows; }
+function openOfflineDatabase() {
+  return new Promise((resolve,reject) => {
+    if (!('indexedDB' in window)) return reject(new Error('IndexedDB غير متاح على هذا المتصفح'));
+    const request = indexedDB.open(OFFLINE_DB_NAME, OFFLINE_DB_VERSION);
+    request.onupgradeneeded = () => {
+      const db = request.result;
+      if (!db.objectStoreNames.contains('kv')) db.createObjectStore('kv', { keyPath: 'key' });
+      if (!db.objectStoreNames.contains('rows')) db.createObjectStore('rows', { keyPath: 'key' });
+    };
+    request.onsuccess = () => resolve(request.result);
+    request.onerror = () => reject(request.error || new Error('تعذر فتح التخزين المحلي'));
+    request.onblocked = () => reject(new Error('تحديث التخزين المحلي متوقف بسبب تبويب آخر مفتوح'));
+  });
+}
+function idbRequest(store, mode, action) {
+  return new Promise((resolve,reject) => {
+    if (!offlineDb) return reject(new Error('التخزين المحلي غير جاهز'));
+    const tx = offlineDb.transaction(store, mode);
+    const req = action(tx.objectStore(store));
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error || tx.error || new Error('فشل التخزين المحلي'));
+    tx.onabort = () => reject(tx.error || new Error('تم إلغاء عملية التخزين المحلي'));
+  });
+}
+async function initOfflineStorage() {
+  offlineDb = await openOfflineDatabase();
+  const queueKey = scopedKey(QUEUE_KEY);
+  let legacyQueue = [];
+  try { legacyQueue = JSON.parse(localStorage.getItem(queueKey) || '[]'); } catch (error) { console.warn('Legacy offline queue is unreadable and was retained for diagnosis:',error); }
+  if (Array.isArray(legacyQueue) && legacyQueue.length) {
+    const stored = await idbRequest('kv','readonly',store=>store.get('queue:'+storageScope));
+    const merged = new Map((Array.isArray(stored?.value)?stored.value:[]).map(op=>[op.type+'\\u0000'+op.id,op]));
+    for (const op of legacyQueue) merged.set(op.type+'\\u0000'+op.id,op);
+    await idbRequest('kv','readwrite',store=>store.put({key:'queue:'+storageScope,value:[...merged.values()]}));
+  }
+  const prefix = cachePrefix();
+  const legacyRows = [];
+  for (let i=0;i<localStorage.length;i++) {
+    const key=localStorage.key(i);
+    if (!key || !key.startsWith(prefix)) continue;
+    try { const row=JSON.parse(localStorage.getItem(key)||'null'); if(row?.record_type&&row?.record_id) legacyRows.push(row); } catch (_) {}
+  }
+  if (legacyRows.length) {
+    const tx=offlineDb.transaction('rows','readwrite');
+    const store=tx.objectStore('rows');
+    for (const row of legacyRows) store.put({key:storageScope+'|'+row.record_type+'|'+row.record_id,row});
+    await new Promise((resolve,reject)=>{tx.oncomplete=resolve;tx.onerror=()=>reject(tx.error);tx.onabort=()=>reject(tx.error);});
+  }
+  localStorage.removeItem(queueKey);
+  for (let i=localStorage.length-1;i>=0;i--) { const key=localStorage.key(i); if(key?.startsWith(prefix)) localStorage.removeItem(key); }
+  const saved = await idbRequest('kv','readonly',store=>store.get('queue:'+storageScope));
+  queueMemory = Array.isArray(saved?.value) ? saved.value : [];
+}
+function cacheRow(row) {
+  if (!offlineDb) return;
+  const key=storageScope+'|'+row.record_type+'|'+row.record_id;
+  idbRequest('rows','readwrite',store=>store.put({key,row})).catch(error=>console.error('Offline cache write failed:',error));
+}
+async function loadCachedRows() {
+  if (!offlineDb) return [];
+  const all=await idbRequest('rows','readonly',store=>store.getAll());
+  return (all||[]).filter(entry=>entry.key.startsWith(storageScope+'|')).map(entry=>entry.row).filter(row=>row?.record_type&&row?.record_id);
+}
 const PAGE_SIZE = 1000;
 let ownerId = null;
 let actorId = null;
@@ -44,11 +108,12 @@ const cleanPayload = item => {
   }
   return out;
 };
-const getQueue = () => {
-  try { const q = JSON.parse(localStorage.getItem(scopedKey(QUEUE_KEY)) || '[]'); return Array.isArray(q) ? q : []; }
-  catch (_) { return []; }
+const getQueue = () => queueMemory;
+const setQueue = q => {
+  queueMemory = Array.isArray(q) ? q : [];
+  if (!offlineDb) return Promise.reject(new Error('التخزين المحلي غير جاهز؛ لم يتم تأكيد حفظ طابور المزامنة'));
+  return idbRequest('kv','readwrite',store=>store.put({key:'queue:'+storageScope,value:queueMemory}));
 };
-const setQueue = q => localStorage.setItem(scopedKey(QUEUE_KEY), JSON.stringify(q));
 const mapKey = (type, id) => type + '\u0000' + id;
 const isNetworkFailure = error => {
   if (!navigator.onLine) return true;
@@ -70,18 +135,19 @@ function splitState(state) {
 }
 function clearLegacyDeviceData() {
   const marker = 'ms-factory-empty-device-v2:' + storageScope;
-  if (localStorage.getItem(marker) === '1') return;
+  // Run cleanup even when an older build already wrote the marker: stale mgr6 snapshots
+  // can themselves consume the mobile localStorage quota.
   const remove = [];
   for (let i = 0; i < localStorage.length; i++) {
     const key = localStorage.key(i);
     if (!key) continue;
     if (key === 'mgr6' || key === 'mgr6-sync-pending' || key === 'mgr6-cloud-snapshot-conflict' ||
-        key.startsWith('mgr6-backup') || key.startsWith('ms-factory-db-queue-v1:') ||
-        key.startsWith('ms-factory-db-baseline-v1:') || key.startsWith('ms-factory-db-last-sync-v1:') ||
-        key.startsWith('ms-factory-db-cache-v1:')) remove.push(key);
+        key.startsWith('mgr6-backup') || key === scopedKey(QUEUE_KEY) ||
+        key === scopedKey(BASELINE_KEY) || key === scopedKey(LAST_SYNC_KEY) ||
+        key.startsWith(cachePrefix())) remove.push(key);
   }
   for (const key of remove) localStorage.removeItem(key);
-  localStorage.setItem(marker, '1');
+  try { localStorage.setItem(marker, '1'); } catch (_) {}
 }
 function resetLocalBusinessState() {
   const state = getState();
@@ -264,9 +330,11 @@ function queueOperations(operations) {
     const prior = latest.get(key);
     latest.set(key, { ...op, expectedVersion: prior ? prior.expectedVersion : op.expectedVersion, queuedAt: Date.now() });
   }
-  setQueue([...latest.values()]);
-  localStorage.setItem('mgr6', JSON.stringify(getState()));
-  localStorage.setItem('mgr6-sync-pending', JSON.stringify({ at:Date.now(), count:latest.size }));
+  setQueue([...latest.values()]).catch(error => {
+    console.error('تعذر حفظ التعديلات المعلقة في التخزين المحلي:',error);
+    document.dispatchEvent(new CustomEvent('factory-db-local-storage-error',{detail:{message:'تعذر حفظ التعديلات المعلقة على هذا الجهاز. لا تغلق الصفحة قبل عودة الاتصال.'}}));
+  });
+  try { localStorage.setItem('mgr6-sync-pending', JSON.stringify({ at:Date.now(), count:latest.size })); } catch (_) {}
 }
 function applyOperationToState(op) {
   if (op.type === '__meta') {
@@ -286,7 +354,7 @@ async function flushQueue() {
   const queue = getQueue();
   await writeOperations(queue);
   for (const op of queue) applyOperationToState(op);
-  setQueue([]);
+  await setQueue([]);
   localStorage.removeItem('mgr6');
   localStorage.removeItem('mgr6-sync-pending');
 }
@@ -305,7 +373,7 @@ async function persistState(state) {
       if (latestOps.length) {
         const pending = new Map(getQueue().map(item => [mapKey(item.type,item.id),item]));
         for (const op of latestOps) pending.set(mapKey(op.type,op.id),op);
-        setQueue([...pending.values()]);
+        await setQueue([...pending.values()]);
         await flushQueue();
       }
       localStorage.removeItem('mgr6-sync-pending');
@@ -395,9 +463,10 @@ async function bootstrap() {
     actorId = profile?.id || null;
     ownerId = profile?.created_by || profile?.id || null;
     storageScope = ownerId || 'anonymous';
+    await initOfflineStorage();
     clearLegacyDeviceData();
     resetLocalBusinessState();
-    const cachedRows = loadCachedRows();
+    const cachedRows = await loadCachedRows();
     if (cachedRows.length) hydrateFromRows(cachedRows);
     else snapshotBaseline(getState());
     for (const op of getQueue()) applyOperationToState(op);
@@ -412,6 +481,7 @@ async function bootstrap() {
   await ensureProfile(actorId, false);
   ownerId = profile.created_by || profile.id;
   storageScope = ownerId;
+  await initOfflineStorage();
   clearLegacyDeviceData();
   resetLocalBusinessState();
   const rows = await fetchAllRecords();
@@ -434,6 +504,7 @@ async function reconnectDatabase() {
   await ensureProfile(actorId, true);
   ownerId = profile.created_by || profile.id;
   storageScope = ownerId;
+  await initOfflineStorage();
   const since = getLastSyncAt();
   if (since) {
     const changed = await fetchChangedRecords(since);
