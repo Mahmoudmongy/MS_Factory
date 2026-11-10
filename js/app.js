@@ -428,7 +428,7 @@ function nav(){
   onauxclick="if(event.button==1){event.preventDefault(); go('${t[0]}',0,true);}" 
   onmousedown="if(event.button==1) event.preventDefault()"
 >${t[1]} ${t[2]}</a>`;
- $g("#sb").innerHTML=`<span class="br">${S.logo?`<img src="${S.logo}">`:"🧵 "}${S.name}</span><div class="sb-nav-scroll">`+U(items.filter(t=>t[0]!=="set"),renderLink)+`</div><div class="sb-footer">`+U(items.filter(t=>t[0]==="set"),renderLink)+`</div>`;
+ $g("#sb").innerHTML=`<span class="br">${S.logo?`<img src="${S.logo}">`:"🧵 "}${S.name}</span><div class="sb-nav-scroll">`+U(items,renderLink)+`</div>`;
 }
 window.setFactoryAuthProfile=function(profile){window.__factoryAuthProfile=profile||null;if(profile&&!profile.is_admin){who="0";const tabs=allowed();if(!tabs.some(t=>t[0]===tab))tab=tabs[0]?.[0]||"home";}nav();render();};
 function migrate(){S.curs=S.curs||["EGP","USD","EUR"];S.codes=S.codes||[];S.accts.forEach(a=>{if(!a.cur)a.cur="EGP"});S.items.forEach(i=>{if(i.model===undefined)i.model="";Object.keys(i.st).forEach(v=>codeFor(i.id,v))});if(!S.tpl)S.tpl=TPL0();S.pend=S.pend||0}
@@ -759,7 +759,7 @@ document.addEventListener('DOMContentLoaded', function(){
 
 const renderNavBase=nav;
 nav=function(){renderNavBase();const sb=$g("#sb");if(sb&&!sb.querySelector(".sb-controls"))sb.insertAdjacentHTML("afterbegin",'<div class="sb-controls"><button type="button" class="sb-mode" onclick="toggleSidebarMode()" aria-label="تبديل عرض القائمة" title="تبديل عرض القائمة">☰</button></div>');applySidebarMode();};
-function applySidebarMode(){const mode=localStorage.getItem("factory-sidebar-mode")||"list";const sb=$g("#sb");if(sb)sb.classList.toggle("icons-only",mode==="icons");const b=sb?.querySelector(".sb-mode");if(b){b.textContent="☰";b.title=LANGEN?"Toggle sidebar display":"تبديل عرض القائمة";b.setAttribute("aria-label",b.title);}const logout=$g("#logout-btn");if(logout){logout.title=LANGEN?"Exit":"خروج";logout.setAttribute("aria-label",logout.title);}}
+function applySidebarMode(){const mode=localStorage.getItem("factory-sidebar-mode")||"list";const sb=$g("#sb");if(sb)sb.classList.toggle("icons-only",mode==="icons");const b=sb?.querySelector(".sb-mode");if(b){b.textContent="☰";b.title=LANGEN?"Toggle sidebar display":"تبديل عرض القائمة";b.setAttribute("aria-label",b.title);b.setAttribute("aria-expanded",String(mode==="list"));}sb?.querySelectorAll(".sb-nav-scroll a").forEach(a=>{const label=a.textContent.trim();a.title=label;a.setAttribute("aria-label",label);});const logout=$g("#logout-btn");if(logout){logout.title=LANGEN?"Exit":"خروج";logout.setAttribute("aria-label",logout.title);}}
 function toggleSidebarMode(){const next=(localStorage.getItem("factory-sidebar-mode")||"list")==="list"?"icons":"list";localStorage.setItem("factory-sidebar-mode",next);applySidebarMode();}
 async function signOutNow(skipConfirm=false){if(!skipConfirm&&!confirm(LANGEN?"Sign out?":"هل تريد تسجيل الخروج؟"))return;try{const {supabase}=await import("./supabase.js");if(supabase)await supabase.auth.signOut();}catch(e){console.error("Sign out failed",e)}location.replace("auth.html")}
 window.signOutNow=signOutNow;window.toggleSidebarMode=toggleSidebarMode;
