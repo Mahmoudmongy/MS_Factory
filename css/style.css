@@ -521,3 +521,42 @@ button,input,select,table,textarea{font-family:inherit}
 .auth-brand #auth-brand-name{margin:0;font-size:24px;line-height:1.4;overflow-wrap:anywhere}
 
 .auth-brand #auth-brand-logo[hidden]{display:none!important}
+
+
+/* Compact summary period editor; selected dates stay visible while fields are closed. */
+.home-period-card{display:grid;gap:10px;overflow:visible}
+.home-period-heading{display:flex;align-items:center;justify-content:space-between;gap:10px}
+.home-period-heading .mu{line-height:1.5}
+.home-period-toggle{flex:none;min-height:40px;white-space:nowrap}
+.home-period-fields{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;padding-top:10px;border-top:1px solid var(--bd)}
+.home-period-fields[hidden]{display:none!important}
+.home-period-fields label{display:block;margin-bottom:4px}
+.home-period-fields input{min-height:44px;margin:0}
+@media(max-width:860px){
+ .home-period-card{padding:12px!important}
+ .home-period-heading{align-items:flex-start}
+ .home-period-heading .mu{font-size:13px}
+ .home-period-fields{gap:8px}
+ .home-period-fields input{min-height:48px!important;font-size:16px!important}
+ .home-period-toggle{min-height:44px;padding:9px 12px}
+ #sb .br{font-size:14px!important;padding:8px 10px!important;min-height:54px;gap:4px}
+ #sb .br img{max-width:88px;max-height:42px}
+ #sb.icons-only .br{display:none!important}
+ #sb.icons-only{width:64px!important;max-width:64px!important;min-width:64px!important}
+}
+@media(max-width:380px){
+ .home-period-fields{grid-template-columns:1fr}
+ .home-period-heading{flex-wrap:wrap}
+}
+#sb a .nav-ico{width:24px;height:24px;padding:3px;border-radius:8px;color:var(--icon-color,#cbd5e1);background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.12);stroke-width:1.9;transition:transform .16s ease,background-color .16s ease,color .16s ease}
+#sb a:hover .nav-ico{background:rgba(255,255,255,.14);transform:translateY(-1px) scale(1.04)}
+#sb a.on .nav-ico{color:#fff;background:rgba(255,255,255,.18);border-color:rgba(255,255,255,.28)}
+#sb.icons-only a .nav-ico{width:26px;height:26px}
+.tiles .tile{color:var(--tx);font-family:inherit;line-height:1.4;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:9px;transition:transform .16s ease,border-color .16s ease,box-shadow .16s ease}
+.tiles .tile:hover{transform:translateY(-2px);border-color:var(--pr);box-shadow:0 5px 16px rgba(15,118,110,.12)}
+.tiles .tile-ico{display:grid;place-items:center;width:42px;height:42px;border-radius:13px;background:var(--pr2)}
+.tiles .tile-ico .nav-ico{width:27px;height:27px;color:var(--icon-color,var(--pr));stroke-width:1.9}
+@media(prefers-reduced-motion:reduce){
+ #sb a .nav-ico,.tiles .tile{transition:none}
+ #sb a:hover .nav-ico,.tiles .tile:hover{transform:none}
+}
