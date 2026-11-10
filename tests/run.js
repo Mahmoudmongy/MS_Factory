@@ -418,7 +418,7 @@ ok('invoice sync fix qualifies child-row deletion columns',/DELETE FROM public\.
 /* ---------- B. app in a desktop context ---------- */
 const ctx=await browser.newContext({viewport:{width:1280,height:900},acceptDownloads:true}),p=await ctx.newPage(),errs=[];p.on('pageerror',e=>errs.push(e.message));
 await p.goto(BASE);await p.waitForTimeout(500);
-const bootDiag=await p.evaluate(()=>({allowed:typeof window.allowed,state:typeof window.__factoryGetState,go:typeof window.go,scriptTags:[...document.scripts].map(x=>({src:x.src,type:x.type}))}));console.log('APP BOOT DIAGNOSTIC',JSON.stringify(bootDiag));
+const bootDiag=await p.evaluate(async()=>({allowed:typeof window.allowed,state:typeof window.__factoryGetState,go:typeof window.go,scriptTags:[...document.scripts].map(x=>({src:x.src,type:x.type})),appFetch:await fetch('./js/app.js').then(r=>({status:r.status,type:r.headers.get('content-type'),size:r.headers.get('content-length')})).catch(e=>({error:String(e)})),resources:performance.getEntriesByType('resource').filter(x=>x.name.includes('/js/app.js')).map(x=>({name:x.name,duration:x.duration,transferSize:x.transferSize}))}));console.log('APP BOOT DIAGNOSTIC',JSON.stringify({...bootDiag,pageErrors:errs}));
 const ev=(f,a)=>p.evaluate(()=>{SAVING=0}).then(()=>p.evaluate(f,a)),bal=()=>ev(()=>Math.abs(S.L.reduce((a,l)=>a+l.dr-l.cr,0))<.01);
 const scr=await ev(()=>window.allowed().map(t=>t[0]));for(const s of scr){await ev(x=>go(x),s)}ok(`all ${scr.length} screens render without errors`,errs.length==0,errs.slice(0,2));
 
