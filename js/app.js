@@ -58,6 +58,14 @@ const APP_ICONS={
  employee:'<circle cx="12" cy="7" r="4"/><path d="M4 21v-2a8 8 0 0 1 16 0v2"/>',
  report:'<path d="M4 20V4m0 16h17M8 16v-4m5 4V7m5 9v-7"/>',
  ai:'<path d="M12 3v3m0 12v3M3 12h3m12 0h3M5.6 5.6l2.1 2.1m8.6 8.6 2.1 2.1m0-12.8-2.1 2.1m-8.6 8.6-2.1 2.1"/><circle cx="12" cy="12" r="4"/>',
+ company:'<path d="M3 21h18M5 21V7l7-4 7 4v14M9 10h2m2 0h2M9 14h2m2 0h2M10 21v-4h4v4"/>',
+ print:'<path d="M6 9V3h12v6M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2M6 14h12v7H6z"/>',
+ import:'<path d="M12 3v12m-5-5 5 5 5-5M5 20h14"/>',
+ margin:'<path d="M4 19V5m0 14h16M7 15l4-4 3 2 5-6"/><circle cx="7" cy="15" r="1"/><circle cx="19" cy="7" r="1"/>',
+ warehouse:'<path d="m3 9 9-6 9 6v12H3zM7 21v-8h10v8M8 9h.01M12 9h.01M16 9h.01"/>',
+ customize:'<path d="M4 6h16M4 12h16M4 18h16"/><circle cx="9" cy="6" r="2"/><circle cx="15" cy="12" r="2"/><circle cx="8" cy="18" r="2"/>',
+ language:'<circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a15 15 0 0 1 0 18M12 3a15 15 0 0 0 0 18"/>',
+ install:'<path d="M12 3v12m-5-5 5 5 5-5M5 20h14"/>',
  settings:'<path d="M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8z"/><path d="m19 13 2 1-2 3-2-1-2 1v2h-4v-2l-2-1-2 1-2-3 2-1v-2l-2-1 2-3 2 1 2-1V5h4v2l2 1 2-1 2 3-2 1z"/>'
 };
 const APP_ICON_COLORS={
