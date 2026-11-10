@@ -19,6 +19,8 @@ ok('partner edit preserves the stable record ID and updates the existing object'
 const stmtStart=app.indexOf('function partnerStatementRows(pid)'),stmtEnd=app.indexOf('function sampleHtml(k)',stmtStart),stmtCode=stmtStart>=0&&stmtEnd>stmtStart?app.slice(stmtStart,stmtEnd):'';
 ok('partner statements combine double-entry ledger lines into readable transaction rows with a running balance',stmtCode.includes('const groups=new Map()')&&stmtCode.includes('<th>نوع الحركة</th>')&&stmtCode.includes('الرصيد النهائي:')&&!stmtCode.includes('<th>مدين</th>')&&!stmtCode.includes('<th>دائن</th>'));
 ok('partner statement resolves invoices and vouchers only within their source category',stmtCode.includes('row.src==="doc"?')&&stmtCode.includes('row.src==="vch"?'));
+const drillStart=app.indexOf('function drillPartner(id)'),drillEnd=app.indexOf('/* ---- currencies per account',drillStart),drillCode=drillStart>=0&&drillEnd>drillStart?app.slice(drillStart,drillEnd):'';
+ok('on-screen partner statements use grouped transactions and running balances',drillCode.includes('partnerStatementRows(id)')&&drillCode.includes('<th>نوع الحركة</th>')&&drillCode.includes('rb(row)')&&!drillCode.includes('lgTbl(srt(partnerLedger(id))'));
 ok('voucher PDF filename uses the customer or supplier name',app.includes('vchPrintHtml(v),"",v.who||pn(v.pid)'));
 ok('employee edit preserves the existing employee record',app.includes('function saveE(id)')&&app.includes('if(old)Object.assign(old,data)'));
 ok('warehouse names can be edited without replacing warehouse IDs',app.includes('function saveWh(id)')&&app.includes('w.name=n'));

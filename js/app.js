@@ -446,7 +446,15 @@ function migrate(){S.curs=S.curs||["EGP","USD","EUR"];S.codes=S.codes||[];S.acct
 /* ---- unified balance display: positive = له علينا (plain), negative = عليه لنا (red) ---- */
 function pvh(v){const s=`${f(Math.abs(v))} ج.م`;return Math.abs(v)<.005?`${f(0)} ج.م`:v<0?`<span class="neg">-${s}</span>`:s}
 function lgTbl(ls,sg,pm){let b=0;return `<table class="l"><tr><th>التاريخ</th><th>المرجع</th><th>البيان</th><th>الطرف</th><th>مدين</th><th>دائن</th><th>الرصيد</th><th></th></tr>${U(ls,l=>{b+=(l.dr-l.cr)*sg;return `<tr><td>${dfm(l.d||(l.ts?lday(new Date(l.ts)):""))}</td><td>${l.ref}</td><td>${l.desc||""}</td><td>${l.pid?pn(l.pid):""}</td><td>${l.dr?f(l.dr):""}</td><td>${l.cr?f(l.cr):""}</td><td>${pm?pvh(b):f(b)}</td><td>${rb(l)}</td></tr>`})}</table>`}
-function drillPartner(id){sh(`<div class="ph"><h3>كشف حساب ${pn(id)} (عميل / مورد مدمج)</h3><div class="row"><button class="g" onclick="stPrint(${id})">🖨️ طباعة</button>${bk}</div></div>${lgTbl(srt(partnerLedger(id)),-1,1)}<b>الرصيد: ${btxt(pbal(id))}</b><p class="mu">الرصيد المحاسبي الموجب يعني أن على الطرف مبلغًا لنا، ويظهر بالسالب في هذا الكشف؛ والسالب يعني أن له مبلغًا علينا.</p>`)}
+function drillPartner(id){
+ const rows=partnerStatementRows(id);let balance=0;
+ sh(`<div class="ph"><h3>كشف حساب ${pn(id)} (عميل / مورد مدمج)</h3><div class="row"><button class="g" onclick="stPrint(${id})">🖨️ طباعة</button>${bk}</div></div>
+ <table class="l"><tr><th>التاريخ</th><th>نوع الحركة</th><th>رقم المستند</th><th>البيان</th><th>قيمة الحركة</th><th>الرصيد</th><th></th></tr>${U(rows,row=>{
+  balance+=row.delta;
+  const movement=row.delta<-.005?"عليه لنا "+f(-row.delta):row.delta>.005?"له علينا "+f(row.delta):"—";
+  return `<tr><td>${dfm(row.d||(row.ts?lday(new Date(row.ts)):""))}</td><td>${row.type}</td><td>${row.ref}</td><td>${row.detail}</td><td>${movement}</td><td style="${balance<-.005?"color:#c0392b;":""}">${f(balance)}</td><td>${rb(row)}</td></tr>`;
+ })}</table><b>الرصيد النهائي: ${btxt(pbal(id))}</b><p class="mu">الرصيد الموجب = له علينا، والسالب بالأحمر = عليه لنا.</p>`);
+}
 /* ---- currencies per account (no mixing of different currencies in one total) ---- */
 const cur_=a=>(typeof a=="object"?a:ac_(a)).cur||"EGP",cf=(a,v)=>`${f(v)} ${cur_(a)=="EGP"?"ج.م":cur_(a)}`;
 function balc(id,fr,to){const a=ac_(id);if(cur_(a)=="EGP")return bal(id,fr,to);return S.L.filter(l=>l.a==id&&(!fr||l.d>=fr)&&(!to||l.d<=to)).reduce((s,l)=>s+(l.fc||0),0)*nat(a)}
