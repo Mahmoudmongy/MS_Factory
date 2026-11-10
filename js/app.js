@@ -663,7 +663,7 @@ function tplReset(){const k=$("#tk").value;S.tpl[k]=TPL0()[k];sv();tplFill();toa
 const WAI=`<div class="card"><b>إرسال الفاتورة إلى واتساب العميل</b><p>1) <b>مشاركة الملف</b> (يعمل فعليًا على الموبايل): يُنشئ ملف PDF حقيقي ويفتح قائمة مشاركة الجهاز لتختار واتساب والعميل، فيُرسل الملف نفسه.</p><p>2) <b>الإرسال المباشر من البرنامج إلى رقم العميل دون خطوات يدوية</b> غير متاح في الـ Demo ويحتاج: حساب WhatsApp Business Platform (Cloud API) موثّق، ورقم هاتف مفعّل، ورمز وصول، وقوالب رسائل معتمدة من Meta، ودالة خادم (Supabase Edge Function) ترفع ملف الـ PDF وترسله كرسالة مستند. سيُنفَّذ في مرحلة Supabase.</p></div>`;
 function ppage(title,html,extra,partyName){window.__pdfPartyName=partyName||"";sh(`<div class="ph"><h3>${title}</h3><div class="row"><button onclick="print()">🖨️ طباعة</button><button class="g" onclick="savePdf()">💾 حفظ PDF</button><button class="g" onclick="sharePdf()">📤 مشاركة ملف PDF</button>${extra||""}${bk}</div></div>${html}${WAI}`)}
 function inv(id){const d=S.docs.find(x=>x.id==id);ppage(`${TN[d.t]} ${d.no}`,docPrintHtml(d),"",pn(d.pid))}
-function vPrint(id){const v=S.vch.find(x=>x.id==id);ppage(`${v.title} ${v.no}`,vchPrintHtml(v))}
+function vPrint(id){const v=S.vch.find(x=>x.id==id);ppage(`${v.title} ${v.no}`,vchPrintHtml(v),"",v.who)}
 function poPrint(id){const o=S.po.find(x=>x.id==id);ppage(`أمر إنتاج ${o.no}`,poPrintHtml(o))}
 function stPrint(id){ppage(`كشف حساب ${pn(id)}`,stmtHtml(id),"",pn(id))}
 function repPrint(){const t=(RL.find(r=>r[0]==R.rep)||[])[1]||"تقرير",tb=[...ACT.querySelectorAll("table.l")].map(x=>x.outerHTML.replace('class="l"',"")).join("<br>");ppage(t,pw("rep",t,"",`<div>من ${R.from?dfm(R.from):"البداية"} إلى ${R.to?dfm(R.to):dfm(td())}</div>${tb}`))}
