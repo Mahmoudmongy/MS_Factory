@@ -620,7 +620,33 @@ function pw(k,title,no,body){const t=TPO||S.tpl[k]||TPL0()[k];$g("#pgst").textCo
 function docPrintHtml(d){const k=d.t=="sale"||d.t=="sret"?"sale":"pur",p=S.partners.find(x=>x.id==d.pid)||{},sw=x=>tsh(k,x);return pw(k,TN[d.t],d.no,`<div>${sw("ts")&&d.ts?fts(d.ts):dfm(d.date)}</div><div><b>${p.name||""}</b>${sw("party")?` ${p.phone||""} — ${[p.gov,p.city,p.adr].filter(Boolean).join(" - ")}`:""}</div>${sw("img")&&d.img?`<img src="${d.img}" width="120">`:""}<table><tr><th>الصنف</th><th>لون / مقاس</th>${sw("unit")?"<th>الوحدة</th>":""}<th>الكمية</th><th>السعر</th><th>الإجمالي</th>${sw("note")?"<th>بيان</th>":""}</tr>${U(d.lines,l=>`<tr><td>${l.name}</td><td>${l.v!="-"?l.v:""}</td>${sw("unit")?`<td>${l.unit||""}</td>`:""}<td>${qf(l.qty)}</td><td>${f(l.price)}</td><td>${f(l.qty*l.price)}</td>${sw("note")?`<td>${l.note||""}</td>`:""}</tr>`)}</table>${d.disc?`<div>الخصم: ${f(d.disc)} ج.م</div>`:""}<h3>الإجمالي: ${f(d.total)} ج.م</h3><div>${d.note||""}</div>`)}
 function vchPrintHtml(v){const k=v.dir=="in"?"receipt":"payment",sw=x=>tsh(k,x);return pw(k,v.title,v.no,`<div>${sw("ts")&&v.ts?fts(v.ts):dfm(v.date)}</div><div>${v.dir=="in"?"استلمنا من":"صُرف إلى"}: <b>${v.who||""}</b></div>${sw("acct")?`<div>الحسابات: ${v.ac.map(x=>an(x.a)+" "+(x.fc?f(x.fc)+" "+x.cur:f(x.m)+" ج.م")).join("، ")}</div>`:""}<table><tr><th>البند</th>${sw("desc")?"<th>البيان</th>":""}<th>المبلغ</th>${sw("disc")?"<th>الخصم</th>":""}<th>الصافي</th></tr>${U(v.ln,l=>`<tr><td>${l.a=="p"?"حساب "+(l.lbl||""):an(+l.a)}</td>${sw("desc")?`<td>${l.d||""}</td>`:""}<td>${f(l.m)}</td>${sw("disc")?`<td>${f(l.x)}</td>`:""}<td>${f(l.m-l.x)}</td></tr>`)}</table><h3>الإجمالي: ${f(v.total)} ج.م</h3><div>${v.desc||""}</div>`)}
 function poPrintHtml(o){const sw=x=>tsh("po",x);return pw("po","أمر إنتاج",o.no,`<div>${sw("ts")&&o.ts?fts(o.ts):dfm(o.date)} — ${pnm(o)} — ${o.desc||""}</div>${poTbl(o).replace('class="l"',"")}${sw("mats")?`<h4>الخامات</h4><table>${U(o.mats,m=>`<tr><td>${it_(m.iid).name}</td><td>${qf(m.qty)} ${it_(m.iid).unit}</td>${sw("cost")?`<td>${f(m.cost||0)}</td>`:""}</tr>`)}</table>`:""}${sw("cost")?`<h3>إجمالي التكلفة: ${f(poCost(o))} ج.م</h3>`:""}`)}
-function stmtHtml(pid){const sw=x=>tsh("stmt",x);let b=0;return pw("stmt","كشف حساب",pn(pid),`<table><tr><th>التاريخ</th><th>المرجع</th><th>البيان</th><th>مدين</th><th>دائن</th><th>الرصيد</th></tr>${U(srt(partnerLedger(pid)),l=>{b+=l.cr-l.dr;return `<tr><td>${dfm(l.d||(l.ts?lday(new Date(l.ts)):""))}</td><td>${l.ref}</td><td>${l.desc||""}</td><td>${l.dr?f(l.dr):""}</td><td>${l.cr?f(l.cr):""}</td><td style="${b<0?"color:#c0392b;":""}">${f(b)}</td></tr>`})}</table><h3>الرصيد: ${f(b)} ج.م ${b<0?"(عليه لنا)":b>0?"(له علينا)":""}</h3>`)}
+function partnerStatementRows(pid){
+ const groups=new Map();
+ partnerLedger(pid).forEach(l=>{
+  const key=[l.src||"",String(l.rid??""),String(l.ref||""),String(l.d||"")].join("\u0001");
+  let row=groups.get(key);
+  if(!row){row={src:l.src||"",rid:l.rid,ref:l.ref||"",d:l.d||"",ts:Number(l.ts)||0,desc:l.desc||"",dr:0,cr:0};groups.set(key,row)}
+  row.dr+=Number(l.dr)||0;row.cr+=Number(l.cr)||0;
+  if(!row.desc&&l.desc)row.desc=l.desc;
+  if(Number(l.ts)&&(!row.ts||Number(l.ts)<row.ts))row.ts=Number(l.ts);
+ });
+ return [...groups.values()].map(row=>{
+  const doc=S.docs.find(x=>String(x.id)===String(row.rid))||S.docs.find(x=>x.no==row.ref&&x.pid==pid);
+  const voucher=S.vch.find(x=>String(x.id)===String(row.rid))||S.vch.find(x=>x.no==row.ref&&x.pid==pid);
+  const type=doc?(TN[doc.t]||"فاتورة"):voucher?(voucher.dir==="in"?"سند قبض":"سند دفع"):row.src==="je"?"قيد يومية":row.src==="manager"?"حركة مستوردة":"حركة حساب";
+  const detail=row.desc||(doc&&Array.isArray(doc.lines)?doc.lines.map(x=>(x.name||"بند")+(x.qty?" × "+qf(x.qty):"")).join("، "):"")||(voucher&&voucher.desc)||"";
+  return {...row,type,detail,delta:row.cr-row.dr};
+ }).sort((a,b)=>String(a.d).localeCompare(String(b.d))||a.ts-b.ts||String(a.ref).localeCompare(String(b.ref),"ar"));
+}
+function stmtHtml(pid){
+ let balance=0;
+ const rows=partnerStatementRows(pid);
+ return pw("stmt","كشف حساب",pn(pid),`<table><tr><th>التاريخ</th><th>نوع الحركة</th><th>رقم المستند</th><th>البيان</th><th>قيمة الحركة</th><th>الرصيد</th></tr>${U(rows,row=>{
+  balance+=row.delta;
+  const movement=row.delta<-.005?"عليه لنا "+f(-row.delta):row.delta>.005?"له علينا "+f(row.delta):"—";
+  return `<tr><td>${dfm(row.d||(row.ts?lday(new Date(row.ts)):""))}</td><td>${row.type}</td><td>${row.ref}</td><td>${row.detail}</td><td>${movement}</td><td style="${balance<-.005?"color:#c0392b;":""}">${f(balance)}</td></tr>`;
+ })}</table><h3>الرصيد النهائي: ${f(balance)} ج.م ${balance<-.005?"(عليه لنا)":balance>.005?"(له علينا)":""}</h3>`);
+}
 function sampleHtml(k){if(k=="sale"||k=="pur"){const d=[...S.docs].reverse().find(x=>k=="sale"?(x.t=="sale"||x.t=="sret"):(x.t=="pur"||x.t=="pret"))||{t:k,no:(k=="sale"?"SA":"PU")+"-0001",date:td(),ts:Date.now(),pid:(S.partners[1]||S.partners[0]||{id:0}).id,lines:[{name:"تيشيرت قطن",v:"أبيض / M",unit:"قطعة",qty:2,price:250,note:"مثال"}],disc:0,total:500,note:"ملاحظات",img:""};return docPrintHtml(d)}
  if(k=="receipt"||k=="payment"){const v=[...S.vch].reverse().find(x=>x.dir==(k=="receipt"?"in":"out"))||{no:"RC-0001",date:td(),ts:Date.now(),dir:k=="receipt"?"in":"out",title:TK[k],who:"محلات الأمل",desc:"دفعة تحت الحساب",ac:[{a:1,m:1000}],ln:[{a:"p",d:"سداد",m:1000,x:0,lbl:"حساب الطرف"}],total:1000};return vchPrintHtml(v)}
  if(k=="po"){const o=S.po[S.po.length-1]||{no:"PO-0001",date:td(),ts:Date.now(),desc:"جاكيت",iname:"جاكيت",wh:FW(),subs:[{v:"أحمر / M",qty:10}],mats:[],x:[],st:0,rec:[],matCost:0,wc:0};return poPrintHtml(o)}
@@ -635,7 +661,7 @@ function tplReset(){const k=$("#tk").value;S.tpl[k]=TPL0()[k];sv();tplFill();toa
 const WAI=`<div class="card"><b>إرسال الفاتورة إلى واتساب العميل</b><p>1) <b>مشاركة الملف</b> (يعمل فعليًا على الموبايل): يُنشئ ملف PDF حقيقي ويفتح قائمة مشاركة الجهاز لتختار واتساب والعميل، فيُرسل الملف نفسه.</p><p>2) <b>الإرسال المباشر من البرنامج إلى رقم العميل دون خطوات يدوية</b> غير متاح في الـ Demo ويحتاج: حساب WhatsApp Business Platform (Cloud API) موثّق، ورقم هاتف مفعّل، ورمز وصول، وقوالب رسائل معتمدة من Meta، ودالة خادم (Supabase Edge Function) ترفع ملف الـ PDF وترسله كرسالة مستند. سيُنفَّذ في مرحلة Supabase.</p></div>`;
 function ppage(title,html,extra,partyName){window.__pdfPartyName=partyName||"";sh(`<div class="ph"><h3>${title}</h3><div class="row"><button onclick="print()">🖨️ طباعة</button><button class="g" onclick="savePdf()">💾 حفظ PDF</button><button class="g" onclick="sharePdf()">📤 مشاركة ملف PDF</button>${extra||""}${bk}</div></div>${html}${WAI}`)}
 function inv(id){const d=S.docs.find(x=>x.id==id);ppage(`${TN[d.t]} ${d.no}`,docPrintHtml(d),"",pn(d.pid))}
-function vPrint(id){const v=S.vch.find(x=>x.id==id);ppage(`${v.title} ${v.no}`,vchPrintHtml(v))}
+function vPrint(id){const v=S.vch.find(x=>x.id==id);ppage(`${v.title} ${v.no}`,vchPrintHtml(v),"",v.who||pn(v.pid))}
 function poPrint(id){const o=S.po.find(x=>x.id==id);ppage(`أمر إنتاج ${o.no}`,poPrintHtml(o))}
 function stPrint(id){ppage(`كشف حساب ${pn(id)}`,stmtHtml(id),"",pn(id))}
 function repPrint(){const t=(RL.find(r=>r[0]==R.rep)||[])[1]||"تقرير",tb=[...ACT.querySelectorAll("table.l")].map(x=>x.outerHTML.replace('class="l"',"")).join("<br>");ppage(t,pw("rep",t,"",`<div>من ${R.from?dfm(R.from):"البداية"} إلى ${R.to?dfm(R.to):dfm(td())}</div>${tb}`))}
