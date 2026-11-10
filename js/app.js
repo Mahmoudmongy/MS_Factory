@@ -17,7 +17,7 @@ let S=seed(); // Legacy local snapshots are intentionally ignored; Supabase hydr
 const SYS_ACCOUNTS=(S.accts||[]).map(x=>({...x}));
 window.__factoryDatabaseFirst=true;
 window.__factoryGetState=()=>S;
-window.__factoryReplaceArrays=(data)=>{if(!data||typeof data!=="object")return;for(const [k,v] of Object.entries(data)){if(Array.isArray(v))S[k]=v;else if(k==="__meta"&&v&&typeof v==="object")Object.assign(S,v);}try{render()}catch(e){}};
+window.__factoryReplaceArrays=(data)=>{if(!data||typeof data!=="object")return;for(const [k,v] of Object.entries(data)){if(Array.isArray(v))S[k]=v;else if(k==="__meta"&&v&&typeof v==="object")Object.assign(S,v);}cachePublicFactoryBranding();try{render()}catch(e){}};
 const sv=()=>{try{S.pend=(S.pend||0)+1;if(window.__factoryDatabaseFirstFailed&&navigator.onLine){alert("تعذر الاتصال بقاعدة البيانات. لم يتم تأكيد حفظ العملية؛ حاول مرة أخرى بعد عودة الاتصال.");return;}if(window.__factoryDatabaseFirstReady&&typeof window.__factoryPersistState==="function"){window.__factoryPersistState(S).catch(e=>{console.error("Database save failed:",e);alert(e.message||"تعذر حفظ التغييرات في قاعدة البيانات");});}else if(!navigator.onLine){localStorage.setItem("mgr6",JSON.stringify(S));localStorage.setItem("mgr6-sync-pending",JSON.stringify({at:Date.now(),pend:S.pend}));}else{alert("البرنامج لسه بيجهز الاتصال بقاعدة البيانات. انتظر لحظات ثم أعد المحاولة.");return;}}catch(e){console.error("State save failed:",e)}};
 const TN={sale:"فاتورة بيع",pur:"فاتورة شراء",sret:"إشعار دائن (مرتجع بيع)",pret:"إشعار مدين (مرتجع شراء)"},PF={sale:"SA",pur:"PU",sret:"SR",pret:"RP"},CT={mfg:"تصنيع",sup:"مشتريات"},TT={A:"الأصول",L:"الالتزامات",Q:"حقوق الملكية",I:"الإيرادات",X:"المصروفات"};
 /* ===== ledger + stock core ===== */
