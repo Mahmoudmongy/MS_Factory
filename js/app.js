@@ -100,7 +100,38 @@ const card=(t,tot,rows)=>`<div class="sc"><div class="row sp sh"><b>${t}</b><b>$
 function isHtml(fr,to){const B=a=>bal(a.id,fr,to),I_=S.accts.filter(a=>a.t=="I"),X_=S.accts.filter(a=>a.t=="X"),row=a=>lr(a.name,B(a),`drillAcct(${a.id},'${fr}','${to}')`),iT=I_.reduce((s,a)=>s+B(a),0),xT=X_.reduce((s,a)=>s+B(a),0);
  return `<h4 class="mu">قائمة الدخل — للفترة من ${fr?dfm(fr):"البداية"} إلى ${dfm(to)}</h4>`+card("الدخل",iT,U(I_,row))+card("يخصم المصروفات",xT,U(X_.filter(a=>B(a)),row))+card("صافي الربح (الخسارة)",iT-xT,"")}
 function hpr(k){[S.per.from,S.per.to]=rng(k);sv();render()}
-function vHome(){const p=S.per;return ph("الملخص",`<span class="mu">القوائم المالية — تحديد الفترة</span>`)+`<div class="card filter-card"><div class="row"><div><label>من تاريخ</label><input type="date" value="${p.from}" onchange="S.per.from=this.value;sv();render()"></div><div><label>إلى تاريخ</label><input type="date" value="${p.to}" onchange="S.per.to=this.value;sv();render()"></div></div></div><div class="g2"><div>${bsHtml(p.to)}</div><div>${isHtml(p.from,p.to)}</div></div>`}
+let HOME_PERIOD_OPEN=false;
+function toggleHomePeriod(btn){
+ const card=btn?.closest(".home-period-card"),panel=card?.querySelector(".home-period-fields");
+ if(!card||!panel)return;
+ HOME_PERIOD_OPEN=!HOME_PERIOD_OPEN;
+ card.classList.toggle("is-open",HOME_PERIOD_OPEN);
+ panel.hidden=!HOME_PERIOD_OPEN;
+ btn.setAttribute("aria-expanded",String(HOME_PERIOD_OPEN));
+ btn.textContent=HOME_PERIOD_OPEN?"إخفاء الفترة":"تحديد الفترة";
+}
+function closeHomePeriod(card){
+ HOME_PERIOD_OPEN=false;
+ card.classList.remove("is-open");
+ const panel=card.querySelector(".home-period-fields"),btn=card.querySelector(".home-period-toggle");
+ if(panel)panel.hidden=true;
+ if(btn){btn.setAttribute("aria-expanded","false");btn.textContent="تحديد الفترة";}
+}
+function vHome(){
+ const p=S.per,open=HOME_PERIOD_OPEN;
+ const from=dfm(p.from),to=dfm(p.to),panelId="home-period-fields-"+(CUR?.id||"main");
+ return ph("الملخص")+
+  '<section class="card home-period-card filter-card'+(open?' is-open':'')+'">'+
+   '<div class="home-period-heading"><span class="mu">الفترة الحالية: '+from+' إلى '+to+'</span>'+
+    '<button type="button" class="g home-period-toggle" aria-expanded="'+open+'" aria-controls="'+panelId+'" onclick="toggleHomePeriod(this)">'+(open?"إخفاء الفترة":"تحديد الفترة")+'</button>'+
+   '</div>'+
+   '<div id="'+panelId+'" class="home-period-fields" '+(open?'':'hidden')+'>'+
+    '<div><label for="home-period-from">من تاريخ</label><input id="home-period-from" type="date" value="'+p.from+'" onchange="S.per.from=this.value;sv();render()"></div>'+
+    '<div><label for="home-period-to">إلى تاريخ</label><input id="home-period-to" type="date" value="'+p.to+'" onchange="S.per.to=this.value;sv();render()"></div>'+
+   '</div>'+
+  '</section>'+
+  '<div class="g2"><div>'+bsHtml(p.to)+'</div><div>'+isHtml(p.from,p.to)+'</div></div>';
+}
 /* ledger drill-down with view / edit per row */
 const rb=l=>l.rid?`<button class="g" onclick="openRef('${l.src}',${l.rid})">عرض</button> ${can("edit")&&l.src!="wo"?`<button class="g" onclick="editRef('${l.src}',${l.rid})">تعديل</button>`:""}`:"";
 const srt=a=>[...a].sort((x,y)=>x.d<y.d?-1:x.d>y.d?1:0);
@@ -465,6 +496,24 @@ function fbar(k,cfg){
  return '<div class="card filter-card '+(dateOpen?"date-range-open":"")+'" data-filter-group="'+k+'"><div class="row filter-controls">'+fields+'<div class="filter-actions">'+actions+'</div></div><div class="filter-date-panel" '+(dateOpen?'':'hidden')+' aria-hidden="'+(!dateOpen)+'">'+dateFields+'</div></div>';
 }
 function toggleFilterDates(btn){const card=btn?.closest(".filter-card");if(!card)return;const open=card.classList.toggle("date-range-open"),key=card.dataset.filterGroup,panel=card.querySelector(".filter-date-panel");if(key){FL[key]=FL[key]||{};FL[key]._dateOpen=open;}if(panel){panel.hidden=!open;panel.setAttribute("aria-hidden",String(!open));}btn.setAttribute("aria-expanded",String(open));btn.textContent=open?"إخفاء الفترة":"تحديد الفترة";}
+function closeFilterDatePanel(card){
+ const key=card.dataset.filterGroup;
+ if(key&&FL[key])FL[key]._dateOpen=false;
+ card.classList.remove("date-range-open");
+ const panel=card.querySelector(".filter-date-panel"),btn=card.querySelector(".filter-date-toggle");
+ if(panel){panel.hidden=true;panel.setAttribute("aria-hidden","true");}
+ if(btn){btn.setAttribute("aria-expanded","false");btn.textContent="تحديد الفترة";}
+}
+function dismissDatePanels(event){
+ if(event.type==="pointerdown"){
+  const target=event.target instanceof Element?event.target:null;
+  if(target?.closest(".filter-card, .home-period-card"))return;
+ }else if(event.key!=="Escape")return;
+ document.querySelectorAll(".filter-card.date-range-open").forEach(closeFilterDatePanel);
+ document.querySelectorAll(".home-period-card.is-open").forEach(closeHomePeriod);
+}
+document.addEventListener("pointerdown",dismissDatePanels);
+document.addEventListener("keydown",dismissDatePanels);
 function fbarType(k,id,el){FL[k]=FL[k]||{};FL[k][id]=el.value;}
 function fbarCommit(k,id,el){
  FL[k]=FL[k]||{};FL[k][id]=el.value;const key=k+":"+id;
