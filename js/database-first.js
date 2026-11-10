@@ -142,9 +142,9 @@ function clearLegacyDeviceData() {
     const key = localStorage.key(i);
     if (!key) continue;
     if (key === 'mgr6' || key === 'mgr6-sync-pending' || key === 'mgr6-cloud-snapshot-conflict' ||
-        key.startsWith('mgr6-backup') || key.startsWith('ms-factory-db-queue-v1:') ||
-        key.startsWith('ms-factory-db-baseline-v1:') || key.startsWith('ms-factory-db-last-sync-v1:') ||
-        key.startsWith('ms-factory-db-cache-v1:')) remove.push(key);
+        key.startsWith('mgr6-backup') || key === scopedKey(QUEUE_KEY) ||
+        key === scopedKey(BASELINE_KEY) || key === scopedKey(LAST_SYNC_KEY) ||
+        key.startsWith(cachePrefix())) remove.push(key);
   }
   for (const key of remove) localStorage.removeItem(key);
   try { localStorage.setItem(marker, '1'); } catch (_) {}
