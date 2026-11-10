@@ -11,7 +11,7 @@ try { $('auth-email').value = localStorage.getItem('factory-login-name') || ''; 
 function say(text, isError = true) {
   if(!msg) return;
   msg.textContent = text;
-  msg.style.color = isError ? 'red' : 'green';
+  msg.dataset.kind = isError ? 'error' : 'success';
   msg.style.display = 'block';
   
 }
@@ -26,10 +26,10 @@ function credentials() {
 }
 
 if (!supabase) {
-  if(status) status.textContent = 'تعذر الاتصال بخدمة تسجيل الدخول';
-  say('تعذر الاتصال بخدمة تسجيل الدخول');
+  if(status) status.textContent = 'إعداد تسجيل الدخول غير متاح';
+  say('تعذر تهيئة خدمة تسجيل الدخول. أعد تحميل الصفحة أو تواصل مع المسؤول.');
 } else {
-  if(status) status.textContent = 'خدمة تسجيل الدخول جاهزة';
+  if(status) status.textContent = 'جاهز لتسجيل الدخول';
 
   form.addEventListener('submit', async (e) => {
     e.preventDefault();
@@ -48,11 +48,18 @@ if (!supabase) {
         supabase.auth.signInWithPassword({ email, password }),
         new Promise((_, reject) => setTimeout(() => reject(new Error('انتهت مهلة الاتصال. تحقق من الإنترنت وحاول مرة أخرى.')), 12000))
       ]);
-      if (result.error) return say('تعذر تسجيل الدخول: ' + result.error.message);
+      if (result.error) {
+        console.warn('Login failed:', result.error);
+        const detail = String(result.error.message || '').toLowerCase();
+        if (detail.includes('invalid login credentials')) return say('اسم المستخدم أو كلمة المرور غير صحيحة.');
+        if (detail.includes('email not confirmed')) return say('الحساب غير مؤكد. تواصل مع المسؤول.');
+        return say('تعذر تسجيل الدخول. تحقق من بياناتك واتصال الإنترنت ثم حاول مرة أخرى.');
+      }
       say('تم الدخول بنجاح ✅', false);
       location.replace('index.html');
     } catch (error) {
-      say(error?.message || 'تعذر تسجيل الدخول. حاول مرة أخرى.');
+      console.warn('Login request failed:', error);
+      say(error?.message?.includes('انتهت مهلة الاتصال') ? error.message : 'تعذر الاتصال بخدمة تسجيل الدخول. تحقق من الإنترنت وحاول مرة أخرى.');
     } finally {
       button.disabled = false;
     }
