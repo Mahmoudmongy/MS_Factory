@@ -18,6 +18,7 @@ ok('customer/supplier names open details and edit stays permission-gated inside 
 ok('partner edit preserves the stable record ID and updates the existing object',app.includes('function saveP(id)')&&app.includes('if(old)Object.assign(old,data)'));
 const stmtStart=app.indexOf('function partnerStatementRows(pid)'),stmtEnd=app.indexOf('function sampleHtml(k)',stmtStart),stmtCode=stmtStart>=0&&stmtEnd>stmtStart?app.slice(stmtStart,stmtEnd):'';
 ok('partner statements combine double-entry ledger lines into readable transaction rows with a running balance',stmtCode.includes('const groups=new Map()')&&stmtCode.includes('<th>نوع الحركة</th>')&&stmtCode.includes('الرصيد النهائي:')&&!stmtCode.includes('<th>مدين</th>')&&!stmtCode.includes('<th>دائن</th>'));
+ok('partner statement resolves invoices and vouchers only within their source category',stmtCode.includes('row.src==="doc"?')&&stmtCode.includes('row.src==="vch"?'));
 ok('voucher PDF filename uses the customer or supplier name',app.includes('vchPrintHtml(v),"",v.who||pn(v.pid)'));
 ok('employee edit preserves the existing employee record',app.includes('function saveE(id)')&&app.includes('if(old)Object.assign(old,data)'));
 ok('warehouse names can be edited without replacing warehouse IDs',app.includes('function saveWh(id)')&&app.includes('w.name=n'));
