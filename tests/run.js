@@ -524,7 +524,7 @@ ok('double click on Save registers the voucher once',await ev(()=>S.vch.length)=
 /* ---------- tabs: unsaved data ---------- */
 await ev(()=>{go('sale');docForm('sale');$("#q").value="7";$("#q").dispatchEvent(new Event("input",{bubbles:true}))});await ev(()=>go('cust'));
 ok('unsaved form data survives switching to another screen',await ev(()=>{const t=TB.filter(x=>x.kind=="page"&&x.el.querySelector("#q")).slice(-1)[0];return t?t.el.querySelector("#q").value:null})=="7");
-await ev(()=>{actTab(TB.find(t=>t.kind=="page"));tryClose()});ok('closing a dirty tab asks for confirmation',!!(await p.$('#cfm')));await p.click('#cf1');ok('discarding closes the tab',await ev(()=>!TB.some(t=>t.kind=="page")));
+const salePageId=await ev(()=>TB.filter(t=>t.kind=="page"&&t.el.querySelector("#q")).slice(-1)[0]?.id);await ev(id=>{actTab(TB.find(t=>t.id==id));tryClose()},salePageId);ok('closing a dirty sales form tab asks for confirmation',!!(await p.$('#cfm')));await p.click('#cf1');ok('discarding closes the tab',await ev(()=>!TB.some(t=>t.kind=="page")));
 /* ---------- real CSV export download ---------- */
 await ev(()=>go('stock'));const [dl]=await Promise.all([p.waitForEvent('download',{timeout:8000}).catch(()=>null),ev(async()=>{const b=[...ACT.querySelectorAll("button")].find(x=>x.textContent.includes("تصدير Excel"));await b.onclick()})]);
 let csv='';if(dl){const f=await dl.path();csv=fs.readFileSync(f,'utf8')}ok('CSV export triggers a real browser download with BOM and data rows',!!dl&&csv.charCodeAt(0)==0xFEFF&&csv.split('\n').length>2,dl&&dl.suggestedFilename());
