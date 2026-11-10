@@ -420,7 +420,7 @@ ok('invoice sync fix qualifies child-row deletion columns',/DELETE FROM public\.
 /* ---------- B. app in a desktop context ---------- */
 const ctx=await browser.newContext({viewport:{width:1280,height:900},acceptDownloads:true}),p=await ctx.newPage(),errs=[];p.on('pageerror',e=>errs.push(e.message));
 await p.goto(BASE);await p.waitForTimeout(500);
-const ev=(f,a)=>p.evaluate(()=>{SAVING=0}).then(()=>p.evaluate(f,a)),bal=()=>ev(()=>Math.abs(S.L.reduce((a,l)=>a+l.dr-l.cr,0))<.01);
+const ev=(f,a)=>p.evaluate(()=>{SAVING=0}).then(()=>p.evaluate(f,a)).catch(e=>{console.error('EVAL_FAILED:',f.toString(),'ARG:',a);throw e}),bal=()=>ev(()=>Math.abs(S.L.reduce((a,l)=>a+l.dr-l.cr,0))<.01);
 const scr=await ev(()=>allowed().map(t=>t[0]));for(const s of scr){await ev(x=>go(x),s)}ok(`all ${scr.length} screens render without errors`,errs.length==0,errs.slice(0,2));
 
 /* Search typing and duplicate screen-tab regression, including a narrow mobile viewport. */
