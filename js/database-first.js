@@ -21,6 +21,8 @@ let stateReady = false;
 let saveChain = Promise.resolve();
 let channel = null;
 let applyingRemote = false;
+// A stale-version conflict is terminal for this browser session.
+let conflictWriteLock = false;
 
 const clone = value => JSON.parse(JSON.stringify(value ?? null));
 const stable = value => {
@@ -282,6 +284,7 @@ function applyOperationToState(op) {
   window.__factoryReplaceArrays?.({[op.type]:list});
 }
 async function flushQueue() {
+  if (conflictWriteLock) throw new Error('الحفظ موقوف بعد تعارض البيانات. أعد تحميل الصفحة لمراجعة النسخة المؤكدة.');
   if (!navigator.onLine || !getQueue().length) return;
   const queue = getQueue();
   await writeOperations(queue);
@@ -292,13 +295,15 @@ async function flushQueue() {
 }
 async function persistState(state) {
   if (!stateReady || applyingRemote) return;
+  if (conflictWriteLock || window.__factoryDatabaseFirstFailed) throw new Error('الحفظ موقوف بعد تعارض البيانات. أعد تحميل الصفحة لمراجعة النسخة المؤكدة.');
   const ops = makeOperations(state);
   if (!ops.length) return;
   if (!navigator.onLine || window.__factoryOfflineMode === true) {
     queueOperations(ops);
     return;
   }
-  saveChain = saveChain.then(async () => {
+  saveChain = saveChain.catch(() => {}).then(async () => {
+    if (conflictWriteLock || window.__factoryDatabaseFirstFailed) throw new Error('الحفظ موقوف بعد تعارض البيانات. أعد تحميل الصفحة لمراجعة النسخة المؤكدة.');
     try {
       await flushQueue();
       const latestOps = makeOperations(getState());
@@ -310,9 +315,14 @@ async function persistState(state) {
       }
       localStorage.removeItem('mgr6-sync-pending');
     } catch (error) {
-      if (error?.code === 'FACTORY_RECORD_CONFLICT') {
-        queueOperations(makeOperations(getState()));
-        document.dispatchEvent(new CustomEvent('factory-db-conflict',{detail:{message:error.message}}));
+      if (error?.code === 'FACTORY_RECORD_CONFLICT' || String(error?.message || '').includes('FACTORY_RECORD_CONFLICT')) {
+        // The atomic batch was rejected. Discard stale retries; never replay them.
+        conflictWriteLock = true;
+        window.__factoryDatabaseFirstFailed = true;
+        setQueue([]);
+        localStorage.removeItem('mgr6');
+        localStorage.removeItem('mgr6-sync-pending');
+        document.dispatchEvent(new CustomEvent('factory-db-conflict',{detail:{message:'تعارض نسخة البيانات. أوقفنا الحفظ في هذه الجلسة ولم نعد إرسال التعديلات القديمة. أعد تحميل الصفحة لجلب البيانات المؤكدة.'}}));
         throw error;
       }
       if (isNetworkFailure(error)) {
@@ -429,6 +439,7 @@ async function bootstrap() {
 window.__factoryPersistState = persistState;
 window.__factoryDatabaseSyncNow = async () => { await flushQueue(); await persistState(getState()); };
 async function reconnectDatabase() {
+  if (conflictWriteLock) throw new Error('إعادة الاتصال لا ترفع قفل الحفظ الناتج عن تعارض البيانات. أعد تحميل الصفحة.');
   const user = await currentSessionUser();
   actorId = user.id;
   await ensureProfile(actorId, true);
@@ -448,7 +459,7 @@ async function reconnectDatabase() {
   await connectRealtime();
   window.__factoryOfflineMode = false;
   window.__factoryDatabaseFirstReady = true;
-  window.__factoryDatabaseFirstFailed = false;
+  window.__factoryDatabaseFirstFailed = Boolean(conflictWriteLock);
   window.dispatchEvent(new CustomEvent('factory-database-ready'));
 }
 window.addEventListener('online', async () => {
