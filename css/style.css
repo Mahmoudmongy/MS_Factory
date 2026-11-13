@@ -214,6 +214,8 @@ button:disabled{opacity:.55;cursor:not-allowed}
 }
 @media(max-width:390px){#top{grid-template-columns:34px minmax(0,1fr) 34px 74px 34px 34px;gap:3px}#top #who{max-width:74px;font-size:11px}#sb{width:52vw;min-width:180px}#sb.icons-only{width:64px;min-width:64px}}
 
+.unlinked-party-review summary{cursor:pointer;font-weight:700}
+
 /* Final usability refinements */
 #top{min-width:0;isolation:isolate}
 #top>*{min-width:0}
