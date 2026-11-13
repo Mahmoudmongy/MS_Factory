@@ -1,4 +1,5 @@
 import { supabase } from './supabase.js';
+import { createConflictRecovery } from './conflict-recovery.js';
 
 const QUEUE_KEY = 'ms-factory-db-queue-v1';
 const BASELINE_KEY = 'ms-factory-db-baseline-v1';
@@ -8,6 +9,7 @@ const CONFLICT_BLOCK_KEY = 'ms-factory-db-conflict-block-v1';
 const CACHE_PREFIX = 'ms-factory-db-cache-v1:';
 let storageScope = 'anonymous';
 const scopedKey = key => key + ':' + storageScope;
+const conflictRecovery = () => createConflictRecovery({ scope: storageScope });
 const getLastSyncAt = () => localStorage.getItem(scopedKey(LAST_SYNC_KEY)) || '';
 const setLastSyncAt = value => { try { localStorage.setItem(scopedKey(LAST_SYNC_KEY), value); } catch (_) {} };
 const cachePrefix = () => CACHE_PREFIX + storageScope + ':';
@@ -73,6 +75,7 @@ function splitState(state) {
   return { arrays, meta };
 }
 function clearLegacyDeviceData() {
+  if (conflictRecovery().hasBlock()) return;
   const marker = 'ms-factory-empty-device-v2:' + storageScope;
   if (localStorage.getItem(marker) === '1') return;
   const remove = [];
@@ -286,7 +289,11 @@ function applyOperationToState(op) {
   window.__factoryReplaceArrays?.({[op.type]:list});
 }
 async function flushQueue() {
-  if (conflictWriteLock) throw new Error('الحفظ موقوف بعد تعارض البيانات. أعد تحميل الصفحة لمراجعة النسخة المؤكدة.');
+  if (conflictWriteLock || conflictRecovery().hasBlock()) {
+    conflictWriteLock = true;
+    window.__factoryDatabaseFirstFailed = true;
+    throw new Error('الحفظ موقوف بعد تعارض البيانات. أعد تحميل الصفحة لمراجعة النسخة المؤكدة.');
+  }
   if (!navigator.onLine || !getQueue().length) return;
   const queue = getQueue();
   await writeOperations(queue);
@@ -297,7 +304,7 @@ async function flushQueue() {
 }
 async function persistState(state) {
   if (!stateReady || applyingRemote) return;
-  if (conflictWriteLock || window.__factoryDatabaseFirstFailed) throw new Error('الحفظ موقوف بعد تعارض البيانات. أعد تحميل الصفحة لمراجعة النسخة المؤكدة.');
+  if (conflictWriteLock || conflictRecovery().hasBlock() || window.__factoryDatabaseFirstFailed) throw new Error('الحفظ موقوف بعد تعارض البيانات. أعد تحميل الصفحة لمراجعة النسخة المؤكدة.');
   const ops = makeOperations(state);
   if (!ops.length) return;
   if (!navigator.onLine || window.__factoryOfflineMode === true) {
@@ -323,26 +330,17 @@ async function persistState(state) {
         window.__factoryDatabaseFirstFailed = true;
         const rejectedQueue = getQueue();
         const conflictAt = new Date().toISOString();
-        const blockKey = scopedKey(CONFLICT_BLOCK_KEY);
         try {
-          // Persist a small fail-safe marker first. If archiving fails, startup must not replay the queue.
-          localStorage.setItem(blockKey, JSON.stringify({ capturedAt:conflictAt, count:rejectedQueue.length }));
-          const reviewKey = scopedKey(CONFLICT_REVIEW_KEY);
-          const priorReviews = JSON.parse(localStorage.getItem(reviewKey) || '[]');
-          const reviewEntry = {
+          conflictRecovery().archiveRejectedQueue(rejectedQueue, {
             capturedAt:conflictAt,
             ownerId,
             actorId,
-            reason:'FACTORY_RECORD_CONFLICT: the atomic apply_factory_record_batch RPC rejected the complete submitted batch.',
-            rejectedOperationCount:rejectedQueue.length,
-            rejectedOperations:rejectedQueue
-          };
-          localStorage.setItem(reviewKey, JSON.stringify([...priorReviews, reviewEntry].slice(-10)));
-          setQueue([]);
-          localStorage.removeItem(blockKey);
+            reason:'FACTORY_RECORD_CONFLICT: the atomic apply_factory_record_batch RPC rejected the complete submitted batch.'
+          }, scopedKey(QUEUE_KEY));
+          localStorage.removeItem('mgr6');
+          localStorage.removeItem('mgr6-sync-pending');
         } catch (archiveError) {
-          // Keep the original queue and the marker; a later page load will fetch Supabase but skip replay.
-          console.error('Could not archive rejected operations for review:',archiveError);
+          console.error('Could not archive rejected operations for review; queue retained:',archiveError);
         }
         document.dispatchEvent(new CustomEvent('factory-db-conflict',{detail:{message:'تعارض نسخة البيانات. أوقفنا الحفظ، وحفظنا العمليات المرفوضة للمراجعة قبل تفريغ طابور الإرسال. أعد تحميل الصفحة لجلب البيانات المؤكدة.'}}));
         throw error;
@@ -432,7 +430,7 @@ async function bootstrap() {
     const cachedRows = loadCachedRows();
     if (cachedRows.length) hydrateFromRows(cachedRows);
     else snapshotBaseline(getState());
-    if (localStorage.getItem(scopedKey(CONFLICT_BLOCK_KEY))) {
+    if (conflictRecovery().hasBlock()) {
       conflictWriteLock = true;
       window.__factoryDatabaseFirstFailed = true;
       document.dispatchEvent(new CustomEvent('factory-db-conflict',{detail:{message:'توجد عمليات محفوظة للمراجعة بعد تعارض سابق. الحفظ وإعادة الإرسال متوقفان.'}}));
@@ -458,7 +456,7 @@ async function bootstrap() {
   setLastSyncAt(new Date().toISOString());
   stateReady = true;
   window.__factoryDatabaseFirstReady = true;
-  const conflictRecoveryPending = localStorage.getItem(scopedKey(CONFLICT_BLOCK_KEY));
+  const conflictRecoveryPending = conflictRecovery().hasBlock();
   if (conflictRecoveryPending) {
     // A previous tab could not safely archive the rejected queue. Never replay it on startup.
     conflictWriteLock = true;
@@ -477,7 +475,11 @@ async function bootstrap() {
 window.__factoryPersistState = persistState;
 window.__factoryDatabaseSyncNow = async () => { await flushQueue(); await persistState(getState()); };
 async function reconnectDatabase() {
-  if (conflictWriteLock) throw new Error('إعادة الاتصال لا ترفع قفل الحفظ الناتج عن تعارض البيانات. أعد تحميل الصفحة.');
+  if (conflictWriteLock || conflictRecovery().hasBlock()) {
+    conflictWriteLock = true;
+    window.__factoryDatabaseFirstFailed = true;
+    throw new Error('إعادة الاتصال لا ترفع قفل الحفظ الناتج عن تعارض البيانات. راجع العمليات المحفوظة أولاً.');
+  }
   const user = await currentSessionUser();
   actorId = user.id;
   await ensureProfile(actorId, true);
@@ -502,6 +504,12 @@ async function reconnectDatabase() {
 }
 window.addEventListener('online', async () => {
   if (!stateReady) return;
+  if (conflictRecovery().hasBlock()) {
+    conflictWriteLock = true;
+    window.__factoryDatabaseFirstFailed = true;
+    window.dispatchEvent(new Event('factory-db-connection-state'));
+    return;
+  }
   window.__factoryDatabaseFirstFailed = true;
   window.dispatchEvent(new Event('factory-db-connection-state'));
   try { await saveChain.catch(()=>{}); await reconnectDatabase(); }
@@ -511,9 +519,46 @@ window.addEventListener('online', async () => {
     window.dispatchEvent(new Event('factory-db-connection-state'));
   }
 });
+function updateConflictExportButton() {
+  try {
+    const recovery = conflictRecovery();
+    const archives = recovery.readArchives();
+    const queue = getQueue();
+    let button = document.getElementById('factory-conflict-export');
+    if (!button) {
+      button = document.createElement('button');
+      button.id = 'factory-conflict-export';
+      button.type = 'button';
+      button.style.cssText = 'position:fixed;z-index:100000;left:16px;bottom:16px;padding:11px 16px;border:0;border-radius:9px;background:#7c2d12;color:#fff;font:600 14px Arial;box-shadow:0 3px 14px #0003;cursor:pointer';
+      button.addEventListener('click', () => {
+        try {
+          const payload = recovery.getExportPayload(getQueue(), { accountId:ownerId });
+          const blob = new Blob([JSON.stringify(payload,null,2)], {type:'application/json;charset=utf-8'});
+          const url = URL.createObjectURL(blob);
+          const link = document.createElement('a');
+          const stamp = new Date().toISOString().replace(/[:.]/g,'-');
+          const unique = globalThis.crypto?.randomUUID?.() || String(Date.now());
+          link.href = url;
+          link.download = 'ms-factory-conflict-review-' + stamp + '-' + unique + '.json';
+          document.body.appendChild(link);
+          link.click();
+          link.remove();
+          setTimeout(() => URL.revokeObjectURL(url),1000);
+        } catch (error) { alert('تعذر تصدير العمليات المحفوظة: ' + (error.message || error)); }
+      });
+      document.body.appendChild(button);
+    }
+    const count = archives.reduce((sum,item)=>sum+Number(item.rejectedOperationCount||0),0) + queue.length;
+    button.hidden = !(archives.length || queue.length || recovery.hasBlock());
+    button.textContent = 'تصدير العمليات المحفوظة (' + count + ')';
+  } catch (error) { console.warn('Could not refresh conflict export control:',error); }
+}
 window.addEventListener('factory-db-conflict', event => {
   console.warn('Factory database conflict:',event.detail?.message || event.detail);
+  updateConflictExportButton();
 });
+updateConflictExportButton();
+window.addEventListener('factory-database-ready', updateConflictExportButton);
 bootstrap().catch(error => {
   window.__factoryDatabaseFirstFailed = true;
   console.error('Database-first startup failed:',error);
