@@ -31,22 +31,46 @@ const normalRecovery=await recoveryPage.evaluate(async()=>{
 ok('browser storage archives operations in order without replacing prior archives',normalRecovery.archives===2&&normalRecovery.previousPreserved&&normalRecovery.queueRemoved&&normalRecovery.markerBeforeArchive&&normalRecovery.archiveBeforeQueueClear&&normalRecovery.blockCleared&&normalRecovery.exportIncludesAll,normalRecovery);
 const quotaRecovery=await recoveryPage.evaluate(async()=>{
   const {createConflictRecovery}=await import('/js/conflict-recovery.js');
-  const scope='browser-quota-'+Date.now(), queueKey='ms-factory-db-queue-v1:'+scope;
+  const scope='browser-quota-'+Date.now(), queueKey='ms-factory-db-queue-v1:'+scope, fillPrefix='ms-factory-quota-fill-'+scope+':';
   localStorage.setItem(queueKey,JSON.stringify([{type:'voucher',id:'V-9'}]));
-  const quotaStorage={getItem:k=>localStorage.getItem(k),setItem:()=>{throw new DOMException('Storage full','QuotaExceededError')},removeItem:k=>localStorage.removeItem(k)};
-  const recovery=createConflictRecovery({storage:quotaStorage,cookieDocument:document,scope});
-  let failed=false;try{recovery.archiveRejectedQueue([{type:'voucher',id:'V-9'}],{capturedAt:'quota-test'},queueKey)}catch(_){failed=true}
-  const beforeReload={failed,queueRetained:!!localStorage.getItem(queueKey),blockPersisted:recovery.hasBlock()};
-  return {scope,queueKey,...beforeReload};
+  const fillValue='q'.repeat(128*1024), fillKeys=[];
+  let quotaHit=false;
+  for(let i=0;i<128;i++){const key=fillPrefix+i;try{localStorage.setItem(key,fillValue);fillKeys.push(key)}catch(error){quotaHit=error?.name==='QuotaExceededError';break}}
+  const recovery=createConflictRecovery({storage:localStorage,cookieDocument:document,scope});
+  let failed=false;try{recovery.archiveRejectedQueue([{type:'voucher',id:'V-9'}],{capturedAt:'quota-test'},queueKey)}catch(error){failed=error?.name==='QuotaExceededError'}
+  const beforeReload={quotaHit,failed,queueRetained:!!localStorage.getItem(queueKey),blockPersisted:recovery.hasBlock()};
+  return {scope,queueKey,fillKeys,...beforeReload};
 });
 await recoveryPage.reload();
-const afterReload=await recoveryPage.evaluate(async(scope)=>{
+const afterReload=await recoveryPage.evaluate(async({scope,queueKey})=>{
   const {createConflictRecovery}=await import('/js/conflict-recovery.js');
-  const quotaStorage={getItem:k=>localStorage.getItem(k),setItem:()=>{throw new DOMException('Storage full','QuotaExceededError')},removeItem:k=>localStorage.removeItem(k)};
-  const recovery=createConflictRecovery({storage:quotaStorage,cookieDocument:document,scope});
-  return {blockAfterReload:recovery.hasBlock(),queueRetained:!!localStorage.getItem('ms-factory-db-queue-v1:'+scope),blockStillPresentWhenOnline:recovery.hasBlock()};
-},quotaRecovery.scope);
-ok('full local storage triggers cookie-backed resend lock and preserves the queue through reload/reconnect',quotaRecovery.failed&&quotaRecovery.queueRetained&&quotaRecovery.blockPersisted&&afterReload.blockAfterReload&&afterReload.queueRetained&&afterReload.blockStillPresentWhenOnline,{quotaRecovery,afterReload});
+  const recovery=createConflictRecovery({storage:localStorage,cookieDocument:document,scope});
+  return {blockAfterReload:recovery.hasBlock(),queueRetained:!!localStorage.getItem(queueKey),online:navigator.onLine};
+},{scope:quotaRecovery.scope,queueKey:quotaRecovery.queueKey});
+ok('real Chromium localStorage quota overflow uses the cookie lock and preserves the queue through reload',quotaRecovery.quotaHit&&quotaRecovery.failed&&quotaRecovery.queueRetained&&quotaRecovery.blockPersisted&&afterReload.blockAfterReload&&afterReload.queueRetained,{quotaRecovery,afterReload});
+await recoveryPage.evaluate(({scope,queueKey,fillKeys})=>{
+  for(const key of fillKeys)localStorage.removeItem(key);
+  localStorage.removeItem(queueKey);
+  localStorage.removeItem('ms-factory-db-conflict-review-v1:'+scope);
+  localStorage.removeItem('ms-factory-db-conflict-block-v1:'+scope);
+  document.cookie='ms_factory_conflict_block_'+scope+'=; Path=/; SameSite=Lax; Max-Age=0';
+},{scope:quotaRecovery.scope,queueKey:quotaRecovery.queueKey,fillKeys:quotaRecovery.fillKeys});
+const dualFailure=await recoveryPage.evaluate(async()=>{
+  const {createConflictRecovery}=await import('/js/conflict-recovery.js');
+  const scope='browser-no-storage-'+Date.now(), queueKey='ms-factory-db-queue-v1:'+scope;
+  localStorage.setItem(queueKey,JSON.stringify([{type:'voucher',id:'V-10'}]));
+  const blockedStorage={getItem:k=>localStorage.getItem(k),setItem:()=>{throw new DOMException('Storage full','QuotaExceededError')},removeItem:k=>localStorage.removeItem(k)};
+  const blockedCookies={get cookie(){return ''},set cookie(_value){}};
+  const recovery=createConflictRecovery({storage:blockedStorage,cookieDocument:blockedCookies,scope});
+  let failed=false;try{recovery.archiveRejectedQueue([{type:'voucher',id:'V-10'}],{capturedAt:'no-storage-test'},queueKey)}catch(_){failed=true}
+  return {scope,queueKey,failed,queueRetained:!!localStorage.getItem(queueKey),durableBlock:recovery.hasBlock()};
+});
+ok('when localStorage and Cookie both fail, the queue remains for the startup guard',dualFailure.failed&&dualFailure.queueRetained&&!dualFailure.durableBlock,dualFailure);
+await recoveryPage.evaluate(({scope,queueKey})=>{
+  localStorage.removeItem(queueKey);
+  localStorage.removeItem('ms-factory-db-conflict-review-v1:'+scope);
+  localStorage.removeItem('ms-factory-db-conflict-block-v1:'+scope);
+},{scope:dualFailure.scope,queueKey:dualFailure.queueKey});
 await recoveryPage.close();
 /* ---------- A. static checks on the real files ---------- */
 const app=fs.readFileSync(path.join(ROOT,'js/app.js'),'utf8'),idx=fs.readFileSync(path.join(ROOT,'index.html'),'utf8'),authPage=fs.readFileSync(path.join(ROOT,'js/auth.js'),'utf8'),cloud=fs.readFileSync(path.join(ROOT,'js/cloud-sync.js'),'utf8'),dbSync=fs.readFileSync(path.join(ROOT,'js/database-first.js'),'utf8'),conflictStorage=fs.readFileSync(path.join(ROOT,'js/conflict-recovery.js'),'utf8'),css=fs.readFileSync(path.join(ROOT,'css/style.css'),'utf8');
@@ -128,12 +152,12 @@ const conflictBranchSource=conflictHandlerSource.slice(conflictBranchStart,confl
 const bootstrapSource=dbSync.slice(dbSync.indexOf('async function bootstrap'),dbSync.indexOf('window.__factoryPersistState'));
 ok('conflict recovery uses a dedicated archive helper that persists the block marker before archive writes and queue removal',/persistBlock\([\s\S]*?storage\.setItem\(reviewKey, serialized\)[\s\S]*?storage\.removeItem\(queueKey\)/.test(conflictStorage)&&conflictStorage.indexOf('storage.setItem(blockKey, value)')<conflictStorage.indexOf('storage.setItem(reviewKey, serialized)')&&conflictStorage.indexOf('storage.setItem(reviewKey, serialized)')<conflictStorage.indexOf('storage.removeItem(queueKey)'));
 ok('a failed archive keeps the original queue and a cookie-backed block marker',conflictStorage.includes("cookieDocument.cookie = cookieKey + '=1")&&conflictStorage.includes('throw new Error(\'لم يتم التحقق من حفظ نسخة العمليات؛ لم يتم مسح الطابور.\')')&&conflictStorage.includes('storage.removeItem(queueKey)'));
-ok('startup, queue flush and reconnect all check the persisted conflict block before replay',dbSync.includes('if (conflictRecovery().hasBlock()) return;')&&dbSync.includes('async function flushQueue() {\n  if (conflictWriteLock || conflictRecovery().hasBlock())')&&dbSync.includes('async function reconnectDatabase() {\n  if (conflictWriteLock || conflictRecovery().hasBlock())')&&dbSync.includes("window.addEventListener('online', async () => {\n  if (!stateReady) return;\n  if (conflictRecovery().hasBlock())"));
+ok('queue flush, startup and reconnect fail closed for conflicts or leftover queue entries',dbSync.includes('if (conflictRecovery().hasBlock()) return;')&&dbSync.includes('async function flushQueue() {\n  if (conflictWriteLock || conflictRecovery().hasBlock())')&&dbSync.includes('async function reconnectDatabase() {\n  if (conflictWriteLock || conflictRecovery().hasBlock() || getQueue().length)')&&dbSync.includes("window.addEventListener('online', async () => {\n  if (!stateReady) return;\n  if (conflictWriteLock || conflictRecovery().hasBlock() || getQueue().length)"));
 ok('previous conflict archives are appended and never silently truncated',conflictStorage.includes('const next = [...prior, entry]')&&!conflictStorage.includes('slice(-10)'));
-ok('a visible export control exports archives and any still-queued operations without deleting them',dbSync.includes('factory-conflict-export')&&dbSync.includes('getExportPayload(getQueue()')&&dbSync.includes('link.download =')&&!dbSync.includes('removeItem(scopedKey(CONFLICT_REVIEW_KEY)'));
+ok('export uses the active account scope and clearing requires export plus explicit confirmation',dbSync.includes('factory-conflict-export')&&dbSync.includes('currentRecovery.getExportPayload(getQueue()')&&dbSync.includes('link.download =')&&dbSync.includes('factory-conflict-resolve')&&dbSync.includes('if (!conflictExportedInSession)')&&dbSync.includes('if (!confirm(')&&dbSync.includes('localStorage.removeItem(scopedKey(QUEUE_KEY))'));
 ok('stale-version conflict locks the session and archives the rejected batch without re-enqueueing',dbSync.includes('let conflictWriteLock = false')&&conflictBranchSource.includes('conflictWriteLock = true;')&&conflictBranchSource.includes('archiveRejectedQueue(rejectedQueue')&&!conflictBranchSource.includes('queueOperations('));
 ok('writes and queue flushes are blocked after conflict until a fresh page session',conflictHandlerSource.includes('if (conflictWriteLock || conflictRecovery().hasBlock() || window.__factoryDatabaseFirstFailed) throw')&&dbSync.includes('if (conflictWriteLock || conflictRecovery().hasBlock())'));
-ok('fresh startup hydrates authoritative Supabase rows and checks the durable block before flushing',/const (?:initialRows|rows) = await fetchAllRecords\(\)/.test(bootstrapSource)&&bootstrapSource.search(/hydrateFromRows\((?:initialRows|rows)\)/)>=0&&bootstrapSource.indexOf('if (conflictRecoveryPending)')>bootstrapSource.search(/hydrateFromRows\((?:initialRows|rows)\)/)&&bootstrapSource.indexOf('await flushQueue();')>bootstrapSource.indexOf('if (conflictRecoveryPending)'));
+ok('fresh startup hydrates Supabase rows and blocks either a durable marker or any leftover queue before replay',/const (?:initialRows|rows) = await fetchAllRecords\(\)/.test(bootstrapSource)&&bootstrapSource.search(/hydrateFromRows\((?:initialRows|rows)\)/)>=0&&bootstrapSource.lastIndexOf('const pendingQueue = getQueue();')>bootstrapSource.search(/hydrateFromRows\((?:initialRows|rows)\)/)&&bootstrapSource.indexOf('if (conflictRecoveryPending || pendingQueue.length)')>bootstrapSource.lastIndexOf('const pendingQueue = getQueue();')&&bootstrapSource.indexOf('await flushQueue();')>bootstrapSource.indexOf('if (conflictRecoveryPending || pendingQueue.length)')&&bootstrapSource.includes('for (const op of pendingQueue) applyOperationToState(op)'));ok('leftover queue blocks startup and reconnect even without a persistent conflict marker',bootstrapSource.includes('if (conflictRecoveryPending || pendingQueue.length)')&&dbSync.includes('async function reconnectDatabase() {\n  if (conflictWriteLock || conflictRecovery().hasBlock() || getQueue().length)')&&dbSync.includes("window.addEventListener('online', async () => {\n  if (!stateReady) return;\n  if (conflictWriteLock || conflictRecovery().hasBlock() || getQueue().length)"));
 ok('live updates subscribe to individual factory_records rows instead of reloading the whole factory',/postgres_changes/.test(dbSync)&&/applyRealtimeRow\(payload\.new\)/.test(dbSync)&&!/refreshFromDatabase|loadFromTablesMerge/.test(dbSync));
 ok('reconnect reads only rows changed since the last sync cursor',/fetchChangedRecords\(since\)/.test(dbSync)&&/gt\('updated_at', since\)/.test(dbSync)&&/LAST_SYNC_KEY/.test(dbSync));
 ok('offline cache stores individual rows and version metadata, not a full local state snapshot during online saves',/CACHE_PREFIX/.test(dbSync)&&/cacheRow\(row\)/.test(dbSync)&&!/JSON\.stringify\(\[\.\.\.baseline\.values\(\)\]\)/.test(dbSync)&&/if\(!navigator\.onLine\)\{localStorage\.setItem\("mgr6"/.test(app));
