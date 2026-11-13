@@ -430,12 +430,17 @@ async function bootstrap() {
     const cachedRows = loadCachedRows();
     if (cachedRows.length) hydrateFromRows(cachedRows);
     else snapshotBaseline(getState());
-    if (conflictRecovery().hasBlock()) {
+    const conflictRecoveryPending = conflictRecovery().hasBlock();
+    const pendingQueue = getQueue();
+    if (conflictRecoveryPending || pendingQueue.length) {
       conflictWriteLock = true;
       window.__factoryDatabaseFirstFailed = true;
-      document.dispatchEvent(new CustomEvent('factory-db-conflict',{detail:{message:'توجد عمليات محفوظة للمراجعة بعد تعارض سابق. الحفظ وإعادة الإرسال متوقفان.'}}));
+      const message = conflictRecoveryPending
+        ? 'توجد عمليات محفوظة للمراجعة بعد تعارض سابق. الحفظ وإعادة الإرسال متوقفان.'
+        : 'توجد عمليات غير مؤكدة محفوظة على هذا الجهاز. أوقفنا إرسالها تلقائيًا؛ صدّرها للمراجعة قبل المتابعة.';
+      document.dispatchEvent(new CustomEvent('factory-db-conflict',{detail:{message}}));
     } else {
-      for (const op of getQueue()) applyOperationToState(op);
+      for (const op of pendingQueue) applyOperationToState(op);
     }
     stateReady = true;
     window.__factoryDatabaseFirstReady = true;
@@ -457,17 +462,20 @@ async function bootstrap() {
   stateReady = true;
   window.__factoryDatabaseFirstReady = true;
   const conflictRecoveryPending = conflictRecovery().hasBlock();
-  if (conflictRecoveryPending) {
-    // A previous tab could not safely archive the rejected queue. Never replay it on startup.
+  const pendingQueue = getQueue();
+  if (conflictRecoveryPending || pendingQueue.length) {
+    // A pending queue is never replayed on startup, even if storage could not persist the marker.
     conflictWriteLock = true;
     window.__factoryDatabaseFirstFailed = true;
-    document.dispatchEvent(new CustomEvent('factory-db-conflict',{detail:{message:'توجد عمليات محفوظة للمراجعة بعد تعارض سابق. لم نعد إرسالها تلقائياً.'}}));
+    const message = conflictRecoveryPending
+      ? 'توجد عمليات محفوظة للمراجعة بعد تعارض سابق. لم نعد إرسالها تلقائيًا.'
+      : 'توجد عمليات غير مؤكدة من جلسة سابقة. لم نعد إرسالها تلقائيًا؛ صدّرها للمراجعة قبل المتابعة.';
+    document.dispatchEvent(new CustomEvent('factory-db-conflict',{detail:{message}}));
     await connectRealtime();
     window.dispatchEvent(new CustomEvent('factory-database-ready'));
     return;
   }
   window.__factoryDatabaseFirstFailed = false;
-  for (const op of getQueue()) applyOperationToState(op);
   await flushQueue();
   await connectRealtime();
   window.dispatchEvent(new CustomEvent('factory-database-ready'));
@@ -475,10 +483,10 @@ async function bootstrap() {
 window.__factoryPersistState = persistState;
 window.__factoryDatabaseSyncNow = async () => { await flushQueue(); await persistState(getState()); };
 async function reconnectDatabase() {
-  if (conflictWriteLock || conflictRecovery().hasBlock()) {
+  if (conflictWriteLock || conflictRecovery().hasBlock() || getQueue().length) {
     conflictWriteLock = true;
     window.__factoryDatabaseFirstFailed = true;
-    throw new Error('إعادة الاتصال لا ترفع قفل الحفظ الناتج عن تعارض البيانات. راجع العمليات المحفوظة أولاً.');
+    throw new Error('إعادة الاتصال لا ترفع قفل الحفظ مع وجود عمليات غير مؤكدة. صدّرها وراجعها أولاً.');
   }
   const user = await currentSessionUser();
   actorId = user.id;
@@ -504,9 +512,10 @@ async function reconnectDatabase() {
 }
 window.addEventListener('online', async () => {
   if (!stateReady) return;
-  if (conflictRecovery().hasBlock()) {
+  if (conflictWriteLock || conflictRecovery().hasBlock() || getQueue().length) {
     conflictWriteLock = true;
     window.__factoryDatabaseFirstFailed = true;
+    updateConflictExportButton();
     window.dispatchEvent(new Event('factory-db-connection-state'));
     return;
   }
@@ -519,6 +528,7 @@ window.addEventListener('online', async () => {
     window.dispatchEvent(new Event('factory-db-connection-state'));
   }
 });
+let conflictExportedInSession = false;
 function updateConflictExportButton() {
   try {
     const recovery = conflictRecovery();
@@ -532,7 +542,8 @@ function updateConflictExportButton() {
       button.style.cssText = 'position:fixed;z-index:100000;left:16px;bottom:16px;padding:11px 16px;border:0;border-radius:9px;background:#7c2d12;color:#fff;font:600 14px Arial;box-shadow:0 3px 14px #0003;cursor:pointer';
       button.addEventListener('click', () => {
         try {
-          const payload = recovery.getExportPayload(getQueue(), { accountId:ownerId });
+          const currentRecovery = conflictRecovery();
+          const payload = currentRecovery.getExportPayload(getQueue(), { accountId:ownerId });
           const blob = new Blob([JSON.stringify(payload,null,2)], {type:'application/json;charset=utf-8'});
           const url = URL.createObjectURL(blob);
           const link = document.createElement('a');
@@ -544,13 +555,48 @@ function updateConflictExportButton() {
           link.click();
           link.remove();
           setTimeout(() => URL.revokeObjectURL(url),1000);
+          conflictExportedInSession = true;
+          updateConflictExportButton();
         } catch (error) { alert('تعذر تصدير العمليات المحفوظة: ' + (error.message || error)); }
       });
       document.body.appendChild(button);
     }
+    let resolveButton = document.getElementById('factory-conflict-resolve');
+    if (!resolveButton) {
+      resolveButton = document.createElement('button');
+      resolveButton.id = 'factory-conflict-resolve';
+      resolveButton.type = 'button';
+      resolveButton.style.cssText = 'position:fixed;z-index:100000;left:16px;bottom:66px;padding:11px 16px;border:0;border-radius:9px;background:#475569;color:#fff;font:600 14px Arial;box-shadow:0 3px 14px #0003;cursor:pointer';
+      resolveButton.textContent = 'متابعة بعد تصدير العمليات';
+      resolveButton.addEventListener('click', () => {
+        if (!conflictExportedInSession) {
+          alert('صدّر العمليات أولاً، ثم أكد تنزيل الملف للمتابعة.');
+          return;
+        }
+        if (!confirm('هل نزّلت ملف العمليات؟ ستُحذف العمليات المعلقة من هذا الجهاز بعد حفظ الملف، ثم يعاد تحميل البيانات المؤكدة من قاعدة البيانات.')) return;
+        try {
+          localStorage.removeItem(scopedKey(QUEUE_KEY));
+          localStorage.removeItem('mgr6');
+          localStorage.removeItem('mgr6-sync-pending');
+          const currentRecovery = conflictRecovery();
+          currentRecovery.clearBlock();
+          if (getQueue().length || currentRecovery.hasBlock()) {
+            throw new Error('تعذر رفع قفل الحماية أو تفريغ الطابور؛ لم نفتح الحفظ.');
+          }
+          window.location.reload();
+        } catch (error) {
+          alert('تعذر المتابعة بأمان: ' + (error.message || error));
+          updateConflictExportButton();
+        }
+      });
+      document.body.appendChild(resolveButton);
+    }
     const count = archives.reduce((sum,item)=>sum+Number(item.rejectedOperationCount||0),0) + queue.length;
-    button.hidden = !(archives.length || queue.length || recovery.hasBlock());
+    const needsReview = Boolean(queue.length || recovery.hasBlock() || conflictWriteLock);
+    button.hidden = !(archives.length || needsReview);
     button.textContent = 'تصدير العمليات المحفوظة (' + count + ')';
+    resolveButton.hidden = !needsReview;
+    resolveButton.disabled = !conflictExportedInSession;
   } catch (error) { console.warn('Could not refresh conflict export control:',error); }
 }
 window.addEventListener('factory-db-conflict', event => {
