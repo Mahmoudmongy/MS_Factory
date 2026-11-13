@@ -432,12 +432,16 @@ async function bootstrap() {
     const cachedRows = loadCachedRows();
     if (cachedRows.length) hydrateFromRows(cachedRows);
     else snapshotBaseline(getState());
-    if (!localStorage.getItem(scopedKey(CONFLICT_BLOCK_KEY))) {
+    if (localStorage.getItem(scopedKey(CONFLICT_BLOCK_KEY))) {
+      conflictWriteLock = true;
+      window.__factoryDatabaseFirstFailed = true;
+      document.dispatchEvent(new CustomEvent('factory-db-conflict',{detail:{message:'توجد عمليات محفوظة للمراجعة بعد تعارض سابق. الحفظ وإعادة الإرسال متوقفان.'}}));
+    } else {
       for (const op of getQueue()) applyOperationToState(op);
     }
     stateReady = true;
     window.__factoryDatabaseFirstReady = true;
-    window.__factoryDatabaseFirstFailed = false;
+    if (!conflictWriteLock) window.__factoryDatabaseFirstFailed = false;
     window.dispatchEvent(new CustomEvent('factory-database-ready'));
     return;
   }
@@ -457,6 +461,7 @@ async function bootstrap() {
   const conflictRecoveryPending = localStorage.getItem(scopedKey(CONFLICT_BLOCK_KEY));
   if (conflictRecoveryPending) {
     // A previous tab could not safely archive the rejected queue. Never replay it on startup.
+    conflictWriteLock = true;
     window.__factoryDatabaseFirstFailed = true;
     document.dispatchEvent(new CustomEvent('factory-db-conflict',{detail:{message:'توجد عمليات محفوظة للمراجعة بعد تعارض سابق. لم نعد إرسالها تلقائياً.'}}));
     await connectRealtime();
