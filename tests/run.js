@@ -20,13 +20,15 @@ const normalRecovery=await recoveryPage.evaluate(async()=>{
   const recovery=createConflictRecovery({storage,cookieDocument:document,scope});
   recovery.archiveRejectedQueue([{type:'sale',id:'S-1'}],{capturedAt:'newer'},queueKey);
   const archives=recovery.readArchives();
+  const exportPayload=recovery.getExportPayload([{type:'invoice',id:'still-local'}]);
+  const exportIncludesAll=exportPayload.archives.length===2&&exportPayload.stillQueuedOperations[0]?.id==='still-local';
   const markerIndex=events.findIndex(x=>x.includes('conflict-block'));
   const archiveIndex=events.findIndex(x=>x.includes('conflict-review'));
   const queueRemoveIndex=events.findIndex(x=>x==='remove:'+queueKey);
-  const result={archives:archives.length,previousPreserved:archives[0]?.capturedAt==='older',queueRemoved:localStorage.getItem(queueKey)===null,markerBeforeArchive:markerIndex>=0&&markerIndex<archiveIndex,archiveBeforeQueueClear:archiveIndex>=0&&archiveIndex<queueRemoveIndex,blockCleared:!recovery.hasBlock()};
+  const result={archives:archives.length,previousPreserved:archives[0]?.capturedAt==='older',queueRemoved:localStorage.getItem(queueKey)===null,markerBeforeArchive:markerIndex>=0&&markerIndex<archiveIndex,archiveBeforeQueueClear:archiveIndex>=0&&archiveIndex<queueRemoveIndex,blockCleared:!recovery.hasBlock(),exportIncludesAll};
   localStorage.removeItem(reviewKey);localStorage.removeItem(queueKey);recovery.clearBlock();return result;
 });
-ok('browser storage archives operations in order without replacing prior archives',normalRecovery.archives===2&&normalRecovery.previousPreserved&&normalRecovery.queueRemoved&&normalRecovery.markerBeforeArchive&&normalRecovery.archiveBeforeQueueClear&&normalRecovery.blockCleared,normalRecovery);
+ok('browser storage archives operations in order without replacing prior archives',normalRecovery.archives===2&&normalRecovery.previousPreserved&&normalRecovery.queueRemoved&&normalRecovery.markerBeforeArchive&&normalRecovery.archiveBeforeQueueClear&&normalRecovery.blockCleared&&normalRecovery.exportIncludesAll,normalRecovery);
 const quotaRecovery=await recoveryPage.evaluate(async()=>{
   const {createConflictRecovery}=await import('/js/conflict-recovery.js');
   const scope='browser-quota-'+Date.now(), queueKey='ms-factory-db-queue-v1:'+scope;
