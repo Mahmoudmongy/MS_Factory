@@ -1,5 +1,6 @@
 import { supabase } from './supabase.js';
 import { createConflictRecovery } from './conflict-recovery.js';
+import { retryStartup } from './startup-retry.mjs';
 
 const QUEUE_KEY = 'ms-factory-db-queue-v1';
 const BASELINE_KEY = 'ms-factory-db-baseline-v1';
@@ -29,6 +30,10 @@ let applyingRemote = false;
 let conflictWriteLock = false;
 
 const clone = value => JSON.parse(JSON.stringify(value ?? null));
+function withRequestTimeout(query, ms = 9000) {
+  return typeof AbortSignal !== 'undefined' && AbortSignal.timeout && typeof query?.abortSignal === 'function'
+    ? query.abortSignal(AbortSignal.timeout(ms)) : query;
+}
 const stable = value => {
   if (Array.isArray(value)) return '[' + value.map(stable).join(',') + ']';
   if (value && typeof value === 'object') return '{' + Object.keys(value).filter(k => !k.startsWith('_cloud')).sort().map(k => JSON.stringify(k)+':'+stable(value[k])).join(',') + '}';
@@ -83,12 +88,35 @@ function clearLegacyDeviceData() {
     const key = localStorage.key(i);
     if (!key) continue;
     if (key === 'mgr6' || key === 'mgr6-sync-pending' || key === 'mgr6-cloud-snapshot-conflict' ||
-        key.startsWith('mgr6-backup') || key.startsWith('ms-factory-db-queue-v1:') ||
+        key.startsWith('mgr6-backup') ||
         key.startsWith('ms-factory-db-baseline-v1:') || key.startsWith('ms-factory-db-last-sync-v1:') ||
         key.startsWith('ms-factory-db-cache-v1:')) remove.push(key);
   }
   for (const key of remove) localStorage.removeItem(key);
   localStorage.setItem(marker, '1');
+}
+function archiveLegacyQueues() {
+  if (conflictRecovery().hasBlock()) return;
+  const keys = [QUEUE_KEY, scopedKey(QUEUE_KEY)];
+  for (const key of keys) {
+    const raw = localStorage.getItem(key);
+    if (!raw) continue;
+    let operations;
+    try { operations = JSON.parse(raw); }
+    catch (_) {
+      conflictRecovery().persistBlock({ ownerId, reason: 'طابور قديم غير قابل للقراءة؛ لم يتم حذفه أو إرساله.' });
+      throw new Error('توجد قائمة عمليات قديمة تالفة. تم الاحتفاظ بها ومنع إرسالها.');
+    }
+    if (!Array.isArray(operations)) {
+      conflictRecovery().persistBlock({ ownerId, reason: 'صيغة الطابور القديم غير معروفة؛ لم يتم حذفه أو إرساله.' });
+      throw new Error('توجد قائمة عمليات قديمة بصيغة غير معروفة. تم الاحتفاظ بها ومنع إرسالها.');
+    }
+    if (!operations.length) { localStorage.removeItem(key); continue; }
+    conflictRecovery().archiveRejectedQueue(operations, {
+      capturedAt: new Date().toISOString(), ownerId, actorId,
+      reason: 'طابور من إصدار سابق؛ تم أرشفته للمراجعة ولم يُرسل إلى قاعدة البيانات.'
+    }, key);
+  }
 }
 function resetLocalBusinessState() {
   const state = getState();
@@ -145,14 +173,14 @@ function setBaselineRow(row) {
 }
 async function fetchPagedRecords(buildQuery) {
   const all = [];
-  const first = await buildQuery().range(0, PAGE_SIZE - 1);
+  const first = await withRequestTimeout(buildQuery().range(0, PAGE_SIZE - 1));
   if (first.error) throw first.error;
   all.push(...(first.data || []));
   if (!first.data || first.data.length < PAGE_SIZE) return all;
   const concurrentPages = 4;
   for (let base = PAGE_SIZE; ; base += PAGE_SIZE * concurrentPages) {
     const pages = await Promise.all(Array.from({ length: concurrentPages }, (_, index) =>
-      buildQuery().range(base + index * PAGE_SIZE, base + (index + 1) * PAGE_SIZE - 1)
+      withRequestTimeout(buildQuery().range(base + index * PAGE_SIZE, base + (index + 1) * PAGE_SIZE - 1))
     ));
     for (const page of pages) {
       if (page.error) throw page.error;
@@ -410,9 +438,9 @@ async function ensureProfile(userId, refresh = false) {
     profile = window.__factoryAuthProfile;
     return profile;
   }
-  const { data, error } = await supabase.from('profiles')
+  const { data, error } = await withRequestTimeout(supabase.from('profiles')
     .select('id,created_by,is_admin,permissions,must_change_password,username,full_name')
-    .eq('id', userId).maybeSingle();
+    .eq('id', userId).maybeSingle());
   if (error) throw error;
   if (!data) throw new Error('لم يتم العثور على ملف صلاحيات الحساب');
   profile = data;
@@ -420,8 +448,11 @@ async function ensureProfile(userId, refresh = false) {
   return profile;
 }
 async function bootstrap() {
+  if (window.__factoryAuthPromise) await window.__factoryAuthPromise;
+  if (window.__factoryAuthReady !== true || !window.__factoryAuthProfile) throw new Error('لم يكتمل التحقق المباشر من حساب المستخدم.');
   if (!supabase || !navigator.onLine || window.__factoryOfflineMode === true) {
     profile = window.__factoryAuthProfile || null;
+    if (!profile || window.__factoryOfflineMode !== true) throw new Error('يلزم اتصال مباشر بقاعدة بيانات الإنتاج لتوثيق الحساب.');
     actorId = profile?.id || null;
     ownerId = profile?.created_by || profile?.id || null;
     storageScope = ownerId || 'anonymous';
@@ -432,7 +463,7 @@ async function bootstrap() {
     else snapshotBaseline(getState());
     const conflictRecoveryPending = conflictRecovery().hasBlock();
     const pendingQueue = getQueue();
-    if (conflictRecoveryPending || pendingQueue.length) {
+    if (conflictWriteLock || conflictRecoveryPending || pendingQueue.length) {
       conflictWriteLock = true;
       window.__factoryDatabaseFirstFailed = true;
       const message = conflictRecoveryPending
@@ -448,22 +479,23 @@ async function bootstrap() {
     window.dispatchEvent(new CustomEvent('factory-database-ready'));
     return;
   }
-  const user = await currentSessionUser();
+  const user = await retryStartup(() => currentSessionUser());
   actorId = user.id;
-  await ensureProfile(actorId, false);
+  await retryStartup(() => ensureProfile(actorId, false));
   ownerId = profile.created_by || profile.id;
   storageScope = ownerId;
-  clearLegacyDeviceData();
   resetLocalBusinessState();
-  const rows = await fetchAllRecords();
+  const rows = await retryStartup(() => fetchAllRecords());
   // Supabase is the only source of business records. An empty database stays empty.
   hydrateFromRows(rows);
+  clearLegacyDeviceData();
+  try { archiveLegacyQueues(); } catch (archiveError) { conflictWriteLock = true; window.__factoryDatabaseFirstFailed = true; console.error('Legacy operations remain local and are blocked from replay:', archiveError); }
   setLastSyncAt(new Date().toISOString());
   stateReady = true;
   window.__factoryDatabaseFirstReady = true;
   const conflictRecoveryPending = conflictRecovery().hasBlock();
   const pendingQueue = getQueue();
-  if (conflictRecoveryPending || pendingQueue.length) {
+  if (conflictWriteLock || conflictRecoveryPending || pendingQueue.length) {
     // A pending queue is never replayed on startup, even if storage could not persist the marker.
     conflictWriteLock = true;
     window.__factoryDatabaseFirstFailed = true;
@@ -488,17 +520,17 @@ async function reconnectDatabase() {
     window.__factoryDatabaseFirstFailed = true;
     throw new Error('إعادة الاتصال لا ترفع قفل الحفظ مع وجود عمليات غير مؤكدة. صدّرها وراجعها أولاً.');
   }
-  const user = await currentSessionUser();
+  const user = await retryStartup(() => currentSessionUser());
   actorId = user.id;
-  await ensureProfile(actorId, true);
+  await retryStartup(() => ensureProfile(actorId, true));
   ownerId = profile.created_by || profile.id;
   storageScope = ownerId;
   const since = getLastSyncAt();
   if (since) {
-    const changed = await fetchChangedRecords(since);
+    const changed = await retryStartup(() => fetchChangedRecords(since));
     for (const row of changed) applyRealtimeRow(row);
   } else {
-    const initialRows = await fetchAllRecords();
+    const initialRows = await retryStartup(() => fetchAllRecords());
     hydrateFromRows(initialRows);
     setLastSyncAt(new Date().toISOString());
   }

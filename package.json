@@ -5,7 +5,7 @@
   "description": "Factory Manager - Arabic RTL PWA with Supabase authentication, database-first records, and offline change queue.",
   "scripts": {
     "dev": "vite",
-    "test": "node tests/run.js",
+    "test": "node tests/run.js && node tests/startup-retry.mjs",
     "serve": "node -e \"require('http').createServer((q,r)=>{const f=require('path').join(process.cwd(),q.url==='/'?'index.html':q.url.split('?')[0]);require('fs').createReadStream(f).on('error',()=>{r.statusCode=404;r.end()}).pipe(r)}).listen(8080,()=>console.log('http://localhost:8080'))\"",
     "build": "vite build"
   },

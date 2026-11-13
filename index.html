@@ -14,6 +14,7 @@
 <link rel="apple-touch-icon" href="./assets/icon-192.png">
 <link rel="stylesheet" href="./css/style.css">
 <style id="pgst"></style>
+<style>html{visibility:visible}#app{visibility:hidden}</style>
   <meta property="og:image" content="https://bolt.new/static/og_default.png">
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:image" content="https://bolt.new/static/og_default.png">
@@ -54,10 +55,11 @@
 </head>
 <script type="module">
 import { supabase } from './js/supabase.js';
+import { retryStartup } from './js/startup-retry.mjs';
 import { scopeFactoryStorage } from './js/account-storage.js';
-(async function bootstrapFactoryApp() {
+window.__factoryAuthReady = false;
+window.__factoryAuthPromise = (async function bootstrapFactoryApp() {
   const profileKey = id => 'factory-profile:' + id;
-  const verifiedKey = id => 'factory-profile-verified:' + id;
   const showProfile = (profile, user, offline) => {
     if (!profile || profile.id !== user.id) throw new Error('ملف الحساب لا يطابق المستخدم الحالي');
     if (profile.must_change_password === true && profile.is_admin !== true) {
@@ -83,44 +85,21 @@ import { scopeFactoryStorage } from './js/account-storage.js';
   };
   try {
     if (!supabase) throw new Error('إعداد الاتصال بقاعدة بيانات الإنتاج غير متاح');
-    const { data, error } = await supabase.auth.getSession();
+    const { data } = await retryStartup(async () => {
+      if (!navigator.onLine) { const offlineError = new Error('الاتصال بالإنترنت مطلوب للوصول إلى قاعدة البيانات.'); offlineError.code = 'OFFLINE'; throw offlineError; }
+      const result = await supabase.auth.getSession();
+      if (result.error) throw result.error;
+      return result;
+    });
     const session = data?.session;
     if (!session?.user) {
-      if (error && !navigator.onLine) throw new Error('لا توجد جلسة دخول محفوظة على هذا الجهاز');
       location.replace('auth.html');
       return;
     }
     const user = session.user;
-    let cachedProfile = null;
-    try { cachedProfile = JSON.parse(localStorage.getItem(profileKey(user.id)) || 'null'); } catch (_) {}
-    if (cachedProfile && cachedProfile.id === data.session.user.id) {
-      if (cachedProfile.must_change_password === true && cachedProfile.is_admin !== true) { location.replace('change-password.html'); return; }
-      if (!showProfile(cachedProfile, user, !navigator.onLine)) return;
-      if (navigator.onLine) {
-        const last = Number(localStorage.getItem(verifiedKey(user.id)) || 0);
-        if (Date.now() - last > 120000) {
-          localStorage.setItem(verifiedKey(user.id), String(Date.now()));
-          fetchProfile(user.id).then(remote => {
-            localStorage.setItem(profileKey(user.id), JSON.stringify(remote));
-            if (remote.must_change_password === true && remote.is_admin !== true) { location.replace('change-password.html'); return; }
-            window.__factoryOfflineMode = false;
-            window.__factoryAuthProfile = remote;
-            if (typeof window.setFactoryAuthProfile === 'function') window.setFactoryAuthProfile(remote);
-          }).catch(refreshError => console.warn('Profile refresh deferred; using previously verified profile:', refreshError));
-        }
-      }
-      return;
-    }
-    if (!navigator.onLine) {
-      document.documentElement.style.visibility = 'visible';
-      document.body?.insertAdjacentHTML?.('afterbegin', '<div role="alert" style="padding:12px;background:#fee2e2;color:#991b1b;text-align:center">لا يوجد ملف حساب محفوظ على هذا الجهاز. اتصل بالإنترنت وسجّل الدخول مرة واحدة.</div>');
-      location.replace('auth.html');
-      return;
-    }
-    const profile = await fetchProfile(user.id);
+    const profile = await retryStartup(() => fetchProfile(user.id));
     localStorage.setItem(profileKey(user.id), JSON.stringify(profile));
-    localStorage.setItem(verifiedKey(user.id), String(Date.now()));
-    showProfile(profile, user, false);
+    if (showProfile(profile, user, false)) window.__factoryAuthReady = true;
   } catch (error) {
     console.error('Authentication bootstrap failed:', error);
     window.__showFactoryBootError?.('تعذر التحقق من حسابك على قاعدة بيانات الإنتاج', error?.message || String(error));
@@ -128,7 +107,7 @@ import { scopeFactoryStorage } from './js/account-storage.js';
 })();
 </script>
 <body>
-<div id="factory-boot-screen" role="status"><div class="boot-card"><span class="boot-spinner"></span><b>جارٍ تحميل بيانات الشركة...</b><small>يتم التحقق من الاتصال وقاعدة البيانات وتحميل بيانات الشركة</small></div></div>
+<div id="factory-boot-screen" role="status" aria-live="polite"><span>جاري التحميل</span><span class="boot-dots" aria-hidden="true"><i></i><i></i><i></i></span></div>
 <div id="app">
   <div id="sb-overlay" onclick="closeSB()"></div>
   <aside id="sb"></aside>
@@ -174,9 +153,9 @@ import { scopeFactoryStorage } from './js/account-storage.js';
     }catch(e){}
   };
 })();
-window.addEventListener('factory-database-ready',()=>{document.getElementById('factory-boot-screen')?.classList.add('done');setTimeout(()=>document.getElementById('factory-boot-screen')?.remove(),180)});
+window.addEventListener('factory-database-ready',()=>{if(window.__factoryAuthReady!==true||!window.__factoryAuthProfile||window.__factoryOfflineMode===true){document.getElementById('factory-boot-screen')?.remove();window.__showFactoryBootError?.('تعذر التحقق من جلسة الحساب','يلزم التحقق المباشر من الحساب وقاعدة بيانات الإنتاج قبل فتح البرنامج.');return}document.getElementById('app').style.visibility='visible';document.getElementById('factory-boot-screen')?.classList.add('done');setTimeout(()=>document.getElementById('factory-boot-screen')?.remove(),180)});
 window.addEventListener('factory-db-startup-error',e=>{document.getElementById('factory-boot-screen')?.remove();window.__showFactoryBootError?.('تعذر الاتصال بقاعدة بيانات الإنتاج',e.detail?.message||'تحقق من الاتصال ثم أعد المحاولة')});
-setTimeout(()=>{const s=document.getElementById('factory-boot-screen');if(s&&!window.__factoryDatabaseFirstReady){s.remove();window.__showFactoryBootError?.('تأخر تحميل بيانات الشركة','انتهت مهلة تجهيز قاعدة البيانات بعد 12 ثانية. أعد المحاولة أو تحقق من اتصال الإنترنت.')}},12000);
+setTimeout(()=>{const s=document.getElementById('factory-boot-screen');if(s&&!window.__factoryDatabaseFirstReady){s.remove();window.__showFactoryBootError?.('تأخر تحميل بيانات الشركة','لم تكتمل قراءة قاعدة البيانات بعد 45 ثانية. تحقق من الاتصال ثم أعد المحاولة.')}},45000);
 if('serviceWorker' in navigator){
   window.addEventListener('load', ()=>{ navigator.serviceWorker.register('./sw.js').catch(()=>{}); });
 }
