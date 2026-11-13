@@ -33,9 +33,18 @@ const quotaRecovery=await recoveryPage.evaluate(async()=>{
   const {createConflictRecovery}=await import('/js/conflict-recovery.js');
   const scope='browser-quota-'+Date.now(), queueKey='ms-factory-db-queue-v1:'+scope, fillPrefix='ms-factory-quota-fill-'+scope+':';
   localStorage.setItem(queueKey,JSON.stringify([{type:'voucher',id:'V-9'}]));
-  const fillValue='q'.repeat(128*1024), fillKeys=[];
+  const fillKeys=[];
   let quotaHit=false;
-  for(let i=0;i<128;i++){const key=fillPrefix+i;try{localStorage.setItem(key,fillValue);fillKeys.push(key)}catch(error){quotaHit=error?.name==='QuotaExceededError';break}}
+  // Fill in progressively smaller chunks so there is not enough leftover space
+  // for the localStorage lock marker; this exercises the cookie fallback too.
+  for(const chunkSize of [128*1024,64*1024,32*1024,16*1024,8*1024,4*1024,2*1024,1024,512,256,128,64,32,16,8,4,2,1]){
+    const fillValue='q'.repeat(chunkSize);
+    while(true){
+      const key=fillPrefix+fillKeys.length;
+      try{localStorage.setItem(key,fillValue);fillKeys.push(key)}
+      catch(error){if(error?.name==='QuotaExceededError')quotaHit=true;break}
+    }
+  }
   const recovery=createConflictRecovery({storage:localStorage,cookieDocument:document,scope});
   let failed=false;try{recovery.archiveRejectedQueue([{type:'voucher',id:'V-9'}],{capturedAt:'quota-test'},queueKey)}catch(error){failed=error?.name==='QuotaExceededError'}
   const beforeReload={quotaHit,failed,queueRetained:!!localStorage.getItem(queueKey),blockPersisted:recovery.hasBlock()};
