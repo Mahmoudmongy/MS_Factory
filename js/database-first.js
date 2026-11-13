@@ -3,6 +3,8 @@ import { supabase } from './supabase.js';
 const QUEUE_KEY = 'ms-factory-db-queue-v1';
 const BASELINE_KEY = 'ms-factory-db-baseline-v1';
 const LAST_SYNC_KEY = 'ms-factory-db-last-sync-v1';
+const CONFLICT_REVIEW_KEY = 'ms-factory-db-conflict-review-v1';
+const CONFLICT_BLOCK_KEY = 'ms-factory-db-conflict-block-v1';
 const CACHE_PREFIX = 'ms-factory-db-cache-v1:';
 let storageScope = 'anonymous';
 const scopedKey = key => key + ':' + storageScope;
@@ -319,10 +321,30 @@ async function persistState(state) {
         // The atomic batch was rejected. Discard stale retries; never replay them.
         conflictWriteLock = true;
         window.__factoryDatabaseFirstFailed = true;
-        setQueue([]);
-        localStorage.removeItem('mgr6');
-        localStorage.removeItem('mgr6-sync-pending');
-        document.dispatchEvent(new CustomEvent('factory-db-conflict',{detail:{message:'تعارض نسخة البيانات. أوقفنا الحفظ في هذه الجلسة ولم نعد إرسال التعديلات القديمة. أعد تحميل الصفحة لجلب البيانات المؤكدة.'}}));
+        const rejectedQueue = getQueue();
+        const conflictAt = new Date().toISOString();
+        const blockKey = scopedKey(CONFLICT_BLOCK_KEY);
+        try {
+          // Persist a small fail-safe marker first. If archiving fails, startup must not replay the queue.
+          localStorage.setItem(blockKey, JSON.stringify({ capturedAt:conflictAt, count:rejectedQueue.length }));
+          const reviewKey = scopedKey(CONFLICT_REVIEW_KEY);
+          const priorReviews = JSON.parse(localStorage.getItem(reviewKey) || '[]');
+          const reviewEntry = {
+            capturedAt:conflictAt,
+            ownerId,
+            actorId,
+            reason:'FACTORY_RECORD_CONFLICT: the atomic apply_factory_record_batch RPC rejected the complete submitted batch.',
+            rejectedOperationCount:rejectedQueue.length,
+            rejectedOperations:rejectedQueue
+          };
+          localStorage.setItem(reviewKey, JSON.stringify([...priorReviews, reviewEntry].slice(-10)));
+          setQueue([]);
+          localStorage.removeItem(blockKey);
+        } catch (archiveError) {
+          // Keep the original queue and the marker; a later page load will fetch Supabase but skip replay.
+          console.error('Could not archive rejected operations for review:',archiveError);
+        }
+        document.dispatchEvent(new CustomEvent('factory-db-conflict',{detail:{message:'تعارض نسخة البيانات. أوقفنا الحفظ، وحفظنا العمليات المرفوضة للمراجعة قبل تفريغ طابور الإرسال. أعد تحميل الصفحة لجلب البيانات المؤكدة.'}}));
         throw error;
       }
       if (isNetworkFailure(error)) {
@@ -410,7 +432,9 @@ async function bootstrap() {
     const cachedRows = loadCachedRows();
     if (cachedRows.length) hydrateFromRows(cachedRows);
     else snapshotBaseline(getState());
-    for (const op of getQueue()) applyOperationToState(op);
+    if (!localStorage.getItem(scopedKey(CONFLICT_BLOCK_KEY))) {
+      for (const op of getQueue()) applyOperationToState(op);
+    }
     stateReady = true;
     window.__factoryDatabaseFirstReady = true;
     window.__factoryDatabaseFirstFailed = false;
@@ -430,6 +454,15 @@ async function bootstrap() {
   setLastSyncAt(new Date().toISOString());
   stateReady = true;
   window.__factoryDatabaseFirstReady = true;
+  const conflictRecoveryPending = localStorage.getItem(scopedKey(CONFLICT_BLOCK_KEY));
+  if (conflictRecoveryPending) {
+    // A previous tab could not safely archive the rejected queue. Never replay it on startup.
+    window.__factoryDatabaseFirstFailed = true;
+    document.dispatchEvent(new CustomEvent('factory-db-conflict',{detail:{message:'توجد عمليات محفوظة للمراجعة بعد تعارض سابق. لم نعد إرسالها تلقائياً.'}}));
+    await connectRealtime();
+    window.dispatchEvent(new CustomEvent('factory-database-ready'));
+    return;
+  }
   window.__factoryDatabaseFirstFailed = false;
   for (const op of getQueue()) applyOperationToState(op);
   await flushQueue();
