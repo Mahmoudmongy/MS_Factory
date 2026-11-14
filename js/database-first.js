@@ -169,9 +169,10 @@ function snapshotBaseline(state) {
 function setBaselineRow(row) {
   baseline.set(mapKey(row.record_type, row.record_id), {
     type: row.record_type, id: row.record_id, payload: clone(row.payload),
-    version: Number(row.version || 1), deleted_at: row.deleted_at || null
+    version: row.version == null ? 1 : Number(row.version), deleted_at: row.deleted_at || null
   });
-  cacheRow(row);
+  // Manager source rows are a read-only base, cached separately per administrator.
+  if(row.origin!=="manager-import")cacheRow(row);
 }
 async function fetchPagedRecords(buildQuery) {
   const all = [];
@@ -192,7 +193,7 @@ async function fetchPagedRecords(buildQuery) {
   }
   return all;
 }
-function managerCacheKey(actor) { return MANAGER_CACHE_KEY + String(actor || "anonymous"); }
+function managerCacheKey(actor) { return MANAGER_CACHE_KEY + String(actor || "anonymous") + ":" + String(ownerId || "no-owner"); }
 function loadManagerCache(actor) {
   try {
     const rows = JSON.parse(localStorage.getItem(managerCacheKey(actor)) || "[]");
