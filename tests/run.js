@@ -772,6 +772,10 @@ ok('Manager.io bridge maps imported accounts, parties, stock, invoices, vouchers
 ok('Manager.io record IDs are stable numeric IDs suitable for the existing UI and factory_records overlay',bridge.includes('const stableId = (namespace, key) =>')&&bridge.includes('namespace * 1000000000000'));
 ok('imported Manager.io financial documents are protected from in-place edits and deletion',app.includes('if(d?.legacyManager)')&&app.includes('if(v?.legacyManager)')&&app.includes('if(pre.legacyManager)')&&app.includes('if(imported?.legacyManager)'));
 ok('Manager.io bridge errors are surfaced to the user without clearing source records',dbSync.includes('factory-manager-bridge-error')&&app.includes('factory-manager-bridge-error'));
+ok('stock state and movement reversals preserve warehouse-specific quantities and values',app.includes('const whQty=')&&app.includes('whVariantQty=')&&app.includes('function rev(rid,src)')&&app.includes('loc.val-=m.val')&&app.includes('function recalc(){S.items.forEach(i=>{i.st={};i.val=0;i.loc={}})'));
+ok('invoice, production-material and write-off movements post to their selected warehouse',app.includes('stockWh=i?(+$("#ty").value||i.wh):0')&&app.includes('m.wh||i.wh')&&app.includes('function saveWo()')&&app.includes(',"wo",wh)'));
+ok('stock list and movement report filter by actual warehouse distribution',app.includes('(!x.wh||itemHasWh(i,x.wh))')&&app.includes('String(x.wh||i.wh)==String(w)')&&app.includes('whLabel(i)'));
+
 ok('Manager source rows retain expected version zero so the first edit creates a new overlay row',dbSync.includes('row.version == null ? 1 : Number(row.version)')&&dbSync.includes('expectedVersion: old?.version || 0'));
 ok('Manager source cache is isolated per administrator and is never copied into shared employee cache',dbSync.includes('MANAGER_CACHE_KEY + String(actor || "anonymous") + ":" + String(ownerId || "no-owner")')&&dbSync.includes('if(row.origin!=="manager-import")cacheRow(row)'));
 
