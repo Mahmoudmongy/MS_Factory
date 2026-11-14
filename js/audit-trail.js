@@ -20,11 +20,11 @@ function ensureUi() {
   panel.id = 'factory-audit-panel'; panel.setAttribute('role','dialog'); panel.setAttribute('aria-modal','true');
   panel.setAttribute('aria-label','سجل التدقيق');
   panel.style.cssText = 'display:none;position:fixed;inset:0;z-index:100510;overflow:auto;padding:clamp(8px,2vw,24px);background:var(--bg,#f7f8fa);color:var(--tx,#17212b)';
-  panel.innerHTML = \`<div style="max-width:1500px;margin:auto">
+  panel.innerHTML = `<div style="max-width:1500px;margin:auto">
     <div class="card row" style="justify-content:space-between;align-items:center"><div><h2 style="margin:0">سجل التدقيق والتراجع الآمن</h2><small>يعرض التغييرات المؤكدة في قاعدة البيانات. التراجع ينشئ حركة عكسية ولا يمحو سجل التدقيق.</small></div><button type="button" class="rd" id="factory-audit-close">إغلاق ✕</button></div>
     <div class="card"><input id="factory-audit-search" type="search" placeholder="بحث بالمرجع أو نوع السجل أو العملية" style="max-width:460px;width:100%"><span id="factory-audit-status" style="margin-inline-start:10px"></span></div>
     <div id="factory-audit-content"></div>
-  </div>\`;
+  </div>`;
   document.body.appendChild(panel);
   panel.querySelector('#factory-audit-close').addEventListener('click', closePanel);
   panel.addEventListener('click', e => { if(e.target===panel) closePanel(); });
@@ -57,11 +57,11 @@ function renderRows() {
   for(const row of rows){const key=row.record_type+'|'+row.record_id;if(!latest.has(key)||Number(row.id)>Number(latest.get(key)))latest.set(key,row.id);}
   const visible=rows.filter(row=>!q||[row.record_type,row.record_id,row.operation,labels[row.operation]].join(' ').toLocaleLowerCase().includes(q));
   if(!visible.length){root.innerHTML='<div class="card">لا توجد حركات مطابقة.</div>';return;}
-  root.innerHTML=\`<div class="card" style="overflow:auto"><table class="l" style="min-width:850px;width:100%"><thead><tr><th>التاريخ</th><th>العملية</th><th>القسم</th><th>رقم السجل</th><th>المنفذ</th><th>التفاصيل</th><th>الإجراء</th></tr></thead><tbody>\${visible.map(row=>{
+  root.innerHTML=`<div class="card" style="overflow:auto"><table class="l" style="min-width:850px;width:100%"><thead><tr><th>التاريخ</th><th>العملية</th><th>القسم</th><th>رقم السجل</th><th>المنفذ</th><th>التفاصيل</th><th>الإجراء</th></tr></thead><tbody>${visible.map(row=>{
     const key=row.record_type+'|'+row.record_id,undoSupported=['partners','items','codes','mv','wh','wo','L','accts','je','customers','suppliers','docs','sret','pret','vch','po','payroll'].includes(row.record_type),canUndo=undoSupported&&latest.get(key)===row.id&&['INSERT','UPDATE'].includes(row.operation);
     const snapshot={before:row.old_row,after:row.new_row};
-    return \`<tr><td>\${esc(new Date(row.occurred_at).toLocaleString('en-GB'))}</td><td>\${esc(labels[row.operation]||row.operation)}</td><td>\${esc(typeLabels[row.record_type]||row.record_type)}</td><td>\${esc(row.record_id)}</td><td>\${esc(row.actor_id||'—')}</td><td><details><summary>عرض قبل / بعد</summary><pre style="white-space:pre-wrap;direction:ltr;text-align:left;max-width:520px;overflow:auto">\${esc(JSON.stringify(snapshot,null,2))}</pre></details></td><td>\${canUndo?\`<button class="g" type="button" data-undo="\${Number(row.id)}">تراجع آمن</button>\`:'—'}</td></tr>\`;
-  }).join('')}</tbody></table></div>\`;
+    return `<tr><td>${esc(new Date(row.occurred_at).toLocaleString('en-GB'))}</td><td>${esc(labels[row.operation]||row.operation)}</td><td>${esc(typeLabels[row.record_type]||row.record_type)}</td><td>${esc(row.record_id)}</td><td>${esc(row.actor_id||'—')}</td><td><details><summary>عرض قبل / بعد</summary><pre style="white-space:pre-wrap;direction:ltr;text-align:left;max-width:520px;overflow:auto">${esc(JSON.stringify(snapshot,null,2))}</pre></details></td><td>${canUndo?`<button class="g" type="button" data-undo="${Number(row.id)}">تراجع آمن</button>`:'—'}</td></tr>`;
+  }).join('')}</tbody></table></div>`;
 }
 async function undoClick(event) {
   const button=event.target.closest('[data-undo]'); if(!button)return;

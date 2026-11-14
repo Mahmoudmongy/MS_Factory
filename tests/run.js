@@ -821,5 +821,7 @@ const reportScopeMigration=fs.readFileSync(path.join(ROOT,'supabase/migrations/2
 ok('report-only employees keep read access without gaining write access',reportScopeMigration.includes("p_write is false and actor.permissions ->> 'reports' = 'true'")&&reportScopeMigration.includes("p_write is false or actor.permissions ->> 'edit' = 'true'"));
 ok('employee account API rejects delete without edit',fs.readFileSync(path.join(ROOT,'supabase/functions/create-employee-account/index.ts'),'utf8').includes('صلاحية الحذف تتطلب صلاحية التعديل'));
 ok('audit timeline uses the owner/time index and still identifies the latest row by audit id',fs.readFileSync(path.join(ROOT,'js/audit-trail.js'),'utf8').includes(".order('occurred_at',{ascending:false})")&&fs.readFileSync(path.join(ROOT,'js/audit-trail.js'),'utf8').includes('Number(row.id)>Number(latest.get(key))'));
+const auditModuleSource=fs.readFileSync(path.join(ROOT,'js/audit-trail.js'),'utf8');
+ok('audit module has valid unescaped JavaScript template literals',!auditModuleSource.includes('\\`')&&!auditModuleSource.includes('\\${'));
 console.log(R.join('\n'));console.log(`\n${R.length-fails}/${R.length} checks passed, ${fails} failed`);process.exit(fails?1:0);
 })().catch(e=>{console.error('TEST RUN CRASHED:',e.message);process.exit(2)});
