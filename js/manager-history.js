@@ -91,6 +91,7 @@ function ensureUi() {
   button.className='g';
   button.textContent='▤';
   button.setAttribute('aria-label','سجل Manager.io');
+  button.title='سجل Manager.io';
   button.title='عرض البيانات التاريخية المنقولة من Manager.io';
   button.style.cssText='white-space:nowrap;font-weight:700;min-height:30px;width:30px;min-width:30px;padding:2px;font-size:16px';
   button.addEventListener('click',openPanel);
