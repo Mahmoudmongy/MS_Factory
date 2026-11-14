@@ -378,7 +378,15 @@ function vSet(){
  const bridgeSummary=admin&&window.__factoryManagerBridgeLoaded
   ? '<section class="card"><h3>بيانات Manager.io المرتبطة</h3><p>تم تحميل البيانات المستوردة وربطها بشاشات البرنامج الحالية.</p><div class="grid"><div><b>'+(S.accts||[]).length+'</b><small>حسابات</small></div><div><b>'+(S.partners||[]).length+'</b><small>عملاء وموردون</small></div><div><b>'+(S.items||[]).length+'</b><small>أصناف</small></div><div><b>'+(S.docs||[]).length+'</b><small>فواتير ومرتجعات</small></div><div><b>'+(S.vch||[]).length+'</b><small>سندات وتحويلات</small></div><div><b>'+(S.je||[]).length+'</b><small>قيود يومية</small></div><div><b>'+(S.L||[]).length+'</b><small>حركات دفتر الأستاذ</small></div><div><b>'+(S.po||[]).length+'</b><small>أوامر إنتاج</small></div></div><p class="mu">المستندات المالية المستوردة محفوظة كما هي للقراءة والمراجعة. أي تعديلات جديدة تُسجّل في طبقة التطبيق دون تعديل مصدر Manager.io.</p></section>'
   : '';
- return ph(N.set,bridgeSummary+'<button class="g" onclick="syncPage()">حالة الاتصال</button>')+
+ const bw=window.__factoryManagerBridgeWarnings||{};
+ const warningParts=[];
+ if(bw.unlinkedVoucherLines)warningParts.push(bw.unlinkedVoucherLines+" سطور سند غير مرتبطة بمستند رئيسي؛ لم نُنشئ منها سندات لتجنب تكرار أو اختلاق حركة مالية.");
+ if(bw.invoiceLinesWithoutProduct)warningParts.push(bw.invoiceLinesWithoutProduct+" بند فاتورة غير مرتبط بصنف مخزني؛ يظهر كبند نصي محفوظ.");
+ if(bw.journalsWithoutLedger)warningParts.push(bw.journalsWithoutLedger+" قيد يومية لا توجد له سطور دفتر أستاذ مرتبطة.");
+ if(bw.vouchersRecoveredFromLedger)warningParts.push(bw.vouchersRecoveredFromLedger+" سندات استُعيدت تفاصيل حساباتها من دفتر الأستاذ.");
+ if(bw.productionOrdersUsingRawBomFallback)warningParts.push("تم استكمال مواد "+bw.productionOrdersUsingRawBomFallback+" أمر إنتاج من تفاصيل المصدر الأصلية.");
+ const bridgeWarningsHtml=admin&&window.__factoryManagerBridgeLoaded?'<section class="card"><h3>نتيجة مطابقة البيانات</h3><p class="mu">'+(bw.ledgerBalanced?'إجمالي المدين يساوي إجمالي الدائن.':'تنبيه: ميزان دفتر الأستاذ يحتاج مراجعة.')+' '+(bw.inventoryReconciled?'كميات المخزون متطابقة مع أرصدة المواقع.':'تنبيه: يوجد اختلاف في كميات المخزون.')+'</p>'+(warningParts.length?'<p class="mu">'+warningParts.join(' • ')+'</p>':'<p class="mu">لم تظهر استثناءات إضافية في فحص المصدر.</p>')+'</section>':'';
+ return ph(N.set,bridgeSummary+bridgeWarningsHtml+'<button class="g" onclick="syncPage()">حالة الاتصال</button>')+
  '<section class="card"><h3>بيانات الشركة</h3><label for="factory-company-name">اسم الشركة الظاهر في البرنامج</label><div class="row"><input id="factory-company-name" maxlength="120" value="'+String(S.name||"").replace(/&/g,"&amp;").replace(/"/g,"&quot;")+'" '+(admin?'':'disabled')+'><button '+(admin?'':'disabled')+' onclick="saveCompanyName()">حفظ الاسم</button></div><p class="mu">يظهر الاسم في القائمة الرئيسية وشاشة الدخول.</p></section>'+
  '<section class="card"><h3>إدارة وحدات البرنامج</h3><p class="mu">تقدر توقف ظهور أي وحدة مش محتاجها حاليًا وترجع تفعّلها في أي وقت. إيقاف الوحدة لا يحذف فواتيرها أو حساباتها أو أي بيانات محفوظة.</p>'+
  '<div class="module-settings-list">'+moduleRows+'</div>'+
