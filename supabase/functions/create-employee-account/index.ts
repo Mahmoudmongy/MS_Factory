@@ -1,6 +1,6 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
 
-const ALLOWED_PERMISSIONS = ["invoices", "inventory", "customers", "suppliers", "production", "reports", "settings"];
+const ALLOWED_PERMISSIONS = ["invoices", "inventory", "customers", "suppliers", "production", "reports", "settings", "edit", "delete"];
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -26,8 +26,8 @@ Deno.serve(async (req: Request) => {
   const { data: authData, error: authError } = await caller.auth.getUser();
   if (authError || !authData.user) return json(401, { error: "جلسة الدخول غير صالحة" });
 
-  const { data: profile, error: profileError } = await admin.from("profiles").select("is_admin").eq("id", authData.user.id).maybeSingle();
-  if (profileError || profile?.is_admin !== true) return json(403, { error: "هذه العملية متاحة لمدير النظام فقط" });
+  const { data: profile, error: profileError } = await admin.from("profiles").select("is_admin,created_by").eq("id", authData.user.id).maybeSingle();
+  if (profileError || profile?.is_admin !== true || profile?.created_by) return json(403, { error: "هذه العملية متاحة لمدير النظام فقط" });
 
   let body: Record<string, unknown>;
   try { body = await req.json(); } catch { return json(400, { error: "بيانات الطلب غير صحيحة" }); }
@@ -37,6 +37,7 @@ Deno.serve(async (req: Request) => {
   const requested = body.permissions && typeof body.permissions === "object" && !Array.isArray(body.permissions) ? body.permissions as Record<string, unknown> : {};
   const permissions: Record<string, boolean> = {};
   for (const key of ALLOWED_PERMISSIONS) permissions[key] = requested[key] === true;
+  if (permissions.delete && !permissions.edit) return json(400, { error: "صلاحية الحذف تتطلب صلاحية التعديل" });
   if (!/^[a-z0-9._-]{3,40}$/.test(username)) return json(400, { error: "اسم المستخدم يجب أن يكون من 3 إلى 40 حرفاً إنجليزياً أو رقماً أو . _ -" });
   if (password.length < 8) return json(400, { error: "كلمة المرور يجب ألا تقل عن 8 أحرف" });
 

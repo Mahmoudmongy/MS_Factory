@@ -24,7 +24,29 @@ const TN={sale:"فاتورة بيع",pur:"فاتورة شراء",sret:"إشعا�
 const ACCOUNT_AR={"Accounts receivable":"العملاء","Accounts payable":"الموردون","Cash & cash equivalents":"النقدية وما في حكمها","Cash and cash equivalents":"النقدية وما في حكمها","Inventory":"المخزون","Inventory - cost":"تكلفة المخزون","Sales":"المبيعات","Cost of sales":"تكلفة المبيعات","Retained earnings":"الأرباح المحتجزة","Owners equity":"حقوق الملكية"},accountLabel=a=>!LANGEN?(ACCOUNT_AR[a?.name]||a?.name||""):(a?.name||"");
 const ak=k=>{let a=S.accts.find(x=>x.k==k);if(!a){const t=SYS_ACCOUNTS.find(x=>x.k==k);if(!t)throw new Error("الحساب الافتراضي غير معروف: "+k);a={...t,id:uid()};S.accts.push(a)}return a.id},ac_=id=>S.accts.find(a=>a.id==id)||{},an=id=>accountLabel(ac_(id)),nat=a=>"AX".includes(a.t)?1:-1;
 const bal=(id,fr,to)=>S.L.filter(l=>l.a==id&&(!fr||l.d>=fr)&&(!to||l.d<=to)).reduce((s,l)=>s+l.dr-l.cr,0)*nat(ac_(id));
-const it_=id=>S.items.find(i=>i.id==id),tq=i=>Object.values(i.st||{}).reduce((a,b)=>a+(+b||0),0),av=i=>tq(i)>0?i.val/tq(i):i.buy,stockAt=(i,wh)=>S.mv.filter(m=>m.iid==i.id&&(m.wh||i.wh)==wh).reduce((a,m)=>a+(+m.q||0),0),stockValueAt=(i,wh)=>S.mv.filter(m=>m.iid==i.id&&(m.wh||i.wh)==wh).reduce((a,m)=>a+(+m.val||0),0),avAt=(i,wh)=>stockAt(i,wh)>0?stockValueAt(i,wh)/stockAt(i,wh):av(i),pn=id=>(S.partners.find(p=>p.id==id)||{}).name||"",whn=id=>(S.wh.find(w=>w.id==id)||{}).name||"";
+const it_=id=>S.items.find(i=>i.id==id),tq=i=>Object.values(i.st||{}).reduce((a,b)=>a+(+b||0),0),av=i=>tq(i)>0?i.val/tq(i):i.buy,stockAt=(i,wh)=>S.mv.filter(m=>m.iid==i.id&&(m.wh||i.wh)==wh).reduce((a,m)=>a+(+m.q||0),0),stockValueAt=(i,wh)=>S.mv.filter(m=>m.iid==i.id&&(m.wh||i.wh)==wh).reduce((a,m)=>a+(+m.val||0),0),avAt=(i,wh)=>stockAt(i,wh)>0?stockValueAt(i,wh)/stockAt(i,wh):av(i),pn=id=>(S.partners.find(p=>p.id==id)||{}).name||"",whn=id=>whPath(id);function buildWarehouseTree(all){
+ all=Array.isArray(all)?all:[];const byParent=new Map(),out=[],seen=new Set();
+ const parentOf=w=>all.some(x=>String(x.id)===String(w.parentId))&&String(w.parentId)!==String(w.id)?String(w.parentId):"root";
+ for(const w of all){const p=parentOf(w);if(!byParent.has(p))byParent.set(p,[]);byParent.get(p).push(w)}
+ const walk=(parent,depth)=>{for(const w of byParent.get(parent)||[]){const id=String(w.id);if(seen.has(id))continue;seen.add(id);out.push({...w,_depth:depth});walk(id,depth+1)}};
+ walk("root",0);
+ for(const w of all)if(!seen.has(String(w.id))){seen.add(String(w.id));out.push({...w,_depth:0});walk(String(w.id),1)}
+ return out;
+}
+function buildWarehousePath(all,id){
+ all=Array.isArray(all)?all:[];const parts=[],seen=new Set();let current=all.find(w=>String(w.id)===String(id));
+ while(current&&!seen.has(String(current.id))){seen.add(String(current.id));parts.unshift(current.name);current=all.find(w=>String(w.id)===String(current.parentId))}
+ return parts.join(" / ")||"";
+}
+function whTree(){return buildWarehouseTree(S.wh||[])}
+function whPath(id){return buildWarehousePath(S.wh||[],id)}
+function whDescendants(id,seen=new Set()){
+ const key=String(id);if(seen.has(key))return [];seen.add(key);
+ const children=(S.wh||[]).filter(w=>String(w.parentId)===key);
+ return children.flatMap(w=>[w.id,...whDescendants(w.id,seen)]);
+}
+globalThis.whTree=whTree;globalThis.whPath=whPath;globalThis.whDescendants=whDescendants;globalThis.buildWarehouseTree=buildWarehouseTree;globalThis.buildWarehousePath=buildWarehousePath;
+
 function rev(rid,src){const match=x=>x.rid==rid&&(!src||x.src==src);S.L=S.L.filter(l=>!match(l));S.mv=S.mv.filter(m=>{if(match(m)){const i=it_(m.iid);if(i){i.st[m.v]-=m.q;i.val-=m.val}return false}return true})}
 function ensureItem(name,wh,unit,buy){let i=S.items.find(x=>x.name==name&&x.wh==wh)||S.items.find(x=>x.name==name);if(!i){const itemId=uid();i={id:itemId,cloudId:String(itemId),name,sku:"IT"+itemId.toString(36).toUpperCase(),wh,unit:unit||"قطعة",buy:buy||0,retail:0,wholesale:0,img:"",st:{},val:0};S.items.push(i)}return i}
 const partnerLedger=id=>{const ids=S.accts.filter(a=>a.k==="ar"||a.k==="ap"||(a.t==="A"&&/accounts receivable|العملاء/i.test(a.name))||(a.t==="L"&&/accounts payable|الموردين/i.test(a.name))).map(a=>a.id);return S.L.filter(l=>l.pid==id&&ids.includes(l.a))};const pbal=id=>partnerLedger(id).reduce((s,l)=>s+l.dr-l.cr,0);
@@ -34,10 +56,10 @@ const colors=()=>[...new Set(S.items.flatMap(i=>Object.keys(i.st).map(k=>k.split
 const sug=(i,k)=>Math.round((av(i)||i.buy)*(1+(S.pct[k]||0)/100)*100)/100;
 const FW=()=>(S.wh.find(w=>/منتج|finished|final/i.test((w.raw?.name||"")+" "+w.name))||S.wh[0]).id,pnm=o=>o.iname||(it_(o.iid)||{}).name||"";
 const poCost=o=>(o.matCost||0)+(o.wc||0)+o.x.reduce((a,x)=>a+x.amt,0)+S.docs.filter(d=>d.t=="pur"&&d.dest==o.id).reduce((a,d)=>a+d.total,0),poQty=o=>o.subs.reduce((a,s)=>a+s.qty,0);
-const CLOUD_SCREEN_PERMISSIONS={sale:"invoices",sret:"invoices",pur:"invoices",pret:"invoices",rc:"invoices",py:"invoices",bank:"settings",cust:"customers",supp:"suppliers",stock:"inventory",prod:"production",coa:"settings",je:"settings",tl:"reports",emp:null,rep:"reports",ai:"settings",set:"settings"};
+const CLOUD_SCREEN_PERMISSIONS={sale:"invoices",sret:"invoices",pur:"invoices",pret:"invoices",rc:"invoices",py:"invoices",bank:"settings",cust:"customers",supp:"suppliers",stock:"inventory",prod:"production",coa:"settings",je:"settings",tl:"reports",emp:null,rep:"reports",ai:"reports",set:null};
 const cloudProfile=()=>window.__factoryAuthProfile||null;
 const cloudCan=(key)=>{const p=cloudProfile();if(!p)return null;if(p.is_admin===true)return true;return p.permissions?.[key]===true;};
-const can=p=>{const cp=cloudProfile();if(cp&&!cp.is_admin){const key=CLOUD_SCREEN_PERMISSIONS[tab];return !!key&&key!=="reports"&&cloudCan(key)===true;}return who=="0"||((S.emp.find(e=>e.id==who)||{}).perm||[]).includes(p);};
+const can=p=>{const cp=cloudProfile();if(cp&&!cp.is_admin){const key=CLOUD_SCREEN_PERMISSIONS[tab];if(!key||cloudCan(key)!==true)return false;if(p==="edit")return cloudCan("edit")===true;if(p==="del")return cloudCan("delete")===true&&cloudCan("edit")===true;return key!=="reports";}return who=="0"||((S.emp.find(e=>e.id==who)||{}).perm||[]).includes(p);};
 /* ===== state + shell ===== */
 let tab="home",who="0",D,PS,V,J,IM="",idImg="",pe=0,dc="all",hs=[],hi=-1,TL={from:"",to:"",k:""},SF={wh:"",nm:"",b1:"",b2:"",q1:"",q2:""},R={rep:"",from:"",to:"",cat:"all",item:0,acct:0,pt:0,ds:"sale",gb:"الصنف",gc:"",ms:"amt",pa:-1,pc:-1,fields:["التاريخ","رقم الفاتورة","الطرف","الصنف","الكمية","الإجمالي"]};
 const APP_ICONS={
@@ -86,16 +108,117 @@ function swho(v){if(cloudProfile()&&!cloudProfile().is_admin)return;who=v;go(all
 function pick(inp,cb){const fl=inp.files[0];if(!fl)return;const r=new FileReader();r.onload=()=>{const im=new Image();im.onload=()=>{const c=document.createElement("canvas"),k=Math.min(1,420/im.width);c.width=im.width*k;c.height=im.height*k;c.getContext("2d").drawImage(im,0,0,c.width,c.height);const v=c.toDataURL("image/jpeg",.6);cb(v);const n=inp.nextElementSibling;if(n&&n.tagName=="IMG")n.remove();inp.insertAdjacentHTML("afterend",`<img src="${v}" width="60">`)};im.src=r.result};r.readAsDataURL(fl)}
 /* ===== global table tools: search (contains) + sort every header + Excel export + date format ===== */
 const key=c=>{const x=(c.dataset.v||c.textContent).trim(),m=x.match(/^(\d\d)-(\d\d)-(\d{4})(?: (\d\d):(\d\d) (AM|PM))?$/);if(m)return +`${m[3]}${m[2]}${m[1]}${p2((+(m[4]||0))%12+(m[6]=="PM"?12:0))}${m[5]||"00"}`;const n=parseFloat(x.replace(/,/g,""));return isNaN(n)?x:n};
-function enh(){(ACT||document).querySelectorAll("td").forEach(c=>{if(/^\d{4}-\d{2}-\d{2}$/.test(c.textContent.trim())){c.dataset.v=c.textContent.trim();c.textContent=dfm(c.dataset.v)}});
+/* Advanced, safe table search: free text, AND/OR and column comparisons. */
+const MSFactorySearch = (() => {
+  const norm = value => String(value ?? '').normalize('NFKC').toLocaleLowerCase()
+    .replace(/[أإآ]/g,'ا').replace(/ى/g,'ي').replace(/[\u064B-\u065F\u0670ـ]/g,'').trim();
+  const unquote = value => {
+    const s=String(value??'').trim();
+    return (s.length>=2 && ((s[0]==='"'&&s.at(-1)==='"')||(s[0]==="'"&&s.at(-1)==="'"))) ? s.slice(1,-1) : s;
+  };
+  const number = value => {
+    const s=String(value??'').replace(/,/g,'').replace(/\s*(ج\.?\s*م|EGP|USD|EUR|دولار|ريال)\s*$/i,'').trim();
+    if(!/^[+-]?(?:\d+\.?\d*|\.\d+)$/.test(s)) return null;
+    const n=Number(s); return Number.isFinite(n)?n:null;
+  };
+  const date = value => {
+    const s=String(value??'').trim();
+    if(/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
+    const m=s.match(/^(\d{2})-(\d{2})-(\d{4})$/);
+    return m ? m[3]+'-'+m[2]+'-'+m[1] : null;
+  };
+  function lex(input) {
+    const out=[]; let token='', quote='', escaped=false;
+    for(const ch of String(input??'')) {
+      if(escaped){token+=ch;escaped=false;continue;}
+      if(ch==='\\'&&quote){escaped=true;continue;}
+      if(quote){token+=ch;if(ch===quote)quote='';continue;}
+      if(ch==='"'||ch==="'"){quote=ch;token+=ch;continue;}
+      if(/\s/.test(ch)){if(token){out.push(token);token='';}continue;}
+      token+=ch;
+    }
+    if(quote) return {tokens:[],error:'علامة الاقتباس غير مكتملة'};
+    if(token)out.push(token);
+    return {tokens:out,error:''};
+  }
+  function compile(input, headers=[]) {
+    const raw=String(input??'').trim();
+    if(!raw)return {valid:true,error:'',test:()=>true};
+    const scanned=lex(raw); if(scanned.error)return {valid:false,error:scanned.error,test:()=>false};
+    const tokens=scanned.tokens, groups=[[]]; let expectTerm=true;
+    for(const token of tokens) {
+      const op=token.toUpperCase();
+      if(op==='OR') {
+        if(expectTerm||!groups[groups.length-1].length)return {valid:false,error:'استخدم OR بين شرطين',test:()=>false};
+        groups.push([]);expectTerm=true;continue;
+      }
+      if(op==='AND') {
+        if(expectTerm||!groups[groups.length-1].length)return {valid:false,error:'استخدم AND بين شرطين',test:()=>false};
+        expectTerm=true;continue;
+      }
+      const match=token.match(/^(.+?)(>=|<=|!=|=|>|<)(.+)$/);
+      let term;
+      if(match) {
+        const field=unquote(match[1]), opx=match[2], expected=unquote(match[3]);
+        const index=headers.findIndex(h=>norm(h)===norm(field));
+        if(index<0)return {valid:false,error:'اسم العمود غير معروف: '+field,test:()=>false};
+        const expectedDate=date(expected), expectedNumber=number(expected);
+        term=values=>{
+          const actual=String(values[index]??'').trim(), actualDate=date(actual), actualNumber=number(actual);
+          let cmp;
+          if(expectedDate&&actualDate)cmp=actualDate.localeCompare(expectedDate);
+          else if(expectedNumber!==null&&actualNumber!==null)cmp=actualNumber<expectedNumber?-1:actualNumber>expectedNumber?1:0;
+          else cmp=norm(actual).localeCompare(norm(expected));
+          if(opx==='=')return cmp===0;
+          if(opx==='!=')return cmp!==0;
+          if(opx==='>')return !!((expectedDate&&actualDate||expectedNumber!==null&&actualNumber!==null)&&cmp>0);
+          if(opx==='<')return !!((expectedDate&&actualDate||expectedNumber!==null&&actualNumber!==null)&&cmp<0);
+          if(opx==='>=')return !!((expectedDate&&actualDate||expectedNumber!==null&&actualNumber!==null)&&cmp>=0);
+          if(opx==='<=')return !!((expectedDate&&actualDate||expectedNumber!==null&&actualNumber!==null)&&cmp<=0);
+          return false;
+        };
+      } else {
+        const needle=norm(unquote(token));
+        if(!needle)return {valid:false,error:'شرط البحث فارغ',test:()=>false};
+        term=values=>norm(values.join(' ')).includes(needle);
+      }
+      groups[groups.length-1].push(term);expectTerm=false;
+    }
+    if(expectTerm)return {valid:false,error:'ينقصك شرط بعد AND أو OR',test:()=>false};
+    return {valid:true,error:'',test:values=>groups.some(group=>group.every(term=>term(values)))};
+  }
+  return {compile,normalize:norm};
+})();
+window.MSFactorySearch = MSFactorySearch;
+function enhanceFactorySelects(root=ACT||document){
+ root.querySelectorAll("select:not([data-search-enhanced]):not([data-no-search])").forEach(select=>{
+  if(select.options.length<10)return;
+  select.dataset.searchEnhanced="1";
+  const input=document.createElement("input");input.type="search";input.className="select-search-input";
+  input.placeholder="ابحث داخل القائمة...";input.setAttribute("aria-label","بحث داخل "+(select.getAttribute("aria-label")||select.id||"القائمة"));
+  input.style.cssText="display:block;box-sizing:border-box;width:100%;max-width:100%;margin:3px 0 5px;flex:1 1 100%";
+  select.parentNode.insertBefore(input,select);
+  const reset=()=>{for(const option of select.options)option.hidden=false};
+  input.addEventListener("input",()=>{const q=MSFactorySearch.normalize(input.value);for(const option of select.options)option.hidden=!!q&&select.options[select.selectedIndex]!==option&&option.value!==""&&!MSFactorySearch.normalize(option.textContent).includes(q)});
+  select.addEventListener("change",()=>{input.value="";reset()});
+ });
+}
+globalThis.enhanceFactorySelects=enhanceFactorySelects;
+function enh(){enhanceFactorySelects();(ACT||document).querySelectorAll("td").forEach(c=>{if(/^\d{4}-\d{2}-\d{2}$/.test(c.textContent.trim())){c.dataset.v=c.textContent.trim();c.textContent=dfm(c.dataset.v)}});
  (ACT||document).querySelectorAll("table.l").forEach((t,ti)=>{if(t.dataset.e)return;t.dataset.e=1;const all=[...t.querySelectorAll("tr")],rows=all.filter(r=>r.querySelector("td")),hd=all[0];if(rows.length<2)return;
- const sig=(N[tab]||tab)+"|"+[...hd.children].map(x=>x.textContent.trim()).join("|")+"|"+ti,storeKey="factory-table:"+sig;let saved={};try{saved=JSON.parse(localStorage.getItem(storeKey)||"{}")}catch{}
- const bar=document.createElement("div");bar.className="row";bar.style.margin="4px 0";bar.innerHTML='<input placeholder="🔎 بحث (يحتوي على...)" style="max-width:260px;margin:0"><button class="g">⬇️ تصدير Excel</button>';t.before(bar);
- const inp=bar.querySelector("input");inp.value=saved.q||"";const filter=()=>{const q=inp.value.trim().toLowerCase();rows.forEach(r=>r.style.display=!q||r.textContent.toLowerCase().includes(q)?"":"none");saved.q=q;try{localStorage.setItem(storeKey,JSON.stringify(saved))}catch{}};inp.oninput=filter;filter();bar.querySelector("button").onclick=()=>xl(t,rows);
- const applySort=(ci,dir,save=true)=>{const body=rows[0].parentNode,foot=all.filter(r=>r!==hd&&!r.querySelector("td"));[...rows].sort((a,b)=>{const x=key(a.children[ci]||a),y=key(b.children[ci]||b);return(typeof x=="number"&&typeof y=="number"?x-y:String(x).localeCompare(String(y),"ar"))*dir}).forEach(r=>body.appendChild(r));foot.forEach(r=>body.appendChild(r));[...hd.children].forEach((th,i)=>{th.dataset.d=i===ci?(dir===-1?"-1":"1"):""});if(save){saved.sort={ci,dir};try{localStorage.setItem(storeKey,JSON.stringify(saved))}catch{}}};
+ const sig=(N[tab]||tab)+"|"+[...hd.children].map(x=>x.textContent.trim()).join("|")+"|"+ti,owner=window.__factoryAuthProfile?.id||"anonymous",storeKey="factory-table:"+owner+":"+sig;let saved={};try{saved=JSON.parse(localStorage.getItem(storeKey)||"{}")}catch{}
+ const bar=document.createElement("div");bar.className="row";bar.style.cssText="margin:4px 0;position:relative;gap:6px;flex-wrap:wrap";bar.innerHTML='<input class="table-search-input" placeholder="'+(LANGEN?'🔎 Search: word AND word | word OR word | column>=100':'🔎 بحث: كلمة AND كلمة | كلمة OR كلمة | اسم العمود>=100')+'" style="max-width:320px;margin:0"><button class="g table-columns-toggle" type="button">'+(LANGEN?'⚙ Columns':'⚙ الأعمدة')+'</button><button class="g table-export" type="button">'+(LANGEN?'⬇️ Export Excel':'⬇️ تصدير Excel')+'</button>';t.before(bar);
+ const inp=bar.querySelector("input"),menu=document.createElement("div");menu.className="table-columns-menu";menu.hidden=true;menu.style.cssText="position:absolute;z-index:1000;top:100%;right:0;min-width:220px;max-height:280px;overflow:auto;padding:10px;background:var(--card,#fff);color:var(--tx,#17212b);border:1px solid var(--bd,#ccc);border-radius:9px;box-shadow:0 8px 24px #0002";
+ const headers=[...hd.children],initial=Array.isArray(saved.columns)?saved.columns.filter(i=>Number.isInteger(i)&&i>=0&&i<headers.length):headers.map((_,i)=>i),visible=new Set(initial.length?initial:headers.map((_,i)=>i));
+ const applyColumns=()=>{headers.forEach((cell,i)=>cell.style.display=visible.has(i)?"":"none");rows.forEach(row=>[...row.children].forEach((cell,i)=>cell.style.display=visible.has(i)?"":"none"));};
+ headers.forEach((cell,i)=>{const label=document.createElement("label");label.style.cssText="display:flex;align-items:center;gap:8px;padding:5px;cursor:pointer";const check=document.createElement("input");check.type="checkbox";check.checked=visible.has(i);check.addEventListener("change",()=>{if(!check.checked&&visible.size===1){check.checked=true;return;}if(check.checked)visible.add(i);else visible.delete(i);saved.columns=[...visible].sort((a,b)=>a-b);try{localStorage.setItem(storeKey,JSON.stringify(saved))}catch{}applyColumns()});label.append(check,document.createTextNode(cell.textContent.trim()||(LANGEN?("Column "+(i+1)):("عمود "+(i+1)))));menu.append(label)});
+ bar.append(menu);bar.querySelector(".table-columns-toggle").onclick=()=>{menu.hidden=!menu.hidden};document.addEventListener("click",e=>{if(!bar.contains(e.target))menu.hidden=true});
+ applyColumns();
+ inp.value=saved.q||"";const filter=()=>{const compiled=MSFactorySearch.compile(inp.value,headers.map(x=>x.textContent.trim()));inp.title=compiled.error||(LANGEN?"Supports AND, OR and comparisons such as amount>=100":"يدعم AND وOR والمقارنات مثل المبلغ>=100");rows.forEach(r=>{const values=[...r.children].map(c=>c.dataset.v||c.textContent.trim());r.style.display=compiled.valid&&compiled.test(values)?"":"none"});saved.q=inp.value;try{localStorage.setItem(storeKey,JSON.stringify(saved))}catch{}};inp.oninput=filter;filter();bar.querySelector(".table-export").onclick=()=>xl(t,rows);
+ const applySort=(ci,dir,save=true)=>{const body=rows[0].parentNode,foot=all.filter(r=>r!==hd&&!r.querySelector("td"));[...rows].sort((a,b)=>{const x=key(a.children[ci]||a),y=key(b.children[ci]||b);return(typeof x==="number"&&typeof y==="number"?x-y:String(x).localeCompare(String(y),"ar"))*dir}).forEach(r=>body.appendChild(r));foot.forEach(r=>body.appendChild(r));[...hd.children].forEach((th,i)=>{th.dataset.d=i===ci?(dir===-1?"-1":"1"):""});if(save){saved.sort={ci,dir};try{localStorage.setItem(storeKey,JSON.stringify(saved))}catch{}}};
  [...hd.children].forEach((th,ci)=>{if(th.colSpan>1||!th.textContent.trim())return;th.style.cursor="pointer";th.title="اضغط للترتيب";th.onclick=()=>applySort(ci,th.dataset.d==="1"?-1:1)});
  let sort=saved.sort;if(!sort){const di=[...hd.children].findIndex(x=>/التاريخ|الوقت|date/i.test(x.textContent));if(di>=0)sort={ci:di,dir:-1}}if(sort&&sort.ci<hd.children.length)applySort(sort.ci,sort.dir,false);
- })}
-async function saveFile(name,data){const dl=window.claude&&claude.use?await claude.use("downloads"):null;if(dl){await dl.save({filename:name,data});return}const blob=data instanceof Blob?data:new Blob([data],{type:"text/csv;charset=utf-8"}),url=URL.createObjectURL(blob),el=document.createElement("a");el.href=url;el.download=name;document.body.appendChild(el);el.click();el.remove();setTimeout(()=>URL.revokeObjectURL(url),5000)}
+ })}async function saveFile(name,data){const dl=window.claude&&claude.use?await claude.use("downloads"):null;if(dl){await dl.save({filename:name,data});return}const blob=data instanceof Blob?data:new Blob([data],{type:"text/csv;charset=utf-8"}),url=URL.createObjectURL(blob),el=document.createElement("a");el.href=url;el.download=name;document.body.appendChild(el);el.click();el.remove();setTimeout(()=>URL.revokeObjectURL(url),5000)}
 function exportCurrencyCell(value){
  const text=String(value||"").replace(/\s+/g," ").trim(),m=text.match(/\s+(ج\.?\s*م|EGP|USD|EUR|دولار|ريال)\s*$/i);
 
@@ -104,10 +227,10 @@ function exportCurrencyCell(value){
  return {value:text,currency:""};
 }
 async function xl(t,rows){
- const headers=[...t.querySelector("tr").children].map(c=>c.textContent.trim()),visible=rows.filter(r=>r.style.display!=="none");
- const split=headers.map((_,i)=>visible.some(r=>exportCurrencyCell(r.children[i]?.textContent).currency));
+ const allHeaders=[...t.querySelector("tr").children],indices=allHeaders.map((c,i)=>({c,i})).filter(x=>getComputedStyle(x.c).display!=="none").map(x=>x.i),headers=indices.map(i=>allHeaders[i].textContent.trim()),visible=rows.filter(r=>r.style.display!=="none");
+ const split=headers.map((_,i)=>visible.some(r=>exportCurrencyCell(r.children[indices[i]]?.textContent).currency));
  const outHead=headers.flatMap((h,i)=>split[i]?[h+" (قيمة)","العملة"]:[h]);
- const data=visible.map(r=>headers.flatMap((_,i)=>{const x=exportCurrencyCell(r.children[i]?.textContent);return split[i]?[x.value,x.currency]:[x.value]}));
+ const data=visible.map(r=>headers.flatMap((_,i)=>{const x=exportCurrencyCell(r.children[indices[i]]?.textContent);return split[i]?[x.value,x.currency]:[x.value]}));
  const ce=v=>'"'+String(v??"").replace(/"/g,'""')+'"',csv=[outHead,...data].map(row=>row.map(ce).join(",")).join("\n");
  try{await saveFile((N[tab]||"export")+".csv","\uFEFF"+csv);toast("تم التصدير — المبلغ والعملة في خليتين منفصلتين")}catch(e){toast("تم إلغاء التصدير")}
 }
@@ -216,7 +339,7 @@ function docForm(t,p){p=p||{};D={t,lines:p.lines||[],img:p.img||"",edit:p.edit||
  sh(`<h3>${TN[t]}${p.edit?" — تعديل":""}</h3>${rt&&p.ref?`<div class="card">مرتجع من الفاتورة <b>${p.ref}</b> — ${p.who||""} — ${dfm(p.idate)}<br><span class="mu">اكتب الكميات المرتجعة فقط، وسيب الباقي فاضي</span></div>`:""}
  <div class="row"><div><label>التاريخ</label><input id="dd" type="date" value="${p.date||td()}"></div><div><label>${s?"العميل":"المورد"}</label><select id="pt">${U(S.partners.filter(x=>s?x.c:x.s),x=>`<option value="${x.id}">${x.name}${x.type=="w"?" — جملة":""}</option>`)}</select></div></div>
  <label>التبويب</label><select id="ct"><option value="mfg">تصنيع</option><option value="sup">مشتريات</option></select>${pur?`<label>تُضاف إلى</label><select id="ds"><option value="wh">مخزن الصنف</option>${U(S.po,o=>`<option value="${o.id}">أمر إنتاج ${o.no}</option>`)}</select>`:""}
- <label>${t=="pur"?"مخزن الإضافة":"مخزن الصرف"}</label><select id="ty" onchange="fillIt()"><option value="0">المخزن الافتراضي للصنف</option>${U(S.wh,w=>`<option value="${w.id}" ${D.warehouseId==w.id?"selected":""}>${w.name}</option>`)}</select>
+ <label>${t=="pur"?"مخزن الإضافة":"مخزن الصرف"}</label><select id="ty" onchange="fillIt()"><option value="0">المخزن الافتراضي للصنف</option>${U(whTree(),w=>`<option value="${w.id}" ${D.warehouseId==w.id?"selected":""}>${whPath(w.id)}</option>`)}</select>
  <label>الصنف ${pur?"(اكتب اسم جديد لإضافته للمخزن تلقائيًا)":""}</label>${pur?`<input id="in" list="itl" placeholder="اسم الصنف: قماش جيرسي" onchange="unitSet()"><datalist id="itl"></datalist>`:`<select id="it" onchange="unitSet()"></select>`}
 
  <div class="row"><input id="un" list="units" placeholder="الوحدة: متر / كيلو / قطعة"><input id="bcd" placeholder="الباركود أو كود الصنف: TS001" onkeydown="if(event.key=='Enter')addBc()"><button class="g" onclick="addBc()">إضافة بالكود</button><button class="g" onclick="scanCam()">📷 مسح</button></div><div id="bcam"></div><p id="bmsg" class="mu"></p><div id="info"></div>
@@ -227,7 +350,7 @@ function docForm(t,p){p=p||{};D={t,lines:p.lines||[],img:p.img||"",edit:p.edit||
  ${rt?"":`<label>${s?"خصم مبيعات":"خصم مشتريات"} (في نهاية الفاتورة)</label><input id="dsc" type="number" placeholder="المبلغ: 100" value="${D.disc||""}" oninput="D.disc=+this.value||0;drawL()">`}
  <label>بيان الفاتورة</label><input id="dn" placeholder="ملاحظات على الفاتورة" value="${p.note||""}"><div class="row"><button onclick="saveDoc()">حفظ</button>${bk}</div>`);
  if(p.pid)$("#pt").value=p.pid;if(p.cat)$("#ct").value=p.cat;if(p.dest&&$("#ds"))$("#ds").value=p.dest;fillIt();drawL()}
-function fillIt(){const l=S.items;if($("#it"))$("#it").innerHTML=U(l,i=>`<option value="${i.id}">${i.name}</option>`);if($("#itl"))$("#itl").innerHTML=U(l,i=>`<option value="${i.name}">`);unitSet()}
+function fillIt(){const l=S.items;if($("#it"))$("#it").innerHTML=U(l,i=>`<option value="${i.id}">${i.name}</option>`);if($("#itl"))$("#itl").innerHTML=U(l,i=>`<option value="${i.name}">`);unitSet();enhanceFactorySelects()}
 function curIt(){if($("#it"))return{i:it_(+$("#it").value)};const n=$("#in").value.trim(),ty=+$("#ty").value;return{i:S.items.find(x=>x.name==n&&(!ty||x.wh==ty)),n}}
 function dp(i){const t=D.t,pid=+$("#pt").value,p=S.partners.find(x=>x.id==pid)||{},last=tt=>{const d=[...S.docs].reverse().find(d=>d.t==tt&&d.pid==pid&&d.lines.some(l=>l.iid==i.id));return d&&d.lines.find(l=>l.iid==i.id).price},k=p.type=="w"?"w":"r",tier=(k=="w"?i.wholesale:i.retail)||sug(i,k);return t=="sale"?tier:t=="sret"?(last("sale")??tier):t=="pret"?(last("pur")??i.buy):i.buy}
 const clr=ks=>ks.forEach(k=>{if($("#"+k))$("#"+k).value=""});
@@ -265,20 +388,21 @@ function resetStockFilters(){SF={wh:"",nm:"",b1:"",b2:"",q1:"",q2:""};render()}
 function vStock(){
  const x=SF,qty=i=>x.wh?stockAt(i,+x.wh):tq(i),value=i=>x.wh?stockValueAt(i,+x.wh):i.val;
  const l=S.items.filter(i=>(!x.wh||qty(i)!==0||i.wh==x.wh)&&(!x.nm||i.name.toLowerCase().includes(x.nm.toLowerCase())||String(i.sku||"").toLowerCase().includes(x.nm.toLowerCase()))&&(x.b1===""||i.buy>=+x.b1)&&(x.b2===""||i.buy<=+x.b2)&&(x.q1===""||qty(i)>=+x.q1)&&(x.q2===""||qty(i)<=+x.q2));
- const filters='<div class="card row"><select onchange="SF.wh=this.value;render()"><option value="">كل المخازن</option>'+U(S.wh,w=>'<option value="'+w.id+'" '+(SF.wh==w.id?'selected':'')+'>'+w.name+'</option>')+'</select><input placeholder="اسم الصنف أو الكود" value="'+(x.nm||'')+'" onchange="SF.nm=this.value;render()"><input type="number" placeholder="سعر الشراء من" value="'+x.b1+'" onchange="SF.b1=this.value;render()"><input type="number" placeholder="سعر الشراء إلى" value="'+x.b2+'" onchange="SF.b2=this.value;render()"><input type="number" placeholder="الكمية من" value="'+x.q1+'" onchange="SF.q1=this.value;render()"><input type="number" placeholder="الكمية إلى" value="'+x.q2+'" onchange="SF.q2=this.value;render()"><button class="g" onclick="resetStockFilters()">مسح الفلاتر</button></div>';
+ const filters='<div class="card row"><select onchange="SF.wh=this.value;render()"><option value="">كل المخازن</option>'+U(whTree(),w=>'<option value="'+w.id+'" '+(SF.wh==w.id?'selected':'')+'>'+whPath(w.id)+'</option>')+'</select><input placeholder="اسم الصنف أو الكود" value="'+(x.nm||'')+'" onchange="SF.nm=this.value;render()"><input type="number" placeholder="سعر الشراء من" value="'+x.b1+'" onchange="SF.b1=this.value;render()"><input type="number" placeholder="سعر الشراء إلى" value="'+x.b2+'" onchange="SF.b2=this.value;render()"><input type="number" placeholder="الكمية من" value="'+x.q1+'" onchange="SF.q1=this.value;render()"><input type="number" placeholder="الكمية إلى" value="'+x.q2+'" onchange="SF.q2=this.value;render()"><button class="g" onclick="resetStockFilters()">مسح الفلاتر</button></div>';
  const rows=U(l,i=>'<tr><td>'+img(i.img)+'</td><td>'+whn(i.wh)+'</td><td>'+(i.sku||'')+'</td><td>'+i.name+'</td><td>'+(i.model||'')+'</td><td>'+i.unit+'</td><td>'+f(i.buy)+'</td><td>'+qf(qty(i))+'</td><td><button class="g" onclick="showWarehouseBalances('+i.id+')">عرض الأرصدة</button></td><td>'+f(i.retail)+'</td><td>'+f(i.wholesale)+'</td><td>'+f(sug(i,"r"))+'</td><td>'+f(sug(i,"w"))+'</td><td>'+f(x.wh?(qty(i)>0?value(i)/qty(i):i.buy):av(i))+'</td><td><b>'+f(value(i))+'</b></td><td><button class="g" onclick="itemForm('+i.id+')">تحرير</button> <button class="g" onclick="drillItem('+i.id+')">عرض الحركات</button></td></tr>');
  return ph(N.stock,'<button class="g" onclick="recalc()">إعادة احتساب</button><button class="g" onclick="woForm()">هالك مخزون</button><button class="g" onclick="wForm()">إدارة المخازن</button><button class="new" onclick="itemForm(0)">+ صنف مخزون جديد</button>')+filters+'<table class="l"><tr><th>صورة</th><th>المخزن الافتراضي</th><th>الرمز</th><th>اسم الصنف</th><th>الموديل</th><th>الوحدة</th><th>سعر الشراء</th><th>الكمية في المخزن المحدد</th><th>توزيع المخزون</th><th>سعر القطاعي</th><th>سعر الجملة</th><th>مقترح قطاعي</th><th>مقترح جملة</th><th>متوسط التكلفة</th><th>إجمالي التكلفة</th><th></th></tr>'+rows+'<tr><th colspan="14">الإجمالي</th><th colspan="2">'+f(l.reduce((a,i)=>a+value(i),0))+'</th></tr></table>';
 }
 function recalc(){S.items.forEach(i=>{i.st={};i.val=0});S.mv.forEach(m=>{const i=it_(m.iid);if(i){i.st[m.v]=(i.st[m.v]||0)+m.q;i.val+=m.val}});sv();toast("تمت إعادة احتساب الأصناف (لا تتأثر الفواتير المنتهية)");render()}
-function itemForm(id){if(id&&!can("edit"))return;const i=id?it_(id):null;IM=i?i.img:"";sh(`<h3>${i?"تحرير صنف":"صنف مخزون جديد"}</h3><input id="a1" placeholder="اسم الصنف: قماش جيرسي" value="${i?i.name:""}"><input id="a8" placeholder="الموديل: Tommy 2026" value="${i?i.model||"":""}"><div class="row"><input id="a2" dir="ltr" placeholder="الرمز: FB001" value="${i?i.sku:""}"><input id="a9" list="units" placeholder="الوحدة: متر" value="${i?i.unit:"قطعة"}"></div><label>النوع (المخزن الفرعي)</label><select id="a0">${U(S.wh,w=>`<option value="${w.id}" ${i&&i.wh==w.id?"selected":""}>${w.name}</option>`)}</select><div class="row"><input id="a3" type="number" placeholder="سعر الشراء: 90" value="${i?i.buy:""}"><input id="a4" type="number" placeholder="سعر القطاعي: 250" value="${i?i.retail:""}"><input id="a5" type="number" placeholder="سعر الجملة: 190" value="${i?i.wholesale:""}"></div><div class="row"><button class="g" onclick="$('#a4').value=Math.round(+$('#a3').value*(1+S.pct.r/100)*100)/100;$('#a5').value=Math.round(+$('#a3').value*(1+S.pct.w/100)*100)/100">اقتراح السعر (قطاعي ${S.pct.r}% / جملة ${S.pct.w}%)</button></div>${i?"":`<input id="a6" type="number" placeholder="رصيد افتتاحي بالوحدة: 100">`}<label>صورة الموديل</label><input type="file" accept="image/*" onchange="pick(this,v=>IM=v)">${IM?`<img src="${IM}" width="60">`:""}<datalist id="units"><option>متر</option><option>كيلو</option><option>توب</option><option>قطعة</option></datalist><div class="row"><button onclick="saveItem(${id||0})">حفظ</button>${bk}</div>`)}
+function itemForm(id){if(id&&!can("edit"))return;const i=id?it_(id):null;IM=i?i.img:"";sh(`<h3>${i?"تحرير صنف":"صنف مخزون جديد"}</h3><input id="a1" placeholder="اسم الصنف: قماش جيرسي" value="${i?i.name:""}"><input id="a8" placeholder="الموديل: Tommy 2026" value="${i?i.model||"":""}"><div class="row"><input id="a2" dir="ltr" placeholder="الرمز: FB001" value="${i?i.sku:""}"><input id="a9" list="units" placeholder="الوحدة: متر" value="${i?i.unit:"قطعة"}"></div><label>النوع (المخزن الفرعي)</label><select id="a0">${U(whTree(),w=>`<option value="${w.id}" ${i&&i.wh==w.id?"selected":""}>${whPath(w.id)}</option>`)}</select><div class="row"><input id="a3" type="number" placeholder="سعر الشراء: 90" value="${i?i.buy:""}"><input id="a4" type="number" placeholder="سعر القطاعي: 250" value="${i?i.retail:""}"><input id="a5" type="number" placeholder="سعر الجملة: 190" value="${i?i.wholesale:""}"></div><div class="row"><button class="g" onclick="$('#a4').value=Math.round(+$('#a3').value*(1+S.pct.r/100)*100)/100;$('#a5').value=Math.round(+$('#a3').value*(1+S.pct.w/100)*100)/100">اقتراح السعر (قطاعي ${S.pct.r}% / جملة ${S.pct.w}%)</button></div>${i?"":`<input id="a6" type="number" placeholder="رصيد افتتاحي بالوحدة: 100">`}<label>صورة الموديل</label><input type="file" accept="image/*" onchange="pick(this,v=>IM=v)">${IM?`<img src="${IM}" width="60">`:""}<datalist id="units"><option>متر</option><option>كيلو</option><option>توب</option><option>قطعة</option></datalist><div class="row"><button onclick="saveItem(${id||0})">حفظ</button>${bk}</div>`)}
 function saveItem(id){if(id&&!can("edit"))return;const n=$("#a1").value.trim();if(!n)return;const o={name:n,sku:$("#a2").value.trim().replace(/[^\x20-\x7e]/g,""),unit:$("#a9").value||"قطعة",model:$("#a8")?$("#a8").value.trim():"",wh:+$("#a0").value,buy:+$("#a3").value||0,retail:+$("#a4").value||0,wholesale:+$("#a5").value||0,img:IM};
  if(id){const current=it_(id);if(!o.sku)o.sku=current.sku||"IT"+Number(id).toString(36).toUpperCase();Object.assign(current,o)}else{const itemId=uid();if(!o.sku)o.sku="IT"+itemId.toString(36).toUpperCase();const i={id:itemId,cloudId:String(itemId),...o,st:{},val:0};S.items.push(i);const q=+$("#a6").value||0;if(q){const c=q*o.buy;stk(td(),i,"-",q,c,"رصيد افتتاحي",0,i.id,"je",o.wh);post(td(),"OP-"+i.id,"رصيد افتتاحي صنف",[{a:ak("inv"),dr:c},{a:ak("cap"),cr:c}],"je",i.id)}}sv();cl()}
-function wForm(){sh(`<h3>المخازن ومواقع التخزين</h3><p class="muted">كل مخزن له رصيد مستقل. تغيير الاسم لا يغيّر أرصدة المخزون أو الحركات التاريخية.</p>${U(S.wh,w=>`<div class="row sp">📁 ${w.name} <button class="g" onclick="editWh(${w.id})">تعديل الاسم</button></div>`)}<input id="wn" placeholder="مخزن فرعي جديد: إكسسوارات"><div class="row"><button onclick="addWh()">إضافة</button>${bk}</div>`)}
-function editWh(id){if(!can("edit"))return;const w=S.wh.find(x=>x.id==id);if(!w)return;sh(`<h3>تعديل اسم المخزن الفرعي</h3><input id="wn2" value="${w.name}" placeholder="اسم المخزن"><div class="row"><button onclick="saveWh(${id})">حفظ</button>${bk}</div>`)}
-function saveWh(id){if(!can("edit"))return;const w=S.wh.find(x=>x.id==id),n=$("#wn2").value.trim();if(!w||!n)return;if(S.wh.some(x=>x.id!=id&&x.name==n)){toast("اسم المخزن موجود بالفعل");return}if(!guard())return;w.name=n;sv();toast("تم تعديل اسم المخزن");cl()}
-function addWh(){const n=$("#wn").value.trim();if(!n)return;if(S.wh.some(w=>w.name==n)){toast("المخزن موجود بالفعل");return}if(!guard())return;S.wh.push({id:uid(),name:n});sv();cl()}
-function woForm(){sh(`<h3>هالك مخزون</h3><label>الصنف</label><select id="wi" onchange="wvr();if($("#ww"))$("#ww").value=it_(+this.value)?.wh||S.wh[0]?.id">${U(S.items,i=>`<option value="${i.id}">${i.name}</option>`)}</select><select id="wv"></select><label>المخزن</label><select id="ww">${U(S.wh,w=>`<option value="${w.id}">${w.name}</option>`)}</select><input id="wq" type="number" placeholder="الكمية الهالكة: 5"><input id="wd" placeholder="السبب: قص خاطئ"><input id="wdt" type="date" value="${td()}"><label>تحميل الهالك على</label><select id="wp"><option value="0">حساب هالك مخزن (مصروف)</option>${U(S.po.filter(o=>o.st<2),o=>`<option value="${o.id}">أمر إنتاج ${o.no} (يُضاف لتكلفته)</option>`)}</select><div class="row"><button onclick="saveWo()">حفظ</button>${bk}</div>`);wvr()}
-const wvr=()=>$("#wv").innerHTML=U(Object.keys(it_(+$("#wi").value).st),k=>`<option>${k}</option>`);
+function warehouseParentOptions(selected,exclude=[]){const blocked=new Set(exclude.map(String));return '<option value="">بدون مخزن رئيسي</option>'+U(whTree().filter(w=>!blocked.has(String(w.id))),w=>'<option value="'+w.id+'" '+(String(selected||"")===String(w.id)?"selected":"")+'>'+('　'.repeat(w._depth))+(w._depth?'↳ ':'')+whPath(w.id)+'</option>')}
+function wForm(){sh(`<h3>المخازن ومواقع التخزين</h3><p class="muted">يمكن إنشاء مخازن رئيسية وفرعية متداخلة. لكل موقع رصيد مستقل، وتغيير الهيكل لا يغيّر الحركات التاريخية.</p>${U(whTree(),w=>`<div class="row sp" style="padding-inline-start:${w._depth*18}px"> ${w._depth?'↳':'📁'} ${whPath(w.id)} <button class="g" onclick="editWh(${w.id})">تعديل</button></div>`)}<label>اسم المخزن الجديد</label><input id="wn" placeholder="مثال: أقمشة / سوست / أزرار"><label>يتبع مخزنًا رئيسيًا</label><select id="wnp">${warehouseParentOptions(null)}</select><div class="row"><button onclick="addWh()">إضافة المخزن</button>${bk}</div>`)}
+function editWh(id){if(!can("edit"))return;const w=S.wh.find(x=>x.id==id);if(!w)return;const blocked=[id,...whDescendants(id)];sh(`<h3>تعديل المخزن</h3><label>اسم المخزن</label><input id="wn2" value="${w.name}" placeholder="اسم المخزن"><label>المخزن الرئيسي</label><select id="wnp2">${warehouseParentOptions(w.parentId,blocked)}</select><div class="row"><button onclick="saveWh(${id})">حفظ</button>${bk}</div>`)}
+function saveWh(id){if(!can("edit"))return;const w=S.wh.find(x=>x.id==id),n=$("#wn2").value.trim(),parentId=$("#wnp2").value?Number($("#wnp2").value):null;if(!w||!n)return;if(parentId===id||whDescendants(id).some(x=>String(x)===String(parentId))){toast("لا يمكن وضع المخزن داخل نفسه أو داخل أحد مخازنه الفرعية");return}if(S.wh.some(x=>x.id!=id&&String(x.parentId||"")===String(parentId||"")&&x.name===n)){toast("يوجد مخزن بنفس الاسم تحت نفس المخزن الرئيسي");return}if(!guard())return;w.name=n;w.parentId=parentId;sv();toast("تم حفظ المخزن");cl()}
+function addWh(){if(!can("edit"))return;const n=$("#wn").value.trim(),parentId=$("#wnp").value?Number($("#wnp").value):null;if(!n)return;if(S.wh.some(w=>String(w.parentId||"")===String(parentId||"")&&w.name===n)){toast("يوجد مخزن بنفس الاسم تحت نفس المخزن الرئيسي");return}if(!guard())return;S.wh.push({id:uid(),name:n,parentId});sv();cl()}
+function woForm(){sh(`<h3>هالك مخزون</h3><label>الصنف</label><select id="wi" onchange="wvr();if($("#ww"))$("#ww").value=it_(+this.value)?.wh||S.wh[0]?.id">${U(S.items,i=>`<option value="${i.id}">${i.name}</option>`)}</select><select id="wv"></select><label>المخزن</label><select id="ww">${U(whTree(),w=>`<option value="${w.id}">${whPath(w.id)}</option>`)}</select><input id="wq" type="number" placeholder="الكمية الهالكة: 5"><input id="wd" placeholder="السبب: قص خاطئ"><input id="wdt" type="date" value="${td()}"><label>تحميل الهالك على</label><select id="wp"><option value="0">حساب هالك مخزن (مصروف)</option>${U(S.po.filter(o=>o.st<2),o=>`<option value="${o.id}">أمر إنتاج ${o.no} (يُضاف لتكلفته)</option>`)}</select><div class="row"><button onclick="saveWo()">حفظ</button>${bk}</div>`);wvr()}
+const wvr=()=>{$("#wv").innerHTML=U(Object.keys(it_(+$("#wi").value).st),k=>`<option>${k}</option>`);enhanceFactorySelects()};
 function saveWo(){const i=it_(+$("#wi").value),q=+$("#wq").value,d=$("#wdt").value||td(),po=+$("#wp").value,warehouseId=+$("#ww").value||i?.wh;if(!i||!q)return;const c=avAt(i,warehouseId)*q,id=uid(),ref="WO-"+pad(S.wo.length+1),o=po?S.po.find(x=>x.id==po):null;stk(d,i,$("#wv").value,-q,-c,"هالك "+ref+(o?" على "+o.no:"")+": "+$("#wd").value,0,id,"wo",warehouseId);post(d,ref,"هالك مخزن "+$("#wd").value,[{a:o?ak("wip"):ak("waste"),dr:c},{a:ak("inv"),cr:c}],"wo",id);if(o)o.wc=(o.wc||0)+c;S.wo.push({id,ts:Date.now(),ref,c,desc:$("#wd").value,po:po||0});sv();cl()}
 
 /* ===== production orders ===== */
@@ -286,35 +410,74 @@ const subsOf=()=>Object.entries(PS.grid).filter(([k,q])=>q>0).map(([v,qty])=>({v
 function editPO(id){if(!can("edit"))return;const o=S.po.find(x=>x.id==id);if(!o)return;if(o.manager_read_only){toast("أوامر الإنتاج المستوردة محفوظة كسجل تاريخي ولا يمكن تعديلها");return}poForm(o)}
 function poForm(pre){pre=pre||{};const fw=FW();PS={mats:(pre.mats||[]).map(m=>({iid:m.iid,qty:m.qty})),x:(pre.x||[]).map(x=>({...x})),grid:{},cs:[],zs:[],edit:pre.id||0};(pre.subs||[]).forEach(s=>{PS.grid[s.v]=s.qty;const[c,z]=s.v=="-"?["",""]:s.v.split(" / ");if(c&&!PS.cs.includes(c))PS.cs.push(c);if(z&&!PS.zs.includes(z))PS.zs.push(z)});
  sh(`<h3>أمر إنتاج ${pre.id?"— تعديل "+pre.no:"جديد"}</h3>${pre.id&&pre.st>0?`<div class="card">⚠️ الأمر مبدوء/مسلّم: الحفظ هيعكس صرف الخامات والتسليم ويرجّع الأمر لحالة «جديد».</div>`:""}<div class="row"><select id="cm" onchange="$('#cd').style.display=this.value=='m'?'block':'none'"><option value="a">كود تلقائي</option><option value="m">كود يدوي</option></select><input id="cd" placeholder="الكود: PO-0010" style="display:none"></div><label>البيان</label><input id="pdsc" placeholder="مثال: جاكيت Tommy" value="${pre.desc||""}">
- <label>الصنف منتهي الصنع + المخزن الفرعي للاستلام</label><div class="row"><input id="pin" list="pil" placeholder="اسم الصنف (جديد أو موجود): جاكيت وتربروف" value="${pre.iname||""}"><select id="pwh">${U(S.wh,w=>`<option value="${w.id}" ${(pre.wh||fw)==w.id?"selected":""}>${w.name}</option>`)}</select></div><datalist id="pil">${U(S.items.filter(i=>i.wh==fw),i=>`<option value="${i.name}">`)}</datalist>
+ <label>الصنف منتهي الصنع + المخزن الفرعي للاستلام</label><div class="row"><input id="pin" list="pil" placeholder="اسم الصنف (جديد أو موجود): جاكيت وتربروف" value="${pre.iname||""}"><select id="pwh">${U(whTree(),w=>`<option value="${w.id}" ${(pre.wh||fw)==w.id?"selected":""}>${whPath(w.id)}</option>`)}</select></div><datalist id="pil">${U(S.items.filter(i=>i.wh==fw),i=>`<option value="${i.name}">`)}</datalist>
  <label>الألوان والمقاسات وعدد القطع (اضغط «تطبيق» ليتوزع العدد على كل لون ومقاس)</label><div class="row"><input id="pcs" placeholder="الألوان: أحمر، أسود، أبيض"><input id="pzs" placeholder="المقاسات: S, M, L, XL"><input id="pcn" type="number" placeholder="عدد القطع لكل خلية: 10"><button onclick="applyG()">تطبيق</button></div><div id="pg"></div>
- ${U(S.wh.filter(w=>w.id!=fw),w=>`<label>فاتورة مواد التصنيع — ${w.name}</label><div class="row"><select id="ms${w.id}">${U(S.items.filter(i=>i.wh==w.id),i=>`<option value="${i.id}">${i.name} (${i.unit})</option>`)}</select><input id="mq${w.id}" type="number" placeholder="الكمية بوحدة الصنف: 463"><button onclick="addM(${w.id})">+</button></div>`)}
+ ${U(whTree().filter(w=>w.id!=fw),w=>`<label>فاتورة مواد التصنيع — ${w.name}</label><div class="row"><select id="ms${w.id}">${U(S.items.filter(i=>i.wh==w.id),i=>`<option value="${i.id}">${i.name} (${i.unit})</option>`)}</select><input id="mq${w.id}" type="number" placeholder="الكمية بوحدة الصنف: 463"><button onclick="addM(${w.id})">+</button></div>`)}
  <label>إضافة تكلفة غير مخزونة (تطريز / شحن / مصروفات تصنيع ...)</label><div class="row"><select id="xa">${U(S.accts.filter(a=>a.t=="X"),a=>`<option value="${a.id}">${a.name}</option>`)}</select><input id="xn" placeholder="البيان: تطريز شعار"><input id="xm" type="number" placeholder="المبلغ: 5400"><button onclick="addX()">+</button></div><div id="pl"></div><div class="row"><button onclick="savePO()">حفظ</button>${bk}</div>`);drawP()}
 const sp_=s=>s.split(/[,،\s]+/).map(x=>x.trim()).filter(Boolean);
 function applyG(){const c=sp_($("#pcs").value),z=sp_($("#pzs").value),n=+$("#pcn").value||0;c.forEach(x=>{if(!PS.cs.includes(x))PS.cs.push(x)});z.forEach(x=>{if(!PS.zs.includes(x))PS.zs.push(x)});const cs=PS.cs.length?PS.cs:[""],zs=PS.zs.length?PS.zs:[""];cs.forEach(a=>zs.forEach(b=>{PS.grid[vk(a,b)]=n}));clr(["pcs","pzs","pcn"]);drawP()}
 function setG(e){PS.grid[e.dataset.k]=+e.value||0;$("#gt").textContent=subsOf().reduce((a,s)=>a+s.qty,0)}
 function addM(w){const q=+$("#mq"+w).value;if(!q)return;PS.mats.push({iid:+$("#ms"+w).value,qty:q});$("#mq"+w).value="";drawP()}
 function addX(){const m=+$("#xm").value;if(!m)return;PS.x.push({a:+$("#xa").value,amt:m,note:$("#xn").value.trim()});clr(["xm","xn"]);drawP()}
+function setMatQty(index,value){if(!PS.mats[index])return;PS.mats[index].qty=Math.max(0,Number(value)||0);drawP()}
+if(typeof location!=="undefined"&&["127.0.0.1","localhost"].includes(location.hostname)){
+ globalThis.__factoryTestHooks={
+  firstItem:()=>{const item=S.items[0];return item?{id:item.id,name:item.name,warehouse:whn(item.wh)}:null},
+  renderProductionMaterial:qty=>{const item=S.items[0];if(!item)return false;PS.mats=[{iid:item.id,qty}];drawP();return true},
+  materialQty:index=>PS.mats[index]?.qty,
+  openProductionForm:()=>{go('prod');poForm()},
+  openEmployeeForm:()=>{go('emp');eForm()},
+  openCustomerScreen:()=>go('cust'),
+  closeModal:()=>cl(),
+  applyPermissionTemplate:key=>{applyEmployeePermissionTemplate(key);return [...document.querySelectorAll('.pm:checked')].map(x=>x.value)},
+  canFor:(screen,permission,profile)=>{const previous=globalThis.__factoryAuthProfile,previousTab=tab;globalThis.__factoryAuthProfile=profile;tab=screen;const result=can(permission);globalThis.__factoryAuthProfile=previous;tab=previousTab;return result},
+  screenPermissions:()=>CLOUD_SCREEN_PERMISSIONS
+ };
+}
 function drawP(){const cs=PS.cs.length?PS.cs:[""],zs=PS.zs.length?PS.zs:[""];$("#pg").innerHTML=`<table><tr><th>اللون \\ المقاس</th>${U(zs,z=>`<th>${z||"الكمية"}</th>`)}</tr>${U(cs,c=>`<tr><th>${c||"—"}</th>${U(zs,z=>`<td><input type="number" data-k="${vk(c,z)}" value="${PS.grid[vk(c,z)]||""}" placeholder="0" style="margin:0;width:70px" onchange="setG(this)"></td>`)}</tr>`)}</table><b>إجمالي القطع: <span id="gt">${subsOf().reduce((a,s)=>a+s.qty,0)}</span></b>`;
- $("#pl").innerHTML=`<div class="card"><b>المواد</b>${U(PS.mats,(m,i)=>`<div class="row sp"><span>${it_(m.iid).name}: ${qf(m.qty)} ${it_(m.iid).unit} ≈ ${f(av(it_(m.iid))*m.qty)}</span><button class="d" onclick="PS.mats.splice(${i},1);drawP()">✕</button></div>`)}<br><b>تكاليف غير مخزونة</b>${U(PS.x,(x,i)=>`<div class="row sp"><span>${an(x.a)} — ${x.note||""}: ${f(x.amt)}</span><button class="d" onclick="PS.x.splice(${i},1);drawP()">✕</button></div>`)}<br><b>الإجمالي التقديري: ${f(PS.mats.reduce((a,m)=>a+av(it_(m.iid))*m.qty,0)+PS.x.reduce((a,x)=>a+x.amt,0))}</b></div>`}
+ $("#pl").innerHTML=`<div class="card"><b>المواد (يمكن تعديل الكمية أو حذف السطر)</b>${U(PS.mats,(m,i)=>`<div class="row sp production-material-row"><span>${it_(m.iid).name} — ${whn(it_(m.iid).wh)} (${it_(m.iid).unit})</span><input aria-label="كمية ${it_(m.iid).name}" type="number" min="0" step="0.001" data-mat-index="${i}" value="${m.qty}" style="width:105px;margin:0" onchange="setMatQty(${i},this.value)"><span>تكلفة تقديرية: ${f(av(it_(m.iid))*m.qty)}</span><button class="d" onclick="PS.mats.splice(${i},1);drawP()">✕</button></div>`)}<br><b>تكاليف غير مخزونة</b>${U(PS.x,(x,i)=>`<div class="row sp"><span>${an(x.a)} — ${x.note||""}: ${f(x.amt)}</span><button class="d" onclick="PS.x.splice(${i},1);drawP()">✕</button></div>`)}<br><b>الإجمالي التقديري: ${f(PS.mats.reduce((a,m)=>a+av(it_(m.iid))*m.qty,0)+PS.x.reduce((a,x)=>a+x.amt,0))}</b></div>`}
 function adv(id){const o=S.po.find(x=>x.id==id),d=td(),Ls=[];o.matCost=0;o.mats.forEach(m=>{const i=it_(m.iid),v=bestV(i),c=avAt(i,i.wh)*m.qty;m.cost=c;o.matCost+=c;stk(d,i,v,-m.qty,-c,"صرف خامات "+o.no,0,o.id,"po",i.wh);Ls.push({a:ak("inv"),cr:c})});o.x.forEach(x=>Ls.push({a:x.a,cr:x.amt,desc:x.note}));Ls.push({a:ak("wip"),dr:o.matCost+o.x.reduce((a,x)=>a+x.amt,0)});post(d,o.no,"بدء أمر إنتاج",Ls,"po",o.id,o.ts);o.st=1;sv();render()}
 function xForm(id){sh(`<h3>إضافة تكلفة غير مخزونة</h3><select id="xa">${U(S.accts.filter(a=>a.t=="X"),a=>`<option value="${a.id}">${a.name}</option>`)}</select><input id="xn" placeholder="البيان: شحن للمصبغة"><input id="xm" type="number" placeholder="المبلغ: 700"><div class="row"><button onclick="saveX(${id})">حفظ</button>${bk}</div>`)}
 function saveX(id){const o=S.po.find(x=>x.id==id),a=+$("#xa").value,m=+$("#xm").value;if(!m)return;o.x.push({a,amt:m,note:$("#xn").value.trim()});if(o.st>=1)post(td(),o.no,"تكلفة إضافية",[{a:ak("wip"),dr:m},{a,cr:m,desc:$("#xn").value.trim()}],"po",o.id);sv();cl()}
 /* ===== employees ===== */
 function vEmp(){return ph(N.emp,`<button class="new" onclick="eForm()">+ موظف جديد</button>`)+`<table class="l"><tr><th>البطاقة</th><th>الاسم</th><th>التليفون</th><th>المحافظة / المدينة</th><th>العنوان</th><th>الصلاحيات</th><th>إجراءات</th></tr>${U(S.emp,e=>`<tr><td>${img(e.img)}</td><td>${e.name}</td><td>${e.p1}<br>${e.p2}</td><td>${e.gov||""} ${e.city||""}</td><td>${e.adr||""}</td><td>${e.perm.map(p=>N[p]||(p=="edit"?"تعديل بعد الحفظ":"حذف الحركات")).join("، ")}</td><td>${can("edit")?`<button class="g" onclick="eForm(${e.id})">تعديل</button>`:""}</td></tr>`)||'<tr><td colspan="7" class="mu">لا يوجد موظفون</td></tr>'}`}
+const EMP_PERMISSION_TEMPLATES={
+ sales:["cust","sale","sret","rc","edit"],
+ purchasing:["supp","pur","pret","stock","edit"],
+ warehouse:["stock","edit"],
+ production:["prod","stock","edit"],
+ accountant:["bank","rc","py","coa","je","rep","tl","edit"],
+ viewer:["rep","tl"],
+ operations:["cust","supp","sale","sret","pur","pret","stock","prod","bank","rc","py","rep","tl","edit"]
+};
+function applyEmployeePermissionTemplate(key){
+ const permissions=EMP_PERMISSION_TEMPLATES[key];if(!permissions)return;
+ document.querySelectorAll(".pm").forEach(box=>box.checked=permissions.includes(box.value));
+ const message=$("#er");if(message)message.textContent="تم تطبيق القالب. راجع الصلاحيات ثم اضغط حفظ.";
+}
+function employeeCloudPermissions(selected){
+ return {
+  invoices:selected.some(x=>["sale","sret","pur","pret","rc","py"].includes(x)),
+  inventory:selected.includes("stock"),customers:selected.includes("cust"),suppliers:selected.includes("supp"),
+  production:selected.includes("prod"),reports:selected.some(x=>["rep","tl","ai"].includes(x)),
+  settings:selected.some(x=>["set","coa","je","bank"].includes(x)),
+  edit:selected.includes("edit"),delete:selected.includes("del")&&selected.includes("edit")
+ };
+}
 function eForm(id){
  if(id&&!can("edit"))return;const e=id?S.emp.find(x=>x.id==id):null;if(id&&!e)return;idImg=e?e.img||"":"";
  const escE=v=>String(v||"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/"/g,"&quot;");
  let h="<h3>"+(e?"تعديل بيانات موظف":"تعيين موظف")+"</h3><input id=\"e1\" placeholder=\"اسم الموظف\" value=\""+escE(e?.name)+"\"><input id=\"e2\" type=\"tel\" dir=\"ltr\" placeholder=\"رقم التليفون 1 (اختياري)\" value=\""+escE(e?.p1)+"\"><input id=\"e3\" type=\"tel\" dir=\"ltr\" placeholder=\"رقم التليفون 2 (اختياري)\" value=\""+escE(e?.p2)+"\">"+addrF(e||{})+"<label>صورة البطاقة (اختياري)</label><input type=\"file\" accept=\"image/*\" onchange=\"pick(this,v=>idImg=v)\">";
  if(!e)h+="<div class=\"card\"><label><input type=\"checkbox\" id=\"e-account\" onchange=\"toggleEmployeeAccount()\"> إنشاء حساب دخول للموظف</label><div id=\"e-account-fields\" hidden><label>اسم المستخدم (إجباري عند إنشاء الحساب)</label><input id=\"e-username\" dir=\"ltr\" placeholder=\"مطلوب\"><label>كلمة المرور الافتراضية</label><input id=\"e-default-password\" type=\"text\" dir=\"ltr\" value=\"password\"><small class=\"mu\">سيُطلب من الموظف تغييرها عند أول دخول.</small></div></div>";
- h+="<div class=\"row\"><b>الصلاحيات</b><button type=\"button\" class=\"g\" onclick=\"toggleAllEmployeePermissions(this)\">تحديد الكل</button></div>"+U(T,t=>"<label style=\"display:block\"><input type=\"checkbox\" class=\"pm\" value=\""+t[0]+"\" "+(e&&e.perm.includes(t[0])?"checked":"")+"> "+t[2]+"</label>")+"<label><input type=\"checkbox\" class=\"pm\" value=\"edit\" "+(e&&e.perm.includes("edit")?"checked":"")+"> تعديل المستندات</label><label><input type=\"checkbox\" class=\"pm\" value=\"del\" "+(e&&e.perm.includes("del")?"checked":"")+"> حذف الحركات</label><p id=\"er\" class=\"mu\"></p><div class=\"row\"><button onclick=\"saveE("+(id||0)+")\">حفظ</button>"+bk+"</div>";sh(h);if(e)gvChg(e.city||"");
+ h+="<label>قالب جاهز للصلاحيات</label><select id=\"e-template\" onchange=\"applyEmployeePermissionTemplate(this.value)\"><option value=\"\">اختر قالبًا أو خصص يدويًا</option><option value=\"sales\">مبيعات</option><option value=\"purchasing\">مشتريات</option><option value=\"warehouse\">مخازن</option><option value=\"production\">إنتاج</option><option value=\"accountant\">محاسب</option><option value=\"viewer\">مشاهدة فقط</option><option value=\"operations\">إدارة تشغيل</option></select><div class=\"row\"><b>الصلاحيات</b><button type=\"button\" class=\"g\" onclick=\"toggleAllEmployeePermissions(this)\">تحديد الكل</button></div>"+U(T,t=>"<label style=\"display:block\"><input type=\"checkbox\" class=\"pm\" value=\""+t[0]+"\" "+(e&&e.perm.includes(t[0])?"checked":"")+"> "+t[2]+"</label>")+"<label><input type=\"checkbox\" class=\"pm\" value=\"edit\" "+(e&&e.perm.includes("edit")?"checked":"")+"> تعديل المستندات</label><label><input type=\"checkbox\" class=\"pm\" value=\"del\" "+(e&&e.perm.includes("del")?"checked":"")+"> حذف الحركات</label><p id=\"er\" class=\"mu\"></p><div class=\"row\"><button onclick=\"saveE("+(id||0)+")\">حفظ</button>"+bk+"</div>";sh(h);if(e)gvChg(e.city||"");
 }
 function toggleEmployeeAccount(){const f=$g("#e-account-fields"),enabled=!!$g("#e-account")?.checked;if(f)f.hidden=!enabled;const u=$g("#e-username");if(u){u.required=enabled;u.setAttribute("aria-required",String(enabled));if(!enabled)u.value="";}}
 function toggleAllEmployeePermissions(btn){const boxes=[...document.querySelectorAll(".pm")],all=boxes.length>0&&boxes.every(x=>x.checked);boxes.forEach(x=>x.checked=!all);if(btn)btn.textContent=all?"تحديد الكل":"إلغاء تحديد الكل";}
 async function saveE(id){if(id&&!can("edit"))return;const n=$("#e1").value.trim(),a=$("#e2").value.trim(),b=$("#e3").value.trim(),old=id?S.emp.find(x=>x.id==id):null;if(!n){$("#er").textContent="اكتب اسم الموظف على الأقل";return;}if(!guard())return;
  const data={name:n,p1:a,p2:b,img:idImg,...rdA(),perm:[...document.querySelectorAll(".pm:checked")].map(x=>x.value)};let authUserId=old?.authUserId||null,createdUsername="";
- if(!id&&$("#e-account")?.checked){const username=$("#e-username").value.trim().toLowerCase(),password=$("#e-default-password").value;if(!username){$("#er").textContent="اسم المستخدم إجباري عند إنشاء حساب الدخول";return;}if(S.emp.some(x=>String(x.username||"").toLowerCase()===username)){$("#er").textContent="اسم المستخدم مستخدم بالفعل؛ اختر اسمًا آخر";return;}if(!/^[a-z0-9._-]{3,40}$/.test(username)){$("#er").textContent="اسم المستخدم من 3 إلى 40 حرفًا إنجليزيًا أو رقمًا أو . _ -";return;}if(password.length<8){$("#er").textContent="كلمة المرور لا تقل عن 8 أحرف";return;}const selected=data.perm;const permissions={invoices:selected.some(x=>["sale","sret","pur","pret","rc","py"].includes(x)),inventory:selected.includes("stock"),customers:selected.includes("cust"),suppliers:selected.includes("supp"),production:selected.includes("prod"),reports:selected.includes("rep")||selected.includes("tl")||selected.includes("ai"),settings:selected.some(x=>["set","coa","je","bank","emp"].includes(x))};
+ if(!id&&$("#e-account")?.checked){const username=$("#e-username").value.trim().toLowerCase(),password=$("#e-default-password").value;if(!username){$("#er").textContent="اسم المستخدم إجباري عند إنشاء حساب الدخول";return;}if(S.emp.some(x=>String(x.username||"").toLowerCase()===username)){$("#er").textContent="اسم المستخدم مستخدم بالفعل؛ اختر اسمًا آخر";return;}if(!/^[a-z0-9._-]{3,40}$/.test(username)){$("#er").textContent="اسم المستخدم من 3 إلى 40 حرفًا إنجليزيًا أو رقمًا أو . _ -";return;}if(password.length<8){$("#er").textContent="كلمة المرور لا تقل عن 8 أحرف";return;}const selected=data.perm;const permissions=employeeCloudPermissions(selected);
  try{const {supabase}=await import("./supabase.js");const {data:created,error}=await supabase.functions.invoke("create-employee-account",{body:{username,full_name:n,password,permissions}});if(error||created?.success!==true)throw new Error(created?.error||error?.message||"تعذر إنشاء الحساب");authUserId=created.user_id;createdUsername=username;}catch(error){$("#er").textContent=error.message||"فشل إنشاء الحساب";return;}}
+ if(old?.authUserId){try{const {supabase}=await import("./supabase.js");const {error}=await supabase.rpc("update_employee_permissions",{p_employee_id:old.authUserId,p_permissions:employeeCloudPermissions(data.perm)});if(error)throw error;}catch(error){$("#er").textContent=error.message||"تعذر تحديث صلاحيات حساب الموظف";return;}}
  if(old)Object.assign(old,data,{authUserId});else S.emp.push({id:uid(),...data,...(authUserId?{authUserId,username:createdUsername}:{})});sv();nav();toast(old?"تم تعديل بيانات الموظف":createdUsername?"تم حفظ الموظف وإنشاء حساب الدخول: "+createdUsername:"تم حفظ الموظف");cl();
 }
 /* ===== settings ===== */
@@ -530,7 +693,7 @@ function codeFor(iid,v){let c=S.codes.find(x=>x.iid==iid&&x.v==v);if(c)return c.
 const codeLook=(iid,v)=>{const c=S.codes.find(x=>x.iid==iid&&x.v==v);return c?c.code:"(يُنشأ عند أول حركة)"},codeOf=l=>{const c=S.codes.find(x=>x.iid==l.iid&&x.v==l.v);return c?c.code:""};
 function showWarehouseBalances(id){
  const i=it_(id);if(!i)return;
- const rows=U(S.wh,w=>{const q=stockAt(i,w.id),v=stockValueAt(i,w.id);return '<tr><td>'+w.name+'</td><td>'+qf(q)+'</td><td>'+f(v)+'</td><td>'+f(q>0?v/q:i.buy)+'</td></tr>'});
+ const rows=U(whTree(),w=>{const q=stockAt(i,w.id),v=stockValueAt(i,w.id);return '<tr><td>'+whPath(w.id)+'</td><td>'+qf(q)+'</td><td>'+f(v)+'</td><td>'+f(q>0?v/q:i.buy)+'</td></tr>'});
  sh('<h3>توزيع مخزون — '+i.name+'</h3><table class="l"><tr><th>المخزن</th><th>الكمية</th><th>القيمة التقديرية</th><th>متوسط التكلفة</th></tr>'+rows+'<tr><th>الإجمالي</th><th>'+qf(tq(i))+'</th><th>'+f(i.val)+'</th><th>'+f(av(i))+'</th></tr></table>'+bk);
 }
 function stk(d,i,v,q,val,ref,pid,rid,src,wh){codeFor(i.id,v);i.st=i.st||{};i.st[v]=(i.st[v]||0)+q;i.val=(+i.val||0)+val;const warehouseId=Number(wh||i.wh||S.wh[0]?.id||0);S.mv.push({d,ts:Date.now(),iid:i.id,v,q,val,ref,pid:pid||0,rid,src,wh:warehouseId,warehouseName:whn(warehouseId)})}
@@ -713,7 +876,7 @@ function vProd(){const k="prod";return ph(N.prod,`<button class="new" onclick="p
 function poLb(id){const o=S.po.find(x=>x.id==id),it=ensureItem(pnm(o),o.wh||FW(),"قطعة");labels(o.subs.map(s=>{const q=o.st==2?((o.rec.find(r=>r.v==s.v)||{}).qty||0):s.qty;return {c:codeFor(it.id,s.v),t:it.name,s:`${it.model?it.model+" · ":""}${s.v!="-"?s.v+" · ":""}${qf(q)} قطعة ${o.st==2?"مستلمة":"مخططة"}`}}))}
 function savePO(){if(!CUR||CUR.kind!="page")return;if(+$("#xm").value)addX();const m=$("#cm").value=="m",c=$("#cd").value.trim(),nm=$("#pin").value.trim(),subs=subsOf();if(!nm||!subs.length||(m&&!c)){toast("اكتب الصنف وحدد كميات الألوان والمقاسات"+(m?" والكود":""));return}if(!guard())return;const old=PS.edit?S.po.find(x=>x.id==PS.edit):null;if(old)rev(old.id,"po");ensureItem(nm,+$("#pwh").value,"قطعة");
  const o={id:old?old.id:uid(),no:old?old.no:m?c:"PO-"+pad(S.po.length+1),date:old?old.date:td(),ts:old?old.ts:Date.now(),desc:$("#pdsc").value,iname:nm,wh:+$("#pwh").value,subs,mats:PS.mats,x:PS.x,st:0,matCost:0,rec:[],wc:old?old.wc||0:0};if(old)S.po[S.po.indexOf(old)]=o;else S.po.push(o);sv();toast("تم حفظ أمر الإنتاج "+o.no);cl()}
-function rcvForm(id){const o=S.po.find(x=>x.id==id),rows=poRows(o);sh(`<h3>تأكيد تسليم أمر ${o.no} للمخزن ومطابقة الكميات</h3><div class="row"><input id="rn" value="${pnm(o)}" placeholder="اسم الصنف"><select id="rw">${U(S.wh,w=>`<option value="${w.id}" ${o.wh==w.id?"selected":""}>${w.name}</option>`)}</select></div><p class="mu">لو الصنف غير موجود في المخزن الفرعي المختار هيتضاف تلقائيًا بالكميات المستلمة.</p><table><tr>${U(poHead,h=>`<th>${h.replace("المستلمة","المستلمة فعليًا")}</th>`)}</tr>${U(rows,(r,i)=>`<tr><td>${r.name}</td><td>${r.type}${r.model?" / "+r.model:""}</td><td>${r.c}</td><td>${r.z}</td><td>${qf(r.p)}</td><td><input type="number" id="rc${i}" value="${r.p}" style="margin:0;width:90px" oninput="rcvUp(${i},${r.p})"></td><td id="df${i}">0</td><td id="pc${i}">100%</td></tr>`)}</table><p>التكلفة الحالية للأمر: <b>${f(poCost(o))} ج.م</b> (تتوزع على الكمية المستلمة)</p><div class="row"><button onclick="confRcv(${id})">تأكيد الاستلام وطباعة الباركود</button>${bk}</div>`)}
+function rcvForm(id){const o=S.po.find(x=>x.id==id),rows=poRows(o);sh(`<h3>تأكيد تسليم أمر ${o.no} للمخزن ومطابقة الكميات</h3><div class="row"><input id="rn" value="${pnm(o)}" placeholder="اسم الصنف"><select id="rw">${U(whTree(),w=>`<option value="${w.id}" ${o.wh==w.id?"selected":""}>${whPath(w.id)}</option>`)}</select></div><p class="mu">لو الصنف غير موجود في المخزن الفرعي المختار هيتضاف تلقائيًا بالكميات المستلمة.</p><table><tr>${U(poHead,h=>`<th>${h.replace("المستلمة","المستلمة فعليًا")}</th>`)}</tr>${U(rows,(r,i)=>`<tr><td>${r.name}</td><td>${r.type}${r.model?" / "+r.model:""}</td><td>${r.c}</td><td>${r.z}</td><td>${qf(r.p)}</td><td><input type="number" id="rc${i}" value="${r.p}" style="margin:0;width:90px" oninput="rcvUp(${i},${r.p})"></td><td id="df${i}">0</td><td id="pc${i}">100%</td></tr>`)}</table><p>التكلفة الحالية للأمر: <b>${f(poCost(o))} ج.م</b> (تتوزع على الكمية المستلمة)</p><div class="row"><button onclick="confRcv(${id})">تأكيد الاستلام وطباعة الباركود</button>${bk}</div>`)}
 function rcvUp(i,p){const v=+$("#rc"+i).value||0;$("#df"+i).textContent=qf(v-p);$("#pc"+i).textContent=(p?Math.round(v/p*100):0)+"%"}
 function confRcv(id){if(!CUR||CUR.kind!="page")return;const o=S.po.find(x=>x.id==id),rec=o.subs.map((s,i)=>({v:s.v,qty:+$("#rc"+i).value||0})),rq=rec.reduce((a,r)=>a+r.qty,0);if(!rq){toast("اكتب الكميات المستلمة");return}if(!guard())return;const it=ensureItem($("#rn").value.trim()||pnm(o),+$("#rw").value,"قطعة"),c=poCost(o),d=td();rec.forEach(r=>{if(r.qty)stk(d,it,r.v,r.qty,c/rq*r.qty,"تسليم "+o.no,0,o.id,"po",+$("#rw").value||it.wh)});post(d,o.no,"تسليم أمر إنتاج للمخزن",[{a:ak("inv"),dr:c},{a:ak("wip"),cr:c}],"po",o.id,o.ts);o.st=2;o.done=d;o.rec=rec;o.iname=it.name;o.wh=+$("#rw").value||it.wh;sv();toast("تم تسليم الأمر "+o.no+" للمخزن");cl();labels(rec.filter(r=>r.qty).map(r=>({c:codeFor(it.id,r.v),t:it.name,s:`${it.model?it.model+" · ":""}${r.v!="-"?r.v+" · ":""}${qf(r.qty)} قطعة مستلمة`})))}
 function poView(id){const o=S.po.find(x=>x.id==id),ps=S.docs.filter(d=>d.t=="pur"&&d.dest==o.id),q=o.st==2?o.rec.reduce((a,r)=>a+r.qty,0):poQty(o);sh(`<div class="ph"><h3>${o.no} — ${pnm(o)}</h3><div class="row"><button class="g" onclick="poLb(${id})">🏷️ باركود</button><button class="g" onclick="poPrint(${id})">🖨️ طباعة</button>${bk}</div></div><p>${o.desc||""}</p><h4>المخطط والمستلم</h4>${poTbl(o)}<h4>التكلفة</h4><table class="l"><tr><th>البند</th><th>البيان</th><th>الكمية</th><th>التكلفة</th></tr>${U(o.mats,m=>`<tr><td>${it_(m.iid).name}</td><td></td><td>${qf(m.qty)} ${it_(m.iid).unit}</td><td>${f(m.cost||av(it_(m.iid))*m.qty)}</td></tr>`)}${U(o.x,x=>`<tr><td>${an(x.a)}</td><td>${x.note||""}</td><td></td><td>${f(x.amt)}</td></tr>`)}${U(ps,d=>`<tr><td>فاتورة شراء ${d.no}</td><td>${d.note||""}</td><td></td><td>${f(d.total)}</td></tr>`)}${o.wc?`<tr><td>هالك محمّل على الأمر</td><td></td><td></td><td>${f(o.wc)}</td></tr>`:""}<tr><th colspan="3">الإجمالي — تكلفة القطعة ${f(q?poCost(o)/q:0)}</th><th>${f(poCost(o))} ج.م</th></tr></table>`)}
@@ -721,7 +884,7 @@ function poView(id){const o=S.po.find(x=>x.id==id),ps=S.docs.filter(d=>d.t=="pur
 function repIm(){const k="im",q=fv(k,"q"),w=fv(k,"wh");const rows=S.items.filter(i=>(!w||i.wh==w)&&(!q||ci(i.name,q)||ci(i.sku,q)||S.codes.some(c=>c.iid==i.id&&ci(c.code,q)))).map(i=>{const m=S.mv.filter(x=>x.iid==i.id),op=m.filter(x=>R.from&&x.d<R.from).reduce((a,x)=>a+x.q,0),r=m.filter(x=>inR(x.d)),ins=r.filter(x=>x.q>0).reduce((a,x)=>a+x.q,0),outs=r.filter(x=>x.q<0).reduce((a,x)=>a-x.q,0);return [lk(i.name,`itemDet(${i.id})`),whn(i.wh),i.model||"",i.unit,qf(op),qf(ins),qf(outs),qf(op+ins-outs)]});
 
 
- return fbar(k,[["q","text","الصنف / الكود / الباركود"],["wh","sel","النوع",[["","الكل"],...S.wh.map(w=>[w.id,w.name])]]])+`<p class="mu">اضغط على اسم الصنف لعرض ألوانه ومقاساته وباركوداته وحركة كل منها.</p>`+tb2(["الصنف","النوع","الموديل","الوحدة","أول الفترة","وارد","صادر","آخر الفترة"],rows)}
+ return fbar(k,[["q","text","الصنف / الكود / الباركود"],["wh","sel","النوع",[["","الكل"],...whTree().map(w=>[w.id,whPath(w.id)])]]])+`<p class="mu">اضغط على اسم الصنف لعرض ألوانه ومقاساته وباركوداته وحركة كل منها.</p>`+tb2(["الصنف","النوع","الموديل","الوحدة","أول الفترة","وارد","صادر","آخر الفترة"],rows)}
 let ITV=[];
 function itemDet(id){const i=it_(id),m=S.mv.filter(x=>x.iid==id);ITV=[...new Set([...Object.keys(i.st),...m.map(x=>x.v)])];sh(`<div class="ph"><h3>${i.name} — تفاصيل الحركة</h3><div class="row"><button class="g" onclick="drillItem(${id})">كل الحركات</button>${bk}</div></div><div class="card">النوع: ${whn(i.wh)} | الموديل: ${i.model||"-"} | الوحدة: ${i.unit} | سعر الشراء: ${f(i.buy)} | متوسط التكلفة: ${f(av(i))} | الرصيد الحالي: ${qf(tq(i))}</div><table class="l"><tr><th>اللون</th><th>المقاس</th><th>الباركود</th><th>أول الفترة</th><th>وارد</th><th>صادر</th><th>آخر الفترة</th><th>الرصيد الحالي</th></tr>${U(ITV,(v,k)=>{const x=m.filter(y=>y.v==v),op=x.filter(y=>R.from&&y.d<R.from).reduce((a,y)=>a+y.q,0),r=x.filter(y=>inR(y.d)),ins=r.filter(y=>y.q>0).reduce((a,y)=>a+y.q,0),outs=r.filter(y=>y.q<0).reduce((a,y)=>a-y.q,0),[c,z]=v=="-"?["-","-"]:v.split(" / ");return `<tr><td>${lk(c,`drillItem(${id},ITV[${k}])`)}</td><td>${lk(z||"-",`drillItem(${id},ITV[${k}])`)}</td><td><code>${codeLook(id,v)}</code></td><td>${qf(op)}</td><td>${qf(ins)}</td><td>${qf(outs)}</td><td>${qf(op+ins-outs)}</td><td>${qf(i.st[v]||0)}</td></tr>`})}<tr><th colspan="7">الإجمالي</th><th>${qf(tq(i))}</th></tr></table><p class="mu">اضغط على اللون أو المقاس لعرض حركاته منفصلة.</p>`)}
 function drillItem(id,v){

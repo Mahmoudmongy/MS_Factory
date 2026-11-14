@@ -3,7 +3,7 @@
  * Run: npm test   (requires: npm install  -> playwright)                                         */
 const http=require('http'),fs=require('fs'),path=require('path'),vm=require('vm');let pw;try{pw=require('playwright')}catch(e){console.error('playwright is not installed. Run: npm install && npx playwright install chromium');process.exit(2)}
 const ROOT=path.join(__dirname,'..'),IMPORT_FIXTURE=path.join(require('os').tmpdir(),'ms-factory-items.csv'),MIME={'.html':'text/html','.js':'text/javascript','.mjs':'text/javascript','.css':'text/css','.json':'application/json','.png':'image/png','.svg':'image/svg+xml','.md':'text/plain'};
-const server=http.createServer((q,r)=>{let u=decodeURIComponent(q.url.split('?')[0]);if(u.endsWith('/'))u+='index.html';if(u==='/index.html'){let html=fs.readFileSync(path.join(ROOT,'index.html'),'utf8');html=html.replace(/<style>html\{visibility:visible\}#app\{visibility:hidden\}<\/style>/,'');html=html.replace(/<div id="factory-boot-screen"[\s\S]*?<\/div>/,'');html=html.replace(/<script type="module">[\s\S]*?<\/script>/,'');html=html.replace('<script type="module" src="./js/cloud-sync.js"></script>','');html=html.replace('<script type="module" src="./js/database-first.js"></script>','');html=html.replace('<script type="module" src="./js/manager-history.js"></script>','');r.writeHead(200,{'Content-Type':'text/html'});r.end(html);return}const f=path.join(ROOT,u);if(!f.startsWith(ROOT)||!fs.existsSync(f)||fs.statSync(f).isDirectory()){r.writeHead(404);r.end('nf');return}r.writeHead(200,{'Content-Type':MIME[path.extname(f)]||'application/octet-stream'});fs.createReadStream(f).pipe(r)});
+const server=http.createServer((q,r)=>{let u=decodeURIComponent(q.url.split('?')[0]);if(u.endsWith('/'))u+='index.html';if(u==='/index.html'){let html=fs.readFileSync(path.join(ROOT,'index.html'),'utf8');html=html.replace(/<style>html\{visibility:visible\}#app\{visibility:hidden\}<\/style>/,'');html=html.replace(/<div id="factory-boot-screen"[\s\S]*?<\/div>/,'');html=html.replace(/<script type="module">[\s\S]*?<\/script>/,'');html=html.replace('<script type="module" src="./js/cloud-sync.js"></script>','');html=html.replace('<script type="module" src="./js/database-first.js"></script>','');html=html.replace('<script type="module" src="./js/manager-history.js"></script>','');html=html.replace('<script type="module" src="./js/audit-trail.js"></script>','');r.writeHead(200,{'Content-Type':'text/html'});r.end(html);return}const f=path.join(ROOT,u);if(!f.startsWith(ROOT)||!fs.existsSync(f)||fs.statSync(f).isDirectory()){r.writeHead(404);r.end('nf');return}r.writeHead(200,{'Content-Type':MIME[path.extname(f)]||'application/octet-stream'});fs.createReadStream(f).pipe(r)});
 const R=[];let fails=0;const ok=(n,c,x)=>{R.push(`${c?'PASS':'FAIL'}  ${n}${x!==undefined?'  => '+(typeof x=='object'?JSON.stringify(x):x):''}`);if(!c)fails++};
 (async()=>{
 await new Promise(r=>server.listen(0,r));const BASE='http://localhost:'+server.address().port+'/';
@@ -496,7 +496,7 @@ ok('online startup sync runs even when local cache already has data',/if \(navig
 ok('offline startup never authorizes from a cached profile',!/cachedProfile/.test(idx)&&/offlineError\.code = 'OFFLINE'/.test(idx)&&/location\.replace\('auth\.html'\)/.test(idx));
 ok('reconnect refreshes the profile before using permissions for cloud sync',/myProfile = null; ownerIdCache = null; window\.__factoryAuthProfile = null;/.test(cloud)&&/const freshProfile = await getMyProfile\(\)/.test(cloud));
 
-ok('offline shell precaches the stable production app and first-login password page',/auth\.html/.test(sw)&&/change-password\.html/.test(sw)&&/js\/change-password\.js/.test(sw)&&/js\/app\.js/.test(sw)&&/factory-v23/.test(sw));
+ok('offline shell precaches the stable production app and first-login password page',/auth\.html/.test(sw)&&/change-password\.html/.test(sw)&&/js\/change-password\.js/.test(sw)&&/js\/app\.js/.test(sw)&&/factory-v24/.test(sw));
 ok('mobile and desktop usability includes visible keyboard focus and safe-area spacing',/focus-visible/.test(css)&&/safe-area-inset-bottom/.test(css));
 ok('offline-created detail records are uploaded even when the full snapshot has a preserved conflict',/if \(admin && !snapshotConflict\)/.test(cloud)&&/for \(const \{ key, arr \} of partnerArrays\)/.test(cloud)&&/hasSnapshotConflict/.test(cloud));
 ok('local save writes a durable pending-sync marker before network recovery',/mgr6-sync-pending/.test(app)&&/localStorage\.setItem\("mgr6-sync-pending"/.test(app));
@@ -512,7 +512,7 @@ ok('opening an existing screen in a separate tab activates it instead of duplica
 ok('Excel export splits currency labels into a separate adjacent cell and keeps amounts numeric',/function exportCurrencyCell/.test(app)&&/\[h\+" \(قيمة\)","العملة"\]/.test(app));
 ok('legacy Excel importer supports multiple named sheets for customers, suppliers and inventory',/function impSheet\(/.test(app)&&/function templateExcel\(/.test(app)&&/customers:\[/.test(app)&&/suppliers:\[/.test(app)&&/WZ\.sheetNames/.test(app));
 ok('module navigation uses consistent purpose-specific SVG icons',/const APP_ICONS=/.test(app)&&/ico\("customer"\)/.test(app)&&/ico\("inventory"\)/.test(app));
-ok('offline service worker pre-caches Vite module assets discovered from the HTML shell',sw.includes('matchAll')&&sw.includes('modulepreload')&&/factory-v23/.test(sw));
+ok('offline service worker pre-caches Vite module assets discovered from the HTML shell',sw.includes('matchAll')&&sw.includes('modulepreload')&&/factory-v24/.test(sw));
 
 
 ok('invoice sync migration uses optimistic version checks and invoker security',/sync_version/.test(fs.readFileSync(path.join(ROOT,'supabase/migrations/20261107090901_20261107111000_atomic_invoice_sync.sql'),'utf8'))&&/SECURITY INVOKER/.test(fs.readFileSync(path.join(ROOT,'supabase/migrations/20261107090901_20261107111000_atomic_invoice_sync.sql'),'utf8'))&&/40001/.test(fs.readFileSync(path.join(ROOT,'supabase/migrations/20261107090901_20261107111000_atomic_invoice_sync.sql'),'utf8')));
@@ -543,6 +543,37 @@ let searchBox=p.locator('#m input[data-filter-key="cust"][data-filter-id="q"]');
 await searchBox.fill("محلات");await p.waitForTimeout(180);
 let searchState=await p.evaluate(()=>({value:document.querySelector('#m input[data-filter-key="cust"][data-filter-id="q"]')?.value,focused:document.activeElement?.matches('input[data-filter-key="cust"][data-filter-id="q"]'),rows:[...document.querySelectorAll('#m table.l tr')].filter(r=>r.querySelector('td')&&getComputedStyle(r).display!=='none').map(r=>r.textContent)}));
 ok('customer search filters results without dropping the typed text or focus',searchState.value==="محلات"&&searchState.focused&&searchState.rows.some(x=>x.includes("محلات الأمل")),searchState);
+const advancedSearch=await ev(()=>{const headers=["العميل","المبلغ","التاريخ"],rows=[["محلات الأمل","1,500.00","2026-11-14"],["شركة النسيج","750.00","2026-11-13"],["محلات النور","250.00","2026-10-01"]],run=q=>{const c=MSFactorySearch.compile(q,headers);return {valid:c.valid,error:c.error,names:rows.filter(c.test).map(x=>x[0])}};return {and:run("محلات AND المبلغ>=1000"),or:run("النسيج OR المبلغ<300"),date:run("التاريخ>=2026-11-13"),quoted:run('"العميل"="شركة النسيج"'),unknown:run("عمود غير موجود>=1")};});
+ok('advanced search supports AND, OR, numeric/date comparisons and quoted column names while rejecting unknown fields',advancedSearch.and.names.length===1&&advancedSearch.and.names[0]==="محلات الأمل"&&advancedSearch.or.names.length===2&&advancedSearch.date.names.length===2&&advancedSearch.quoted.names.length===1&&!advancedSearch.unknown.valid,advancedSearch);
+const columnUi=await ev(()=>{const toolbar=document.querySelector('#m .table-columns-toggle'),bar=toolbar?.closest('.row'),table=bar?.nextElementSibling;return {button:!!toolbar,headers:table?.matches('table.l')?[...table.querySelector('tr').children].length:0};});
+if(columnUi.button){const state=await p.locator('#m .table-columns-toggle').first().evaluate(button=>{const bar=button.closest('.row'),menu=bar?.querySelector('.table-columns-menu'),table=bar?.nextElementSibling;if(!menu||!table?.matches('table.l'))return {exists:false};button.click();const visible=!menu.hidden,count=menu.querySelectorAll('input[type=checkbox]').length,check=menu.querySelector('input[type=checkbox]');check.checked=false;check.dispatchEvent(new Event('change',{bubbles:true}));return {exists:true,visible,count,hidden:getComputedStyle(table.querySelector('tr').children[0]).display==='none'};});const saved=await ev(()=>Object.keys(localStorage).some(k=>k.startsWith('factory-table:')&&JSON.parse(localStorage.getItem(k)||'{}').columns?.length>0));await ev(()=>go('cust'));const restored=await ev(()=>{const t=document.querySelector('#m table.l');return !!t&&getComputedStyle(t.querySelector('tr').children[0]).display==='none'});ok('table column chooser saves visible columns and restores them on re-render',state.exists&&state.visible&&state.count===columnUi.headers&&state.hidden&&saved&&restored,{state,headers:columnUi.headers,saved,restored});}else ok('table column chooser is present on operational tables',false,columnUi);
+const warehouseTreeTest=await ev(()=>{const sample=[{id:101,name:"مخزن رئيسي"},{id:102,name:"خامات",parentId:101},{id:103,name:"أقمشة",parentId:102},{id:104,name:"منتج نهائي"}],tree=globalThis.buildWarehouseTree(sample);return {ids:tree.map(x=>x.id),depths:tree.map(x=>x._depth),path:globalThis.buildWarehousePath(sample,103)};});
+ok('warehouse locations support nested parent-child paths and stable tree ordering',warehouseTreeTest.ids.join(',')==="101,102,103,104"&&warehouseTreeTest.depths.join(',')==="0,1,2,0"&&warehouseTreeTest.path==="مخزن رئيسي / خامات / أقمشة",warehouseTreeTest);
+const materialSetup=await ev(()=>{globalThis.__factoryTestHooks?.openProductionForm();const item=globalThis.__factoryTestHooks?.firstItem();const rendered=globalThis.__factoryTestHooks?.renderProductionMaterial(7);return {item,rendered};});
+if(materialSetup.item&&materialSetup.rendered){
+ const matQty=p.locator('#pl input[data-mat-index="0"]');await matQty.fill("11");await matQty.press("Enter");
+ const matEdit=await ev(()=>({qty:globalThis.__factoryTestHooks?.materialQty(0),warehouse:document.querySelector('#pl .production-material-row')?.textContent||''}));
+ ok('production material rows expose editable quantities and show the source warehouse',matEdit.qty===11&&matEdit.warehouse.includes(materialSetup.item.name)&&matEdit.warehouse.includes(materialSetup.item.warehouse),{materialSetup,matEdit});
+}else ok('production material test fixture is available',false,materialSetup);
+const selectSearch=await ev(()=>{const host=document.createElement('div');host.id='qa-select-search';host.innerHTML='<select id="qa-large-select">'+Array.from({length:12},(_,i)=>'<option value="'+i+'">اختيار '+i+'</option>').join('')+'</select>';document.querySelector('#m').append(host);globalThis.enhanceFactorySelects(host);return {input:!!host.querySelector('.select-search-input'),enhanced:host.querySelector('select').dataset.searchEnhanced==='1'};});
+await p.locator('#qa-select-search .select-search-input').fill('اختيار 10');
+const selectFiltered=await ev(()=>{const select=document.querySelector('#qa-large-select');return {visible:[...select.options].filter(o=>!o.hidden).map(o=>o.textContent),hidden:[...select.options].filter(o=>o.hidden).length};});
+ok('large dropdown lists share the same in-place search behavior',selectSearch.input&&selectSearch.enhanced&&selectFiltered.visible.includes('اختيار 10')&&selectFiltered.hidden>=10,selectFiltered);
+await ev(()=>document.querySelector('#qa-select-search')?.remove());
+const employeeTemplate=await ev(()=>{return globalThis.__factoryTestHooks?.openEmployeeForm(),globalThis.__factoryTestHooks?.applyPermissionTemplate('warehouse');});
+ok('employee permission templates apply module access and edit rights without silently granting deletion',employeeTemplate.includes('stock')&&employeeTemplate.includes('edit')&&!employeeTemplate.includes('del')&&!employeeTemplate.includes('sale'),employeeTemplate);
+const viewerTemplate=await ev(()=>globalThis.__factoryTestHooks?.applyPermissionTemplate('viewer'));
+ok('read-only employee template does not grant edit or delete rights',viewerTemplate.includes('rep')&&viewerTemplate.includes('tl')&&!viewerTemplate.includes('edit')&&!viewerTemplate.includes('del'),viewerTemplate);
+await ev(()=>globalThis.__factoryTestHooks.closeModal());
+const cloudPermissionMatrix=await ev(()=>{const profile={is_admin:false,permissions:{inventory:true,edit:false,delete:false}};return {read:globalThis.__factoryTestHooks.canFor('stock',undefined,profile),editDenied:!globalThis.__factoryTestHooks.canFor('stock','edit',profile),deleteDenied:!globalThis.__factoryTestHooks.canFor('stock','del',profile),editAllowed:globalThis.__factoryTestHooks.canFor('stock','edit',{...profile,permissions:{inventory:true,edit:true,delete:false}}),deleteStillDenied:!globalThis.__factoryTestHooks.canFor('stock','del',{...profile,permissions:{inventory:true,edit:true,delete:false}})};});
+const deleteNeedsEdit=await ev(()=>({denied:!globalThis.__factoryTestHooks.canFor('stock','del',{is_admin:false,permissions:{inventory:true,edit:false,delete:true}}),allowed:globalThis.__factoryTestHooks.canFor('stock','del',{is_admin:false,permissions:{inventory:true,edit:true,delete:true}})}));
+ok('employee deletion requires both edit and delete permissions',deleteNeedsEdit.denied&&deleteNeedsEdit.allowed,deleteNeedsEdit);
+ok('cloud employee controls match module, edit and delete permissions',cloudPermissionMatrix.read&&cloudPermissionMatrix.editDenied&&cloudPermissionMatrix.deleteDenied&&cloudPermissionMatrix.editAllowed&&cloudPermissionMatrix.deleteStillDenied,cloudPermissionMatrix);
+const ownerOnlyScreens=await ev(()=>{const p=globalThis.__factoryTestHooks.screenPermissions();return {settings:p.set===null,assistant:p.ai==='reports'};});
+ok('cloud employees cannot open owner-only settings; assistant access follows reports permission',ownerOnlyScreens.settings&&ownerOnlyScreens.assistant,ownerOnlyScreens);
+await ev(()=>globalThis.__factoryTestHooks.openCustomerScreen());
+await p.locator('#m input[data-filter-key="cust"][data-filter-id="q"]').fill('محلات');
+await p.locator('#m input[data-filter-key="cust"][data-filter-id="q"]').focus();
 await p.keyboard.type(" XYZ");await p.waitForTimeout(180);
 const continuedSearch=await p.locator('#m input[data-filter-key="cust"][data-filter-id="q"]').inputValue();
 ok('customer search accepts continued typing after live filtering',continuedSearch==="محلات XYZ",continuedSearch);
@@ -558,17 +589,17 @@ ok('header has no language button, has an icon-only theme button and shows Admin
 const exportCell=await ev(()=>exportCurrencyCell("1,250.50 ج.م"));
 ok('currency export parser returns a numeric value and a separate currency cell',exportCell.value==="1250.50"&&exportCell.currency==="ج.م",exportCell);
 await ev(()=>go('sale'));
-await p.locator('#m .filter-date-toggle').click();
-const desktopFrom=p.locator('#m input[data-filter-date-field="1"]').first();
+await p.locator('#m .filter-date-toggle:visible').first().click();
+const desktopFrom=p.locator('#m input[data-filter-date-field="1"]:visible').first();
 await desktopFrom.fill("2026-11-01");
-const stagedDate=await ev(()=>({committed:FL.dsale.from||"",pending:FILTER_DATE_PENDING.dsale?.from||"",inline:document.querySelector('#m input[data-filter-date-field="1"]')?.getAttribute("onchange")||""}));
+const stagedDate=await ev(()=>({committed:FL.dsale.from||"",pending:FILTER_DATE_PENDING.dsale?.from||"",inline:[...document.querySelectorAll('#m input[data-filter-date-field="1"]')].find(el=>el.getClientRects().length)?.getAttribute("onchange")||""}));
 ok('desktop date filter waits for Enter instead of applying partial input',stagedDate.committed===""&&stagedDate.pending==="2026-11-01"&&stagedDate.inline==="",stagedDate);
 await desktopFrom.press("Enter");
 const committedDate=await ev(()=>({from:FL.dsale.from,panelHidden:document.querySelector('.filter-card[data-filter-group="dsale"] .filter-date-panel')?.hidden}));
 ok('desktop date filter commits on Enter and closes the period panel',committedDate.from==="2026-11-01"&&committedDate.panelHidden===true,committedDate);
 await p.setViewportSize({width:390,height:844});await ev(()=>go('sale'));
-await p.locator('#m .filter-date-toggle').click();
-const mobileTo=p.locator('#m input[data-filter-date-field="1"]').nth(1);
+await p.locator('#m .filter-date-toggle:visible').first().click();
+const mobileTo=p.locator('#m input[data-filter-date-field="1"]:visible').nth(1);
 await mobileTo.fill("2026-11-30");
 await mobileTo.evaluate(el=>el.blur());
 const mobileDateCommit=await ev(()=>({to:FL.dsale.to,panelHidden:document.querySelector('.filter-card[data-filter-group="dsale"] .filter-date-panel')?.hidden,width:document.documentElement.scrollWidth}));
@@ -655,7 +686,7 @@ const pm=await ev(()=>{const d=S.docs.length,pg=TB.length;const first=S.docs[0];
 ok('employee without permissions cannot edit/delete (even by calling the functions directly)',pm.can[0]===false&&pm.can[1]===false&&pm.docsSame&&pm.noNewTab,pm);ok('employee sees only permitted screens',pm.tabs.split(',').every(x=>['home','sale','set'].includes(x)),pm.tabs);
 await ev(()=>{who="0";S.emp=[];nav()});
 /* ---------- Supabase employee permissions ---------- */
-await ev(()=>{window.setFactoryAuthProfile({id:"cloud-test",is_admin:false,permissions:{invoices:true}});tab="sale";nav();render()});
+await ev(()=>{window.setFactoryAuthProfile({id:"cloud-test",is_admin:false,permissions:{invoices:true,edit:true,delete:false}});tab="sale";nav();render()});
 const cloudInvoicePerm=await ev(()=>({screens:allowed().map(t=>t[0]),edit:can("edit")}));
 ok('Supabase employee sees only the assigned invoice screens and can edit within that module',cloudInvoicePerm.screens.includes("sale")&&!cloudInvoicePerm.screens.includes("stock")&&cloudInvoicePerm.edit,cloudInvoicePerm);
 await ev(()=>{window.setFactoryAuthProfile({id:"cloud-test",is_admin:false,permissions:{reports:true}});tab="rep";nav();render()});
@@ -715,7 +746,7 @@ ok('middle-click is the only sidebar gesture that opens a new tab',app.includes(
 /* ---------- C. PWA: service worker + offline shell ---------- */
 const c2=await browser.newContext({viewport:{width:1280,height:800}}),q=await c2.newPage(),swConsole=[];q.on('console',m=>swConsole.push(m.type()+': '+m.text()));q.on('pageerror',e=>swConsole.push('pageerror: '+e.message));await q.goto(BASE);const swReg=await q.evaluate(async()=>{try{const reg=await navigator.serviceWorker.register('./sw.js');return {ok:true,scope:reg.scope,installing:reg.installing?.state,waiting:reg.waiting?.state,active:reg.active?.state}}catch(e){return {ok:false,error:e.message}}});const swReady=await q.evaluate(()=>Promise.race([navigator.serviceWorker.ready.then(()=>true),new Promise(resolve=>setTimeout(()=>resolve(false),15000))]));if(!swReady){const diag=await q.evaluate(async()=>{const r=await navigator.serviceWorker.getRegistration();return r?{installing:r.installing?.state,waiting:r.waiting?.state,active:r.active?.state,scope:r.scope}:null});await c2.close();throw new Error('Service Worker did not become ready: '+JSON.stringify({swReg,diag,console:swConsole.slice(-20)}))}await q.reload();await q.waitForTimeout(600);
 const swi=await q.evaluate(async()=>({ctl:!!navigator.serviceWorker.controller,keys:await caches.keys(),cached:(await (await caches.open((await caches.keys())[0])).keys()).map(r=>new URL(r.url).pathname)}));
-ok('service worker installed and controlling the page; single versioned cache',swi.ctl&&swi.keys.length==1&&/^factory-v23$/.test(swi.keys[0]),swi.keys);
+ok('service worker installed and controlling the page; single versioned cache',swi.ctl&&swi.keys.length==1&&/^factory-v24$/.test(swi.keys[0]),swi.keys);
 ok('stable app shell files are precached; linked CSS and scripts are cached on first request',['/index.html','/auth.html','/change-password.html','/js/change-password.js','/','/js/app.js','/css/style.css'].every(f=>swi.cached.includes(f)),swi.cached);
 ok('offline cache does not include authenticated API responses or user records',swi.cached.every(f=>!f.includes('/rest/v1/')&&!f.includes('/auth/v1/')&&!f.includes('/storage/v1/')));
 await q.evaluate(()=>{const s=JSON.parse(localStorage.getItem('mgr6')||'null');localStorage.setItem('mgr6',JSON.stringify(s))});
@@ -769,5 +800,28 @@ const managerHistory=fs.readFileSync(path.join(ROOT,'js/manager-history.js'),'ut
 ok('Manager.io history screen is connected from the main app and cached for PWA use',fs.readFileSync(path.join(ROOT,'index.html'),'utf8').includes('js/manager-history.js')&&fs.readFileSync(path.join(ROOT,'public/sw.js'),'utf8').includes('js/manager-history.js'));
 ok('Manager.io history module includes all migrated business areas', ['customers','suppliers','products','inventory_location_balances','invoices','invoice_items','returns','vouchers','production_orders','manager_accounts','manager_ledger_transactions'].every(t=>managerHistory.includes(t)));
 ok('Manager.io history is explicitly read-only and does not write imported history',managerHistory.includes('للقراءة فقط')&&!['.insert(','.update(','.upsert(','.delete('].some(token=>managerHistory.includes(token)));
+const auditModule=fs.readFileSync(path.join(ROOT,'js/audit-trail.js'),'utf8');
+ok('database audit screen is linked, offline-cached, owner-admin-only, and calls the guarded undo RPC',fs.readFileSync(path.join(ROOT,'index.html'),'utf8').includes('js/audit-trail.js')&&fs.readFileSync(path.join(ROOT,'public/sw.js'),'utf8').includes('js/audit-trail.js')&&auditModule.includes("data.is_admin!==true || data.created_by")&&auditModule.includes("undo_factory_record_change")&&auditModule.includes("latest.get(key)===row.id"));
+const permissionMigration=fs.readFileSync(path.join(ROOT,'supabase/migrations/20261114132500_employee_permission_templates_and_write_guards.sql'),'utf8');
+const permissionRpcMigration=fs.readFileSync(path.join(ROOT,'supabase/migrations/20261114132600_employee_permission_rpc_invoker_wrapper.sql'),'utf8');
+const permissionQa=fs.readFileSync(path.join(ROOT,'tests/sql/employee-permissions-qa.sql'),'utf8');
+const employeeCreate=fs.readFileSync(path.join(ROOT,'supabase/functions/create-employee-account/index.ts'),'utf8');
+ok('employee write/delete permissions are enforced by RLS and an owner-checked invoker RPC',permissionMigration.includes("actor.permissions ->> 'edit' = 'true'")&&permissionMigration.includes('private.can_delete_factory_record')&&permissionMigration.includes('deleted_at is null or private.can_delete_factory_record')&&permissionRpcMigration.includes('security invoker')&&permissionQa.includes('QA_EMPLOYEE_DELETE_PERMISSION_FAILED'));
+ok('employee account creation accepts only module/edit/delete flags and owner administrators',employeeCreate.includes('"edit", "delete"')&&employeeCreate.includes('profile?.created_by'));
+const profileAuditMigration=fs.readFileSync(path.join(ROOT,'supabase/migrations/20261114132700_profile_audit_log.sql'),'utf8');
+const profileAuditQa=fs.readFileSync(path.join(ROOT,'tests/sql/profile-audit-qa.sql'),'utf8');
+ok('employee profile changes join the audit timeline without exposing profile undo',profileAuditMigration.includes('after insert or update or delete on public.profiles')&&profileAuditQa.includes('QA_PROFILE_AUDIT_CAPTURE_PASSED')&&(()=>{const ui=fs.readFileSync(path.join(ROOT,'js/audit-trail.js'),'utf8'),match=ui.match(/undoSupported=\[([^\]]+)\]/);return ui.includes("profile:'الموظفون والصلاحيات'")&&!!match&&!match[1].includes("'profile'")})());
+const profileSecurityMigration=fs.readFileSync(path.join(ROOT,'supabase/migrations/20261114132800_protect_profile_permissions.sql'),'utf8');
+const profileSecurityQa=fs.readFileSync(path.join(ROOT,'tests/sql/profile-self-escalation-qa.sql'),'utf8');
+ok('profile RLS cannot be bypassed to self-grant permissions or admin status',profileSecurityMigration.includes('new.permissions is distinct from old.permissions')&&profileSecurityMigration.includes('new.is_admin is distinct from old.is_admin')&&profileSecurityMigration.includes('before update on public.profiles')&&profileSecurityQa.includes('QA_PROFILE_SELF_ADMIN_ESCALATION_NOT_BLOCKED'));
+ok('employee permission updates import the shared Supabase client from the application asset path',fs.readFileSync(path.join(ROOT,'js/app.js'),'utf8').includes('import("./supabase.js")'));
+const deleteRequiresEditMigration=fs.readFileSync(path.join(ROOT,'supabase/migrations/20261114132900_delete_requires_edit.sql'),'utf8');
+ok('database permission updates reject delete without edit',deleteRequiresEditMigration.includes('EMPLOYEE_DELETE_REQUIRES_EDIT')&&fs.readFileSync(path.join(ROOT,'tests/sql/employee-permissions-qa.sql'),'utf8').includes('QA_DELETE_REQUIRES_EDIT_NOT_ENFORCED'));
+const reportScopeMigration=fs.readFileSync(path.join(ROOT,'supabase/migrations/20261114133100_restore_reports_read_scope.sql'),'utf8');
+ok('report-only employees keep read access without gaining write access',reportScopeMigration.includes("p_write is false and actor.permissions ->> 'reports' = 'true'")&&reportScopeMigration.includes("p_write is false or actor.permissions ->> 'edit' = 'true'"));
+ok('employee account API rejects delete without edit',fs.readFileSync(path.join(ROOT,'supabase/functions/create-employee-account/index.ts'),'utf8').includes('صلاحية الحذف تتطلب صلاحية التعديل'));
+ok('audit timeline uses the owner/time index and still identifies the latest row by audit id',fs.readFileSync(path.join(ROOT,'js/audit-trail.js'),'utf8').includes(".order('occurred_at',{ascending:false})")&&fs.readFileSync(path.join(ROOT,'js/audit-trail.js'),'utf8').includes('Number(row.id)>Number(latest.get(key))'));
+const auditModuleSource=fs.readFileSync(path.join(ROOT,'js/audit-trail.js'),'utf8');
+ok('audit module has valid unescaped JavaScript template literals',!auditModuleSource.includes('\\`')&&!auditModuleSource.includes('\\${'));
 console.log(R.join('\n'));console.log(`\n${R.length-fails}/${R.length} checks passed, ${fails} failed`);process.exit(fails?1:0);
 })().catch(e=>{console.error('TEST RUN CRASHED:',e.message);process.exit(2)});
