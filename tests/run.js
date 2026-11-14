@@ -745,6 +745,34 @@ ok('Manager.io bridge maps imported accounts, parties, stock, invoices, vouchers
 ok('Manager.io record IDs are stable numeric IDs suitable for the existing UI and factory_records overlay',bridge.includes('function stableId(namespace, key)')&&bridge.includes('namespace * 1000000000000'));
 ok('imported Manager.io financial documents are protected from in-place edits and deletion',app.includes('if(d?.legacyManager)')&&app.includes('if(v?.legacyManager)')&&app.includes('if(pre.legacyManager)')&&app.includes('if(imported?.legacyManager)'));
 ok('Manager.io bridge errors are surfaced to the user without clearing source records',dbSync.includes('factory-manager-bridge-error')&&app.includes('factory-manager-bridge-error'));
+const bridgePage=await browser.newPage();
+await bridgePage.goto(BASE+'auth.html');
+const bridgeFixture=await bridgePage.evaluate(async()=>{
+ const {mapManagerDataToState}=await import('/js/manager-data-bridge.js');
+ const data={
+  accounts:[{id:'a1',external_id:'cash',account_code:'1000',name:'Cash',account_type:'asset',account_role:'cash',is_cash_account:true,currency_code:'EGP'},{id:'a2',external_id:'ar',account_code:'1100',name:'AR',account_type:'asset',account_role:'accounts_receivable',is_cash_account:false,currency_code:'EGP'},{id:'a3',external_id:'sales',account_code:'4000',name:'Sales',account_type:'income',account_role:'sales',is_cash_account:false,currency_code:'EGP'}],
+  customers:[{id:'c1',external_id:'customer-1',name:'Customer',customer_type:'retail'}],suppliers:[],
+  products:[{id:'p1',external_id:'item-1',name:'Shirt',sku:'SH001',unit:'piece',buy_price:60,retail_price:100,warehouse:'Finished'}],
+  inventory:[{id:'i1',product_id:'p1',variant:'-',quantity:9,warehouse:'Finished'}],
+  costs:[{id:'co1',product_id:'p1',effective_date:'2026-01-01',unit_cost:60}],
+  locations:[{id:'w1',external_id:'wh1',name:'Finished'}],inventoryLocationBalances:[],
+  invoices:[{id:'inv1',external_id:'invoice-1',invoice_no:'SI-001',invoice_type:'sale',customer_id:'c1',invoice_date:'2026-01-02',total:100,discount:0,raw:{}}],
+  invoiceLines:[{id:'il1',invoice_id:'inv1',line_no:1,product_id:'p1',item_name:'Shirt',quantity:1,unit_price:100,line_total:100,source_line_kind:'nested_detail',raw:{}}],
+  returns:[],returnLines:[],
+  vouchers:[{id:'v1',external_id:'receipt-1',voucher_no:'RC-001',direction:'in',customer_id:'c1',voucher_date:'2026-01-03',amount:100,raw:{Lines:[{AccountsReceivableSalesInvoice:'invoice-1',Amount:70,DiscountAmount:30}]}}],
+  voucherLines:[{id:'vl1',voucher_id:'v1',line_type:'receipt',bank_account_id:'a1',account_id:'a2',customer_id:'c1',amount:100}],
+  ledger:[{id:'l1',transaction_date:'2026-01-02',transaction_type:'Sales Invoice',reference:'SI-001',account_id:'a2',customer_id:'c1',debit:100,credit:0,source_record_type:'sales_invoices',source_manager_key:'invoice-1',raw:{item:'item-1',qty:'1'}},{id:'l2',transaction_date:'2026-01-02',transaction_type:'Sales Invoice',reference:'SI-001',account_id:'a3',debit:0,credit:100,source_record_type:'sales_invoices',source_manager_key:'invoice-1',raw:{}}],
+  journals:[],production:[{id:'po1',external_id:'po-1',order_no:'PO-001',product_id:'p1',item_name:'Shirt',order_date:'2026-01-04',status:'completed',breakdown:{bill_of_materials:[],expense_items:[],inventory_location:'wh1'},raw:{Qty:10,InventoryLocation:'wh1'}}],
+  materials:[],expenses:[],writeoffs:[],transfers:[],currencies:[]
+ };
+ const state=mapManagerDataToState(data),doc=state.docs[0],voucher=state.vch[0],order=state.po[0];
+ const ledgerDr=state.L.reduce((a,x)=>a+x.dr,0),ledgerCr=state.L.reduce((a,x)=>a+x.cr,0);
+ const movementQty=state.mv.filter(x=>x.iid===state.items[0].id).reduce((a,x)=>a+x.q,0);
+ return {accounts:state.accts.length,invoice:state.docs.length,voucher:state.vch.length,production:state.po.length,ledgerBalanced:Math.abs(ledgerDr-ledgerCr)<.005,partyLinked:doc.pid===state.partners[0].id,voucherCashAndCounterpart:voucher.ac.length===1&&voucher.ln.length===1,invoiceAllocation:voucher.alloc[doc.id]===100,productionQuantity:order.subs[0]?.qty===10,stockReconciled:Math.abs(movementQty-9)<.001};
+});
+ok('Manager bridge maps real application shapes, invoice allocations and stock opening balances',bridgeFixture.accounts===3&&bridgeFixture.invoice===1&&bridgeFixture.voucher===1&&bridgeFixture.production===1&&bridgeFixture.ledgerBalanced&&bridgeFixture.partyLinked&&bridgeFixture.voucherCashAndCounterpart&&bridgeFixture.invoiceAllocation&&bridgeFixture.productionQuantity&&bridgeFixture.stockReconciled,bridgeFixture);
+await bridgePage.close();
+
 
 
 
