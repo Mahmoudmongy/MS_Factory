@@ -85,5 +85,10 @@ console.log('PASS invoice and voucher posting failures fail closed with safe rol
 const sw = fs.readFileSync(path.join(root, 'sw.js'), 'utf8');
 const swPublic = fs.readFileSync(path.join(root, 'public/sw.js'), 'utf8');
 assert(app.includes('landscape=c.width/c.height>1.1') && app.includes('windowWidth:captureWidth') && app.includes('W=landscape?297:210'), 'PDF export captures the full table width and selects landscape A4 for wide documents');
-assert(sw.includes('factory-v25') && swPublic.includes('factory-v25'), 'service-worker cache version changes when the application assets change');
+assert(sw.includes('factory-v26') && swPublic.includes('factory-v26'), 'service-worker cache version changes when the application assets change');
+assert(app.includes('t.style.tableLayout="fixed"') && app.includes('colgroup') && app.includes('factory-table-scroll'), 'tables use stable content-weighted fixed columns');
+assert(app.includes('"مشاركة ملف PDF"') && app.includes('"تحرير"') && app.includes('factory-icon-action'), 'common row actions are icon-only with accessible labels');
+assert(css.includes('max-height:min(72vh,760px)') && css.includes('position:sticky;top:0'), 'table headers remain pinned in the scrollable table viewport');
+assert(index.includes('id="logout-btn"') && index.indexOf('id="logout-btn"') < index.indexOf('id="who"') && index.indexOf('id="who"') < index.indexOf('id="thb"'), 'topbar order is exit, account, theme');
+assert(manager.includes("button.textContent='▤'") && audit.includes("button.textContent = '⟲'"), 'Manager.io history and audit undo launchers are adjacent compact icons');
 console.log('PASS adaptive A4 PDF layout and service-worker cache refresh');
