@@ -332,7 +332,7 @@ function vSet(){
  const moduleRows=MODULES.filter(m=>m.id!=="home"&&m.id!=="settings").map(m=>{
   const enabled=modules[m.id]!==false;
   const screens=m.screens.map(id=>N[id]||id).join("، ");
-  return '<label class="module-setting-row"><span><b>'+m.label+'</b><small class="mu">'+screens+'</small></span><input type="checkbox" '+(enabled?'checked':'')+(admin?'':' disabled')+' onchange="toggleModule(\\''+m.id+'\\',this.checked)" aria-label="تفعيل وحدة '+m.label+'"></label>';
+   return `<label class="module-setting-row"><span><b>${m.label}</b><small class="mu">${screens}</small></span><input type="checkbox" ${enabled?'checked':''}${admin?'':' disabled'} onchange="toggleModule('${m.id}',this.checked)" aria-label="تفعيل وحدة ${m.label}"></label>`;
  }).join("");
  const tiles=[
   ["coa","شجرة الحسابات","go('coa')"],["company","بيانات الشركة التفصيلية","bizForm()"],
