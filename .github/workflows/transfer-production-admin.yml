@@ -1,0 +1,169 @@
+```yaml
+name: Transfer admin account to Production
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm_transfer:
+        description: "I confirm transferring the admin account to the new Production project"
+        required: true
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ms-factory-admin-transfer-production
+  cancel-in-progress: false
+
+jobs:
+  transfer-admin:
+    if: github.ref == 'refs/heads/main' && inputs.confirm_transfer == true
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    env:
+      SUPABASE_URL: https://amtorqmzctshfzaoiovz.supabase.co
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      ADMIN_PASSWORD: ${{ secrets.MS_FACTORY_ADMIN_PASSWORD }}
+      ADMIN_ID: 92ff1f15-5919-400c-80f3-c77132506df9
+      ADMIN_EMAIL: m.mongy.hr@gmail.com
+
+    steps:
+      - name: Validate configuration
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$SUPABASE_SERVICE_ROLE_KEY" || {
+            echo "::error::Missing SUPABASE_SERVICE_ROLE_KEY"
+            exit 1
+          }
+          test -n "$ADMIN_PASSWORD" || {
+            echo "::error::Missing MS_FACTORY_ADMIN_PASSWORD"
+            exit 1
+          }
+          echo "Production target and required secrets are configured."
+
+      - name: Create admin Auth user and transfer profile
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          node <<'NODE'
+          const base = process.env.SUPABASE_URL;
+          const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+          const id = process.env.ADMIN_ID;
+          const email = process.env.ADMIN_EMAIL;
+          const password = process.env.ADMIN_PASSWORD;
+
+          const headers = {
+            apikey: key,
+            Authorization: `Bearer ${key}`,
+            "Content-Type": "application/json"
+          };
+
+          async function request(path, options = {}) {
+            const response = await fetch(`${base}${path}`, {
+              ...options,
+              headers: { ...headers, ...(options.headers || {}) }
+            });
+            const body = await response.text();
+            let data;
+            try { data = body ? JSON.parse(body) : null; }
+            catch { data = body; }
+            return { response, data };
+          }
+
+          async function main() {
+            if (!base.includes("amtorqmzctshfzaoiovz.supabase.co")) {
+              throw new Error("Production project URL mismatch.");
+            }
+
+            // Check whether the exact Auth user already exists.
+            const existing = await request(`/auth/v1/admin/users/${id}`);
+
+            if (existing.response.ok) {
+              if (existing.data?.id !== id ||
+                  existing.data?.email?.toLowerCase() !== email) {
+                throw new Error("Existing Auth user does not match expected admin.");
+              }
+              console.log("Matching Auth user already exists; password will not be changed.");
+            } else if (existing.response.status === 404) {
+              // Create the user with the original UUID and supplied password.
+              const created = await request(`/auth/v1/admin/users/${id}`, {
+                method: "POST",
+                body: JSON.stringify({
+                  email,
+                  password,
+                  email_confirm: true
+                })
+              });
+
+              if (!created.response.ok) {
+                throw new Error(`Auth creation failed: HTTP ${created.response.status}`);
+              }
+
+              if (created.data?.id !== id) {
+                throw new Error("Created Auth user UUID does not match.");
+              }
+              console.log("Admin Auth user created with the original UUID.");
+            } else {
+              throw new Error(`Auth lookup failed: HTTP ${existing.response.status}`);
+            }
+
+            // Transfer only the admin profile, preserving the source values.
+            const profile = {
+              id,
+              email,
+              full_name: null,
+              username: null,
+              must_change_password: false,
+              permissions: {},
+              created_by: null,
+              is_admin: true
+            };
+
+            const saved = await request("/rest/v1/profiles?on_conflict=id", {
+              method: "POST",
+              headers: {
+                Prefer: "resolution=merge-duplicates,return=representation"
+              },
+              body: JSON.stringify(profile)
+            });
+
+            if (!saved.response.ok) {
+              throw new Error(`Profile transfer failed: HTTP ${saved.response.status}`);
+            }
+
+            // Verify Auth identity.
+            const verifiedAuth = await request(`/auth/v1/admin/users/${id}`);
+            if (!verifiedAuth.response.ok ||
+                verifiedAuth.data?.id !== id ||
+                verifiedAuth.data?.email?.toLowerCase() !== email) {
+              throw new Error("Auth verification failed.");
+            }
+
+            // Verify profile.
+            const verifiedProfile = await request(
+              `/rest/v1/profiles?id=eq.${id}&select=id,email,is_admin,must_change_password`
+            );
+
+            if (!verifiedProfile.response.ok ||
+                !Array.isArray(verifiedProfile.data) ||
+                verifiedProfile.data.length !== 1 ||
+                verifiedProfile.data[0].id !== id ||
+                verifiedProfile.data[0].is_admin !== true) {
+              throw new Error("Profile verification failed.");
+            }
+
+            console.log("SUCCESS: Admin Auth user and profile verified in Production.");
+            console.log("QA was not modified.");
+          }
+
+          main().catch(error => {
+            console.error(error.message);
+            process.exit(1);
+          });
+          NODE
+```
