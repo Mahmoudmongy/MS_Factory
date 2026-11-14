@@ -92,4 +92,6 @@ assert(css.includes('max-height:min(72vh,760px)') && css.includes('position:stic
 const indexHtml = fs.readFileSync(path.join(root, 'index.html'), 'utf8');
 assert(history.includes("button.textContent='▤'") && auditTrail.includes("button.textContent = '⟲'"), 'Manager.io history and audit undo launchers are adjacent compact icons');
 assert(indexHtml.indexOf('id="logout-btn"') < indexHtml.indexOf('id="who"') && indexHtml.indexOf('id="who"') < indexHtml.indexOf('id="thb"'), 'topbar order is exit, account, theme');
+assert(app.includes('const sv=(strict=false)=>') && app.includes('await sv(true)'), 'account and warehouse edits wait for confirmed database persistence');
+assert(app.includes('const oldName=a.name,oldParent=a.parentId') && app.includes('تم إلغاء التعديل المحلي'), 'failed account and warehouse edits restore their prior local values');
 console.log('PASS adaptive A4 PDF layout and service-worker cache refresh');
