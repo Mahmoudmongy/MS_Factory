@@ -39,7 +39,7 @@ function idMaps(rows, namespace) {
   return { byUuid, byExternal, get: value => value == null ? 0 : byUuid.get(String(value)) || byExternal.get(String(value)) || 0 };
 }
 function accountType(type) {
-  return ({ asset:"A", liability:"L", equity:"Q", income:"I", expense:"X" })[type] || "A";
+  return ({ asset:"A", liability:"L", equity:"Q", income:"I", expense:"X" })[text(type).toLowerCase()] || "A";
 }
 function accountRole(role) {
   return ({ accounts_receivable:"ar", accounts_payable:"ap", cash:"cash", cash_account:"cash", inventory:"inv", capital:"cap", cost_of_goods_sold:"cogs", sales:"sales", sales_discount:"sdisc", purchase_discount:"pdisc", waste:"waste" })[role] || role || "";
@@ -188,8 +188,12 @@ function mapManagerDataToState(data) {
     const ac = [], ln = [];
     for (const line of rows) {
       const cashUuid = line.bank_account_id || (cashAccountIds.has(String(line.account_id)) ? line.account_id : null);
+      const counterpartUuid = line.account_id && String(line.account_id)!==String(cashUuid) ? line.account_id : null;
       if (cashUuid) ac.push({ a:acctIds.get(cashUuid), m:num(line.amount), fc:0 });
-      else ln.push({ a:(line.customer_id||line.supplier_id)?"p":acctIds.get(line.account_id), d:line.account_name || "", m:num(line.amount), x:0, lbl:(line.customer_id||line.supplier_id)?"حساب الطرف":"" , pid:partnerId(line.customer_id||line.supplier_id) });
+      if (counterpartUuid || line.customer_id || line.supplier_id) {
+        const hasParty=!!(line.customer_id||line.supplier_id);
+        ln.push({ a:hasParty?"p":acctIds.get(counterpartUuid), d:line.account_name || "", m:num(line.amount), x:0, lbl:hasParty?"حساب الطرف":"", pid:hasParty?partnerId(line.customer_id||line.supplier_id):0 });
+      }
     }
     const raw = v.raw || {}, pid = partnerId(v.customer_id || v.supplier_id);
     if (!ac.length && v.account) {
@@ -242,8 +246,8 @@ function mapManagerDataToState(data) {
   const po = production.map(order => {
     const mats = (materialsByOrder.get(String(order.id)) || []).sort((a,b)=>num(a.line_no)-num(b.line_no)).map(m=>({ iid:productIds.get(m.product_id)||0, qty:num(m.quantity), cost:num(m.line_total)||num(m.unit_cost)*num(m.quantity), note:m.material_name || "" }));
     const x = (expensesByOrder.get(String(order.id)) || []).sort((a,b)=>num(a.line_no)-num(b.line_no)).map(e=>({ a:acctIds.get(e.account_id), amt:num(e.amount), note:e.account_name || "" }));
-    const subs = normalizeBreakdown(order.breakdown, order.raw?.Qty || 0);
-    const status = order.status==="delivered"?2:order.status==="in_progress"?1:0;
+    const subs = normalizeBreakdown(order.raw?.FinishedBreakdown || null, order.raw?.Qty || 0);
+    const status = ["delivered","completed","complete","finished"].includes(String(order.status||"").toLowerCase())?2:["in_progress","in progress","processing"].includes(String(order.status||"").toLowerCase())?1:0;
     const loc = rawText(order.raw||{},"InventoryLocation");
     return { id:productionIds.get(order.id), cloudId:sourceKey(order), no:order.order_no || sourceKey(order), date:order.order_date || "", ts:dateMs(order.created_at), desc:order.description || "", iname:order.item_name || productName(order.product_id), iid:productIds.get(order.product_id)||0, wh:whId(loc), subs, mats, x, st:status, matCost:mats.reduce((a,m)=>a+num(m.cost),0), rec:status===2?subs.map(s=>({v:s.v,qty:s.qty})):[], wc:0, legacyManager:true };
   });
