@@ -148,7 +148,7 @@ function mapManagerDataToState(data) {
     const locationTotal=Object.values(loc).reduce((a,x)=>a+Object.values(x.st||{}).reduce((q,v)=>q+num(v),0),0),difference=quantity-locationTotal;
     if(Math.abs(difference)>.001){const key=String(defaultWh),entry=loc[key]||{st:{},val:0};entry.st["-"]=(entry.st["-"]||0)+difference;entry.val+=difference*unitCost;loc[key]=entry;}
     const value=Object.values(loc).reduce((a,x)=>a+num(x.val),0);
-    return { id:productIds.get(p.id), cloudId:sourceKey(p), name:p.name || "", sku:p.sku || "", model:p.model || "", wh:defaultWh, loc, unit:p.unit || "قطعة", buy:num(p.buy_price), retail:num(p.retail_price), wholesale:num(p.wholesale_price), img:p.image_url || "", st, val:value, legacyManager:true, manager_read_only:true };
+    return { id:productIds.get(p.id), cloudId:sourceKey(p), name:p.name || "", sku:p.sku || "", model:p.model || "", wh:defaultWh, loc, unit:p.unit || "قطعة", buy:num(p.buy_price), retail:num(p.retail_price), wholesale:num(p.wholesale_price), img:p.image_url || "", st, val:value, legacyManager:true };
   });
   const productName = uuid => productByUuid.get(String(uuid))?.name || "";
   const itemUnit = uuid => productByUuid.get(String(uuid))?.unit || "قطعة";
@@ -171,7 +171,7 @@ function mapManagerDataToState(data) {
     const partner = partnerId(partnerUuid);
     
     const discount = num(inv.discount), total = num(inv.total);
-    return { id:invoiceIds.get(inv.id), cloudId:sourceKey(inv), t:type, no:inv.invoice_no || sourceKey(inv), date:inv.invoice_date || "", ts:dateMs(inv.created_at), pid:partner, cat:type==="sale"?"mfg":"sup", dest:type==="pur"?"wh":"", lines, gross:total+discount, disc:discount, total, note:inv.note || rawText(raw,"Description"), img:"", legacyManager:true };
+    return { id:invoiceIds.get(inv.id), cloudId:sourceKey(inv), t:type, no:inv.invoice_no || sourceKey(inv), date:inv.invoice_date || "", ts:dateMs(inv.created_at), pid:partner, cat:type==="sale"?"mfg":"sup", dest:type==="pur"?"wh":"", lines, gross:total+discount, disc:discount, total, note:inv.note || rawText(raw,"Description"), img:"", legacyManager:true, manager_read_only:true };
   });
 
   const returnLinesById = new Map();
@@ -183,7 +183,7 @@ function mapManagerDataToState(data) {
     const rows = (returnLinesById.get(String(ret.id)) || []).sort((a,b)=>num(a.line_no)-num(b.line_no));
     const lines = rows.map(line => ({ iid:productIds.get(line.product_id)||0, name:line.product_name || productName(line.product_id), v:line.variant || rawText(line.raw||{},"variant","Variant") || "-", qty:num(line.quantity), price:num(line.unit_price), cost:line.product_id?unitCostAt(line.product_id,ret.return_date):0, note:line.note || "", unit:itemUnit(line.product_id) }));
     const partner = partnerId(ret.customer_id || ret.supplier_id);
-    docs.push({ id:returnIds.get(ret.id), cloudId:sourceKey(ret), t:/sale|credit/i.test(String(ret.return_type||""))?"sret":"pret", no:ret.return_no || sourceKey(ret), date:ret.return_date || "", ts:dateMs(ret.created_at), pid:partner, cat:ret.return_type==="sale_return"?"mfg":"sup", dest:"", lines, gross:num(ret.total), disc:0, total:num(ret.total), note:ret.note || rawText(ret.raw||{},"Description"), img:"", legacyManager:true });
+    docs.push({ id:returnIds.get(ret.id), cloudId:sourceKey(ret), t:/sale|credit/i.test(String(ret.return_type||""))?"sret":"pret", no:ret.return_no || sourceKey(ret), date:ret.return_date || "", ts:dateMs(ret.created_at), pid:partner, cat:ret.return_type==="sale_return"?"mfg":"sup", dest:"", lines, gross:num(ret.total), disc:0, total:num(ret.total), note:ret.note || rawText(ret.raw||{},"Description"), img:"", legacyManager:true, manager_read_only:true });
   }
 
   const invoiceIdByExternal = new Map(invoices.map(i=>[String(i.external_id),invoiceIds.get(i.id)]));
@@ -228,11 +228,11 @@ function mapManagerDataToState(data) {
       const accountId = acctIds.get(accounts.find(a=>a.name===v.account || a.account_code===v.account)?.id);
       if (accountId) ac.push({a:accountId,m:num(v.amount),fc:0});
     }
-    return { id:voucherIds.get(v.id), cloudId:sourceKey(v), no:v.voucher_no || sourceKey(v), date:v.voucher_date || "", ts:dateMs(v.created_at), dir:v.direction==="in"?"in":"out", title:rawText(raw,"TransactionTitle","ReceiptCustomTitle","PaymentCustomTitle") || (v.direction==="in"?"إيصال استلام نقدية":"إيصال صرف نقدية"), pid, who:partnerName(pid) || rawText(raw,"Payee","Contact","Customer","Supplier"), desc:v.note || rawText(raw,"Description"), ac, ln, link:"sales", img:"", total:num(v.amount), alloc, legacyManager:true };
+    return { id:voucherIds.get(v.id), cloudId:sourceKey(v), no:v.voucher_no || sourceKey(v), date:v.voucher_date || "", ts:dateMs(v.created_at), dir:v.direction==="in"?"in":"out", title:rawText(raw,"TransactionTitle","ReceiptCustomTitle","PaymentCustomTitle") || (v.direction==="in"?"إيصال استلام نقدية":"إيصال صرف نقدية"), pid, who:partnerName(pid) || rawText(raw,"Payee","Contact","Customer","Supplier"), desc:v.note || rawText(raw,"Description"), ac, ln, link:"sales", img:"", total:num(v.amount), alloc, legacyManager:true, manager_read_only:true };
   });
   for (const tr of transfers) {
     const id = transferIds.get(tr.id), paid = acctIds.get(tr.paid_from_account_id), received = acctIds.get(tr.received_in_account_id);
-    vch.push({ id, cloudId:sourceKey(tr), no:"TR-"+String(id).slice(-7), date:tr.transfer_date || "", ts:dateMs(tr.created_at), dir:"out", title:"تحويل بين الحسابات", pid:0, who:accounts.find(a=>String(a.id)===String(tr.received_in_account_id))?.name || "تحويل داخلي", desc:tr.description || "", ac:paid?[{a:paid,m:num(tr.amount),fc:0}]:[], ln:received?[{a:received,d:"تحويل إلى الحساب",m:num(tr.amount),x:0}]:[], link:"sales", img:"", total:num(tr.amount), alloc:{}, legacyManager:true });
+    vch.push({ id, cloudId:sourceKey(tr), no:"TR-"+String(id).slice(-7), date:tr.transfer_date || "", ts:dateMs(tr.created_at), dir:"out", title:"تحويل بين الحسابات", pid:0, who:accounts.find(a=>String(a.id)===String(tr.received_in_account_id))?.name || "تحويل داخلي", desc:tr.description || "", ac:paid?[{a:paid,m:num(tr.amount),fc:0}]:[], ln:received?[{a:received,d:"تحويل إلى الحساب",m:num(tr.amount),x:0}]:[], link:"sales", img:"", total:num(tr.amount), alloc:{}, legacyManager:true, manager_read_only:true });
   }
 
   const journalByExternal = new Map(journals.map(j=>[String(j.external_id),journalIds.get(j.id)]));
@@ -259,7 +259,7 @@ function mapManagerDataToState(data) {
     const rid = map && row.source_manager_key ? map.get(String(row.source_manager_key)) || 0 : 0;
     return { id:stableId(11,row.id), d:row.transaction_date || "", ts:dateMs(row.created_at), ref:row.reference || "", desc:row.line_description || row.description || row.transaction_type || "", a:acctIds.get(row.account_id), dr:num(row.debit), cr:num(row.credit), pid:partnerId(row.customer_id || row.supplier_id), src:sourceType[source] || "opening", rid, fc:0, legacyManager:true };
   });
-  const je = journals.map(j => ({ id:journalIds.get(j.id), cloudId:sourceKey(j), no:"JE-"+String(journalIds.get(j.id)).slice(-7), date:j.entry_date || "", ts:dateMs(j.created_at), desc:j.narration || rawText(j.raw||{},"Narration"), legacyManager:true }));
+  const je = journals.map(j => ({ id:journalIds.get(j.id), cloudId:sourceKey(j), no:"JE-"+String(journalIds.get(j.id)).slice(-7), date:j.entry_date || "", ts:dateMs(j.created_at), desc:j.narration || rawText(j.raw||{},"Narration"), legacyManager:true, manager_read_only:true }));
 
   const materialsByOrder = new Map();
   for (const m of materials) {
@@ -279,7 +279,7 @@ function mapManagerDataToState(data) {
     const subs = normalizeBreakdown(order.raw?.FinishedBreakdown || null, order.raw?.Qty || 0);
     const status = ["delivered","completed","complete","finished"].includes(String(order.status||"").toLowerCase())?2:["in_progress","in progress","processing"].includes(String(order.status||"").toLowerCase())?1:0;
     const loc = rawText(order.raw||{},"InventoryLocation");
-    return { id:productionIds.get(order.id), cloudId:sourceKey(order), no:order.order_no || sourceKey(order), date:order.order_date || "", ts:dateMs(order.created_at), desc:order.description || "", iname:order.item_name || productName(order.product_id), iid:productIds.get(order.product_id)||0, wh:whId(loc), subs, mats, x, st:status, matCost:mats.reduce((a,m)=>a+num(m.cost),0), rec:status===2?subs.map(s=>({v:s.v,qty:s.qty})):[], wc:0, legacyManager:true };
+    return { id:productionIds.get(order.id), cloudId:sourceKey(order), no:order.order_no || sourceKey(order), date:order.order_date || "", ts:dateMs(order.created_at), desc:order.description || "", iname:order.item_name || productName(order.product_id), iid:productIds.get(order.product_id)||0, wh:whId(loc), subs, mats, x, st:status, matCost:mats.reduce((a,m)=>a+num(m.cost),0), rec:status===2?subs.map(s=>({v:s.v,qty:s.qty})):[], wc:0, legacyManager:true, manager_read_only:true };
   });
 
   const wo = writeoffs.map(w => {const rows=Array.isArray(w.items)?w.items:Object.values(w.items||{});const c=rows.reduce((a,x)=>{const key=rawText(x,"InventoryItem","item"),product=products.find(p=>String(p.external_id)===String(key)||String(p.sku)===String(key)),explicit=num(x.Amount||x.amount||x.total||x.cost),qty=num(x.Qty||x.qty);return a+(explicit||qty*(product?unitCostAt(product.id,w.writeoff_date):0))},0);return { id:writeoffIds.get(w.id), cloudId:sourceKey(w), no:sourceKey(w), ref:sourceKey(w), date:w.writeoff_date || "", ts:dateMs(w.created_at), desc:w.description || "", c, po:0, wh:whId(w.inventory_location_id||rawText(w.raw||{},"InventoryLocation")), items:rows, legacyManager:true, manager_read_only:true }});
