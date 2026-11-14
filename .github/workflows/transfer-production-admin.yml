@@ -1,4 +1,4 @@
-```yaml
+
 name: Transfer admin account to Production
 
 on:
@@ -166,4 +166,3 @@ jobs:
             process.exit(1);
           });
           NODE
-```
