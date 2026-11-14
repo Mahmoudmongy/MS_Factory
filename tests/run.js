@@ -82,9 +82,16 @@ await recoveryPage.evaluate(({scope,queueKey})=>{
 },{scope:dualFailure.scope,queueKey:dualFailure.queueKey});
 await recoveryPage.close();
 /* ---------- A. static checks on the real files ---------- */
-const app=fs.readFileSync(path.join(ROOT,'js/app.js'),'utf8'),idx=fs.readFileSync(path.join(ROOT,'index.html'),'utf8'),authPage=fs.readFileSync(path.join(ROOT,'js/auth.js'),'utf8'),cloud=fs.readFileSync(path.join(ROOT,'js/cloud-sync.js'),'utf8'),dbSync=fs.readFileSync(path.join(ROOT,'js/database-first.js'),'utf8').replace(/\r\n/g,'\n'),conflictStorage=fs.readFileSync(path.join(ROOT,'js/conflict-recovery.js'),'utf8'),css=fs.readFileSync(path.join(ROOT,'css/style.css'),'utf8');
+const app=fs.readFileSync(path.join(ROOT,'js/app.js'),'utf8'),idx=fs.readFileSync(path.join(ROOT,'index.html'),'utf8'),authPage=fs.readFileSync(path.join(ROOT,'js/auth.js'),'utf8'),cloud=fs.readFileSync(path.join(ROOT,'js/cloud-sync.js'),'utf8'),dbSync=fs.readFileSync(path.join(ROOT,'js/database-first.js'),'utf8').replace(/\r\n/g,'\n'),bridge=fs.readFileSync(path.join(ROOT,'js/manager-data-bridge.js'),'utf8'),conflictStorage=fs.readFileSync(path.join(ROOT,'js/conflict-recovery.js'),'utf8'),css=fs.readFileSync(path.join(ROOT,'css/style.css'),'utf8');
 try { new vm.Script(app,{filename:'js/app.js'}); } catch (error) { console.error('APP SYNTAX ERROR:',error.stack||error); process.exit(2); }
 ok('app.js contains no output-truncation artifacts',!app.includes('tokens truncated')&&!app.includes('Warning: truncated output')&&!app.includes('Total output lines:'));
+ok('ERP module registry groups every operational screen and preserves always-available Home and Settings',app.includes('const MODULES=')&&app.includes('const MODULE_GROUPS=')&&app.includes('moduleEnabled(id)')&&app.includes('screens:["home"]')&&app.includes('screens:["set"]'));
+ok('module visibility is administrator-controlled, persisted, and non-destructive',app.includes('function moduleAdmin()')&&app.includes('function toggleModule(id,enabled)')&&app.includes('S.modules[id]=!!enabled')&&app.includes('never deletes its invoices')&&app.includes('لا يحذف فواتيرها'));
+ok('Manager.io bridge loads only for the administrator and remains a read-only base beneath versioned overlays',dbSync.includes("loadManagerDataBridge(supabase,ownerId)")&&dbSync.includes('profile?.is_admin!==true')&&dbSync.includes('origin:"manager-import"')&&dbSync.includes('hydrateFromRows([...managerRows,...rows])')&&dbSync.includes('row.origin!=="manager-import"')&&bridge.includes('manager_read_only:true'));
+ok('Manager.io bridge has stable IDs and retains per-warehouse stock movements',bridge.includes('id:stableId(15,row.id)')&&bridge.includes('id:stableId(16')&&bridge.includes('warehouseId:location?whId(location):0')&&bridge.includes('movementRowsUsingDefaultWarehouse'));
+ok('warehouse-aware production and write-off workflows use the selected warehouse',app.includes('stockVariantAt=')&&app.includes('bestVAt=')&&app.includes('m.wh||i.wh')&&app.includes('stockVariantAt(i,warehouseId,variant)')&&app.includes('function repIm()')&&app.includes('warehouseId'));
+ok('grouped navigation and module settings have responsive styles',css.includes('.sb-group-title')&&css.includes('.module-settings-list')&&css.includes('.module-setting-row'));
+
 const names=[...app.matchAll(/^(?:async )?function ([A-Za-z0-9_$]+)\(/gm)].map(m=>m[1]),dup=[...new Set(names.filter((n,i)=>names.indexOf(n)!==i))];
 ok('app.js has no duplicate top-level function definitions',dup.length==0,dup);
 ok('customer/supplier names open details and edit stays permission-gated inside details',app.includes('partyView(${p.id})')&&app.includes('pForm(${p.c?1:0},${id})')&&app.includes('can("edit")'));
@@ -702,6 +709,47 @@ ok('mobile date fields remain hidden until the separate period button is pressed
 await m.evaluate(()=>docForm('sale'));const fw=await m.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1);
 ok('mobile: invoice form fits the screen width',fw);
 ok('mobile: no JavaScript errors',merr.length==0,merr.slice(0,2));await mc.close();
+
+const bridgePage=await browser.newPage();
+await bridgePage.goto(BASE+'auth.html');
+const bridgeFixture=await bridgePage.evaluate(async()=>{
+ const {mapManagerDataToState}=await import('/js/manager-data-bridge.js');
+ const data={
+  accounts:[{id:'a1',external_id:'cash',name:'Cash',account_type:'asset',account_role:'cash',is_cash_account:true},{id:'a2',external_id:'ar',name:'AR',account_type:'asset',account_role:'ar'},{id:'a3',external_id:'sales',name:'Sales',account_type:'income',account_role:'sales'}],
+  customers:[{id:'c1',external_id:'customer-1',name:'Customer'}],suppliers:[],
+  products:[{id:'p1',external_id:'item-1',name:'Shirt',sku:'SH001',buy_price:60,unit:'piece',warehouse:'Finished'}],
+  inventory:[{id:'i1',product_id:'p1',variant:'-',quantity:9,warehouse:'Finished'}],
+  costs:[{id:'co1',product_id:'p1',effective_date:'2026-01-01',unit_cost:60}],
+  locations:[{id:'w1',external_id:'wh1',name:'Finished'},{id:'w2',external_id:'wh2',name:'Raw'}],
+  inventoryLocationBalances:[{id:'bal1',product_id:'p1',manager_location_id:'wh1',warehouse:'Finished',quantity:5},{id:'bal2',product_id:'p1',manager_location_id:'wh2',warehouse:'Raw',quantity:4}],
+  invoices:[{id:'inv1',external_id:'invoice-1',invoice_no:'SI-001',invoice_type:'sale',customer_id:'c1',invoice_date:'2026-01-02',total:100,raw:{SalesInventoryLocation:'wh1'}}],
+  invoiceLines:[{id:'il1',invoice_id:'inv1',line_no:1,product_id:'p1',item_name:'Shirt',quantity:1,unit_price:100,line_total:100,source_line_kind:'nested_detail',raw:{}}],
+  returns:[],returnLines:[],
+  vouchers:[{id:'v1',external_id:'receipt-1',direction:'in',customer_id:'c1',amount:100,raw:{Lines:[{AccountsReceivableSalesInvoice:'invoice-1',Amount:70,DiscountAmount:30}]}},{id:'v2',external_id:'receipt-2',direction:'in',customer_id:'c1',amount:50,raw:{ReceivedIn:'cash'}}],
+  voucherLines:[{id:'vl1',voucher_id:'v1',line_type:'receipt',bank_account_id:'a1',account_id:'a2',customer_id:'c1',amount:100},{id:'orphan',voucher_id:null,line_type:'receipt',bank_account_id:'a1',account_id:'a2',amount:25},{id:'open',voucher_id:null,line_type:'opening_balance',bank_account_id:'a1',account_id:'a2',amount:10}],
+  ledger:[{id:'l1',transaction_date:'2026-01-02',transaction_type:'Sales Invoice',account_id:'a2',customer_id:'c1',debit:100,credit:0,source_record_type:'sales_invoices',source_manager_key:'invoice-1',raw:{item:'item-1',qty:'1'}},{id:'l2',transaction_date:'2026-01-02',transaction_type:'Sales Invoice',account_id:'a3',debit:0,credit:100,source_record_type:'sales_invoices',source_manager_key:'invoice-1',raw:{}},{id:'l3',transaction_date:'2026-01-04',transaction_type:'Receipt',account_id:'a1',debit:50,credit:0,source_record_type:'receipts',source_manager_key:'receipt-2',raw:{}},{id:'l4',transaction_date:'2026-01-04',transaction_type:'Receipt',account_id:'a2',customer_id:'c1',debit:0,credit:50,source_record_type:'receipts',source_manager_key:'receipt-2',raw:{}}],
+  journals:[],production:[{id:'po1',external_id:'po-1',order_no:'PO-001',product_id:'p1',item_name:'Shirt',order_date:'2026-01-04',status:'delivered',breakdown:{},raw:{Qty:10,InventoryLocation:'wh1',BillOfMaterials:[{BillOfMaterials:'item-1',Qty:2}]}}],
+  materials:[],expenses:[],writeoffs:[],transfers:[],currencies:[]
+ };
+ const state=mapManagerDataToState(data),item=state.items[0],finished=state.wh.find(w=>w.name==='Finished'),raw=state.wh.find(w=>w.name==='Raw'),doc=state.docs[0];
+ const movementQty=state.mv.filter(x=>x.iid===item.id).reduce((a,x)=>a+x.q,0);
+ return {
+  twoWarehouses:Object.keys(item.loc||{}).length===2&&item.loc[String(finished.id)].st['-']===5&&item.loc[String(raw.id)].st['-']===4,
+  ledgerBalanced:state.managerBridgeWarnings.ledgerBalanced,
+  inventoryReconciled:state.managerBridgeWarnings.inventoryReconciled,
+  sourceMovementWarehouse:state.mv.some(m=>m.src==='doc'&&m.wh===finished.id),
+  warehouseOpeningReconciles:Math.abs(movementQty-9)<.001,
+  invoiceWarehouse:doc.warehouseId===finished.id&&doc.dest==='',
+  importedDocsReadOnly:doc.manager_read_only===true&&state.vch[0].manager_read_only===true&&state.po[0].manager_read_only===true,
+  voucherFallback:state.vch.length===2&&state.vch[1].ac.length===1&&state.vch[1].ln.length===1,
+  voucherAllocation:state.vch[0].alloc[doc.id]===100,
+  rawBomFallback:state.po[0].mats.length===1&&state.po[0].matCost===120,
+  unlinkedLinesPreserved:state.managerBridgeWarnings.unlinkedVoucherLines===1&&state.managerBridgeWarnings.openingVoucherLines===1,
+  stableMovementIds:new Set(state.mv.map(m=>m.id)).size===state.mv.length
+ };
+});
+ok('Manager.io fixture preserves ledger balance, voucher allocation, read-only documents and two-warehouse stock',Object.values(bridgeFixture).every(Boolean),bridgeFixture);
+await bridgePage.close();
 await browser.close();server.close();
 ok('legacy cloud-sync polling is disabled in database-first mode',cloud.includes('if (!window.__factoryDatabaseFirst) {')&&cloud.indexOf('if (!window.__factoryDatabaseFirst) {')<cloud.indexOf('const _origSetItem')&&cloud.includes('setInterval(() => {'));
 ok('database startup reuses the cached profile and avoids duplicate getUser requests',dbSync.includes('ensureProfile(actorId, false)')&&dbSync.includes('supabase.auth.getSession()')&&!dbSync.includes('supabase.auth.getUser()'));
