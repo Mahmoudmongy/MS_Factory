@@ -96,21 +96,21 @@ function ensureUi() {
 
   const style=document.createElement('style');
   style.textContent=`
-  #manager-history-panel{position:fixed;inset:0;z-index:100500;background:var(--bg,#f7f8fa);color:var(--fg,#17212b);display:none;overflow:auto;padding:clamp(10px,2vw,24px)}
+  #manager-history-panel{position:fixed;inset:0;z-index:100500;background:var(--bg,#f7f8fa);color:var(--tx,#17212b);display:none;overflow:auto;padding:clamp(10px,2vw,24px)}
   #manager-history-panel.open{display:block}
   #manager-history-panel .mh-shell{max-width:1500px;margin:auto}
-  #manager-history-panel .mh-head{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;background:var(--card,#fff);border:1px solid var(--border,#ddd);border-radius:12px;padding:14px;margin-bottom:12px}
+  #manager-history-panel .mh-head{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;background:var(--card,#fff);border:1px solid var(--bd,#ddd);border-radius:12px;padding:14px;margin-bottom:12px}
   #manager-history-panel .mh-tabs{display:flex;gap:7px;flex-wrap:wrap;margin:12px 0}
-  #manager-history-panel .mh-tabs button{border:1px solid var(--border,#ddd);border-radius:8px;padding:9px 13px;background:var(--card,#fff);color:inherit;cursor:pointer}
+  #manager-history-panel .mh-tabs button{border:1px solid var(--bd,#ddd);border-radius:8px;padding:9px 13px;background:var(--card,#fff);color:inherit;cursor:pointer}
   #manager-history-panel .mh-tabs button.active{background:#0f766e;color:#fff;border-color:#0f766e}
-  #manager-history-panel .mh-card{background:var(--card,#fff);border:1px solid var(--border,#ddd);border-radius:12px;padding:14px;margin:10px 0;overflow:auto}
+  #manager-history-panel .mh-card{background:var(--card,#fff);border:1px solid var(--bd,#ddd);border-radius:12px;padding:14px;margin:10px 0;overflow:auto}
   #manager-history-panel .mh-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px}
-  #manager-history-panel .mh-stat{background:var(--card,#fff);border:1px solid var(--border,#ddd);border-radius:10px;padding:14px}
+  #manager-history-panel .mh-stat{background:var(--card,#fff);border:1px solid var(--bd,#ddd);border-radius:10px;padding:14px}
   #manager-history-panel .mh-stat b{display:block;font-size:23px;margin-top:6px;direction:ltr;text-align:right}
   #manager-history-panel .mh-muted{opacity:.72;font-size:13px}
   #manager-history-panel .mh-search{width:min(100%,420px);padding:10px;border:1px solid var(--border,#ccc);border-radius:8px;background:var(--card,#fff);color:inherit}
   #manager-history-panel table{width:100%;border-collapse:collapse;min-width:650px}
-  #manager-history-panel th,#manager-history-panel td{padding:9px 10px;border-bottom:1px solid var(--border,#ddd);text-align:right;vertical-align:top}
+  #manager-history-panel th,#manager-history-panel td{padding:9px 10px;border-bottom:1px solid var(--bd,#ddd);text-align:right;vertical-align:top}
   #manager-history-panel th{position:sticky;top:0;background:var(--card,#fff)}
   #manager-history-panel details summary{cursor:pointer;color:#0f766e;font-weight:700}
   #manager-history-panel pre{white-space:pre-wrap;word-break:break-word;max-height:360px;overflow:auto;direction:ltr;text-align:left;background:rgba(127,127,127,.08);padding:10px;border-radius:8px}
