@@ -1234,12 +1234,13 @@ enh=function(){
   });
   root.querySelectorAll("button[onclick]").forEach(button=>{
     const action=button.getAttribute("onclick")||"";
-    const labels=[
-      [/savePdf|downloadPdf/i,"⬇","حفظ PDF"],[/sendWaPdf|sharePdf/i,"↗","مشاركة ملف PDF"],
-      [/vPrint\(|poPrint\\(|inv\\(|stPrint\\(/,"⎙","طباعة"],[/editDoc\(|editV\\(|editPO\\(|editAcc\\(|editWh\\(/,"✎","تعديل"],
-      [/delGo\(|factoryDelRef\\(|delete/i,"⌫","حذف"]
+    const actionRules=[
+      [["savePdf","downloadPdf"],"⬇","حفظ PDF"],[["sendWaPdf","sharePdf"],"↗","مشاركة ملف PDF"],
+      [["vPrint(","poPrint(","inv(","stPrint("],"⎙","طباعة"],
+      [["editDoc(","editV(","editPO(","editAcc(","editWh("],"✎","تعديل"],
+      [["delGo(","factoryDelRef(","delete"],"⌫","حذف"]
     ];
-    const byAction=labels.find(x=>x[0].test(action));
+    const byAction=actionRules.find(x=>x[0].some(token=>action.includes(token)));
     const textLabel=button.textContent.trim();
     const byText={
       "عرض":["◉","عرض"],"تعديل":["✎","تعديل"],"تحرير":["✎","تحرير"],"طباعة":["⎙","طباعة"],
