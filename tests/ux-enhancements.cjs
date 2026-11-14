@@ -5,7 +5,9 @@ const root = path.join(__dirname, '..');
 const app = fs.readFileSync(path.join(root, 'js/app.js'), 'utf8');
 const css = fs.readFileSync(path.join(root, 'css/style.css'), 'utf8');
 const history = fs.readFileSync(path.join(root, 'js/manager-history.js'), 'utf8');
-const migration = fs.readFileSync(path.join(root, 'supabase/migrations/20261114153000_guard_factory_record_deletes.sql'), 'utf8');
+const migration = fs.readFileSync(path.join(root, 'supabase/migrations/20261114153611_guard_factory_record_deletes.sql'), 'utf8');
+const safeUndoMigration = fs.readFileSync(path.join(root, 'supabase/migrations/20261114131825_safe_factory_record_undo.sql'), 'utf8');
+const permissionMigration = fs.readFileSync(path.join(root, 'supabase/migrations/20261114133748_delete_requires_edit.sql'), 'utf8');
 new Function(app); // Syntax-check the complete production browser script before testing behavior.
 const parserStart = app.indexOf('function factorySearchMatch(');
 const parserEnd = app.indexOf('function factorySearchApply(', parserStart);
@@ -29,6 +31,9 @@ assert(app.includes('id="materialWarehouse"') && app.includes('function addProdu
 assert(app.includes('function undoRef') && app.includes('undoOf:{src,id:String(id)}') && app.includes('عكس آمن للحركة'), 'undo must append compensating entries');
 assert(app.includes('function factoryEnhanceNameSelects') && app.includes('factory-search-options'), 'name selectors must show searchable name-only dropdowns');
 assert(migration.includes('FACTORY_RECORD_PHYSICAL_DELETE_BLOCKED') && migration.includes('FACTORY_RECORD_DELETE_BLOCKED'), 'database must block physical deletes and unsafe soft deletes');
+assert(safeUndoMigration.includes('UNDO_NOT_LATEST') && safeUndoMigration.includes('UNDO_VERSION_CONFLICT') && safeUndoMigration.includes('UNDO_ADMIN_ONLY'), 'audit undo must be admin-only and latest-version safe');
+assert(permissionMigration.includes('EMPLOYEE_DELETE_REQUIRES_EDIT'), 'delete permission must require edit permission');
+assert(app.includes('function updateColumnChooserLanguage') && app.includes('Choose visible columns and save'), 'column chooser labels must follow application language');
 assert(history.includes("insertBefore(launcher,netButton.nextSibling)") && history.includes('moveConflictExport') && history.includes("notice.style.display=notice.hidden?'none':'flex'"), 'Manager.io and saved-operations export controls must share the top bar and respect close/export state');
 assert(css.includes('.factory-table-scroll') && css.includes('overflow-wrap:anywhere') && css.includes('.factory-search-options'), 'tables and name dropdowns must be responsive');
 console.log('PASS advanced search: AND / OR / numeric comparisons');
