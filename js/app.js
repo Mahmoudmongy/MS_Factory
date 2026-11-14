@@ -1255,11 +1255,13 @@ enh=function(){
     ];
     const byAction=actionRules.find(x=>x[0].some(token=>action.includes(token)));
     const textLabel=button.textContent.trim();
-    const byText={
-      "عرض":["◉","عرض"],"تعديل":["✎","تعديل"],"تحرير":["✎","تحرير"],"طباعة":["⎙","طباعة"],
-      "حفظ":["▣","حفظ"],"حذف":["⌫","حذف"],"مشاركة ملف PDF":["↗","مشاركة ملف PDF"],
-      "مشاركة PDF":["↗","مشاركة PDF"],"تصدير Excel":["⇩","تصدير Excel"]
-    }[textLabel];
+    const byText=textLabel.startsWith("عرض")?["◉",textLabel]:
+      (textLabel.startsWith("تعديل")||textLabel.startsWith("تحرير"))?["✎",textLabel]:
+      textLabel.startsWith("طباعة")?["⎙",textLabel]:
+      textLabel.startsWith("حفظ")?["▣",textLabel]:
+      textLabel.startsWith("حذف")?["⌫",textLabel]:
+      (textLabel.startsWith("مشاركة ملف PDF")||textLabel.startsWith("مشاركة PDF"))?["↗",textLabel]:
+      textLabel.startsWith("تصدير Excel")?["⇩",textLabel]:null;
     const match=byAction|| (byText?[null,...byText]:null);if(!match)return;
     const glyph=byAction?byAction[1]:match[1],title=byAction?byAction[2]:match[2];
     button.title=button.title||title;button.setAttribute("aria-label",title);button.classList.add("factory-icon-action");
