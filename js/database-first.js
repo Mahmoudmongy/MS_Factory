@@ -24,6 +24,7 @@ let ownerId = null;
 let actorId = null;
 let profile = null;
 let baseline = new Map();
+let managerBaseline = new Map();
 let stateReady = false;
 let saveChain = Promise.resolve();
 let channel = null;
@@ -121,6 +122,8 @@ function archiveLegacyQueues() {
   }
 }
 function resetLocalBusinessState() {
+  baseline = new Map();
+  managerBaseline = new Map();
   const state = getState();
   const { arrays } = splitState(state);
   const patch = {};
@@ -139,6 +142,7 @@ function persistBaseline() {
 }
 function snapshotBaseline(state) {
   baseline = new Map();
+  managerBaseline = new Map();
   const { arrays, meta } = splitState(state);
   const current = new Map();
   for (const [type,items] of Object.entries(arrays)) {
@@ -167,11 +171,17 @@ function snapshotBaseline(state) {
   persistBaseline();
 }
 function setBaselineRow(row) {
-  baseline.set(mapKey(row.record_type, row.record_id), {
+  const key=mapKey(row.record_type,row.record_id);
+  if(row.origin==="manager-import"){
+    managerBaseline.set(key,{type:row.record_type,id:row.record_id,payload:cleanPayload(row.payload),version:0,deleted_at:null});
+    return;
+  }
+  managerBaseline.delete(key);
+  baseline.set(key, {
     type: row.record_type, id: row.record_id, payload: clone(row.payload),
     version: row.version == null ? 1 : Number(row.version), deleted_at: row.deleted_at || null
   });
-  if(row.origin!=="manager-import")cacheRow(row);
+  cacheRow(row);
 }
 async function fetchPagedRecords(buildQuery) {
   const all = [];
@@ -224,7 +234,7 @@ function managerStateToRows(state) {
   return rows;
 }
 async function getManagerBridgeRows() {
-  if(profile?.is_admin!==true)return [];
+  if(!profile?.id||!ownerId)return [];
   const cached=loadManagerCache(actorId);
   if(cached.length){window.__factoryManagerBridgeLoaded=true;return cached;}
   try{
@@ -312,14 +322,18 @@ function makeOperations(state) {
   current.set(mapKey('__meta','main'), { type:'__meta', id:'main', payload:meta });
   const operations = [];
   for (const [key, item] of current) {
-    const old = baseline.get(key);
-    if (!old || stable(old.payload) !== stable(item.payload) || old.deleted_at) {
-      operations.push({ ...item, expectedVersion: old?.version || 0, deleted: false });
+    const old = baseline.get(key),source=old||managerBaseline.get(key);
+    if (!source || stable(source.payload) !== stable(item.payload) || source.deleted_at) {
+      operations.push({ ...item, expectedVersion: source?.version || 0, deleted: false });
     }
   }
   for (const [key, old] of baseline) {
     if (old.deleted_at) continue;
     if (!current.has(key)) operations.push({ type:old.type, id:old.id, payload:null, expectedVersion:old.version || 0, deleted:true });
+  }
+  for (const [key, old] of managerBaseline) {
+    if (baseline.has(key)||!current.has(key)) continue;
+    operations.push({type:old.type,id:old.id,payload:null,expectedVersion:0,deleted:true});
   }
   return operations;
 }
@@ -511,7 +525,7 @@ async function bootstrap() {
     if (!profile || window.__factoryOfflineMode !== true) throw new Error('يلزم اتصال مباشر بقاعدة بيانات الإنتاج لتوثيق الحساب.');
     actorId = profile?.id || null;
     ownerId = profile?.created_by || profile?.id || null;
-    storageScope = ownerId || 'anonymous';
+    storageScope = String(ownerId || 'anonymous') + ':' + String(actorId || 'anonymous');
     clearOtherManagerCaches(actorId);
     clearLegacyDeviceData();
     resetLocalBusinessState();
@@ -542,7 +556,7 @@ async function bootstrap() {
   actorId = user.id;
   await retryStartup(() => ensureProfile(actorId, false));
   ownerId = profile.created_by || profile.id;
-  storageScope = ownerId;
+  storageScope = String(ownerId) + ':' + String(actorId);
   clearOtherManagerCaches(actorId);
   resetLocalBusinessState();
   const managerRows = await getManagerBridgeRows();
