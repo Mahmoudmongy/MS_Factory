@@ -203,8 +203,8 @@ function mapManagerDataToState(data) {
       for(const row of ledgerRows){
         const accountId=acctIds.get(row.account_id),amount=Math.abs(num(row.debit)||num(row.credit));
         if(!accountId||!amount)continue;
-        if(cashAccountIds.has(String(row.account_id))&&!ac.some(x=>x.a===accountId))ac.push({a:accountId,m:amount,fc:0});
-        else if(!cashAccountIds.has(String(row.account_id)))ln.push({a:(row.customer_id||row.supplier_id)?"p":accountId,d:row.line_description||row.description||"",m:amount,x:0,lbl:(row.customer_id||row.supplier_id)?"حساب الطرف":"",pid:partnerId(row.customer_id||row.supplier_id)});
+        if(cashAccountIds.has(String(row.account_id))&&!ac.length)ac.push({a:accountId,m:amount,fc:0});
+        else if(!cashAccountIds.has(String(row.account_id))&&!ln.length)ln.push({a:(row.customer_id||row.supplier_id)?"p":accountId,d:row.line_description||row.description||"",m:amount,x:0,lbl:(row.customer_id||row.supplier_id)?"حساب الطرف":"",pid:partnerId(row.customer_id||row.supplier_id)});
       }
     }
     if(!ac.length){
