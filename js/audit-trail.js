@@ -1,7 +1,7 @@
 import { supabase } from './supabase.js';
 const esc = value => String(value ?? '').replace(/[&<>"']/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
 const labels = {INSERT:'إضافة',UPDATE:'تعديل',DELETE:'حذف'};
-const typeLabels = {docs:'الفواتير',vch:'السندات',po:'أوامر الإنتاج',je:'القيود اليومية',wo:'الهالك',partners:'العملاء والموردون',items:'الأصناف',wh:'المخازن',payroll:'الأجور',profile:'الموظفون والصلاحيات'};
+const typeLabels = {docs:'الفواتير',vch:'السندات',po:'أوامر الإنتاج',je:'القيود اليومية',wo:'الهالك',partners:'العملاء والموردون',customers:'العملاء',suppliers:'الموردون',sret:'مرتجعات المبيعات',pret:'مرتجعات المشتريات',items:'الأصناف',codes:'الباركود',mv:'حركات المخزون',wh:'المخازن',accts:'الحسابات',L:'بيانات المصنع',payroll:'الأجور',profile:'الموظفون والصلاحيات'};
 let ownerId = null, rows = [], panel = null, launcher = null;
 function ensureUi() {
   if (document.getElementById('factory-audit-open')) return;
