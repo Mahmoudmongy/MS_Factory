@@ -550,9 +550,11 @@ if(columnUi.button){const state=await p.locator('#m .table-columns-toggle').firs
 const warehouseTreeTest=await ev(()=>{const sample=[{id:101,name:"مخزن رئيسي"},{id:102,name:"خامات",parentId:101},{id:103,name:"أقمشة",parentId:102},{id:104,name:"منتج نهائي"}],tree=globalThis.buildWarehouseTree(sample);return {ids:tree.map(x=>x.id),depths:tree.map(x=>x._depth),path:globalThis.buildWarehousePath(sample,103)};});
 ok('warehouse locations support nested parent-child paths and stable tree ordering',warehouseTreeTest.ids.join(',')==="101,102,103,104"&&warehouseTreeTest.depths.join(',')==="0,1,2,0"&&warehouseTreeTest.path==="مخزن رئيسي / خامات / أقمشة",warehouseTreeTest);
 const materialSetup=await ev(()=>{globalThis.__factoryTestHooks?.openProductionForm();const item=globalThis.__factoryTestHooks?.firstItem();const rendered=globalThis.__factoryTestHooks?.renderProductionMaterial(7);return {item,rendered};});
-const matQty=p.locator('#pl input[data-mat-index="0"]');await matQty.fill("11");await matQty.press("Enter");
-const matEdit=await ev(()=>({qty:globalThis.__factoryTestHooks?.materialQty(0),warehouse:document.querySelector('#pl .production-material-row')?.textContent||''}));
-ok('production material rows expose editable quantities and show the source warehouse',!!materialSetup.item&&materialSetup.rendered&&matEdit.qty===11&&matEdit.warehouse.includes(materialSetup.item.name)&&matEdit.warehouse.includes(materialSetup.item.warehouse),{materialSetup,matEdit});
+if(materialSetup.item&&materialSetup.rendered){
+ const matQty=p.locator('#pl input[data-mat-index="0"]');await matQty.fill("11");await matQty.press("Enter");
+ const matEdit=await ev(()=>({qty:globalThis.__factoryTestHooks?.materialQty(0),warehouse:document.querySelector('#pl .production-material-row')?.textContent||''}));
+ ok('production material rows expose editable quantities and show the source warehouse',matEdit.qty===11&&matEdit.warehouse.includes(materialSetup.item.name)&&matEdit.warehouse.includes(materialSetup.item.warehouse),{materialSetup,matEdit});
+}else ok('production material test fixture is available',false,materialSetup);
 const selectSearch=await ev(()=>{const host=document.createElement('div');host.id='qa-select-search';host.innerHTML='<select id="qa-large-select">'+Array.from({length:12},(_,i)=>'<option value="'+i+'">اختيار '+i+'</option>').join('')+'</select>';document.querySelector('#m').append(host);globalThis.enhanceFactorySelects(host);return {input:!!host.querySelector('.select-search-input'),enhanced:host.querySelector('select').dataset.searchEnhanced==='1'};});
 await p.locator('#qa-select-search .select-search-input').fill('اختيار 10');
 const selectFiltered=await ev(()=>{const select=document.querySelector('#qa-large-select');return {visible:[...select.options].filter(o=>!o.hidden).map(o=>o.textContent),hidden:[...select.options].filter(o=>o.hidden).length};});
