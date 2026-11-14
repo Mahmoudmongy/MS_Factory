@@ -739,6 +739,8 @@ ok('journal posting validates accounts, non-negative one-sided lines, minimum li
 ok('journal numbers are generated without reusing an existing reference',app.includes('function nextJournalNo()')&&app.includes('while(used.has("JE-"+pad(n)))n++'));
 ok('journal correction creates a reversing entry and retains the original journal',app.includes('function reverseJ(id)')&&app.includes('original.reversedBy=rid')&&app.includes('reversalOf:id')&&app.includes('قيد عكسي للقيد'));
 ok('journal list distinguishes reversed entries and offers reversal instead of edit/delete',app.includes('تم عكسه')&&app.includes('عكس القيد')&&!app.includes('onclick="editJ('));
+ok('journal reversal labels and audit warning are fully translated in English mode',app.includes('"مرحّل":"Posted"')&&app.includes('"تم عكسه":"Reversed"')&&app.includes('"قيد عكسي":"Reversal entry"')&&app.includes('"عكس القيد":"Reverse entry"'));
+
 
 
 console.log(R.join('\n'));console.log(`\n${R.length-fails}/${R.length} checks passed, ${fails} failed`);process.exit(fails?1:0);
