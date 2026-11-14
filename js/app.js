@@ -193,7 +193,7 @@ const rdA=()=>({gov:$("#gv").value,city:$("#ct2").value,adr:$("#adr").value.trim
 const sel=(v,a)=>U(a,x=>`<option value="${x[0]}" ${v==x[0]?"selected":""}>${x[1]}</option>`);
 function retFrom(id){const d=S.docs.find(x=>x.id==id);docForm(d.t=="sale"?"sret":"pret",{pid:d.pid,cat:d.cat,ref:d.no,who:pn(d.pid),idate:d.date,lines:d.lines.filter(l=>l.iid).map(l=>({...l,max:l.qty,qty:0}))})}
 function editDoc(id){if(!can("edit"))return;const d=S.docs.find(x=>x.id==id);if(!d)return;if(d.manager_read_only){toast("المستندات المستوردة من Manager.io محفوظة كسجل تاريخي ولا يمكن تعديلها");return}docForm(d.t,{edit:id,pid:d.pid,cat:d.cat,date:d.date,warehouseId:d.warehouseId,lines:d.lines.map(l=>({...l})),disc:d.disc,note:d.note,img:d.img,dest:d.dest})}
-function docForm(t,p){p=p||{};D={t,lines:p.lines||[],img:p.img||"",edit:p.edit||0,disc:p.disc||0,warehouseId:+(p.warehouseId||p.wh||S.wh[0]?.id||0)};const s=t=="sale"||t=="sret",rt=t=="sret"||t=="pret",pur=t=="pur";
+function docForm(t,p){p=p||{};D={t,lines:p.lines||[],img:p.img||"",edit:p.edit||0,disc:p.disc||0,warehouseId:+(p.warehouseId||p.wh||0)};const s=t=="sale"||t=="sret",rt=t=="sret"||t=="pret",pur=t=="pur";
  sh(`<h3>${TN[t]}${p.edit?" — تعديل":""}</h3>${rt&&p.ref?`<div class="card">مرتجع من الفاتورة <b>${p.ref}</b> — ${p.who||""} — ${dfm(p.idate)}<br><span class="mu">اكتب الكميات المرتجعة فقط، وسيب الباقي فاضي</span></div>`:""}
  <div class="row"><div><label>التاريخ</label><input id="dd" type="date" value="${p.date||td()}"></div><div><label>${s?"العميل":"المورد"}</label><select id="pt">${U(S.partners.filter(x=>s?x.c:x.s),x=>`<option value="${x.id}">${x.name}${x.type=="w"?" — جملة":""}</option>`)}</select></div></div>
  <label>التبويب</label><select id="ct"><option value="mfg">تصنيع</option><option value="sup">مشتريات</option></select>${pur?`<label>تُضاف إلى</label><select id="ds"><option value="wh">مخزن الصنف</option>${U(S.po,o=>`<option value="${o.id}">أمر إنتاج ${o.no}</option>`)}</select>`:""}
@@ -228,7 +228,7 @@ function saveDoc(){if(!CUR||CUR.kind!="page")return;pend();const t=D.t,rt=t=="sr
   else{if(i)stk(dd,i,l.v,-l.qty,-amt,no,pid,id,"doc",warehouseId||i.wh);Ls.push({a:ak("inv"),cr:amt,desc:l.note})}delete l.max});
  if(disc)Ls.push(t=="sale"?{a:ak("sdisc"),dr:disc}:{a:ak("pdisc"),cr:disc});
  Ls.push(t=="sale"?{a:ak("ar"),dr:net,pid}:t=="sret"?{a:ak("ar"),cr:net,pid}:t=="pur"?{a:ak("ap"),cr:net,pid}:{a:ak("ap"),dr:net,pid});
- post(dd,no,TN[t],Ls,"doc",id,ts);S.docs.push({id,t,no,date:dd,ts,pid,cat,dest:dest=="wh"||!dest?dest:+dest,warehouseId:warehouseId||S.wh[0]?.id||0,lines,gross:gr,disc,total:net,note:$("#dn").value.trim(),img:D.img});sv();toast("تم حفظ "+TN[t]+" "+no);cl();if(t=="pur"&&!old)docLb(id)}
+ post(dd,no,TN[t],Ls,"doc",id,ts);S.docs.push({id,t,no,date:dd,ts,pid,cat,dest:dest=="wh"||!dest?dest:+dest,warehouseId:warehouseId||0,lines,gross:gr,disc,total:net,note:$("#dn").value.trim(),img:D.img});sv();toast("تم حفظ "+TN[t]+" "+no);cl();if(t=="pur"&&!old)docLb(id)}
 /* ===== vouchers ===== */
 function editV(id){if(!can("edit"))return;const v=S.vch.find(x=>x.id==id);if(!v)return;if(v.manager_read_only){toast("السندات المستوردة محفوظة كسجل تاريخي ولا يمكن تعديلها");return}vForm(v.dir,{...v,ln:v.ln.map(l=>({...l})),ac:v.ac.map(a=>({...a}))})}
 /* ===== inventory ===== */
