@@ -197,6 +197,22 @@ function mapManagerDataToState(data) {
       }
     }
     const raw = v.raw || {}, pid = partnerId(v.customer_id || v.supplier_id), alloc={};
+    if(!ac.length||!ln.length){
+      const sourceType=v.direction==="in"?"receipts":"payments";
+      const ledgerRows=ledger.filter(x=>x.source_record_type===sourceType&&String(x.source_manager_key)===String(v.external_id));
+      for(const row of ledgerRows){
+        const accountId=acctIds.get(row.account_id),amount=Math.abs(num(row.debit)||num(row.credit));
+        if(!accountId||!amount)continue;
+        if(cashAccountIds.has(String(row.account_id))&&!ac.some(x=>x.a===accountId))ac.push({a:accountId,m:amount,fc:0});
+        else if(!cashAccountIds.has(String(row.account_id)))ln.push({a:(row.customer_id||row.supplier_id)?"p":accountId,d:row.line_description||row.description||"",m:amount,x:0,lbl:(row.customer_id||row.supplier_id)?"حساب الطرف":"",pid:partnerId(row.customer_id||row.supplier_id)});
+      }
+    }
+    if(!ac.length){
+      const cashKey=rawText(raw,v.direction==="in"?"ReceivedIn":"PaidFrom");
+      const cashId=acctIds.get(cashKey)||acctIds.get(accounts.find(a=>a.name===v.account||a.account_code===v.account)?.id);
+      if(cashId)ac.push({a:cashId,m:num(v.amount),fc:0});
+    }
+    if(!ln.length&&(v.customer_id||v.supplier_id))ln.push({a:"p",d:"حساب الطرف",m:num(v.amount),x:0,lbl:"حساب الطرف",pid});
     for(const line of (Array.isArray(raw.Lines)?raw.Lines:[])){const external=rawText(line,"AccountsReceivableSalesInvoice","PurchaseInvoice");const docId=invoiceIdByExternal.get(String(external));if(docId)alloc[docId]=(alloc[docId]||0)+num(line.Amount)+num(line.DiscountAmount);}
     if (!ac.length && v.account) {
       const accountId = acctIds.get(accounts.find(a=>a.name===v.account || a.account_code===v.account)?.id);
@@ -246,8 +262,10 @@ function mapManagerDataToState(data) {
     list.push(x); expensesByOrder.set(key,list);
   }
   const po = production.map(order => {
-    const mats = (materialsByOrder.get(String(order.id)) || []).sort((a,b)=>num(a.line_no)-num(b.line_no)).map(m=>({ iid:productIds.get(m.product_id)||0, qty:num(m.quantity), cost:num(m.line_total)||num(m.unit_cost)*num(m.quantity), note:m.material_name || "" }));
-    const x = (expensesByOrder.get(String(order.id)) || []).sort((a,b)=>num(a.line_no)-num(b.line_no)).map(e=>({ a:acctIds.get(e.account_id), amt:num(e.amount), note:e.account_name || "" }));
+    let mats = (materialsByOrder.get(String(order.id)) || []).sort((a,b)=>num(a.line_no)-num(b.line_no)).map(m=>({ iid:productIds.get(m.product_id)||0, qty:num(m.quantity), cost:num(m.line_total)||num(m.unit_cost)*num(m.quantity), note:m.material_name || "" }));
+    let x = (expensesByOrder.get(String(order.id)) || []).sort((a,b)=>num(a.line_no)-num(b.line_no)).map(e=>({ a:acctIds.get(e.account_id), amt:num(e.amount), note:e.account_name || "" }));
+    if(!mats.length&&Array.isArray(order.raw?.BillOfMaterials))mats=order.raw.BillOfMaterials.map(m=>{const key=rawText(m,"BillOfMaterials","InventoryItem","item"),product=products.find(p=>String(p.external_id)===String(key)||String(p.sku)===String(key)),qty=num(m.Qty||m.qty);return {iid:product?productIds.get(product.id):0,qty,cost:product?qty*unitCostAt(product.id,order.order_date):0,note:product?.name||key}}).filter(m=>m.iid&&m.qty);
+    if(!x.length&&Array.isArray(order.raw?.ExpenseItems))x=order.raw.ExpenseItems.map(e=>({a:acctIds.get(e.Account),amt:num(e.Amount),note:""})).filter(e=>e.a&&e.amt);
     const subs = normalizeBreakdown(order.raw?.FinishedBreakdown || null, order.raw?.Qty || 0);
     const status = ["delivered","completed","complete","finished"].includes(String(order.status||"").toLowerCase())?2:["in_progress","in progress","processing"].includes(String(order.status||"").toLowerCase())?1:0;
     const loc = rawText(order.raw||{},"InventoryLocation");
