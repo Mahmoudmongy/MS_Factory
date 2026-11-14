@@ -738,6 +738,6 @@ ok('first-login password change clears the cached must-change-password flag befo
 const managerHistory=fs.readFileSync(path.join(ROOT,'js/manager-history.js'),'utf8');
 ok('Manager.io history screen is connected from the main app and cached for PWA use',fs.readFileSync(path.join(ROOT,'index.html'),'utf8').includes('js/manager-history.js')&&fs.readFileSync(path.join(ROOT,'public/sw.js'),'utf8').includes('js/manager-history.js'));
 ok('Manager.io history module includes all migrated business areas', ['customers','suppliers','products','inventory_location_balances','invoices','invoice_items','returns','vouchers','production_orders','manager_accounts','manager_ledger_transactions'].every(t=>managerHistory.includes(t)));
-ok('Manager.io history is explicitly read-only and does not write imported history',managerHistory.includes('للقراءة فقط')&&!/\\.from\\([^)]*\\)\\.(?:insert|update|upsert|delete)\\s*\\(/.test(managerHistory));
+ok('Manager.io history is explicitly read-only and does not write imported history',managerHistory.includes('للقراءة فقط')&&!['.insert(','.update(','.upsert(','.delete('].some(token=>managerHistory.includes(token)));
 console.log(R.join('\n'));console.log(`\n${R.length-fails}/${R.length} checks passed, ${fails} failed`);process.exit(fails?1:0);
 })().catch(e=>{console.error('TEST RUN CRASHED:',e.message);process.exit(2)});
