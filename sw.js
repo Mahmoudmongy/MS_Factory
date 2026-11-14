@@ -1,4 +1,4 @@
-/* Service Worker v14 - refreshed application shell.
+/* Service Worker v13 - refreshed application shell.
  * Business data stays in Supabase. Authenticated API responses are never cached.
  */
 const VERSION = 'factory-v22';
