@@ -808,5 +808,6 @@ ok('employee profile changes join the audit timeline without exposing profile un
 const profileSecurityMigration=fs.readFileSync(path.join(ROOT,'supabase/migrations/20261114132800_protect_profile_permissions.sql'),'utf8');
 const profileSecurityQa=fs.readFileSync(path.join(ROOT,'tests/sql/profile-self-escalation-qa.sql'),'utf8');
 ok('profile RLS cannot be bypassed to self-grant permissions or admin status',profileSecurityMigration.includes('new.permissions is distinct from old.permissions')&&profileSecurityMigration.includes('new.is_admin is distinct from old.is_admin')&&profileSecurityMigration.includes('before update on public.profiles')&&profileSecurityQa.includes('QA_PROFILE_SELF_ADMIN_ESCALATION_NOT_BLOCKED'));
+ok('employee permission updates import the shared Supabase client from the application asset path',fs.readFileSync(path.join(ROOT,'js/app.js'),'utf8').includes('import("./js/supabase.js")'));
 console.log(R.join('\n'));console.log(`\n${R.length-fails}/${R.length} checks passed, ${fails} failed`);process.exit(fails?1:0);
 })().catch(e=>{console.error('TEST RUN CRASHED:',e.message);process.exit(2)});
