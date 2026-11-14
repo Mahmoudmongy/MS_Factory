@@ -5,6 +5,22 @@ const fts=t=>{const d=new Date(t);let h=d.getHours();const ap=h>=12?"PM":"AM";h=
 const rng=k=>{const t=td(),d=new Date();d.setDate(d.getDate()-((d.getDay()+1)%7));return k=="d"?[t,t]:k=="w"?[lday(d),t]:[t.slice(0,8)+"01",t]},prs=fn=>U([["d","اليوم"],["w","هذا الأسبوع"],["m","هذا الشهر"]],x=>`<button class="g" onclick="${fn}('${x[0]}')">${x[1]}</button>`);
 const GEO0={"القاهرة":["القاهرة الجديدة","مدينة نصر","المعادي","شبرا","مصر الجديدة"],"الجيزة":["الدقي","6 أكتوبر","الشيخ زايد","الهرم","إمبابة"],"الإسكندرية":["المنتزه","سموحة","العجمي","برج العرب"],"الدقهلية":["المنصورة","ميت غمر","السنبلاوين","طلخا"],"الشرقية":["الزقازيق","العاشر من رمضان","بلبيس","فاقوس"],"القليوبية":["بنها","شبرا الخيمة","قليوب","العبور"],"الغربية":["طنطا","المحلة الكبرى","كفر الزيات"],"المنوفية":["شبين الكوم","السادات","منوف"],"البحيرة":["دمنهور","كفر الدوار","رشيد"],"كفر الشيخ":["كفر الشيخ","دسوق"],"دمياط":["دمياط","دمياط الجديدة","رأس البر"],"بورسعيد":["بورسعيد","بورفؤاد"],"الإسماعيلية":["الإسماعيلية","التل الكبير"],"السويس":["السويس"],"الفيوم":["الفيوم","سنورس"],"بني سويف":["بني سويف","الواسطي"],"المنيا":["المنيا","ملوي","مغاغة"],"أسيوط":["أسيوط","ديروط"],"سوهاج":["سوهاج","جرجا"],"قنا":["قنا","نجع حمادي"],"الأقصر":["الأقصر","إسنا"],"أسوان":["أسوان","كوم أمبو"],"البحر الأحمر":["الغردقة","سفاجا"],"الوادي الجديد":["الخارجة","الداخلة"],"مطروح":["مرسى مطروح","العلمين"],"شمال سيناء":["العريش"],"جنوب سيناء":["شرم الشيخ","الطور"]};
 const mk=(id,code,name,t,k,cash)=>({id,code,name,t,k:k||"",cash:cash||0,cur:"EGP"});
+/* ---- print template defaults: restore missing runtime definitions ---- */
+const TK={sale:"فاتورة بيع",pur:"فاتورة شراء",receipt:"سند قبض",payment:"سند صرف",po:"أمر إنتاج",stmt:"كشف حساب",rep:"تقرير"};
+const TCOL={
+ sale:[["ts","وقت الإصدار"],["party","بيانات العميل"],["img","صورة المستند"],["unit","الوحدة"],["note","بيان الصنف"]],
+ pur:[["ts","وقت الإصدار"],["party","بيانات المورد"],["img","صورة المستند"],["unit","الوحدة"],["note","بيان الصنف"]],
+ receipt:[["ts","وقت الإصدار"],["acct","الحسابات"],["desc","البيان"],["disc","الخصم"]],
+ payment:[["ts","وقت الإصدار"],["acct","الحسابات"],["desc","البيان"],["disc","الخصم"]],
+ po:[["ts","وقت الإصدار"],["mats","الخامات"],["cost","التكلفة"]],stmt:[],rep:[]
+};
+function TPL0(){
+ const make=title=>({org:S.name||"مدير الشركة",title,head:"",foot:"شكرًا لتعاملكم معنا",fs:12,mg:10,al:"c",logo:1,bar:1,hide:[]});
+ return {sale:make(TK.sale),pur:make(TK.pur),receipt:make(TK.receipt),payment:make(TK.payment),po:make(TK.po),stmt:make(TK.stmt),rep:make(TK.rep)};
+}
+let TPO=null;
+const tsh=(k,field)=>{const t=(TPO&&Array.isArray(TPO.hide)?TPO:(TPO&&TPO[k])||S.tpl?.[k]||TPL0()[k]);return !((t?.hide||[]).includes(field));};
+/* ------------------------------------------------------------------ */
 function seed(){const d0=td(),n0=Date.now(),op=(a,dr,cr)=>({d:d0,ts:n0,ref:"JE-0001",desc:"رصيد افتتاحي",a,dr,cr,pid:0,src:"je"});
 const s={name:"مدير الشركة",logo:"",pct:{w:20,r:40},geo:JSON.parse(JSON.stringify(GEO0)),per:{from:d0.slice(0,4)+"-01-01",to:d0},hide:[],modules:{},
 accts:[mk(1,"1001","الخزنة","A","",1),mk(2,"1002","بنك","A","",1),mk(3,"1003","فودافون كاش","A","",1),mk(4,"1100","العملاء","A","ar"),mk(5,"1200","المخزون","A","inv"),mk(6,"1250","تحت التصنيع","A","wip"),mk(7,"2100","الموردون","L","ap"),mk(8,"3001","رأس المال","Q","cap"),mk(9,"4100","المبيعات","I","sales"),mk(10,"5100","تكلفة المبيعات","X","cogs"),mk(11,"5200","مصروفات التصنيع لدى الغير","X"),mk(12,"5210","نثريات إنتاج","X"),mk(13,"5300","هالك مخزن","X","waste"),mk(14,"5400","مصروفات تحويل بنك","X"),mk(15,"5410","مصروفات فودافون كاش","X"),mk(16,"5500","مصروفات شحن","X"),mk(17,"5600","دعاية وإعلان","X"),mk(18,"5150","خصومات المبيعات","X","sdisc"),mk(19,"4200","خصومات المشتريات","I","pdisc")],
@@ -461,22 +477,7 @@ function nav(){
 window.setFactoryAuthProfile=function(profile){window.__factoryAuthProfile=profile||null;if(profile&&!profile.is_admin){who="0";const tabs=allowed();if(!tabs.some(t=>t[0]===tab))tab=tabs[0]?.[0]||"home";}nav();render();};
 function repairImportedWarehouseMap(){if(S.warehouseModelVersion===1)return;const raw=S.wh.find(w=>/مواد خام/.test(w.raw?.name||w.name||"")||w._cloudRecordId==="4143faac-cf13-4f8d-b5c2-5da6b11140ab"),finished=S.wh.find(w=>/منتجات نهائية/.test(w.raw?.name||w.name||"")||w._cloudRecordId==="4cffecfb-39d3-47ae-9c7a-97431887f26c"),sup=S.wh.find(w=>/مستلزمات/.test(w.raw?.name||w.name||""));if(!raw||!finished||!sup)return;raw.id=1;raw.name="المخزن الرئيسي مواد خام";finished.id=2;finished.name="المخزن الرئيسي للمنتجات النهائية";const strings=x=>{const out=[];const walk=v=>{if(typeof v==="string")out.push(v);else if(v&&typeof v==="object")Object.values(v).forEach(walk)};walk(x.raw||{});return out.join(" ").toLowerCase()};S.items.forEach(i=>{const text=strings(i);if(/قماش|fabric|textile/.test(text))i.wh=raw.id;else if(/مستلزمات|suppl(y|ies)|accessor/.test(text))i.wh=sup.id;else if(i.wh==1||i.wh==2)i.wh=finished.id});S.warehouseModelVersion=1;sv();render()}
 addEventListener("factory-database-ready",repairImportedWarehouseMap,{once:true});
-/* ---- print template defaults: restore missing runtime definitions ---- */
-const TK={sale:"فاتورة بيع",pur:"فاتورة شراء",receipt:"سند قبض",payment:"سند صرف",po:"أمر إنتاج",stmt:"كشف حساب",rep:"تقرير"};
-const TCOL={
- sale:[["ts","وقت الإصدار"],["party","بيانات العميل"],["img","صورة المستند"],["unit","الوحدة"],["note","بيان الصنف"]],
- pur:[["ts","وقت الإصدار"],["party","بيانات المورد"],["img","صورة المستند"],["unit","الوحدة"],["note","بيان الصنف"]],
- receipt:[["ts","وقت الإصدار"],["acct","الحسابات"],["desc","البيان"],["disc","الخصم"]],
- payment:[["ts","وقت الإصدار"],["acct","الحسابات"],["desc","البيان"],["disc","الخصم"]],
- po:[["ts","وقت الإصدار"],["mats","الخامات"],["cost","التكلفة"]],stmt:[],rep:[]
-};
-function TPL0(){
- const make=title=>({org:S.name||"مدير الشركة",title,head:"",foot:"شكرًا لتعاملكم معنا",fs:12,mg:10,al:"c",logo:1,bar:1,hide:[]});
- return {sale:make(TK.sale),pur:make(TK.pur),receipt:make(TK.receipt),payment:make(TK.payment),po:make(TK.po),stmt:make(TK.stmt),rep:make(TK.rep)};
-}
-let TPO=null;
-const tsh=(k,field)=>{const t=(TPO&&Array.isArray(TPO.hide)?TPO:(TPO&&TPO[k])||S.tpl?.[k]||TPL0()[k]);return !((t?.hide||[]).includes(field));};
-/* ------------------------------------------------------------------ */
+
 function migrate(){S.modules=S.modules&&typeof S.modules==="object"?S.modules:{};S.curs=S.curs||["EGP","USD","EUR"];S.codes=S.codes||[];S.accts.forEach(a=>{if(!a.cur)a.cur="EGP"});S.items.forEach(i=>{if(i.model===undefined)i.model="";Object.keys(i.st).forEach(v=>codeFor(i.id,v))});if(!S.tpl)S.tpl=TPL0();else Object.values(S.tpl).forEach(t=>{if(t.fs===14)t.fs=12});S.pend=S.pend||0}
 /* ---- unified balance display: positive = له علينا (plain), negative = عليه لنا (red) ---- */
 function pvh(v){const s=`${f(Math.abs(v))} ج.م`;return Math.abs(v)<.005?`${f(0)} ج.م`:v<0?`<span class="neg">-${s}</span>`:s}
