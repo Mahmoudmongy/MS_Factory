@@ -203,7 +203,7 @@ function enhanceFactorySelects(root=ACT||document){
   select.addEventListener("change",()=>{input.value="";reset()});
  });
 }
-window.enhanceFactorySelects=enhanceFactorySelects;
+globalThis.enhanceFactorySelects=enhanceFactorySelects;
 function enh(){enhanceFactorySelects();(ACT||document).querySelectorAll("td").forEach(c=>{if(/^\d{4}-\d{2}-\d{2}$/.test(c.textContent.trim())){c.dataset.v=c.textContent.trim();c.textContent=dfm(c.dataset.v)}});
  (ACT||document).querySelectorAll("table.l").forEach((t,ti)=>{if(t.dataset.e)return;t.dataset.e=1;const all=[...t.querySelectorAll("tr")],rows=all.filter(r=>r.querySelector("td")),hd=all[0];if(rows.length<2)return;
  const sig=(N[tab]||tab)+"|"+[...hd.children].map(x=>x.textContent.trim()).join("|")+"|"+ti,owner=window.__factoryAuthProfile?.id||"anonymous",storeKey="factory-table:"+owner+":"+sig;let saved={};try{saved=JSON.parse(localStorage.getItem(storeKey)||"{}")}catch{}
