@@ -427,6 +427,7 @@ if(typeof location!=="undefined"&&["127.0.0.1","localhost"].includes(location.ho
   materialQty:index=>PS.mats[index]?.qty,
   openProductionForm:()=>{go('prod');poForm()},
   openEmployeeForm:()=>{go('emp');eForm()},
+  openCustomerScreen:()=>go('cust'),
   applyPermissionTemplate:key=>{applyEmployeePermissionTemplate(key);return [...document.querySelectorAll('.pm:checked')].map(x=>x.value)},
   canFor:(screen,permission,profile)=>{const previous=globalThis.__factoryAuthProfile,previousTab=tab;globalThis.__factoryAuthProfile=profile;tab=screen;const result=can(permission);globalThis.__factoryAuthProfile=previous;tab=previousTab;return result},
   screenPermissions:()=>CLOUD_SCREEN_PERMISSIONS

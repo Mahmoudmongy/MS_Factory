@@ -570,6 +570,7 @@ ok('employee deletion requires both edit and delete permissions',deleteNeedsEdit
 ok('cloud employee controls match module, edit and delete permissions',cloudPermissionMatrix.read&&cloudPermissionMatrix.editDenied&&cloudPermissionMatrix.deleteDenied&&cloudPermissionMatrix.editAllowed&&cloudPermissionMatrix.deleteStillDenied,cloudPermissionMatrix);
 const ownerOnlyScreens=await ev(()=>{const p=globalThis.__factoryTestHooks.screenPermissions();return {settings:p.set===null,assistant:p.ai==='reports'};});
 ok('cloud employees cannot open owner-only settings; assistant access follows reports permission',ownerOnlyScreens.settings&&ownerOnlyScreens.assistant,ownerOnlyScreens);
+await ev(()=>globalThis.__factoryTestHooks.openCustomerScreen());
 await p.keyboard.type(" XYZ");await p.waitForTimeout(180);
 const continuedSearch=await p.locator('#m input[data-filter-key="cust"][data-filter-id="q"]').inputValue();
 ok('customer search accepts continued typing after live filtering',continuedSearch==="محلات XYZ",continuedSearch);
