@@ -58,3 +58,8 @@ assert(fs.readFileSync(path.join(root, 'index.html'), 'utf8').includes('js/audit
 assert(auditTrail.includes('undo_factory_record_change') && auditTrail.includes('latest.get(key)===row.id'), 'audit undo must use the guarded latest-entry RPC');
 assert(auditTrail.includes("undoSupported=['partners','items','codes','wh','accts','customers','suppliers']") && !auditTrail.includes("undoSupported=['partners','items','codes','mv'"), 'generic audit undo must exclude financial and stock movement records');
 console.log('PASS owner-only audit UI and module/edit/delete permission enforcement');
+
+assert(app.includes('const EMP_PERMISSION_TEMPLATES=') && app.includes('function applyEmployeePermissionTemplate') && app.includes('function employeeCloudPermissions'), 'employee permission templates and cloud mapping must be available');
+assert(app.includes('supabase.rpc("update_employee_permissions"') && app.includes('p_permissions:employeeCloudPermissions(data.perm)'), 'editing an existing cloud employee must update database permissions');
+assert(app.includes('delete:selected.includes("del")&&selected.includes("edit")') && app.includes('localPerm.includes("del")&&localPerm.includes("edit")'), 'delete permission must require edit for cloud and local employees');
+console.log('PASS employee templates, existing-account permission updates, and delete-requires-edit UI');
