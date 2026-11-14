@@ -208,7 +208,7 @@ function docForm(t,p){p=p||{};D={t,lines:p.lines||[],img:p.img||"",edit:p.edit||
  ${rt?"":`<label>${s?"خصم مبيعات":"خصم مشتريات"} (في نهاية الفاتورة)</label><input id="dsc" type="number" placeholder="المبلغ: 100" value="${D.disc||""}" oninput="D.disc=+this.value||0;drawL()">`}
  <label>بيان الفاتورة</label><input id="dn" placeholder="ملاحظات على الفاتورة" value="${p.note||""}"><div class="row"><button onclick="saveDoc()">حفظ</button>${bk}</div>`);
  if(p.pid)$("#pt").value=p.pid;if(p.cat)$("#ct").value=p.cat;if(p.dest&&$("#ds"))$("#ds").value=p.dest;fillIt();drawL()}
-function fillIt(){const ty=+$("#ty").value,l=S.items.filter(i=>!ty||stockAt(i,ty)!==0||i.wh==ty);if($("#it"))$("#it").innerHTML=U(l,i=>`<option value="${i.id}">${i.name}</option>`);if($("#itl"))$("#itl").innerHTML=U(l,i=>`<option value="${i.name}">`);unitSet()}
+function fillIt(){const l=S.items;if($("#it"))$("#it").innerHTML=U(l,i=>`<option value="${i.id}">${i.name}</option>`);if($("#itl"))$("#itl").innerHTML=U(l,i=>`<option value="${i.name}">`);unitSet()}
 function curIt(){if($("#it"))return{i:it_(+$("#it").value)};const n=$("#in").value.trim(),ty=+$("#ty").value;return{i:S.items.find(x=>x.name==n&&(!ty||x.wh==ty)),n}}
 function dp(i){const t=D.t,pid=+$("#pt").value,p=S.partners.find(x=>x.id==pid)||{},last=tt=>{const d=[...S.docs].reverse().find(d=>d.t==tt&&d.pid==pid&&d.lines.some(l=>l.iid==i.id));return d&&d.lines.find(l=>l.iid==i.id).price},k=p.type=="w"?"w":"r",tier=(k=="w"?i.wholesale:i.retail)||sug(i,k);return t=="sale"?tier:t=="sret"?(last("sale")??tier):t=="pret"?(last("pur")??i.buy):i.buy}
 const clr=ks=>ks.forEach(k=>{if($("#"+k))$("#"+k).value=""});
@@ -268,7 +268,7 @@ function addM(w){const q=+$("#mq"+w).value;if(!q)return;PS.mats.push({iid:+$("#m
 function addX(){const m=+$("#xm").value;if(!m)return;PS.x.push({a:+$("#xa").value,amt:m,note:$("#xn").value.trim()});clr(["xm","xn"]);drawP()}
 function drawP(){const cs=PS.cs.length?PS.cs:[""],zs=PS.zs.length?PS.zs:[""];$("#pg").innerHTML=`<table><tr><th>اللون \\ المقاس</th>${U(zs,z=>`<th>${z||"الكمية"}</th>`)}</tr>${U(cs,c=>`<tr><th>${c||"—"}</th>${U(zs,z=>`<td><input type="number" data-k="${vk(c,z)}" value="${PS.grid[vk(c,z)]||""}" placeholder="0" style="margin:0;width:70px" onchange="setG(this)"></td>`)}</tr>`)}</table><b>إجمالي القطع: <span id="gt">${subsOf().reduce((a,s)=>a+s.qty,0)}</span></b>`;
  $("#pl").innerHTML=`<div class="card"><b>المواد</b>${U(PS.mats,(m,i)=>`<div class="row sp"><span>${it_(m.iid).name}: ${qf(m.qty)} ${it_(m.iid).unit} ≈ ${f(av(it_(m.iid))*m.qty)}</span><button class="d" onclick="PS.mats.splice(${i},1);drawP()">✕</button></div>`)}<br><b>تكاليف غير مخزونة</b>${U(PS.x,(x,i)=>`<div class="row sp"><span>${an(x.a)} — ${x.note||""}: ${f(x.amt)}</span><button class="d" onclick="PS.x.splice(${i},1);drawP()">✕</button></div>`)}<br><b>الإجمالي التقديري: ${f(PS.mats.reduce((a,m)=>a+av(it_(m.iid))*m.qty,0)+PS.x.reduce((a,x)=>a+x.amt,0))}</b></div>`}
-function adv(id){const o=S.po.find(x=>x.id==id),d=td(),Ls=[];o.matCost=0;o.mats.forEach(m=>{const i=it_(m.iid),v=bestV(i),c=av(i)*m.qty;m.cost=c;o.matCost+=c;stk(d,i,v,-m.qty,-c,"صرف خامات "+o.no,0,o.id,"po",i.wh);Ls.push({a:ak("inv"),cr:c})});o.x.forEach(x=>Ls.push({a:x.a,cr:x.amt,desc:x.note}));Ls.push({a:ak("wip"),dr:o.matCost+o.x.reduce((a,x)=>a+x.amt,0)});post(d,o.no,"بدء أمر إنتاج",Ls,"po",o.id,o.ts);o.st=1;sv();render()}
+function adv(id){const o=S.po.find(x=>x.id==id),d=td(),Ls=[];o.matCost=0;o.mats.forEach(m=>{const i=it_(m.iid),v=bestV(i),c=avAt(i,i.wh)*m.qty;m.cost=c;o.matCost+=c;stk(d,i,v,-m.qty,-c,"صرف خامات "+o.no,0,o.id,"po",i.wh);Ls.push({a:ak("inv"),cr:c})});o.x.forEach(x=>Ls.push({a:x.a,cr:x.amt,desc:x.note}));Ls.push({a:ak("wip"),dr:o.matCost+o.x.reduce((a,x)=>a+x.amt,0)});post(d,o.no,"بدء أمر إنتاج",Ls,"po",o.id,o.ts);o.st=1;sv();render()}
 function xForm(id){sh(`<h3>إضافة تكلفة غير مخزونة</h3><select id="xa">${U(S.accts.filter(a=>a.t=="X"),a=>`<option value="${a.id}">${a.name}</option>`)}</select><input id="xn" placeholder="البيان: شحن للمصبغة"><input id="xm" type="number" placeholder="المبلغ: 700"><div class="row"><button onclick="saveX(${id})">حفظ</button>${bk}</div>`)}
 function saveX(id){const o=S.po.find(x=>x.id==id),a=+$("#xa").value,m=+$("#xm").value;if(!m)return;o.x.push({a,amt:m,note:$("#xn").value.trim()});if(o.st>=1)post(td(),o.no,"تكلفة إضافية",[{a:ak("wip"),dr:m},{a,cr:m,desc:$("#xn").value.trim()}],"po",o.id);sv();cl()}
 /* ===== employees ===== */
@@ -512,14 +512,14 @@ function addBc(){
   }
   if(!v) v=vk($("#cl").value.trim(),$("#sz").value.trim());
   if(v=="-" && D.t!="pur" && !h) v=bestV(it);
-  $("#ty").value=it.wh; fillIt();
+  fillIt();
   if($("#it")) $("#it").value=it.id; else $("#in").value=it.name;
   if(v && v!="-"){ const parts=v.split(" / "); if(parts[0] && parts[0]!="-") $("#cl").value=parts[0]; if(parts[1]) $("#sz").value=parts[1]; }
   const isSale=D.t=="sale"||D.t=="sret";
   const pr=+$ ("#pc").value || (isSale ? (it.retail||sug(it,"r")||it.buy) : it.buy) || dp(it);
   const bcCode=codeLook(it.id, v);
   $("#info").innerHTML=`<div class="card" style="border-right:4px solid #0f766e"><b>${it.name}</b> — ${whn(it.wh)} | الموديل: ${it.model||"-"} | الوحدة: ${it.unit} | المخزن: ${whn(it.wh)}<br>اللون: ${v.split(" / ")[0]||"-"} | المقاس: ${v.split(" / ")[1]||"-"} | الباركود: <code>${bcCode}</code><br>سعر البيع: ${f(it.retail)} | جملة: ${f(it.wholesale)} | شراء: ${f(it.buy)} | تكلفة: ${f(av(it))}</div>`;
-  D.lines.push({iid:it.id,name:it.name,v,qty:+$("#q").value||1,price:pr,cost:av(it)||it.buy||0,note:$("#ln").value.trim(),unit:it.unit,sku:it.sku,model:it.model||"",barcode:bcCode});
+  D.lines.push({iid:it.id,name:it.name,v,qty:+$("#q").value||1,price:pr,cost:avAt(it,+$("#ty").value||it.wh)||it.buy||0,note:$("#ln").value.trim(),unit:it.unit,sku:it.sku,model:it.model||"",barcode:bcCode});
   clr(["cl","sz","pc","ln","q","bcd"]);
 
   $("#bmsg").innerHTML=`<span style="color:#0f766e">✅ تمت إضافة: ${it.name} — ${v} — ${bcCode}</span>`;
