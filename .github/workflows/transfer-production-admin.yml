@@ -91,9 +91,10 @@ jobs:
               console.log("Matching Auth user already exists; password will not be changed.");
             } else if (existing.response.status === 404) {
               // Create the user with the original UUID and supplied password.
-              const created = await request(`/auth/v1/admin/users/${id}`, {
+              const created = await request("/auth/v1/admin/users", {
                 method: "POST",
                 body: JSON.stringify({
+                  id,
                   email,
                   password,
                   email_confirm: true
