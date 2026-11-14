@@ -745,6 +745,9 @@ ok('Manager.io bridge maps imported accounts, parties, stock, invoices, vouchers
 ok('Manager.io record IDs are stable numeric IDs suitable for the existing UI and factory_records overlay',bridge.includes('function stableId(namespace, key)')&&bridge.includes('namespace * 1000000000000'));
 ok('imported Manager.io financial documents are protected from in-place edits and deletion',app.includes('if(d?.legacyManager)')&&app.includes('if(v?.legacyManager)')&&app.includes('if(pre.legacyManager)')&&app.includes('if(imported?.legacyManager)'));
 ok('Manager.io bridge errors are surfaced to the user without clearing source records',dbSync.includes('factory-manager-bridge-error')&&app.includes('factory-manager-bridge-error'));
+ok('Manager source rows retain expected version zero so the first edit creates a new overlay row',dbSync.includes('row.version == null ? 1 : Number(row.version)')&&dbSync.includes('expectedVersion: old?.version || 0'));
+ok('Manager source cache is isolated per administrator and is never copied into shared employee cache',dbSync.includes('MANAGER_CACHE_KEY + String(actor || "anonymous") + ":" + String(ownerId || "no-owner")')&&dbSync.includes('if(row.origin!=="manager-import")cacheRow(row)'));
+
 const bridgePage=await browser.newPage();
 await bridgePage.goto(BASE+'auth.html');
 const bridgeFixture=await bridgePage.evaluate(async()=>{
