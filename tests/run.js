@@ -634,14 +634,14 @@ ok('foreign-currency amount without exchange rate is rejected',await ev(()=>wind
 await ev(()=>{$("#vfx").value="50";vAc();$("#la").value=String(ak("sales"));$("#lm").value="500";vLn();saveV()});
 ok('USD voucher: balance 10 USD and 500 EGP equivalent kept separately; ledger balanced',await ev(id=>balc(id,"",td())==10&&bal(id,"",td())==500,usd.id)&&await bal());
 /* ---------- production ---------- */
-await ev(()=>{go('prod');poForm();$("#pin").value="جاكيت اختبار";$("#pcs").value="أحمر، أسود";$("#pzs").value="M, L";$("#pcn").value="5";applyG();$("#ms1").value="1";$("#mq1").value="20";addM(1);$("#xn").value="تطريز";$("#xm").value="500";addX();savePO()});
+await ev(()=>{go('prod');poForm();$("#pin").value="جاكيت اختبار";$("#pcs").value="أحمر، أسود";$("#pzs").value="M, L";$("#pcn").value="5";applyG();$("#materialWarehouse").value="1";fillProductionMaterialItems();$("#materialItem").value="1";$("#materialQty").value="20";addProductionMaterial();$("#xn").value="تطريز";$("#xm").value="500";addX();savePO()});
 const po=await ev(()=>S.po[0]);ok('production order: 2 colours x 2 sizes x 5 = 20 pieces, finished item pre-created',po&&po.subs.length==4&&po.subs.reduce((a,s)=>a+s.qty,0)==20&&await ev(()=>!!S.items.find(i=>i.name=="جاكيت اختبار")));
 const fab0=await ev(()=>tq(it_(1)));await ev(id=>adv(id),po.id);ok('start execution issues 20 m of fabric from stock',await ev(()=>tq(it_(1)))==fab0-20);
 await ev(id=>{rcvForm(id);$("#rc0").value="4";rcvUp(0,5);$("#rc2").value="6";rcvUp(2,5)},po.id);ok('receipt screen shows difference and execution %',await ev(()=>$("#df0").textContent=="-1"&&$("#pc0").textContent=="80%"&&$("#df2").textContent=="1"&&$("#pc2").textContent=="120%"));
 await ev(id=>confRcv(id),po.id);await ev(()=>closeTab(CUR,1));
 ok('delivery adds the received 20 pieces, WIP back to zero, ledger balanced',await ev(()=>tq(S.items.find(i=>i.name=="جاكيت اختبار"))==20&&Math.abs(bal(ak("wip"),"",td()))<.01)&&await bal());
 ok('cost per piece = total cost / received pieces',await ev(id=>{const o=S.po.find(x=>x.id==id);return Math.abs(poCost(o)/20-(o.matCost+500)/20)<.001&&poCost(o)>500},po.id));
-await ev(()=>{go('prod');poForm();$("#pin").value="بنطلون اختبار";$("#pcs").value="كحلي";$("#pcn").value="10";applyG();$("#ms1").value="1";$("#mq1").value="10";addM(1);savePO()});const po2=await ev(()=>S.po.find(o=>o.iname=="بنطلون اختبار"));await ev(id=>adv(id),po2.id);
+await ev(()=>{go('prod');poForm();$("#pin").value="بنطلون اختبار";$("#pcs").value="كحلي";$("#pcn").value="10";applyG();$("#materialWarehouse").value="1";fillProductionMaterialItems();$("#materialItem").value="1";$("#materialQty").value="10";addProductionMaterial();savePO()});const po2=await ev(()=>S.po.find(o=>o.iname=="بنطلون اختبار"));await ev(id=>adv(id),po2.id);
 const c0=await ev(id=>poCost(S.po.find(o=>o.id==id)),po2.id);await ev(id=>{woForm();$("#wi").value="1";wvr();$("#wq").value="2";$("#wp").value=String(id);saveWo()},po2.id);
 ok('waste charged to an order raises its cost and keeps ledger balanced',await ev(id=>poCost(S.po.find(o=>o.id==id)),po2.id)>c0&&await bal());
 /* ---------- grouped item movement report ---------- */
