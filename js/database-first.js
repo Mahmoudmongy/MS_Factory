@@ -194,15 +194,20 @@ async function fetchPagedRecords(buildQuery) {
   return all;
 }
 function managerCacheKey(actor) { return MANAGER_CACHE_KEY + String(actor || "anonymous") + ":" + String(ownerId || "no-owner"); }
+function managerWarningKey(actor) { return MANAGER_CACHE_KEY + "warnings:" + String(actor || "anonymous") + ":" + String(ownerId || "no-owner"); }
 function loadManagerCache(actor) {
   try {
     const rows = JSON.parse(localStorage.getItem(managerCacheKey(actor)) || "[]");
+    window.__factoryManagerBridgeWarnings=JSON.parse(localStorage.getItem(managerWarningKey(actor))||"{}");
     return Array.isArray(rows) ? rows.filter(r=>r&&r.record_type&&r.record_id) : [];
   } catch (_) { return []; }
 }
-function saveManagerCache(actor, rows) {
-  try { localStorage.setItem(managerCacheKey(actor),JSON.stringify(rows)); return true; }
-  catch (error) { console.warn("Manager bridge cache could not be saved; data will be reloaded online:",error); return false; }
+function saveManagerCache(actor, rows, warnings={}) {
+  try {
+    localStorage.setItem(managerCacheKey(actor),JSON.stringify(rows));
+    localStorage.setItem(managerWarningKey(actor),JSON.stringify(warnings||{}));
+    return true;
+  } catch (error) { console.warn("Manager bridge cache could not be saved; data will be reloaded online:",error); return false; }
 }
 function managerStateToRows(state) {
   const rows=[];
@@ -223,7 +228,8 @@ async function getManagerBridgeRows() {
     const state=await retryStartup(()=>loadManagerDataBridge(supabase,ownerId));
     if(!state)return [];
     const rows=managerStateToRows(state);
-    saveManagerCache(actorId,rows);
+    window.__factoryManagerBridgeWarnings=state.managerBridgeWarnings||{};
+    saveManagerCache(actorId,rows,state.managerBridgeWarnings||{});
     window.__factoryManagerBridgeLoaded=true;
     return rows;
   }catch(error){
