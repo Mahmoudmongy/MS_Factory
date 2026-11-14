@@ -503,7 +503,11 @@ ok('local save writes a durable pending-sync marker before network recovery',/mg
 ok('header keeps one clear cloud-status icon with the refined light-green treatment and no duplicate sync button',!idx.includes('id="sync-btn"')&&idx.includes('id="net-cloud"')&&css.includes('#top #net{background:#e8f5e9'));
 ok('header uses an icon-only light/dark toggle and language stays out of the header',/<button id="thb"/.test(idx)&&!idx.includes('id="lgb"')&&/togLang\(\)/.test(app)&&/التبديل إلى الوضع الداكن/.test(app));
 ok('admin selector is labelled Admin in Arabic and English',/الأدمن \/ Admin/.test(app));
-ok('search filters retain typed values and commit on Enter or blur',/function fbarType\(k,id,el\)\{FL\[k\]=FL\[k\]\|\|\{\};FL\[k\]\[id\]=el\.value;\}/.test(app)&&/oninput="fbarType\(/.test(app)&&/onblur="fbarCommit/.test(app));
+ok('search filters retain typed values and commit on Enter or blur',/function fbarType\(k,id,el\)\{FL\[k\]=FL\[k\]\|\|\{\};FL\[k\]\[id\]=el\.value;\}/.test(app)&&app.includes('data-filter-search="1"')&&app.includes('document.addEventListener("input"')&&app.includes('document.addEventListener("focusout"')&&app.includes('event.key!=="Enter"'));
+ok('filter fields use delegated events instead of malformed interpolated inline JavaScript',app.includes('data-filter-select="1"')&&app.includes('data-filter-date-field="1"')&&app.includes('let FILTER_DATE_PENDING=Object.create(null)')&&app.includes('stageFilterDateField(el)')&&!/on(?:change|input|blur|keydown)="(?:FL\[|fbarType|fbarCommit)/.test(app));
+ok('summary date range is staged and committed on Enter or leaving the date group',app.includes('data-home-period-field="from"')&&app.includes('data-home-period-field="to"')&&app.includes('function commitHomePeriod(card)')&&app.includes('S.per={...S.per,from,to}')&&!app.includes('onchange="S.per.from=this.value')&&!app.includes('onchange="S.per.to=this.value'));
+ok('summary hides zero-balance accounts without deleting them or changing account totals',app.includes('A_=S.accts.filter(a=>a.t=="A"&&Math.abs(B(a))>.005)')&&app.includes('Ls=S.accts.filter(a=>a.t=="L"&&Math.abs(B(a))>.005)')&&app.includes('Qs=S.accts.filter(a=>a.t=="Q"&&Math.abs(B(a))>.005)')&&app.includes('I_=S.accts.filter(a=>a.t=="I"&&Math.abs(B(a))>.005)')&&app.includes('sm=t=>S.accts.filter(x=>x.t==t).reduce'));
+ok('customer receivables display positive and supplier payables display negative from the control-account ledger',app.includes('const btxt=b=>pvh(b)')&&app.includes('bf=="lo"?pbal(p.id)>.005:bf=="er"?pbal(p.id)<-.005')&&app.includes('الرصيد الموجب = مستحق للشركة، والسالب بالأحمر = مستحق للطرف'));
 ok('opening an existing screen in a separate tab activates it instead of duplicating it',/let x=TB\.find\(y=>y\.kind=="screen"&&y\.sid==t\)/.test(app));
 ok('Excel export splits currency labels into a separate adjacent cell and keeps amounts numeric',/function exportCurrencyCell/.test(app)&&/\[h\+" \(قيمة\)","العملة"\]/.test(app));
 ok('legacy Excel importer supports multiple named sheets for customers, suppliers and inventory',/function impSheet\(/.test(app)&&/function templateExcel\(/.test(app)&&/customers:\[/.test(app)&&/suppliers:\[/.test(app)&&/WZ\.sheetNames/.test(app));
@@ -553,6 +557,22 @@ const headerState=await ev(()=>({languageButton:!!document.getElementById('lgb')
 ok('header has no language button, has an icon-only theme button and shows Admin',!headerState.languageButton&&headerState.themeTag==="BUTTON"&&headerState.admin==="الأدمن / Admin",headerState);
 const exportCell=await ev(()=>exportCurrencyCell("1,250.50 ج.م"));
 ok('currency export parser returns a numeric value and a separate currency cell',exportCell.value==="1250.50"&&exportCell.currency==="ج.م",exportCell);
+await ev(()=>go('sale'));
+await p.locator('#m .filter-date-toggle').click();
+const desktopFrom=p.locator('#m input[data-filter-date-field="1"]').first();
+await desktopFrom.fill("2026-11-01");
+const stagedDate=await ev(()=>({committed:FL.dsale.from||"",pending:FILTER_DATE_PENDING.dsale?.from||"",inline:document.querySelector('#m input[data-filter-date-field="1"]')?.getAttribute("onchange")||""}));
+ok('desktop date filter waits for Enter instead of applying partial input',stagedDate.committed===""&&stagedDate.pending==="2026-11-01"&&stagedDate.inline==="",stagedDate);
+await desktopFrom.press("Enter");
+const committedDate=await ev(()=>({from:FL.dsale.from,panelHidden:document.querySelector('.filter-card[data-filter-group="dsale"] .filter-date-panel')?.hidden}));
+ok('desktop date filter commits on Enter and closes the period panel',committedDate.from==="2026-11-01"&&committedDate.panelHidden===true,committedDate);
+await p.setViewportSize({width:390,height:844});await ev(()=>go('sale'));
+await p.locator('#m .filter-date-toggle').click();
+const mobileTo=p.locator('#m input[data-filter-date-field="1"]').nth(1);
+await mobileTo.fill("2026-11-30");
+await mobileTo.evaluate(el=>el.blur());
+const mobileDateCommit=await ev(()=>({to:FL.dsale.to,panelHidden:document.querySelector('.filter-card[data-filter-group="dsale"] .filter-date-panel')?.hidden,width:document.documentElement.scrollWidth}));
+ok('mobile date filter commits when focus leaves the date group without horizontal overflow',mobileDateCommit.to==="2026-11-30"&&mobileDateCommit.panelHidden===true&&mobileDateCommit.width<=390,mobileDateCommit);
 await p.setViewportSize({width:1280,height:900});await ev(()=>{FL.cust={};go('home')});
 
 /* master data edit: same partner ID, no duplicate row */
@@ -574,8 +594,10 @@ ok('sale: stock of item decreased by 2 (20 -> 18)',await ev(()=>tq(it_(3)))==18)
 ok('sale: sales revenue account = 500 and sales-discount = 10 (credit/debit sides correct)',await ev(()=>[bal(ak("sales"),"",td()),bal(ak("sdisc"),"",td())]).then(x=>x[0]==500&&x[1]==10),await ev(()=>[bal(ak("sales"),"",td()),bal(ak("sdisc"),"",td())]));
 ok('ledger balanced after sale',await bal());
 const pb=await ev(()=>({raw:pbal(1),shown:btxt(pbal(1)),pos:pvh(500),neg:pvh(-500)}));
-ok('unified balance rule: customer owing us (490) shows NEGATIVE in red',pb.raw==490&&pb.shown.includes('class="neg"')&&pb.shown.includes('-490.00'),pb.shown);
+ok('unified balance rule: customer owing us (490) shows positive in plain text',pb.raw==490&&!pb.shown.includes('class="neg"')&&pb.shown.includes('490.00'),pb.shown);
 ok('unified balance rule: positive (we owe him) shows plain, negative shows red',!pb.pos.includes('neg')&&pb.pos.includes('500.00')&&pb.neg.includes('neg')&&pb.neg.includes('-500.00'));
+const supplierBalance=await ev(()=>{const accts=S.accts,ledger=S.L,partners=S.partners;S.accts=[{id:9901,k:"ap",t:"L",name:"Accounts payable"}];S.L=[{pid:9902,a:9901,dr:0,cr:500}];S.partners=[{id:9902,s:true,name:"مورد اختبار"}];const result={raw:pbal(9902),shown:btxt(pbal(9902))};S.accts=accts;S.L=ledger;S.partners=partners;return result});
+ok('supplier payable (credit balance) displays negative in red without altering its ledger lines',supplierBalance.raw===-500&&supplierBalance.shown.includes('class="neg"')&&supplierBalance.shown.includes('-500.00'),supplierBalance);
 /* return */
 await ev(id=>retFrom(id),sale.id);ok('return opens with blank quantities',await ev(()=>D.lines.every(l=>l.qty==0)));
 await ev(()=>{SAVING=0;saveDoc()});ok('return with all-empty quantities is rejected (nothing saved)',await ev(()=>!S.docs.some(d=>d.t=="sret")));
