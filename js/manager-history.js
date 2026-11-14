@@ -82,9 +82,9 @@ function ensureUi() {
   const top = $('#top');
   const tabsBar = $('#tabs');
   if (!top || !tabsBar) return;
-  const launcher = document.createElement('div');
+  const launcher = document.createElement('span');
   launcher.id = 'manager-history-launcher';
-  launcher.style.cssText = 'display:flex;justify-content:flex-end;align-items:center;padding:5px 12px;background:var(--bg,#f7f8fa);';
+  launcher.style.cssText = 'display:inline-flex;align-items:center;gap:6px;max-width:min(55vw,520px);vertical-align:middle;';
   const button = document.createElement('button');
   button.id='manager-history-open';
   button.type='button';
@@ -94,7 +94,17 @@ function ensureUi() {
   button.style.cssText='white-space:nowrap;font-weight:700;min-height:34px';
   button.addEventListener('click',openPanel);
   launcher.appendChild(button);
-  tabsBar.parentNode.insertBefore(launcher,tabsBar);
+  const netButton=$('#net');
+  if(netButton?.parentNode)netButton.parentNode.insertBefore(launcher,netButton.nextSibling);else top.appendChild(launcher);
+  const moveConflictExport=()=>{
+    const notice=$('#factory-conflict-export-notice');if(!notice||launcher.contains(notice))return;
+    notice.style.cssText='position:static;z-index:auto;display:flex;align-items:center;gap:4px;max-width:min(42vw,420px);margin:0;';
+    const exportButton=$('#factory-conflict-export',notice),closeButton=$('#factory-conflict-export-close',notice);
+    if(exportButton)exportButton.style.cssText='max-width:220px;min-height:34px;padding:6px 9px;border:0;border-radius:8px;background:#7c2d12;color:#fff;font:600 12px Arial;line-height:1.3;white-space:normal;overflow-wrap:anywhere;cursor:pointer';
+    if(closeButton)closeButton.style.cssText='flex:0 0 28px;min-width:28px;min-height:30px;border:0;border-radius:7px;background:#7c2d12;color:#fff;font:700 20px/1 Arial;cursor:pointer';
+    launcher.appendChild(notice);
+  };
+  new MutationObserver(moveConflictExport).observe(document.body,{childList:true,subtree:true});moveConflictExport();
 
   const style=document.createElement('style');
   style.textContent=`
