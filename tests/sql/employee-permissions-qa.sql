@@ -11,7 +11,7 @@ BEGIN
     VALUES(v_employee,'authenticated','authenticated',v_employee::text||'@qa.invalid','',clock_timestamp(),
       '{"provider":"email","providers":["email"]}','{}',clock_timestamp(),clock_timestamp());
     UPDATE public.profiles SET created_by=v_owner,is_admin=false,
-      permissions='{"inventory":true,"edit":false,"delete":false}'::jsonb WHERE id=v_employee;
+      permissions='{"reports":true,"edit":false,"delete":false}'::jsonb WHERE id=v_employee;
     PERFORM set_config('request.jwt.claim.sub',v_owner::text,true);
     PERFORM set_config('request.jwt.claims',jsonb_build_object('sub',v_owner,'role','authenticated')::text,true);
     PERFORM set_config('role','authenticated',true);
@@ -24,7 +24,7 @@ BEGIN
     EXCEPTION WHEN invalid_parameter_value THEN v_count:=1;
     END;
     IF v_count<>1 THEN RAISE EXCEPTION 'QA_DELETE_REQUIRES_EDIT_NOT_ENFORCED'; END IF;
-    PERFORM public.update_employee_permissions(v_employee,'{"inventory":true,"edit":false,"delete":false}'::jsonb);
+    PERFORM public.update_employee_permissions(v_employee,'{"reports":true,"edit":false,"delete":false}'::jsonb);
     PERFORM set_config('request.jwt.claim.sub',v_employee::text,true);
     PERFORM set_config('request.jwt.claims',jsonb_build_object('sub',v_employee,'role','authenticated')::text,true);
     SELECT count(*) INTO v_count FROM public.factory_records WHERE user_id=v_owner AND record_id=v_record_id;

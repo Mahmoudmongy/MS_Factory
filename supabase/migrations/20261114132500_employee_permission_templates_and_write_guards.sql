@@ -12,7 +12,8 @@ as $$
         or (
           actor.created_by = p_owner_id
           and p_permission is not null
-          and actor.permissions ->> p_permission = 'true'
+          and (actor.permissions ->> p_permission = 'true'
+            or (p_write is false and actor.permissions ->> 'reports' = 'true'))
           and (p_write is false or actor.permissions ->> 'edit' = 'true')
         )
       )
