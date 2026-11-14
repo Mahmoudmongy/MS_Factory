@@ -86,16 +86,103 @@ function swho(v){if(cloudProfile()&&!cloudProfile().is_admin)return;who=v;go(all
 function pick(inp,cb){const fl=inp.files[0];if(!fl)return;const r=new FileReader();r.onload=()=>{const im=new Image();im.onload=()=>{const c=document.createElement("canvas"),k=Math.min(1,420/im.width);c.width=im.width*k;c.height=im.height*k;c.getContext("2d").drawImage(im,0,0,c.width,c.height);const v=c.toDataURL("image/jpeg",.6);cb(v);const n=inp.nextElementSibling;if(n&&n.tagName=="IMG")n.remove();inp.insertAdjacentHTML("afterend",`<img src="${v}" width="60">`)};im.src=r.result};r.readAsDataURL(fl)}
 /* ===== global table tools: search (contains) + sort every header + Excel export + date format ===== */
 const key=c=>{const x=(c.dataset.v||c.textContent).trim(),m=x.match(/^(\d\d)-(\d\d)-(\d{4})(?: (\d\d):(\d\d) (AM|PM))?$/);if(m)return +`${m[3]}${m[2]}${m[1]}${p2((+(m[4]||0))%12+(m[6]=="PM"?12:0))}${m[5]||"00"}`;const n=parseFloat(x.replace(/,/g,""));return isNaN(n)?x:n};
+/* Advanced, safe table search: free text, AND/OR and column comparisons. */
+const MSFactorySearch = (() => {
+  const norm = value => String(value ?? '').normalize('NFKC').toLocaleLowerCase()
+    .replace(/[أإآ]/g,'ا').replace(/ى/g,'ي').replace(/[\u064B-\u065F\u0670ـ]/g,'').trim();
+  const unquote = value => {
+    const s=String(value??'').trim();
+    return (s.length>=2 && ((s[0]==='"'&&s.at(-1)==='"')||(s[0]==="'"&&s.at(-1)==="'"))) ? s.slice(1,-1) : s;
+  };
+  const number = value => {
+    const s=String(value??'').replace(/,/g,'').replace(/\s*(ج\.?\s*م|EGP|USD|EUR|دولار|ريال)\s*$/i,'').trim();
+    if(!/^[+-]?(?:\d+\.?\d*|\.\d+)$/.test(s)) return null;
+    const n=Number(s); return Number.isFinite(n)?n:null;
+  };
+  const date = value => {
+    const s=String(value??'').trim();
+    if(/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
+    const m=s.match(/^(\d{2})-(\d{2})-(\d{4})$/);
+    return m ? m[3]+'-'+m[2]+'-'+m[1] : null;
+  };
+  function lex(input) {
+    const out=[]; let token='', quote='', escaped=false;
+    for(const ch of String(input??'')) {
+      if(escaped){token+=ch;escaped=false;continue;}
+      if(ch==='\\'&&quote){escaped=true;continue;}
+      if(quote){token+=ch;if(ch===quote)quote='';continue;}
+      if(ch==='"'||ch==="'"){quote=ch;token+=ch;continue;}
+      if(/\s/.test(ch)){if(token){out.push(token);token='';}continue;}
+      token+=ch;
+    }
+    if(quote) return {tokens:[],error:'علامة الاقتباس غير مكتملة'};
+    if(token)out.push(token);
+    return {tokens:out,error:''};
+  }
+  function compile(input, headers=[]) {
+    const raw=String(input??'').trim();
+    if(!raw)return {valid:true,error:'',test:()=>true};
+    const scanned=lex(raw); if(scanned.error)return {valid:false,error:scanned.error,test:()=>false};
+    const tokens=scanned.tokens, groups=[[]]; let expectTerm=true;
+    for(const token of tokens) {
+      const op=token.toUpperCase();
+      if(op==='OR') {
+        if(expectTerm||!groups[groups.length-1].length)return {valid:false,error:'استخدم OR بين شرطين',test:()=>false};
+        groups.push([]);expectTerm=true;continue;
+      }
+      if(op==='AND') {
+        if(expectTerm||!groups[groups.length-1].length)return {valid:false,error:'استخدم AND بين شرطين',test:()=>false};
+        expectTerm=true;continue;
+      }
+      const match=token.match(/^(.+?)(>=|<=|!=|=|>|<)(.+)$/);
+      let term;
+      if(match) {
+        const field=unquote(match[1]), opx=match[2], expected=unquote(match[3]);
+        const index=headers.findIndex(h=>norm(h)===norm(field));
+        if(index<0)return {valid:false,error:'اسم العمود غير معروف: '+field,test:()=>false};
+        const expectedDate=date(expected), expectedNumber=number(expected);
+        term=values=>{
+          const actual=String(values[index]??'').trim(), actualDate=date(actual), actualNumber=number(actual);
+          let cmp;
+          if(expectedDate&&actualDate)cmp=actualDate.localeCompare(expectedDate);
+          else if(expectedNumber!==null&&actualNumber!==null)cmp=actualNumber<expectedNumber?-1:actualNumber>expectedNumber?1:0;
+          else cmp=norm(actual).localeCompare(norm(expected));
+          if(opx==='=')return cmp===0;
+          if(opx==='!=')return cmp!==0;
+          if(opx==='>')return !!((expectedDate&&actualDate||expectedNumber!==null&&actualNumber!==null)&&cmp>0);
+          if(opx==='<')return !!((expectedDate&&actualDate||expectedNumber!==null&&actualNumber!==null)&&cmp<0);
+          if(opx==='>=')return !!((expectedDate&&actualDate||expectedNumber!==null&&actualNumber!==null)&&cmp>=0);
+          if(opx==='<=')return !!((expectedDate&&actualDate||expectedNumber!==null&&actualNumber!==null)&&cmp<=0);
+          return false;
+        };
+      } else {
+        const needle=norm(unquote(token));
+        if(!needle)return {valid:false,error:'شرط البحث فارغ',test:()=>false};
+        term=values=>norm(values.join(' ')).includes(needle);
+      }
+      groups[groups.length-1].push(term);expectTerm=false;
+    }
+    if(expectTerm)return {valid:false,error:'ينقصك شرط بعد AND أو OR',test:()=>false};
+    return {valid:true,error:'',test:values=>groups.some(group=>group.every(term=>term(values)))};
+  }
+  return {compile,normalize:norm};
+})();
+window.MSFactorySearch = MSFactorySearch;
 function enh(){(ACT||document).querySelectorAll("td").forEach(c=>{if(/^\d{4}-\d{2}-\d{2}$/.test(c.textContent.trim())){c.dataset.v=c.textContent.trim();c.textContent=dfm(c.dataset.v)}});
  (ACT||document).querySelectorAll("table.l").forEach((t,ti)=>{if(t.dataset.e)return;t.dataset.e=1;const all=[...t.querySelectorAll("tr")],rows=all.filter(r=>r.querySelector("td")),hd=all[0];if(rows.length<2)return;
- const sig=(N[tab]||tab)+"|"+[...hd.children].map(x=>x.textContent.trim()).join("|")+"|"+ti,storeKey="factory-table:"+sig;let saved={};try{saved=JSON.parse(localStorage.getItem(storeKey)||"{}")}catch{}
- const bar=document.createElement("div");bar.className="row";bar.style.margin="4px 0";bar.innerHTML='<input placeholder="🔎 بحث (يحتوي على...)" style="max-width:260px;margin:0"><button class="g">⬇️ تصدير Excel</button>';t.before(bar);
- const inp=bar.querySelector("input");inp.value=saved.q||"";const filter=()=>{const q=inp.value.trim().toLowerCase();rows.forEach(r=>r.style.display=!q||r.textContent.toLowerCase().includes(q)?"":"none");saved.q=q;try{localStorage.setItem(storeKey,JSON.stringify(saved))}catch{}};inp.oninput=filter;filter();bar.querySelector("button").onclick=()=>xl(t,rows);
- const applySort=(ci,dir,save=true)=>{const body=rows[0].parentNode,foot=all.filter(r=>r!==hd&&!r.querySelector("td"));[...rows].sort((a,b)=>{const x=key(a.children[ci]||a),y=key(b.children[ci]||b);return(typeof x=="number"&&typeof y=="number"?x-y:String(x).localeCompare(String(y),"ar"))*dir}).forEach(r=>body.appendChild(r));foot.forEach(r=>body.appendChild(r));[...hd.children].forEach((th,i)=>{th.dataset.d=i===ci?(dir===-1?"-1":"1"):""});if(save){saved.sort={ci,dir};try{localStorage.setItem(storeKey,JSON.stringify(saved))}catch{}}};
+ const sig=(N[tab]||tab)+"|"+[...hd.children].map(x=>x.textContent.trim()).join("|")+"|"+ti,owner=window.__factoryAuthProfile?.id||"anonymous",storeKey="factory-table:"+owner+":"+sig;let saved={};try{saved=JSON.parse(localStorage.getItem(storeKey)||"{}")}catch{}
+ const bar=document.createElement("div");bar.className="row";bar.style.cssText="margin:4px 0;position:relative;gap:6px;flex-wrap:wrap";bar.innerHTML='<input class="table-search-input" placeholder="🔎 بحث: كلمة AND كلمة | كلمة OR كلمة | المبلغ>=100" style="max-width:320px;margin:0"><button class="g table-columns-toggle" type="button">⚙ الأعمدة</button><button class="g table-export" type="button">⬇️ تصدير Excel</button>';t.before(bar);
+ const inp=bar.querySelector("input"),menu=document.createElement("div");menu.className="table-columns-menu";menu.hidden=true;menu.style.cssText="position:absolute;z-index:1000;top:100%;right:0;min-width:220px;max-height:280px;overflow:auto;padding:10px;background:var(--card,#fff);color:var(--tx,#17212b);border:1px solid var(--bd,#ccc);border-radius:9px;box-shadow:0 8px 24px #0002";
+ const headers=[...hd.children],initial=Array.isArray(saved.columns)?saved.columns.filter(i=>Number.isInteger(i)&&i>=0&&i<headers.length):headers.map((_,i)=>i),visible=new Set(initial.length?initial:headers.map((_,i)=>i));
+ const applyColumns=()=>{headers.forEach((cell,i)=>cell.style.display=visible.has(i)?"":"none");rows.forEach(row=>[...row.children].forEach((cell,i)=>cell.style.display=visible.has(i)?"":"none"));};
+ headers.forEach((cell,i)=>{const label=document.createElement("label");label.style.cssText="display:flex;align-items:center;gap:8px;padding:5px;cursor:pointer";const check=document.createElement("input");check.type="checkbox";check.checked=visible.has(i);check.addEventListener("change",()=>{if(!check.checked&&visible.size===1){check.checked=true;return;}if(check.checked)visible.add(i);else visible.delete(i);saved.columns=[...visible].sort((a,b)=>a-b);try{localStorage.setItem(storeKey,JSON.stringify(saved))}catch{}applyColumns()});label.append(check,document.createTextNode(cell.textContent.trim()||("عمود "+(i+1))));menu.append(label)});
+ bar.append(menu);bar.querySelector(".table-columns-toggle").onclick=()=>{menu.hidden=!menu.hidden};document.addEventListener("click",e=>{if(!bar.contains(e.target))menu.hidden=true});
+ applyColumns();
+ inp.value=saved.q||"";const filter=()=>{const compiled=MSFactorySearch.compile(inp.value,headers.map(x=>x.textContent.trim()));inp.title=compiled.error||"يدعم AND وOR والمقارنات مثل المبلغ>=100";rows.forEach(r=>{const values=[...r.children].map(c=>c.dataset.v||c.textContent.trim());r.style.display=compiled.valid&&compiled.test(values)?"":"none"});saved.q=inp.value;try{localStorage.setItem(storeKey,JSON.stringify(saved))}catch{}};inp.oninput=filter;filter();bar.querySelector(".table-export").onclick=()=>xl(t,rows);
+ const applySort=(ci,dir,save=true)=>{const body=rows[0].parentNode,foot=all.filter(r=>r!==hd&&!r.querySelector("td"));[...rows].sort((a,b)=>{const x=key(a.children[ci]||a),y=key(b.children[ci]||b);return(typeof x==="number"&&typeof y==="number"?x-y:String(x).localeCompare(String(y),"ar"))*dir}).forEach(r=>body.appendChild(r));foot.forEach(r=>body.appendChild(r));[...hd.children].forEach((th,i)=>{th.dataset.d=i===ci?(dir===-1?"-1":"1"):""});if(save){saved.sort={ci,dir};try{localStorage.setItem(storeKey,JSON.stringify(saved))}catch{}}};
  [...hd.children].forEach((th,ci)=>{if(th.colSpan>1||!th.textContent.trim())return;th.style.cursor="pointer";th.title="اضغط للترتيب";th.onclick=()=>applySort(ci,th.dataset.d==="1"?-1:1)});
  let sort=saved.sort;if(!sort){const di=[...hd.children].findIndex(x=>/التاريخ|الوقت|date/i.test(x.textContent));if(di>=0)sort={ci:di,dir:-1}}if(sort&&sort.ci<hd.children.length)applySort(sort.ci,sort.dir,false);
- })}
-async function saveFile(name,data){const dl=window.claude&&claude.use?await claude.use("downloads"):null;if(dl){await dl.save({filename:name,data});return}const blob=data instanceof Blob?data:new Blob([data],{type:"text/csv;charset=utf-8"}),url=URL.createObjectURL(blob),el=document.createElement("a");el.href=url;el.download=name;document.body.appendChild(el);el.click();el.remove();setTimeout(()=>URL.revokeObjectURL(url),5000)}
+ })}async function saveFile(name,data){const dl=window.claude&&claude.use?await claude.use("downloads"):null;if(dl){await dl.save({filename:name,data});return}const blob=data instanceof Blob?data:new Blob([data],{type:"text/csv;charset=utf-8"}),url=URL.createObjectURL(blob),el=document.createElement("a");el.href=url;el.download=name;document.body.appendChild(el);el.click();el.remove();setTimeout(()=>URL.revokeObjectURL(url),5000)}
 function exportCurrencyCell(value){
  const text=String(value||"").replace(/\s+/g," ").trim(),m=text.match(/\s+(ج\.?\s*م|EGP|USD|EUR|دولار|ريال)\s*$/i);
 
@@ -104,10 +191,10 @@ function exportCurrencyCell(value){
  return {value:text,currency:""};
 }
 async function xl(t,rows){
- const headers=[...t.querySelector("tr").children].map(c=>c.textContent.trim()),visible=rows.filter(r=>r.style.display!=="none");
- const split=headers.map((_,i)=>visible.some(r=>exportCurrencyCell(r.children[i]?.textContent).currency));
+ const allHeaders=[...t.querySelector("tr").children],indices=allHeaders.map((c,i)=>({c,i})).filter(x=>getComputedStyle(x.c).display!=="none").map(x=>x.i),headers=indices.map(i=>allHeaders[i].textContent.trim()),visible=rows.filter(r=>r.style.display!=="none");
+ const split=headers.map((_,i)=>visible.some(r=>exportCurrencyCell(r.children[indices[i]]?.textContent).currency));
  const outHead=headers.flatMap((h,i)=>split[i]?[h+" (قيمة)","العملة"]:[h]);
- const data=visible.map(r=>headers.flatMap((_,i)=>{const x=exportCurrencyCell(r.children[i]?.textContent);return split[i]?[x.value,x.currency]:[x.value]}));
+ const data=visible.map(r=>headers.flatMap((_,i)=>{const x=exportCurrencyCell(r.children[indices[i]]?.textContent);return split[i]?[x.value,x.currency]:[x.value]}));
  const ce=v=>'"'+String(v??"").replace(/"/g,'""')+'"',csv=[outHead,...data].map(row=>row.map(ce).join(",")).join("\n");
  try{await saveFile((N[tab]||"export")+".csv","\uFEFF"+csv);toast("تم التصدير — المبلغ والعملة في خليتين منفصلتين")}catch(e){toast("تم إلغاء التصدير")}
 }
