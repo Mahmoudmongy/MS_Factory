@@ -734,6 +734,12 @@ ok('company module customization hides modules without deleting their records an
 ok('legacy per-screen visibility preferences remain supported alongside module settings',app.includes('S.hide=[...ACT.querySelectorAll(".cz:not(:checked)")]')&&app.includes('!S.hide.includes(t[0])'));
 ok('disabled modules are excluded from navigation and permission-filtered screen access',app.includes('if(!moduleEnabled(mid))return false')&&app.includes('MODULES.filter(m=>items.some'));
 ok('sidebar navigation renders the available modules under Arabic group headings',app.includes('class="sb-group"')&&app.includes('class="sb-group-title"')&&css.includes('#sb .sb-group-title'));
+ok('posted journal entries cannot be edited or deleted in place',app.includes('function editJ(id){toast("القيود المرحلة لا تُعدّل')&&app.includes('if(src==="je"){toast("القيود المرحلة لا تُحذف'));
+ok('journal posting validates accounts, non-negative one-sided lines, minimum line count and debit-credit balance',app.includes('function validateJournalLines(lines)')&&app.includes('القيد يجب أن يحتوي على سطرين على الأقل')&&app.includes('القيد غير متوازن: إجمالي المدين يجب أن يساوي إجمالي الدائن'));
+ok('journal numbers are generated without reusing an existing reference',app.includes('function nextJournalNo()')&&app.includes('while(used.has("JE-"+pad(n)))n++'));
+ok('journal correction creates a reversing entry and retains the original journal',app.includes('function reverseJ(id)')&&app.includes('original.reversedBy=rid')&&app.includes('reversalOf:id')&&app.includes('قيد عكسي للقيد'));
+ok('journal list distinguishes reversed entries and offers reversal instead of edit/delete',app.includes('تم عكسه')&&app.includes('عكس القيد')&&!app.includes('onclick="editJ('));
+
 
 console.log(R.join('\n'));console.log(`\n${R.length-fails}/${R.length} checks passed, ${fails} failed`);process.exit(fails?1:0);
 })().catch(e=>{console.error('TEST RUN CRASHED:',e.message);process.exit(2)});
