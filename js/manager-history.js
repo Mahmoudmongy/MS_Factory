@@ -8,6 +8,7 @@ const date = value => value ? String(value).slice(0,10) : '—';
 const shortId = value => String(value || '').slice(0,8);
 const PAGE = 1000;
 let ownerId = null;
+let currentProfile = null;
 let activeTab = 'overview';
 let loaded = new Map();
 let searchText = '';
@@ -73,6 +74,7 @@ async function getOwner() {
   const {data:profile,error:profileError} = await supabase.from('profiles')
     .select('id,created_by,is_admin,permissions').eq('id',user.id).maybeSingle();
   if(profileError || !profile) throw new Error('تعذر تحديد حساب المصنع صاحب البيانات.');
+  currentProfile = profile;
   ownerId = profile.created_by || profile.id;
 }
 function ensureUi() {
@@ -141,9 +143,17 @@ function ensureUi() {
   document.addEventListener('keydown',e=>{if(e.key==='Escape'&&panel.classList.contains('open'))closePanel()});
   renderTabs();
 }
+function canReadTab(tab) {
+  if (!currentProfile || currentProfile.is_admin === true) return true;
+  const p=currentProfile.permissions||{};
+  const map={overview:['customers','suppliers','inventory','invoices','production','reports','settings'],partners:['customers','suppliers'],inventory:['inventory'],documents:['invoices'],vouchers:['invoices','reports'],production:['production'],accounting:['reports','settings']};
+  return (map[tab]||[]).some(key=>p[key]===true);
+}
 function renderTabs() {
   const root=$('#manager-history-tabs');if(!root)return;
-  root.innerHTML=TABS.map(([id,label])=>`<button type="button" data-tab="${id}" class="${activeTab===id?'active':''}">${label}</button>`).join('');
+  const visible=TABS.filter(([id])=>canReadTab(id));
+  if(!visible.some(([id])=>id===activeTab))activeTab=visible[0]?.[0]||'overview';
+  root.innerHTML=visible.map(([id,label])=>`<button type="button" data-tab="${id}" class="${activeTab===id?'active':''}">${label}</button>`).join('');
 }
 function setStatus(message,error=false) {
   const el=$('#manager-history-status');if(!el)return;
@@ -154,6 +164,8 @@ async function openPanel() {
   const panel=$('#manager-history-panel');panel.classList.add('open');
   document.body.style.overflow='hidden';
   if(!ownerId){setStatus('جارٍ التحقق من جلسة الحساب...');try{await getOwner()}catch(e){setStatus(e.message,true);return}}
+  renderTabs();
+  if(!canReadTab(activeTab)){setStatus('لا توجد صلاحية لعرض هذا القسم.',true);return}
   await loadTab(activeTab);
 }
 function closePanel(){const p=$('#manager-history-panel');if(p)p.classList.remove('open');document.body.style.overflow=''}
@@ -172,6 +184,7 @@ function searchBox(){return `<input class="mh-search" id="manager-history-search
 function bindSearch(){const input=$('#manager-history-search');if(input)input.addEventListener('input',()=>{searchText=input.value;renderCurrent()})}
 function renderCurrent(){renderTabContent(activeTab);bindSearch()}
 async function loadTab(tab) {
+  if(!canReadTab(tab)){setStatus('لا توجد صلاحية لعرض هذا القسم.',true);return}
   if(tab==='overview'){await renderOverview();return}
   const tables=(CONFIG[tab]||[]).map(x=>x[0]);
   const missing=tables.filter(t=>!loaded.has(t));
@@ -217,7 +230,9 @@ function renderTabContent(tab){
       return `<tr><td>${esc(p.sku||'—')}</td><td>${esc(p.name)}</td><td>${esc(p.unit||'قطعة')}</td><td>${qty(total)}</td><td>${loc}</td><td>${money(latest?.unit_cost??p.buy_price)}</td><td>${money(total*Number(latest?.unit_cost??p.buy_price??0))}</td><td>${detail(p.raw||p)}</td></tr>`;
     });
     const neg=balances.filter(x=>Number(x.quantity)<0);
-    root.innerHTML=card('المخزون حسب المخزن',`<div class="mh-muted">عدد الأصناف: ${products.length} — مواقع التخزين: ${locations.length} — أرصدة المواقع السالبة: <b class="mh-negative">${neg.length}</b></div>`+searchBox()+table(['الكود','الصنف','الوحدة','إجمالي الكمية','تفصيل كل مخزن','آخر تكلفة وحدة','قيمة تقديرية','المصدر'],rows))+card('تفاصيل مواقع التخزين',table(['المخزن','الصنف','الكمية','مرجع المصدر'],filtered(balances,r=>[r.warehouse,r.manager_location_id,get('products').find(p=>p.id===r.product_id)?.name].join(' ')).slice(0,500).map(r=>`<tr><td>${esc(r.warehouse||'—')}</td><td>${esc(get('products').find(p=>p.id===r.product_id)?.name||shortId(r.product_id))}</td><td class="${Number(r.quantity)<0?'mh-negative':''}">${qty(r.quantity)}</td><td>${esc(r.source_record_key||'—')}</td></tr>`)))+card('تاريخ تكاليف الأصناف',table(['التاريخ','الصنف','تكلفة الوحدة','التفاصيل'],costs.slice(0,500).map(r=>`<tr><td>${date(r.effective_date)}</td><td>${esc(get('products').find(p=>p.id===r.product_id)?.name||shortId(r.product_id))}</td><td>${money(r.unit_cost)}</td><td>${detail(r.raw||r)}</td></tr>`)))+card('تسويات وهالك المخزون',table(['التاريخ','الوصف','المخزن','الأصناف','التفاصيل'],writeoffs.map(r=>`<tr><td>${date(r.writeoff_date)}</td><td>${esc(r.description||'')}</td><td>${esc(r.inventory_location_id||'—')}</td><td>${Array.isArray(r.items)?r.items.length:0}</td><td>${detail(r.raw||r)}</td></tr>`)));
+    const warehouseSummary=[...balances.reduce((map,row)=>{const key=row.warehouse||row.manager_location_id||'غير محدد';const v=map.get(key)||{name:key,items:0,quantity:0,negativeRows:0,negativeQty:0};v.items++;v.quantity+=Number(row.quantity||0);if(Number(row.quantity)<0){v.negativeRows++;v.negativeQty+=Number(row.quantity||0)}map.set(key,v);return map;},new Map()).values()];
+    const warehouseSummaryHtml=table(['المخزن','عدد أرصدة الأصناف','صافي الكمية','عدد الأرصدة السالبة','إجمالي الكميات السالبة'],warehouseSummary.map(w=>'<tr><td>'+esc(w.name)+'</td><td>'+w.items+'</td><td>'+qty(w.quantity)+'</td><td class="'+(w.negativeRows?'mh-negative':'')+'">'+w.negativeRows+'</td><td class="'+(w.negativeQty<0?'mh-negative':'')+'">'+qty(w.negativeQty)+'</td></tr>'));
+    root.innerHTML=card('المخزون حسب المخزن',`<div class="mh-muted">عدد الأصناف: ${products.length} — مواقع التخزين: ${locations.length} — أرصدة المواقع السالبة: <b class="mh-negative">${neg.length}</b></div>`+searchBox()+table(['الكود','الصنف','الوحدة','إجمالي الكمية','تفصيل كل مخزن','آخر تكلفة وحدة','قيمة تقديرية','المصدر'],rows))+card('ملخص أرصدة كل مخزن',warehouseSummaryHtml)+card('تفاصيل مواقع التخزين',table(['المخزن','الصنف','الكمية','مرجع المصدر'],filtered(balances,r=>[r.warehouse,r.manager_location_id,get('products').find(p=>p.id===r.product_id)?.name].join(' ')).slice(0,500).map(r=>`<tr><td>${esc(r.warehouse||'—')}</td><td>${esc(get('products').find(p=>p.id===r.product_id)?.name||shortId(r.product_id))}</td><td class="${Number(r.quantity)<0?'mh-negative':''}">${qty(r.quantity)}</td><td>${esc(r.source_record_key||'—')}</td></tr>`)))+card('تاريخ تكاليف الأصناف',table(['التاريخ','الصنف','تكلفة الوحدة','التفاصيل'],costs.slice(0,500).map(r=>`<tr><td>${date(r.effective_date)}</td><td>${esc(get('products').find(p=>p.id===r.product_id)?.name||shortId(r.product_id))}</td><td>${money(r.unit_cost)}</td><td>${detail(r.raw||r)}</td></tr>`)))+card('تسويات وهالك المخزون',table(['التاريخ','الوصف','المخزن','الأصناف','التفاصيل'],writeoffs.map(r=>`<tr><td>${date(r.writeoff_date)}</td><td>${esc(r.description||'')}</td><td>${esc(r.inventory_location_id||'—')}</td><td>${Array.isArray(r.items)?r.items.length:0}</td><td>${detail(r.raw||r)}</td></tr>`)));
   } else if(tab==='documents'){
     const invoices=filtered(get('invoices'),r=>[r.invoice_no,r.customer_name,r.note,r.invoice_type,r.external_id].join(' '));
     const items=get('invoice_items'),returns=filtered(get('returns'),r=>[r.return_no,r.note,r.return_type].join(' ')),customers=get('customers'),suppliers=get('suppliers');
