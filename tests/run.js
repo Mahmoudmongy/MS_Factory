@@ -580,12 +580,12 @@ await ev(()=>{const p=S.partners.find(x=>x.c);const id=p.id; pForm(1,id); $("#b1
 const partnerEdit=await ev(()=>{const p=S.partners.find(x=>x.name=="اختبار تعديل العميل");return p&&{id:p.id,count:S.partners.filter(x=>x.id==p.id).length}});
 ok('editing a customer updates the existing row without creating a duplicate',!!partnerEdit&&partnerEdit.count==1,partnerEdit);
 /* regression: printing / purchase save used to crash (missing #pgst) */
-await ev(()=>{go('pur');docForm('pur');$("#ty").value=String(S.wh[0].id);fillIt();$("#in").value="قماش اختبار";unitSet();$("#un").value="متر";$("#cl").value="أحمر";$("#q").value="10";$("#pc").value="100";saveDoc()});
+await ev(()=>{let supplier=S.partners.find(x=>!x.c);if(!supplier){supplier={id:uid(),name:"مورد اختبار",c:0};S.partners.push(supplier)}go('pur');docForm('pur');$("#pt").value=String(supplier.id);$("#ty").value=String(S.wh[0].id);fillIt();$("#in").value="قماش اختبار";unitSet();$("#un").value="متر";$("#cl").value="أحمر";$("#q").value="10";$("#pc").value="100";saveDoc()});
 ok('saving a purchase invoice opens the barcode print page (no crash)',await ev(()=>CUR.title.includes("باركود")||!!ACT.querySelector('#pr')),errs.slice(-1));await ev(()=>closeTab(CUR,1));
 const item=await ev(()=>{const i=S.items.find(x=>x.name=="قماش اختبار");return i&&{q:i.st["أحمر"],u:i.unit,v:i.val}});ok('purchase created the item with colour variant, unit and stock value',item&&item.q==10&&item.u=="متر"&&item.v==1000,item);
 ok('ledger balanced after purchase',await bal());
 const code1=await ev(()=>codeFor(S.items.find(x=>x.name=="قماش اختبار").id,"أحمر"));
-await ev(()=>{const i=S.items.find(x=>x.name=="قماش اختبار");go('pur');docForm('pur');$("#ty").value=String(i.wh);fillIt();$("#in").value=i.name;unitSet();$("#cl").value="أحمر";$("#q").value="5";$("#pc").value="110";saveDoc()});await ev(()=>{TB.filter(t=>t.kind=="page").forEach(t=>closeTab(t,1))});
+await ev(()=>{const i=S.items.find(x=>x.name=="قماش اختبار"),supplier=S.partners.find(x=>!x.c);go('pur');docForm('pur');$("#pt").value=String(supplier.id);$("#ty").value=String(i.wh);fillIt();$("#in").value=i.name;unitSet();$("#cl").value="أحمر";$("#q").value="5";$("#pc").value="110";saveDoc()});await ev(()=>{TB.filter(t=>t.kind=="page").forEach(t=>closeTab(t,1))});
 ok('barcode is stable: repeat purchase of the same variant keeps one code',await ev((c)=>S.codes.filter(x=>x.iid==S.items.find(i=>i.name=="قماش اختبار").id).length==1&&codeFor(S.items.find(i=>i.name=="قماش اختبار").id,"أحمر")==c,code1)&&/^[A-Za-z0-9]+$/.test(code1),code1);
 /* sale */
 await ev(()=>{go('sale');docForm('sale');$("#pt").value="1";$("#it").value="3";unitSet();$("#q").value="2";D.disc=10;saveDoc()});
