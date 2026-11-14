@@ -187,19 +187,52 @@ function queueCloudEffectTombstone(src,id){
   localStorage.setItem(key,JSON.stringify(items));
  }catch(e){console.error("Could not queue cloud effect tombstone",e)}
 }
-function delGo(src,id){if(!can("del"))return;const cp=cloudProfile(),effectPermission=({doc:"invoices",po:"production",vch:"invoices",je:"settings",wo:"inventory"})[src];if(cp&&!cp.is_admin&&(cp.permissions?.inventory!==true||cp.permissions?.[effectPermission]!==true)){toast("حذف الحركة يتطلب صلاحية المخزون وصلاحية القسم المرتبط بها");return}queueCloudEffectTombstone(src,id);rev(id,src);if(src=="doc")S.docs=S.docs.filter(x=>x.id!=id);else if(src=="vch")S.vch=S.vch.filter(x=>x.id!=id);else if(src=="po")S.po=S.po.filter(x=>x.id!=id);else if(src=="je")S.je=S.je.filter(x=>x.id!=id);else if(src=="wo"){const w=S.wo.find(x=>x.id==id);if(w&&w.po){const o=S.po.find(x=>x.id==w.po);if(o)o.wc-=w.c}S.wo=S.wo.filter(x=>x.id!=id)}sv();toast("تم الحذف");cl()}
+function delGo(src,id){if(src==="je"){toast("القيود المرحلة لا تُحذف؛ استخدم إجراء عكس القيد للحفاظ على الأثر المحاسبي");return}if(!can("del"))return;const cp=cloudProfile(),effectPermission=({doc:"invoices",po:"production",vch:"invoices",je:"settings",wo:"inventory"})[src];if(cp&&!cp.is_admin&&(cp.permissions?.inventory!==true||cp.permissions?.[effectPermission]!==true)){toast("حذف الحركة يتطلب صلاحية المخزون وصلاحية القسم المرتبط بها");return}queueCloudEffectTombstone(src,id);rev(id,src);if(src=="doc")S.docs=S.docs.filter(x=>x.id!=id);else if(src=="vch")S.vch=S.vch.filter(x=>x.id!=id);else if(src=="po")S.po=S.po.filter(x=>x.id!=id);else if(src=="je")S.je=S.je.filter(x=>x.id!=id);else if(src=="wo"){const w=S.wo.find(x=>x.id==id);if(w&&w.po){const o=S.po.find(x=>x.id==w.po);if(o)o.wc-=w.c}S.wo=S.wo.filter(x=>x.id!=id)}sv();toast("تم الحذف");cl()}
 function tpr(k){[TL.from,TL.to]=rng(k);render()}
 function vTl(){const l=[];S.docs.forEach(d=>l.push({ts:d.ts,s:"doc",id:d.id,t:TN[d.t],ref:d.no,w:pn(d.pid),amt:d.total,desc:d.note}));S.vch.forEach(v=>l.push({ts:v.ts,s:"vch",id:v.id,t:v.title,ref:v.no,w:v.who,amt:v.total,desc:v.desc}));S.po.forEach(o=>l.push({ts:o.ts,s:"po",id:o.id,t:"أمر إنتاج",ref:o.no,w:"",amt:poCost(o),desc:o.desc}));S.je.filter(j=>j.id).forEach(j=>l.push({ts:j.ts,s:"je",id:j.id,t:"قيد يومية",ref:j.no,w:"",amt:S.L.filter(x=>x.rid==j.id).reduce((a,x)=>a+x.dr,0),desc:j.desc}));S.wo.forEach(w=>l.push({ts:w.ts,s:"wo",id:w.id,t:"هالك مخزون",ref:w.ref,w:"",amt:w.c,desc:w.desc}));
  const rows=l.filter(x=>x.ts&&(!TL.from||lday(new Date(x.ts))>=TL.from)&&(!TL.to||lday(new Date(x.ts))<=TL.to)&&(!TL.k||x.s==TL.k)).sort((a,b)=>b.ts-a.ts);
  return ph(N.tl,prs("tpr"))+`<div class="card row"><div><label>من تاريخ</label><input type="date" value="${TL.from}" onchange="TL.from=this.value;render()"></div><div><label>إلى تاريخ</label><input type="date" value="${TL.to}" onchange="TL.to=this.value;render()"></div><div><label>النوع</label><select onchange="TL.k=this.value;render()">${sel(TL.k,[["","الكل"],["doc","الفواتير والمرتجعات"],["vch","السندات"],["po","أوامر الإنتاج"],["je","القيود"],["wo","الهالك"]])}</select></div></div><table class="l"><tr><th>التاريخ</th><th>النوع</th><th>المرجع</th><th>الطرف</th><th>البيان</th><th>المبلغ</th><th></th></tr>${U(rows,x=>`<tr><td>${fts(x.ts)}</td><td>${x.t}</td><td>${x.ref}</td><td>${x.w||""}</td><td>${x.desc||""}</td><td>${f(x.amt)}</td><td><button class="g" onclick="openRef('${x.s}',${x.id})">عرض</button> ${can("edit")&&x.s!="wo"?`<button class="g" onclick="editRef('${x.s}',${x.id})">تعديل</button> `:""}${can("del")?`<button class="d" onclick="delRef('${x.s}',${x.id})">🗑 حذف</button>`:""}</td></tr>`)}</table>`}
 /* ===== cash accounts / chart of accounts / journal ===== */
-function vJe(){return ph(N.je,`<button class="new" onclick="jForm()">+ قيد جديد</button>`)+`<table class="l"><tr><th>وقت التسجيل</th><th>الرقم</th><th>البيان</th><th>المبلغ</th><th></th></tr>${U([...S.je].reverse(),j=>`<tr><td>${sd(j)}</td><td>${j.no}</td><td>${j.desc}</td><td>${f(S.L.filter(l=>l.ref==j.no&&l.src=="je").reduce((a,l)=>a+l.dr,0))}</td><td>${j.id?`<button class="g" onclick="refView(${j.id})">عرض</button> ${can("edit")?`<button class="g" onclick="editJ(${j.id})">تعديل</button> `:""}${can("del")?`<button class="d" onclick="delRef('je',${j.id})">حذف</button>`:""}`:""}</td></tr>`)}</table>`}
+function vJe(){return ph(N.je,`${can("edit")?'<button class="new" onclick="jForm()">+ قيد جديد</button>':""}`)+`<div class="card"><p class="mu">القيود المرحلة لا تُعدّل ولا تُحذف. لتصحيح قيد، أنشئ قيدًا عكسيًا يحتفظ بالقيد الأصلي وسجل المراجعة.</p></div><table class="l"><tr><th>وقت التسجيل</th><th>الرقم</th><th>البيان</th><th>الحالة</th><th>مدين</th><th></th></tr>${U([...S.je].reverse(),j=>{const lines=S.L.filter(l=>l.rid==j.id&&l.src==="je"),amount=lines.reduce((a,l)=>a+l.dr,0),status=j.reversalOf?"قيد عكسي":j.reversedBy?"تم عكسه":"مرحّل";return `<tr><td>${sd(j)}</td><td>${j.no}</td><td>${j.desc||""}</td><td>${status}</td><td>${f(amount)}</td><td>${j.id?`<button class="g" onclick="refView(${j.id})">عرض</button> ${can("edit")&&!j.reversedBy&&!j.reversalOf?`<button class="g" onclick="reverseJ(${j.id})">عكس القيد</button>`:""}`:""}</td></tr>`})}</table>`}
 function jForm(pre){pre=pre||{};J={lines:pre.lines||[],edit:pre.id||0};sh(`<h3>قيد يومية ${pre.id?"— تعديل":""}</h3><div class="row"><input id="jd" type="date" value="${pre.date||td()}"><input id="j0" placeholder="بيان القيد: تسوية مخزون" value="${pre.desc||""}"></div><div class="row"><select id="j1">${U(S.accts,a=>`<option value="${a.id}">${a.code} ${a.name}</option>`)}</select><input id="j4" placeholder="بيان السطر"><input id="j2" type="number" placeholder="مدين: 1000"><input id="j3" type="number" placeholder="دائن: 1000"><button onclick="jAdd()">+</button></div><div id="jl"></div><div class="row"><button onclick="saveJ()">حفظ</button>${bk}</div>`);jDraw()}
 const jt=k=>J.lines.reduce((a,l)=>a+l[k],0);
 function jAdd(){const dr=+$("#j2").value||0,cr=+$("#j3").value||0;if(!dr&&!cr)return;J.lines.push({a:+$("#j1").value,dr,cr,desc:$("#j4").value.trim()});$("#j2").value=$("#j3").value=$("#j4").value="";jDraw()}
 function jDraw(){$("#jl").innerHTML=`<table>${U(J.lines,(l,i)=>`<tr><td>${an(l.a)}</td><td>${l.desc||""}</td><td>${f(l.dr)}</td><td>${f(l.cr)}</td><td><button class="d" onclick="J.lines.splice(${i},1);jDraw()">✕</button></td></tr>`)}</table><b>مدين ${f(jt("dr"))} | دائن ${f(jt("cr"))} ${jt("dr")==jt("cr")&&jt("dr")?"✅":"⚠️"}</b>`}
-function saveJ(){if(!$("#j2").value&&!$("#j3").value||true){if(+$("#j2").value||+$("#j3").value)jAdd()}if(!J.lines.length||jt("dr")!=jt("cr"))return;const old=J.edit?S.je.find(x=>x.id==J.edit):null,d=$("#jd").value||td();if(old){rev(old.id,"je");S.je=S.je.filter(x=>x!==old)}const id=old?old.id:uid(),no=old?old.no:"JE-"+pad(S.je.length+1),ts=old?old.ts:Date.now();post(d,no,$("#j0").value,J.lines,"je",id,ts);S.je.push({id,no,date:d,ts,desc:$("#j0").value});sv();cl()}
-function editJ(id){const j=S.je.find(x=>x.id==id);if(j)jForm({id,date:j.date,desc:j.desc,lines:S.L.filter(l=>l.rid==id).map(l=>({a:l.a,dr:l.dr,cr:l.cr,desc:l.desc==j.desc?"":l.desc}))})}
+function nextJournalNo(){const used=new Set(S.je.map(j=>String(j.no||"")));let n=1;while(used.has("JE-"+pad(n)))n++;return "JE-"+pad(n)}
+function validateJournalLines(lines){
+ if(!Array.isArray(lines)||lines.length<2)return "القيد يجب أن يحتوي على سطرين على الأقل";
+ for(const l of lines){
+  const dr=Number(l.dr)||0,cr=Number(l.cr)||0;
+  if(!S.accts.some(a=>a.id==l.a))return "يوجد حساب غير صالح في القيد";
+  if(!Number.isFinite(dr)||!Number.isFinite(cr)||dr<0||cr<0||(dr>0&&cr>0)||(!dr&&!cr))return "راجع مبالغ المدين والدائن في كل سطر";
+ }
+ const dr=lines.reduce((n,l)=>n+(Number(l.dr)||0),0),cr=lines.reduce((n,l)=>n+(Number(l.cr)||0),0);
+ return Math.abs(dr-cr)>.005?"القيد غير متوازن: إجمالي المدين يجب أن يساوي إجمالي الدائن":"";
+}
+function saveJ(){
+ if(!can("edit"))return;
+ if(+$("#j2").value||+$("#j3").value)jAdd();
+ if(J.edit){toast("القيد المرحّل لا يُعدّل؛ استخدم إجراء عكس القيد ثم أنشئ قيدًا صحيحًا جديدًا");return}
+ const error=validateJournalLines(J.lines);if(error){toast(error);return}
+ const d=$("#jd").value||td(),desc=$("#j0").value.trim();if(!desc){toast("اكتب بيان القيد");return}
+ if(!guard())return;
+ const id=uid(),no=nextJournalNo(),ts=Date.now();
+ if(!post(d,no,desc,J.lines,"je",id,ts)){toast("تعذر ترحيل القيد؛ لم يتم حفظه لأنه غير متوازن");return}
+ S.je.push({id,no,date:d,ts,desc,status:"posted"});sv();toast("تم ترحيل القيد "+no);cl();
+}
+function editJ(id){toast("القيود المرحلة لا تُعدّل. استخدم زر «عكس القيد» لتصحيحها دون تغيير السجل الأصلي")}
+function reverseJ(id){
+ if(!can("edit")||!guard())return;
+ const original=S.je.find(j=>j.id==id);if(!original||original.reversalOf||original.reversedBy){toast("لا يمكن عكس هذا القيد أو سبق عكسه");return}
+ const source=S.L.filter(l=>l.rid==id&&l.src==="je");if(source.length<2){toast("تعذر العثور على سطور القيد الأصلية؛ لم يتم إجراء أي تغيير");return}
+ const lines=source.map(l=>({a:l.a,dr:l.cr,cr:l.dr,desc:"عكس: "+(l.desc||original.desc||"") ,pid:l.pid||0,fc:l.fc||0}));
+ const error=validateJournalLines(lines);if(error){toast("تعذر إنشاء القيد العكسي: "+error);return}
+ const rid=uid(),no=nextJournalNo(),date=td(),ts=Date.now(),desc="قيد عكسي للقيد "+original.no+" — "+(original.desc||"");
+ if(!post(date,no,desc,lines,"je",rid,ts)){toast("فشل ترحيل القيد العكسي؛ لم يتم حفظ أي تغيير");return}
+ original.reversedBy=rid;
+ S.je.push({id:rid,no,date,ts,desc,status:"posted",reversalOf:id});
+ sv();toast("تم إنشاء القيد العكسي "+no+" مع الاحتفاظ بالقيد الأصلي");render();
+}
 /* ===== address (governorate -> city) ===== */
 const addrF=(p)=>{p=p||{};return `<div class="row"><select id="gv" onchange="gvChg()"><option value="">المحافظة</option>${U(Object.keys(S.geo),g=>`<option ${p.gov==g?"selected":""}>${g}</option>`)}</select><select id="ct2"><option value="">المدينة</option></select></div><input id="adr" placeholder="العنوان بالتفصيل: شارع / عمارة / دور" value="${p.adr||""}"><div class="row"><input id="ngv" placeholder="إضافة محافظة جديدة"><input id="nct" placeholder="إضافة مدينة للمحافظة المختارة"><button class="g" onclick="geoAdd()">+ إضافة</button></div>`},gvChg=(c)=>{$("#ct2").innerHTML=`<option value="">المدينة</option>`+U(S.geo[$("#gv").value]||[],x=>`<option ${c==x?"selected":""}>${x}</option>`)};
 function geoAdd(){const g=$("#ngv").value.trim(),c=$("#nct").value.trim();if(g&&!S.geo[g])S.geo[g]=[];const t=g||$("#gv").value;if(c&&t&&!S.geo[t].includes(c))S.geo[t].push(c);sv();const cur=$("#gv").value;$("#gv").innerHTML=`<option value="">المحافظة</option>`+U(Object.keys(S.geo),x=>`<option ${(g||cur)==x?"selected":""}>${x}</option>`);gvChg(c);$("#ngv").value=$("#nct").value=""}
