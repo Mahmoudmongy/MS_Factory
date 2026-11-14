@@ -589,8 +589,7 @@ const missingAccountVoucherRuntime=await ev(()=>{
  const imported={id:987654321,dir:"in",date:td(),ts:Date.now(),no:"RC-IMPORTED",title:"سند قبض مستورد",who:"عميل تاريخي",desc:"سند منقول",total:100,ac:[],ln:[],manager_read_only:true};
  S.vch=[imported];
  S.L=[...oldLedger,{d:td(),ts:Date.now(),ref:imported.no,desc:"حركة نقدية مستوردة",a:1,dr:100,cr:0,pid:0,src:"vch",rid:imported.id,fc:0}];
- go("rc");
- const listHtml=ACT.innerHTML,derived=voucherAccounts(imported),printHtml=vchPrintHtml(imported);
+ const listHtml=vVch("in"),derived=voucherAccounts(imported),printHtml=vchPrintHtml(imported);
  const result={visible:listHtml.includes("RC-IMPORTED"),accountRecovered:derived.length===1&&derived[0].a===1,accountShown:listHtml.includes("الخزنة (EGP)"),printSafe:printHtml.includes("الخزنة")};
  S.vch=oldVch;S.L=oldLedger;go("home");return result;
 });
@@ -649,7 +648,7 @@ ok('import detects new / duplicate-in-file / invalid / already-existing rows',JS
 await ev(()=>importGo());ok('import creates only the valid rows with opening stock; ledger balanced',await ev(()=>!!S.items.find(i=>i.sku=="IMP001")&&!S.items.find(i=>i.sku=="IMP003")&&!S.items.find(i=>i.sku=="IMP004")&&tq(S.items.find(i=>i.sku=="IMP001"))==30)&&await bal());
 /* ---------- templates ---------- */
 await ev(()=>{tplForm();$("#tk").value="sale";tplFill();$("#t_title").value="فاتورة ضريبية";ACT.querySelector('.t_c[value="unit"]').checked=false;tplPrev()});
-ok('print-template preview reflects title and hidden column',await ev(()=>{const h=$("#tpv").innerHTML;return h.includes("فاتورة ضريبية")&&!h.includes("<th>الوحدة</th>")}));await ev(()=>closeTab(CUR,1));
+const templatePreviewCheck=await ev(()=>{const h=$("#tpv").innerHTML;return {title:h.includes("فاتورة ضريبية"),unitHidden:!h.includes("<th>الوحدة</th>"),excerpt:h.slice(0,900)}});ok('print-template preview reflects title and hidden column',templatePreviewCheck.title&&templatePreviewCheck.unitHidden,templatePreviewCheck);await ev(()=>closeTab(CUR,1));
 /* ---------- language ---------- */
 await ev(()=>{PRF.lang='en';applyPref()});const left=[];for(const s of ['home','bank','rc','py','cust','supp','sale','sret','pur','pret','stock','prod','coa','je','tl','emp','rep','ai','set']){await ev(x=>go(x),s);await p.waitForTimeout(40);const t=await ev(x=>{const out=[],w=document.createTreeWalker(document.body,NodeFilter.SHOW_TEXT);let n;while(n=w.nextNode()){if(n.parentElement&&n.parentElement.tagName=='SCRIPT')continue;if(/[\u0600-\u06FF]/.test(n.nodeValue)&&n.nodeValue.trim()!='ع')out.push(n.nodeValue.trim())}return out},s);t.forEach(x=>{if(!/محلات|عميل قطاعي|اختبار|استيراد|النسيج|جيرسي|زراير|تيشيرت|جاكيت|بنطلون|قماش|أحمر|أسود|جهة|الخزنة بالدولار|موظف/.test(x))left.push(s+': '+x)})}
 ok('English mode: no untranslated UI text on the 19 main screens',left.length==0,left.slice(0,12));await ev(()=>{PRF.lang='ar';applyPref()});
