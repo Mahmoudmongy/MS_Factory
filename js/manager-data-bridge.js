@@ -131,14 +131,24 @@ function mapManagerDataToState(data) {
     const eligible = list.filter(x => !date || !x.date || x.date <= String(date));
     return eligible.length ? eligible[eligible.length-1].cost : num(productByUuid.get(String(productUuid))?.buy_price);
   };
+  const locationRowsByProduct=new Map();
+  for(const row of data.inventoryLocationBalances||[]){const key=String(row.product_id),list=locationRowsByProduct.get(key)||[];list.push(row);locationRowsByProduct.set(key,list);}
   const items = products.map(p => {
     const st = inventoryByProduct.get(String(p.id)) || {};
     if (!Object.keys(st).length && num(p.qty)) st["-"] = num(p.qty);
     const quantity = Object.values(st).reduce((a,b)=>a+num(b),0);
     const unitCost = unitCostAt(p.id, "9999-12-31");
     const stockRows = inventory.filter(x => String(x.product_id) === String(p.id));
-    const warehouse = p.warehouse || stockRows[0]?.warehouse || locations[0]?.name || "";
-    return { id:productIds.get(p.id), cloudId:sourceKey(p), name:p.name || "", sku:p.sku || "", model:p.model || "", wh:whId(warehouse), unit:p.unit || "قطعة", buy:num(p.buy_price), retail:num(p.retail_price), wholesale:num(p.wholesale_price), img:p.image_url || "", st, val:quantity*unitCost, legacyManager:true };
+    const locationRows=locationRowsByProduct.get(String(p.id))||[];
+    const primaryLocation=[...locationRows].sort((a,b)=>num(b.quantity)-num(a.quantity))[0];
+    const warehouse = p.warehouse || primaryLocation?.manager_location_id || primaryLocation?.warehouse || stockRows[0]?.warehouse || locations[0]?.name || "";
+    const defaultWh=whId(warehouse),loc={};
+    for(const row of locationRows){const wid=whId(row.manager_location_id||row.warehouse||warehouse),key=String(wid),entry=loc[key]||{st:{},val:0},qty=num(row.quantity);entry.st["-"]=(entry.st["-"]||0)+qty;entry.val+=qty*unitCost;loc[key]=entry;}
+    if(!Object.keys(loc).length)loc[String(defaultWh)]={st:{...st},val:quantity*unitCost};
+    const locationTotal=Object.values(loc).reduce((a,x)=>a+Object.values(x.st||{}).reduce((q,v)=>q+num(v),0),0),difference=quantity-locationTotal;
+    if(Math.abs(difference)>.001){const key=String(defaultWh),entry=loc[key]||{st:{},val:0};entry.st["-"]=(entry.st["-"]||0)+difference;entry.val+=difference*unitCost;loc[key]=entry;}
+    const value=Object.values(loc).reduce((a,x)=>a+num(x.val),0);
+    return { id:productIds.get(p.id), cloudId:sourceKey(p), name:p.name || "", sku:p.sku || "", model:p.model || "", wh:defaultWh, loc, unit:p.unit || "قطعة", buy:num(p.buy_price), retail:num(p.retail_price), wholesale:num(p.wholesale_price), img:p.image_url || "", st, val:value, legacyManager:true };
   });
   const productName = uuid => productByUuid.get(String(uuid))?.name || "";
   const itemUnit = uuid => productByUuid.get(String(uuid))?.unit || "قطعة";
@@ -159,9 +169,9 @@ function mapManagerDataToState(data) {
     const raw = inv.raw || {}, type = inv.invoice_type === "sale" ? "sale" : "pur";
     const partnerUuid = inv.customer_id || inv.supplier_id;
     const partner = partnerId(partnerUuid);
-    const location = type === "pur" ? rawText(raw,"PurchaseInventoryLocation") : "";
+    
     const discount = num(inv.discount), total = num(inv.total);
-    return { id:invoiceIds.get(inv.id), cloudId:sourceKey(inv), t:type, no:inv.invoice_no || sourceKey(inv), date:inv.invoice_date || "", ts:dateMs(inv.created_at), pid:partner, cat:type==="sale"?"mfg":"sup", dest:type==="pur"?(location?whId(location):"wh"):"", lines, gross:total+discount, disc:discount, total, note:inv.note || rawText(raw,"Description"), img:"", legacyManager:true };
+    return { id:invoiceIds.get(inv.id), cloudId:sourceKey(inv), t:type, no:inv.invoice_no || sourceKey(inv), date:inv.invoice_date || "", ts:dateMs(inv.created_at), pid:partner, cat:type==="sale"?"mfg":"sup", dest:type==="pur"?"wh":"", lines, gross:total+discount, disc:discount, total, note:inv.note || rawText(raw,"Description"), img:"", legacyManager:true };
   });
 
   const returnLinesById = new Map();
@@ -274,8 +284,10 @@ function mapManagerDataToState(data) {
 
   const wo = writeoffs.map(w => {const rows=Array.isArray(w.items)?w.items:Object.values(w.items||{});const c=rows.reduce((a,x)=>{const key=rawText(x,"InventoryItem","item"),product=products.find(p=>String(p.external_id)===String(key)||String(p.sku)===String(key)),explicit=num(x.Amount||x.amount||x.total||x.cost),qty=num(x.Qty||x.qty);return a+(explicit||qty*(product?unitCostAt(product.id,w.writeoff_date):0))},0);return { id:writeoffIds.get(w.id), cloudId:sourceKey(w), no:sourceKey(w), ref:sourceKey(w), date:w.writeoff_date || "", ts:dateMs(w.created_at), desc:w.description || "", c, po:0, items:rows, legacyManager:true }});
   const mv = [];
-  const invoiceUuidByExternal = new Map(invoices.map(i=>[String(i.external_id),i.id]));
-  const returnUuidByExternal = new Map(returns.map(r=>[String(r.external_id),r.id]));
+  const invoiceRecordByExternal=new Map(invoices.map(i=>[String(i.external_id),i]));
+  const returnRecordByExternal=new Map(returns.map(r=>[String(r.external_id),r]));
+  const productionRecordByExternal=new Map(production.map(p=>[String(p.external_id),p]));
+  const writeoffRecordByExternal=new Map(writeoffs.map(w=>[String(w.external_id),w]));
   for (const row of ledger) {
     const raw = row.raw || {}, itemKey = rawText(raw,"item"), qtyRaw = num(raw.qty);
     if (!itemKey || !qtyRaw) continue;
@@ -291,18 +303,20 @@ function mapManagerDataToState(data) {
     const cost = unitCostAt(product.id,row.transaction_date);
     const sourceValue=source==="purchase_invoices"||source==="debit_notes";
     const value = sourceValue ? Math.abs(num(raw.amount) || num(raw.unitPrice)*absQty) : absQty*cost;
-    const external = row.source_manager_key || "";
-    const map = sourceMaps[row.source_record_type], rid = map && external ? map.get(String(external)) || 0 : 0;
-    mv.push({ d:row.transaction_date || "", ts:dateMs(row.created_at), iid:productIds.get(product.id), v:"-", q:sign*absQty, val:sign*value, ref:row.reference || "", pid:partnerId(row.customer_id || row.supplier_id), rid, src });
+    const external = String(row.source_manager_key || "");
+    const map = sourceMaps[row.source_record_type], rid = map && external ? map.get(external) || 0 : 0;
+    const parent=source==="sales_invoices"||source==="purchase_invoices"?invoiceRecordByExternal.get(external):source==="credit_notes"||source==="debit_notes"?returnRecordByExternal.get(external):source==="production_orders"?productionRecordByExternal.get(external):source==="inventory_write_offs"?writeoffRecordByExternal.get(external):null;
+    const parentRaw=parent?.raw||{},location=source==="sales_invoices"?rawText(parentRaw,"SalesInventoryLocation","InventoryLocation"):source==="purchase_invoices"?rawText(parentRaw,"PurchaseInventoryLocation","InventoryLocation"):rawText(parentRaw,"SalesInventoryLocation","PurchaseInventoryLocation","InventoryLocation");
+    const movementWarehouse=whId(location||rawText(raw,"InventoryLocation","location")||product.warehouse);
+    mv.push({ d:row.transaction_date || "", ts:dateMs(row.created_at), iid:productIds.get(product.id), v:"-", q:sign*absQty, val:sign*value, ref:row.reference || "", pid:partnerId(row.customer_id || row.supplier_id), rid, src, wh:movementWarehouse });
   }
 
-  // Reconcile the movement history to the current imported stock snapshot.
-  // Any history not represented by source movements becomes an explicit opening balance.
+  // Reconcile each warehouse's movement history to its current imported stock balance.
   const movementTotals=new Map();
-  for(const m of mv){const key=String(m.iid)+"|"+String(m.v||"-"),sum=movementTotals.get(key)||{q:0,val:0};sum.q+=num(m.q);sum.val+=num(m.val);movementTotals.set(key,sum);}
+  for(const m of mv){const key=String(m.iid)+"|"+String(m.v||"-")+"|"+String(m.wh||0),sum=movementTotals.get(key)||{q:0,val:0};sum.q+=num(m.q);sum.val+=num(m.val);movementTotals.set(key,sum);}
   const allMovementDates=mv.map(m=>m.d).filter(Boolean).sort();
   const openingDate=allMovementDates.length?new Date(new Date(allMovementDates[0]+"T00:00:00").getTime()-86400000).toISOString().slice(0,10):"1970-01-01";
-  for(const item of items){for(const [variant,quantity] of Object.entries(item.st||{})){const key=String(item.id)+"|"+String(variant||"-"),sum=movementTotals.get(key)||{q:0,val:0};const openingQty=num(quantity)-sum.q,openingValue=num(item.val)-sum.val;if(Math.abs(openingQty)>.0001||Math.abs(openingValue)>.005){mv.push({d:openingDate,ts:dateMs(openingDate),iid:item.id,v:variant||"-",q:openingQty,val:openingValue,ref:"رصيد افتتاحي مستورد من Manager.io",pid:0,rid:0,src:"opening",legacyManager:true});}}}
+  for(const item of items){for(const [warehouse,location] of Object.entries(item.loc||{})){for(const [variant,quantity] of Object.entries(location.st||{})){const key=String(item.id)+"|"+String(variant||"-")+"|"+String(warehouse),sum=movementTotals.get(key)||{q:0,val:0},openingQty=num(quantity)-sum.q,openingValue=num(location.val)-sum.val;if(Math.abs(openingQty)>.0001||Math.abs(openingValue)>.005){mv.push({d:openingDate,ts:dateMs(openingDate),iid:item.id,v:variant||"-",q:openingQty,val:openingValue,ref:"رصيد افتتاحي مستورد من Manager.io",pid:0,rid:0,src:"opening",wh:num(warehouse),legacyManager:true});}}}}
   const ledgerDebit=ledger.reduce((a,x)=>a+num(x.debit),0),ledgerCredit=ledger.reduce((a,x)=>a+num(x.credit),0);
   const inventoryQuantity=inventory.reduce((a,x)=>a+num(x.quantity),0),locationQuantity=(data.inventoryLocationBalances||[]).reduce((a,x)=>a+num(x.quantity),0);
   const managerBridgeWarnings={
