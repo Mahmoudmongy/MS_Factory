@@ -41,3 +41,10 @@ console.log('PASS saved sorting, column selection, and summary expansion');
 console.log('PASS supplier sign, account hierarchy, nested warehouses, production material locations');
 console.log('PASS append-only safe reversal and database delete guards');
 console.log('PASS sync popover, searchable name-only dropdowns, and responsive tables');
+
+const ownerInvokerMigration = fs.readFileSync(path.join(root, 'supabase/migrations/20261114180500_current_owner_id_security_invoker.sql'), 'utf8');
+const ownerInvokerQa = fs.readFileSync(path.join(root, 'tests/sql/current-owner-invoker-qa.sql'), 'utf8');
+assert(ownerInvokerMigration.includes('SECURITY INVOKER') && !ownerInvokerMigration.includes('SECURITY DEFINER'), 'owner lookup must run with caller privileges');
+assert(ownerInvokerMigration.includes('REVOKE ALL ON FUNCTION public.current_owner_id() FROM public, anon') && ownerInvokerMigration.includes('GRANT EXECUTE ON FUNCTION public.current_owner_id() TO authenticated, service_role'), 'owner lookup grants must be least-privilege');
+assert(ownerInvokerQa.includes('SET LOCAL ROLE authenticated') && ownerInvokerQa.includes('CURRENT_OWNER_MUST_BE_SECURITY_INVOKER'), 'QA must verify owner lookup under authenticated role');
+console.log('PASS current_owner_id uses invoker rights and least-privilege grants');
