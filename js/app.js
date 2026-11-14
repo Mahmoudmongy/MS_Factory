@@ -1080,3 +1080,16 @@ setTimeout(()=>factoryEnhanceNameSelects(document),0);
 
 // Apply the replacement renderer and saved table preferences on the current screen.
 enh();
+
+
+function updateColumnChooserLanguage(){
+ document.querySelectorAll(".factory-column-chooser").forEach(chooser=>{
+  const summary=chooser.querySelector("summary");if(summary)summary.textContent=LANGEN?"Choose visible columns and save":"اختيار الأعمدة الظاهرة وحفظها";
+  const table=chooser.parentElement?.querySelector("table"),headers=table?[...table.querySelectorAll("thead th")]:[];
+  chooser.querySelectorAll("label").forEach((label,i)=>{const h=headers[i],txt=h?.textContent?.trim()||(LANGEN?"Column "+(i+1):"عمود "+(i+1));const last=label.lastChild;if(last&&last.nodeType===3)last.nodeValue=" "+txt});
+ });
+}
+const factoryBaseApplyPref=applyPref;
+applyPref=function(){factoryBaseApplyPref();updateColumnChooserLanguage()};
+
+updateColumnChooserLanguage();
