@@ -557,7 +557,14 @@ const selectSearch=await ev(()=>{const host=document.createElement('div');host.i
 await p.locator('#qa-select-search .select-search-input').fill('اختيار 10');
 const selectFiltered=await ev(()=>{const select=document.querySelector('#qa-large-select');return {visible:[...select.options].filter(o=>!o.hidden).map(o=>o.textContent),hidden:[...select.options].filter(o=>o.hidden).length};});
 ok('large dropdown lists share the same in-place search behavior',selectSearch.input&&selectSearch.enhanced&&selectFiltered.visible.includes('اختيار 10')&&selectFiltered.hidden>=10,selectFiltered);
-await ev(()=>document.querySelector('#qa-select-search')?.remove());}else ok('table column chooser is present on operational tables',false,columnUi);
+await ev(()=>document.querySelector('#qa-select-search')?.remove());
+const employeeTemplate=await ev(()=>{go('emp');eForm();applyEmployeePermissionTemplate('warehouse');return [...document.querySelectorAll('.pm:checked')].map(x=>x.value);});
+ok('employee permission templates apply module access and edit rights without silently granting deletion',employeeTemplate.includes('stock')&&employeeTemplate.includes('edit')&&!employeeTemplate.includes('del')&&!employeeTemplate.includes('sale'),employeeTemplate);
+const viewerTemplate=await ev(()=>{applyEmployeePermissionTemplate('viewer');return [...document.querySelectorAll('.pm:checked')].map(x=>x.value);});
+ok('read-only employee template does not grant edit or delete rights',viewerTemplate.includes('rep')&&viewerTemplate.includes('tl')&&!viewerTemplate.includes('edit')&&!viewerTemplate.includes('del'),viewerTemplate);
+const cloudPermissionMatrix=await ev(()=>{const previous=window.__factoryAuthProfile,previousTab=tab;window.__factoryAuthProfile={is_admin:false,permissions:{inventory:true,edit:false,delete:false}};tab='stock';const read=can(),editDenied=!can('edit'),deleteDenied=!can('del');window.__factoryAuthProfile.permissions.edit=true;const editAllowed=can('edit'),deleteStillDenied=!can('del');window.__factoryAuthProfile=previous;tab=previousTab;return {read,editDenied,deleteDenied,editAllowed,deleteStillDenied};});
+ok('cloud employee controls match module, edit and delete permissions',cloudPermissionMatrix.read&&cloudPermissionMatrix.editDenied&&cloudPermissionMatrix.deleteDenied&&cloudPermissionMatrix.editAllowed&&cloudPermissionMatrix.deleteStillDenied,cloudPermissionMatrix);
+}else ok('table column chooser is present on operational tables',false,columnUi);
 await p.keyboard.type(" XYZ");await p.waitForTimeout(180);
 const continuedSearch=await p.locator('#m input[data-filter-key="cust"][data-filter-id="q"]').inputValue();
 ok('customer search accepts continued typing after live filtering',continuedSearch==="محلات XYZ",continuedSearch);

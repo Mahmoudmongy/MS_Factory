@@ -56,7 +56,7 @@ const poCost=o=>(o.matCost||0)+(o.wc||0)+o.x.reduce((a,x)=>a+x.amt,0)+S.docs.fil
 const CLOUD_SCREEN_PERMISSIONS={sale:"invoices",sret:"invoices",pur:"invoices",pret:"invoices",rc:"invoices",py:"invoices",bank:"settings",cust:"customers",supp:"suppliers",stock:"inventory",prod:"production",coa:"settings",je:"settings",tl:"reports",emp:null,rep:"reports",ai:"settings",set:"settings"};
 const cloudProfile=()=>window.__factoryAuthProfile||null;
 const cloudCan=(key)=>{const p=cloudProfile();if(!p)return null;if(p.is_admin===true)return true;return p.permissions?.[key]===true;};
-const can=p=>{const cp=cloudProfile();if(cp&&!cp.is_admin){const key=CLOUD_SCREEN_PERMISSIONS[tab];return !!key&&key!=="reports"&&cloudCan(key)===true;}return who=="0"||((S.emp.find(e=>e.id==who)||{}).perm||[]).includes(p);};
+const can=p=>{const cp=cloudProfile();if(cp&&!cp.is_admin){const key=CLOUD_SCREEN_PERMISSIONS[tab];if(!key||cloudCan(key)!==true)return false;if(p==="edit")return cloudCan("edit")===true;if(p==="del")return cloudCan("delete")===true;return key!=="reports";}return who=="0"||((S.emp.find(e=>e.id==who)||{}).perm||[]).includes(p);};
 /* ===== state + shell ===== */
 let tab="home",who="0",D,PS,V,J,IM="",idImg="",pe=0,dc="all",hs=[],hi=-1,TL={from:"",to:"",k:""},SF={wh:"",nm:"",b1:"",b2:"",q1:"",q2:""},R={rep:"",from:"",to:"",cat:"all",item:0,acct:0,pt:0,ds:"sale",gb:"الصنف",gc:"",ms:"amt",pa:-1,pc:-1,fields:["التاريخ","رقم الفاتورة","الطرف","الصنف","الكمية","الإجمالي"]};
 const APP_ICONS={
@@ -424,19 +424,43 @@ function xForm(id){sh(`<h3>إضافة تكلفة غير مخزونة</h3><select
 function saveX(id){const o=S.po.find(x=>x.id==id),a=+$("#xa").value,m=+$("#xm").value;if(!m)return;o.x.push({a,amt:m,note:$("#xn").value.trim()});if(o.st>=1)post(td(),o.no,"تكلفة إضافية",[{a:ak("wip"),dr:m},{a,cr:m,desc:$("#xn").value.trim()}],"po",o.id);sv();cl()}
 /* ===== employees ===== */
 function vEmp(){return ph(N.emp,`<button class="new" onclick="eForm()">+ موظف جديد</button>`)+`<table class="l"><tr><th>البطاقة</th><th>الاسم</th><th>التليفون</th><th>المحافظة / المدينة</th><th>العنوان</th><th>الصلاحيات</th><th>إجراءات</th></tr>${U(S.emp,e=>`<tr><td>${img(e.img)}</td><td>${e.name}</td><td>${e.p1}<br>${e.p2}</td><td>${e.gov||""} ${e.city||""}</td><td>${e.adr||""}</td><td>${e.perm.map(p=>N[p]||(p=="edit"?"تعديل بعد الحفظ":"حذف الحركات")).join("، ")}</td><td>${can("edit")?`<button class="g" onclick="eForm(${e.id})">تعديل</button>`:""}</td></tr>`)||'<tr><td colspan="7" class="mu">لا يوجد موظفون</td></tr>'}`}
+const EMP_PERMISSION_TEMPLATES={
+ sales:["cust","sale","sret","rc","edit"],
+ purchasing:["supp","pur","pret","stock","edit"],
+ warehouse:["stock","edit"],
+ production:["prod","stock","edit"],
+ accountant:["bank","rc","py","coa","je","rep","tl","edit"],
+ viewer:["rep","tl"],
+ operations:["cust","supp","sale","sret","pur","pret","stock","prod","bank","rc","py","rep","tl","edit"]
+};
+function applyEmployeePermissionTemplate(key){
+ const permissions=EMP_PERMISSION_TEMPLATES[key];if(!permissions)return;
+ document.querySelectorAll(".pm").forEach(box=>box.checked=permissions.includes(box.value));
+ const message=$("#er");if(message)message.textContent="تم تطبيق القالب. راجع الصلاحيات ثم اضغط حفظ.";
+}
+function employeeCloudPermissions(selected){
+ return {
+  invoices:selected.some(x=>["sale","sret","pur","pret","rc","py"].includes(x)),
+  inventory:selected.includes("stock"),customers:selected.includes("cust"),suppliers:selected.includes("supp"),
+  production:selected.includes("prod"),reports:selected.some(x=>["rep","tl"].includes(x)),
+  settings:selected.some(x=>["set","coa","je","bank","ai"].includes(x)),
+  edit:selected.includes("edit"),delete:selected.includes("del")
+ };
+}
 function eForm(id){
  if(id&&!can("edit"))return;const e=id?S.emp.find(x=>x.id==id):null;if(id&&!e)return;idImg=e?e.img||"":"";
  const escE=v=>String(v||"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/"/g,"&quot;");
  let h="<h3>"+(e?"تعديل بيانات موظف":"تعيين موظف")+"</h3><input id=\"e1\" placeholder=\"اسم الموظف\" value=\""+escE(e?.name)+"\"><input id=\"e2\" type=\"tel\" dir=\"ltr\" placeholder=\"رقم التليفون 1 (اختياري)\" value=\""+escE(e?.p1)+"\"><input id=\"e3\" type=\"tel\" dir=\"ltr\" placeholder=\"رقم التليفون 2 (اختياري)\" value=\""+escE(e?.p2)+"\">"+addrF(e||{})+"<label>صورة البطاقة (اختياري)</label><input type=\"file\" accept=\"image/*\" onchange=\"pick(this,v=>idImg=v)\">";
  if(!e)h+="<div class=\"card\"><label><input type=\"checkbox\" id=\"e-account\" onchange=\"toggleEmployeeAccount()\"> إنشاء حساب دخول للموظف</label><div id=\"e-account-fields\" hidden><label>اسم المستخدم (إجباري عند إنشاء الحساب)</label><input id=\"e-username\" dir=\"ltr\" placeholder=\"مطلوب\"><label>كلمة المرور الافتراضية</label><input id=\"e-default-password\" type=\"text\" dir=\"ltr\" value=\"password\"><small class=\"mu\">سيُطلب من الموظف تغييرها عند أول دخول.</small></div></div>";
- h+="<div class=\"row\"><b>الصلاحيات</b><button type=\"button\" class=\"g\" onclick=\"toggleAllEmployeePermissions(this)\">تحديد الكل</button></div>"+U(T,t=>"<label style=\"display:block\"><input type=\"checkbox\" class=\"pm\" value=\""+t[0]+"\" "+(e&&e.perm.includes(t[0])?"checked":"")+"> "+t[2]+"</label>")+"<label><input type=\"checkbox\" class=\"pm\" value=\"edit\" "+(e&&e.perm.includes("edit")?"checked":"")+"> تعديل المستندات</label><label><input type=\"checkbox\" class=\"pm\" value=\"del\" "+(e&&e.perm.includes("del")?"checked":"")+"> حذف الحركات</label><p id=\"er\" class=\"mu\"></p><div class=\"row\"><button onclick=\"saveE("+(id||0)+")\">حفظ</button>"+bk+"</div>";sh(h);if(e)gvChg(e.city||"");
+ h+="<label>قالب جاهز للصلاحيات</label><select id=\"e-template\" onchange=\"applyEmployeePermissionTemplate(this.value)\"><option value=\"\">اختر قالبًا أو خصص يدويًا</option><option value=\"sales\">مبيعات</option><option value=\"purchasing\">مشتريات</option><option value=\"warehouse\">مخازن</option><option value=\"production\">إنتاج</option><option value=\"accountant\">محاسب</option><option value=\"viewer\">مشاهدة فقط</option><option value=\"operations\">إدارة تشغيل</option></select><div class=\"row\"><b>الصلاحيات</b><button type=\"button\" class=\"g\" onclick=\"toggleAllEmployeePermissions(this)\">تحديد الكل</button></div>"+U(T,t=>"<label style=\"display:block\"><input type=\"checkbox\" class=\"pm\" value=\""+t[0]+"\" "+(e&&e.perm.includes(t[0])?"checked":"")+"> "+t[2]+"</label>")+"<label><input type=\"checkbox\" class=\"pm\" value=\"edit\" "+(e&&e.perm.includes("edit")?"checked":"")+"> تعديل المستندات</label><label><input type=\"checkbox\" class=\"pm\" value=\"del\" "+(e&&e.perm.includes("del")?"checked":"")+"> حذف الحركات</label><p id=\"er\" class=\"mu\"></p><div class=\"row\"><button onclick=\"saveE("+(id||0)+")\">حفظ</button>"+bk+"</div>";sh(h);if(e)gvChg(e.city||"");
 }
 function toggleEmployeeAccount(){const f=$g("#e-account-fields"),enabled=!!$g("#e-account")?.checked;if(f)f.hidden=!enabled;const u=$g("#e-username");if(u){u.required=enabled;u.setAttribute("aria-required",String(enabled));if(!enabled)u.value="";}}
 function toggleAllEmployeePermissions(btn){const boxes=[...document.querySelectorAll(".pm")],all=boxes.length>0&&boxes.every(x=>x.checked);boxes.forEach(x=>x.checked=!all);if(btn)btn.textContent=all?"تحديد الكل":"إلغاء تحديد الكل";}
 async function saveE(id){if(id&&!can("edit"))return;const n=$("#e1").value.trim(),a=$("#e2").value.trim(),b=$("#e3").value.trim(),old=id?S.emp.find(x=>x.id==id):null;if(!n){$("#er").textContent="اكتب اسم الموظف على الأقل";return;}if(!guard())return;
  const data={name:n,p1:a,p2:b,img:idImg,...rdA(),perm:[...document.querySelectorAll(".pm:checked")].map(x=>x.value)};let authUserId=old?.authUserId||null,createdUsername="";
- if(!id&&$("#e-account")?.checked){const username=$("#e-username").value.trim().toLowerCase(),password=$("#e-default-password").value;if(!username){$("#er").textContent="اسم المستخدم إجباري عند إنشاء حساب الدخول";return;}if(S.emp.some(x=>String(x.username||"").toLowerCase()===username)){$("#er").textContent="اسم المستخدم مستخدم بالفعل؛ اختر اسمًا آخر";return;}if(!/^[a-z0-9._-]{3,40}$/.test(username)){$("#er").textContent="اسم المستخدم من 3 إلى 40 حرفًا إنجليزيًا أو رقمًا أو . _ -";return;}if(password.length<8){$("#er").textContent="كلمة المرور لا تقل عن 8 أحرف";return;}const selected=data.perm;const permissions={invoices:selected.some(x=>["sale","sret","pur","pret","rc","py"].includes(x)),inventory:selected.includes("stock"),customers:selected.includes("cust"),suppliers:selected.includes("supp"),production:selected.includes("prod"),reports:selected.includes("rep")||selected.includes("tl")||selected.includes("ai"),settings:selected.some(x=>["set","coa","je","bank","emp"].includes(x))};
+ if(!id&&$("#e-account")?.checked){const username=$("#e-username").value.trim().toLowerCase(),password=$("#e-default-password").value;if(!username){$("#er").textContent="اسم المستخدم إجباري عند إنشاء حساب الدخول";return;}if(S.emp.some(x=>String(x.username||"").toLowerCase()===username)){$("#er").textContent="اسم المستخدم مستخدم بالفعل؛ اختر اسمًا آخر";return;}if(!/^[a-z0-9._-]{3,40}$/.test(username)){$("#er").textContent="اسم المستخدم من 3 إلى 40 حرفًا إنجليزيًا أو رقمًا أو . _ -";return;}if(password.length<8){$("#er").textContent="كلمة المرور لا تقل عن 8 أحرف";return;}const selected=data.perm;const permissions=employeeCloudPermissions(selected);
  try{const {supabase}=await import("./supabase.js");const {data:created,error}=await supabase.functions.invoke("create-employee-account",{body:{username,full_name:n,password,permissions}});if(error||created?.success!==true)throw new Error(created?.error||error?.message||"تعذر إنشاء الحساب");authUserId=created.user_id;createdUsername=username;}catch(error){$("#er").textContent=error.message||"فشل إنشاء الحساب";return;}}
+ if(old?.authUserId){try{const {supabase}=await import("./supabase.js");const {error}=await supabase.rpc("update_employee_permissions",{p_employee_id:old.authUserId,p_permissions:employeeCloudPermissions(data.perm)});if(error)throw error;}catch(error){$("#er").textContent=error.message||"تعذر تحديث صلاحيات حساب الموظف";return;}}
  if(old)Object.assign(old,data,{authUserId});else S.emp.push({id:uid(),...data,...(authUserId?{authUserId,username:createdUsername}:{})});sv();nav();toast(old?"تم تعديل بيانات الموظف":createdUsername?"تم حفظ الموظف وإنشاء حساب الدخول: "+createdUsername:"تم حفظ الموظف");cl();
 }
 /* ===== settings ===== */
