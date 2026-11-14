@@ -612,3 +612,25 @@ button,input,select,table,textarea{font-family:inherit}
 .factory-search-options button{display:block;width:100%;text-align:right;border:0;border-radius:5px;background:transparent;color:inherit;padding:8px 10px;cursor:pointer}
 .factory-search-options button:hover,.factory-search-options button:focus{background:rgba(15,118,110,.12)}
 .factory-search-empty{padding:10px;color:var(--muted,#64748b)}
+
+/* Shared table density, wrapping, pinned headings and summary placement. */
+.factory-table-scroll{max-width:100%;overflow:auto;overscroll-behavior-inline:contain;-webkit-overflow-scrolling:touch}
+.factory-table-scroll table.l{width:100%;table-layout:auto}
+.factory-table-scroll table.l th,.factory-table-scroll table.l td{white-space:normal;overflow-wrap:anywhere;word-break:normal;vertical-align:middle}
+.factory-table-scroll table.l thead th{position:sticky;top:0;z-index:4;background:var(--card,#fff);box-shadow:0 1px 0 var(--bd,#ddd)}
+.factory-table-count{font-size:12px;font-weight:700;color:var(--muted,#64748b);padding:4px 2px;text-align:start}
+.factory-table-total{display:flex;flex-wrap:wrap;gap:6px 16px;padding:7px 10px;margin-top:5px;border:1px solid var(--bd,#d8dee8);border-radius:7px;background:var(--card,#fff);font-weight:700;font-size:13px}
+.factory-column-chooser{width:fit-content;max-width:100%;margin-top:8px;margin-bottom:12px}
+.factory-column-chooser[dir="rtl"]{margin-right:auto;margin-left:0}
+.factory-column-chooser[dir="ltr"]{margin-left:auto;margin-right:0}
+.factory-icon-action{min-width:34px!important;width:36px!important;height:36px!important;padding:5px!important;display:inline-grid;place-items:center;font-size:18px!important;line-height:1}
+.factory-action-link{color:var(--pr);text-decoration:underline;text-underline-offset:3px;cursor:pointer;font-weight:700}
+.timeline-filters{align-items:end;gap:10px}
+.timeline-filters>div{min-width:150px;flex:1 1 170px}
+.timeline-filters label{display:block;margin-bottom:4px}
+.timeline-filters input,.timeline-filters select{width:100%;min-width:0}
+@media(max-width:700px){
+ .factory-table-total{font-size:12px}
+ .factory-table-scroll table.l{min-width:680px}
+ .timeline-filters>div{flex:1 1 100%}
+}

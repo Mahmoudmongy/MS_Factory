@@ -238,7 +238,7 @@ async function scanCam(){const m=$("#bmsg");if(!window.BarcodeDetector||!navigat
 const gross=()=>D.lines.reduce((a,l)=>a+l.qty*l.price,0);
 function drawL(){const rt=D.t=="sret"||D.t=="pret",g=gross(),dsc=rt?0:(D.disc||0);$("#ls").innerHTML=D.lines.length?`<table><tr><th>الصنف</th><th>الوحدة</th><th>الكمية</th><th>السعر</th><th>الإجمالي</th><th>البيان</th><th></th></tr>${U(D.lines,(l,i)=>`<tr><td>${l.name}${l.v!="-"?" ("+l.v+")":""}</td><td>${l.unit||""}</td><td><input type="number" value="${l.qty||""}" placeholder="0" ${l.max?`max="${l.max}"`:""} style="width:80px;margin:0" onchange="D.lines[${i}].qty=+this.value||0;drawL()"></td><td>${f(l.price)}</td><td>${f(l.qty*l.price)}</td><td>${l.note||""}</td><td><button class="d" onclick="D.lines.splice(${i},1);drawL()">✕</button></td></tr>`)}<tr><th colspan="4">الإجمالي (الأسعار مثبّتة)</th><th colspan="3">${f(g)}</th></tr>${dsc?`<tr><th colspan="4">${D.t=="sale"?"خصم مبيعات":"خصم مشتريات"}</th><th colspan="3">-${f(dsc)}</th></tr><tr><th colspan="4">الصافي</th><th colspan="3">${f(g-dsc)}</th></tr>`:""}</table>`:'<p class="mu">أضف أصنافًا أو بنودًا</p>'}
 function pend(){if($("#bcd")&&$("#bcd").value.trim())addBc();else if(["cl","sz","pc","ln","q"].some(k=>$("#"+k)&&$("#"+k).value.trim())||($("#in")&&$("#in").value.trim()))addL();if($("#nm")&&$("#nm").value.trim())addF()}
-function saveDoc(){if(!CUR||CUR.kind!="page")return;pend();const t=D.t,rt=t=="sret"||t=="pret",lines=D.lines.filter(l=>l.qty>0&&(!rt||l.iid||l.ni));if(!lines.length){toast("أضف أصنافًا أو بنودًا للفاتورة");return}if(!guard())return;const dd=$("#dd").value||td(),pid=+$("#pt").value,cat=$("#ct").value,dest=t=="pur"?$("#ds").value:"",warehouseId=+$("#ty").value||0,wip=dest&&dest!="wh",old=D.edit?S.docs.find(x=>x.id==D.edit):null;
+function saveDoc(){if(!CUR||CUR.kind!="page")return;pend();const t=D.t,rt=t=="sret"||t=="pret",lines=D.lines.filter(l=>l.qty>0&&(!rt||l.iid||l.ni));if(!lines.length){toast("أضف أصنافًا أو بنودًا للفاتورة");return}if(!guard())return;const dd=$("#dd").value||td(),pid=+$("#pt").value,cat=$("#ct").value,dest=t=="pur"?$("#ds").value:"",warehouseId=+$("#ty").value||0,wip=dest&&dest!="wh",old=D.edit?S.docs.find(x=>x.id==D.edit):null,oldLedger=old?S.L.filter(x=>String(x.rid)===String(old.id)&&x.src==="doc").map(x=>({...x})):[],oldMoves=old?S.mv.filter(x=>String(x.rid)===String(old.id)&&x.src==="doc").map(x=>({...x})):[];
  if(old){rev(old.id,"doc");S.docs=S.docs.filter(x=>x!==old)}
  const id=old?old.id:uid(),no=old?old.no:PF[t]+"-"+pad(S.docs.filter(x=>x.t==t).length+1),ts=old?old.ts:Date.now(),gr=lines.reduce((a,l)=>a+l.qty*l.price,0),disc=rt?0:Math.min(+D.disc||0,gr),net=gr-disc,Ls=[];
  lines.forEach((l,idx)=>{if(l.ni){const i=ensureItem(l.name,l.ni.wh,l.ni.unit,l.price);l.iid=i.id;l.unit=i.unit;delete l.ni}const amt=l.qty*l.price,i=l.iid?it_(l.iid):null;
@@ -248,7 +248,7 @@ function saveDoc(){if(!CUR||CUR.kind!="page")return;pend();const t=D.t,rt=t=="sr
   else{if(i)stk(dd,i,l.v,-l.qty,-amt,no,pid,id,"doc",warehouseId||i.wh);Ls.push({a:ak("inv"),cr:amt,desc:l.note})}delete l.max});
  if(disc)Ls.push(t=="sale"?{a:ak("sdisc"),dr:disc}:{a:ak("pdisc"),cr:disc});
  Ls.push(t=="sale"?{a:ak("ar"),dr:net,pid}:t=="sret"?{a:ak("ar"),cr:net,pid}:t=="pur"?{a:ak("ap"),cr:net,pid}:{a:ak("ap"),dr:net,pid});
- post(dd,no,TN[t],Ls,"doc",id,ts);S.docs.push({id,t,no,date:dd,ts,pid,cat,dest:dest=="wh"||!dest?dest:+dest,warehouseId:warehouseId||0,lines,gross:gr,disc,total:net,note:$("#dn").value.trim(),img:D.img});sv();toast("تم حفظ "+TN[t]+" "+no);cl();if(t=="pur"&&!old)docLb(id)}
+ if(!post(dd,no,TN[t],Ls,"doc",id,ts)){rev(id,"doc");if(old){oldLedger.forEach(x=>S.L.push(x));oldMoves.forEach(m=>{const item=it_(m.iid);if(item){item.st=item.st||{};item.st[m.v]=(Number(item.st[m.v])||0)+Number(m.q||0);item.val=(Number(item.val)||0)+Number(m.val||0)}S.mv.push(m)});S.docs.push(old)}toast("تعذر حفظ الفاتورة لأن القيد المحاسبي غير متوازن. لم يتم اعتماد التعديل.");return}S.docs.push({id,t,no,date:dd,ts,pid,cat,dest:dest=="wh"||!dest?dest:+dest,warehouseId:warehouseId||0,lines,gross:gr,disc,total:net,note:$("#dn").value.trim(),img:D.img});sv();toast("تم حفظ "+TN[t]+" "+no);cl();if(t=="pur"&&!old)docLb(id)}
 /* ===== vouchers ===== */
 function voucherAccounts(v){
  const saved=Array.isArray(v?.ac)?v.ac.filter(a=>a&&typeof a==="object"&&a.a!=null):[];
@@ -726,10 +726,10 @@ function drawV(){const[a,b]=vsum();$("#vs").innerHTML=`<table>${U(V.ac,(x,i)=>`<
 function saveV(){if(!CUR||CUR.kind!="page")return;if(+$("#vm").value)vAc();if(+$("#lm").value)vLn();
  if(V.lk){const s=Object.entries(V.alloc);if(!s.length){toast("حدد المبالغ على الفواتير المراد سدادها");return}for(const[id,m]of s){const d=S.docs.find(x=>x.id==id);if(!d||m>remOf(d,V.edit)+.005){toast("مبلغ السداد أكبر من المتبقي في إحدى الفواتير");return}}const tot=s.reduce((a,[,m])=>a+m,0),nos=s.map(([id])=>S.docs.find(x=>x.id==id).no).join("، ");V.ln=V.ln.filter(l=>l.a!="p");V.ln.push({a:"p",d:"سداد فواتير: "+nos,m:tot,x:0,lbl:"حساب الطرف"})}
  const[a,b]=vsum();if(!a||Math.abs(a-b)>.005){$("#ve").textContent="مجموع الحسابات لازم يساوي مجموع البنود";return}if(!guard())return;
- const dir=V.dir,t=$("#vt").value,pid=t=="o"?0:+$("#vp").value,d=$("#vd").value||td(),old=V.edit?S.vch.find(x=>x.id==V.edit):null;if(old){rev(old.id,"vch");S.vch=S.vch.filter(x=>x!==old)}
+ const dir=V.dir,t=$("#vt").value,pid=t=="o"?0:+$("#vp").value,d=$("#vd").value||td(),old=V.edit?S.vch.find(x=>x.id==V.edit):null,oldLedger=old?S.L.filter(x=>String(x.rid)===String(old.id)&&x.src==="vch").map(x=>({...x})):[];if(old){rev(old.id,"vch");S.vch=S.vch.filter(x=>x!==old)}
  const id=old?old.id:uid(),no=old?old.no:$("#v0").checked?(dir=="in"?"RC-":"PY-")+pad(S.vch.filter(x=>x.dir==dir).length+1):$("#vr").value.trim()||"—",ts=old?old.ts:Date.now(),Ls=[];
  V.ac.forEach(x=>Ls.push(dir=="in"?{a:x.a,dr:x.m,fc:x.fc||0}:{a:x.a,cr:x.m,fc:x.fc?-x.fc:0}));V.ln.forEach(l=>{const n=l.m-l.x,p=l.a=="p",a2=p?(t=="s"?ak("ap"):ak("ar")):+l.a;Ls.push(dir=="in"?{a:a2,cr:n,pid:p?pid:0,desc:l.d}:{a:a2,dr:n,pid:p?pid:0,desc:l.d})});
- post(d,no,$("#vx").value||$("#vtl").value,Ls,"vch",id,ts);const l=$("#vl").value;S.vch.push({id,no,date:d,ts,dir,title:$("#vtl").value,pid,who:t=="o"?$("#vo").value:pn(pid),desc:$("#vx").value,ac:V.ac,ln:V.ln,link:l=="sales"?l:+l,img:V.img,total:a,alloc:V.lk?{...V.alloc}:{}});sv();toast("تم حفظ السند "+no);cl()}
+ if(!post(d,no,$("#vx").value||$("#vtl").value,Ls,"vch",id,ts)){if(old){oldLedger.forEach(x=>S.L.push(x));S.vch.push(old)}toast("تعذر حفظ السند لأن القيد المحاسبي غير متوازن. لم يتم اعتماد التعديل.");return}const l=$("#vl").value;S.vch.push({id,no,date:d,ts,dir,title:$("#vtl").value,pid,who:t=="o"?$("#vo").value:pn(pid),desc:$("#vx").value,ac:V.ac,ln:V.ln,link:l=="sales"?l:+l,img:V.img,total:a,alloc:V.lk?{...V.alloc}:{}});sv();toast("تم حفظ السند "+no);cl()}
 /* ---- production orders: planned vs received table, barcode preview anytime ---- */
 function poRows(o){const it=S.items.find(x=>x.name==pnm(o)),rec={};(o.rec||[]).forEach(r=>rec[r.v]=r.qty);return o.subs.map(s=>{const[c,z]=s.v=="-"?["-","-"]:s.v.split(" / "),r=o.st==2?(rec[s.v]||0):0;return {name:pnm(o),type:whn(o.wh),model:it?it.model||"":"",c:c||"-",z:z||"-",v:s.v,p:s.qty,r,diff:r-s.qty,pct:s.qty?Math.round(r/s.qty*100):0}})}
 const poHead=["الصنف","النوع / الموديل","اللون","المقاس","الكمية المخططة","الكمية المستلمة","الفرق","نسبة التنفيذ"];
@@ -1117,3 +1117,141 @@ const factoryBaseApplyPref=applyPref;
 applyPref=function(){factoryBaseApplyPref();updateColumnChooserLanguage()};
 
 updateColumnChooserLanguage();
+
+/* MS Factory UX patch — safe, presentation-focused overrides */
+(function(){
+  const oldAddL = addL;
+  addL = function(){
+    const before = D.lines.length;
+    oldAddL();
+    if(D.lines.length>before){
+      if($("#it")) $("#it").selectedIndex=0;
+      if($("#un")) $("#un").value="";
+      if($("#info")) $("#info").innerHTML="";
+      if($("#bcd")) $("#bcd").value="";
+      if($("#in")) $("#in").value="";
+      if($("#cl")) $("#cl").value="";
+      if($("#sz")) $("#sz").value="";
+      if($("#pc")) $("#pc").value="";
+      if($("#ln")) $("#ln").value="";
+      if($("#q")) $("#q").value="";
+    }
+  };
+  const oldAddF = addF;
+  addF = function(){
+    const before = D.lines.length;
+    oldAddF();
+    if(D.lines.length>before && $("#fa")) $("#fa").selectedIndex=0;
+  };
+
+  drawL = function(){
+    const rt=D.t==="sret"||D.t==="pret",g=gross(),dsc=rt?0:(D.disc||0);
+    $("#ls").innerHTML=D.lines.length
+      ? '<div class="factory-table-scroll"><table class="l"><thead><tr><th>الصنف</th><th>الوحدة</th><th>الكمية</th><th>السعر</th><th>الإجمالي</th><th>البيان</th><th></th></tr></thead><tbody>'+
+        U(D.lines,(l,i)=>'<tr><td>'+factoryEsc(l.name)+(l.v!=="-"?" ("+factoryEsc(l.v)+")":"")+'</td><td>'+factoryEsc(l.unit||"")+'</td><td><input type="number" value="'+(l.qty||"")+'" placeholder="0" '+(l.max?'max="'+l.max+'"':"")+' style="width:80px;margin:0" onchange="D.lines['+i+'].qty=+this.value||0;drawL()"></td><td><input type="number" min="0" step="0.01" value="'+(Number(l.price)||0)+'" aria-label="سعر '+factoryEsc(l.name)+'" style="width:105px;margin:0" onchange="D.lines['+i+'].price=Math.max(0,+this.value||0);drawL()"></td><td>'+f(l.qty*l.price)+'</td><td>'+factoryEsc(l.note||"")+'</td><td><button class="d" title="حذف البند" aria-label="حذف البند" onclick="D.lines.splice('+i+',1);drawL()">✕</button></td></tr>')+
+        '</tbody><tfoot><tr><th colspan="4">الإجمالي</th><th colspan="3">'+f(g)+'</th></tr>'+
+        (dsc?'<tr><th colspan="4">'+(D.t==="sale"?"خصم مبيعات":"خصم مشتريات")+'</th><th colspan="3">-'+f(dsc)+'</th></tr><tr><th colspan="4">الصافي</th><th colspan="3">'+f(g-dsc)+'</th></tr>':"")+
+        '</tfoot></table></div>'
+      : '<p class="mu">أضف أصنافًا أو بنودًا</p>';
+  };
+
+  vBank = function(){
+    const k="bank",q=fv(k,"q")||"",currency=fv(k,"cur")||"";
+    const cash=S.accts.filter(a=>a.cash),children=id=>cash.filter(a=>String(a.parentId||"")===String(id));
+    const matches=a=>ci(a.name,q)||ci(a.code,q)||children(a.id).some(matches);
+    const total=(a,seen)=>{seen=seen||new Set();if(seen.has(String(a.id)))return 0;seen.add(String(a.id));return balc(a.id,"",S.per.to)+children(a.id).reduce((n,x)=>n+total(x,seen),0)};
+    const totals={};cash.forEach(a=>{if(!children(a.id).length)totals[cur_(a)]=(totals[cur_(a)]||0)+balc(a.id,"",S.per.to)});
+    const row=(a,level)=>{const kids=children(a.id),closed=localStorage.getItem("factory-account-collapsed:"+a.id)==="1";
+      return '<tr><td style="padding-inline-start:'+(10+level*20)+'px">'+(kids.length?'<button class="g account-tree-toggle" title="إظهار أو إخفاء الحسابات الفرعية" aria-label="إظهار أو إخفاء الحسابات الفرعية" onclick="toggleAccountTree('+JSON.stringify(String(a.id))+')">'+(closed?"▸":"▾")+'</button> ':"")+factoryEsc(accountLabel(a))+'</td><td>'+factoryEsc(cur_(a))+'</td><td>'+lk(cf(a,total(a)),'drillAcct('+a.id+',\'\',\''+S.per.to+'\')')+'</td><td>'+ (cur_(a)==="EGP"?"—":f(bal(a.id,"",S.per.to))+" ج.م")+'</td><td>'+(can("edit")?'<button class="g" title="تعديل الحساب" aria-label="تعديل الحساب" onclick="editAcc('+JSON.stringify(String(a.id))+')">✎</button>':"")+'</td></tr>'+(closed?"":kids.filter(matches).map(x=>row(x,level+1)).join(""));
+    };
+    const roots=cash.filter(a=>!cash.some(p=>String(p.id)===String(a.parentId))&&(!currency||cur_(a)===currency)&&matches(a));
+    return ph(N.bank,'<button class="new" onclick="bForm()">+ حساب نقدي / بنك جديد</button>')+
+      fbar(k,[["q","text","اسم أو كود الحساب"],["cur","sel","العملة",["",...S.curs]]])+
+      '<table class="l"><thead><tr><th>الحساب</th><th>العملة</th><th>الرصيد بعملة الحساب</th><th>'+(LANGEN?"EGP equivalent":"المعادل بالجنيه")+'</th><th>إجراءات</th></tr></thead><tbody>'+
+      (roots.map(a=>row(a,0)).join("")||'<tr><td colspan="5" class="mu">لا توجد حسابات نقدية مطابقة</td></tr>')+
+      '</tbody></table><div class="card"><b>إجمالي كل عملة (لا تُجمع العملات المختلفة معًا)</b>'+
+      U(Object.keys(totals),c=>'<div class="row sp"><span>'+factoryEsc(c)+'</span><b>'+f(totals[c])+' '+(c==="EGP"?"ج.م":factoryEsc(c))+'</b></div>')+'</div>';
+  };
+
+  vTl = function(){
+    const l=[];
+    S.docs.forEach(d=>l.push({ts:d.ts,s:"doc",id:d.id,t:TN[d.t],ref:d.no,w:pn(d.pid),amt:d.total,desc:[d.note,...(d.lines||[]).map(x=>x.name+" × "+x.qty)].filter(Boolean).join(" — ")}));
+    S.vch.forEach(v=>{const accounts=voucherAccounts(v).map(x=>an(x.a)+" "+f(x.m)+" "+cur_(x.a)).join("، ");l.push({ts:v.ts,s:"vch",id:v.id,t:v.title,ref:v.no,w:v.who,amt:v.total,desc:[v.title,v.who,accounts,v.desc].filter(Boolean).join(" — ")})});
+    S.po.forEach(o=>l.push({ts:o.ts,s:"po",id:o.id,t:"أمر إنتاج",ref:o.no,w:"",amt:poCost(o),desc:o.desc}));
+    S.je.filter(j=>j.id).forEach(j=>l.push({ts:j.ts,s:"je",id:j.id,t:"قيد يومية",ref:j.no,w:"",amt:S.L.filter(x=>x.rid==j.id).reduce((a,x)=>a+x.dr,0),desc:j.desc}));
+    S.wo.forEach(w=>l.push({ts:w.ts,s:"wo",id:w.id,t:"هالك مخزون",ref:w.ref,w:"",amt:w.c,desc:w.desc}));
+    S.L.filter(x=>x.src==="undo"&&x.undoOf&&!l.some(y=>y.s==="undo"&&String(y.id)===String(x.rid))).forEach(x=>l.push({ts:x.ts,s:"undo",id:x.rid,t:"تراجع آمن",ref:x.ref,w:"",amt:Number(x.dr)||Number(x.cr)||0,desc:x.desc}));
+    const q=String(TL.q||"").trim().toLocaleLowerCase("ar");
+    const rows=l.filter(x=>x.ts&&(!TL.from||lday(new Date(x.ts))>=TL.from)&&(!TL.to||lday(new Date(x.ts))<=TL.to)&&(!TL.k||x.s===TL.k)&&(!q||[x.t,x.ref,x.w,x.desc].join(" ").toLocaleLowerCase("ar").includes(q))).sort((a,b)=>b.ts-a.ts);
+    return ph(N.tl,prs("tpr"))+'<div class="card row timeline-filters"><div><label>من تاريخ</label><input type="date" value="'+factoryEsc(TL.from||"")+'" onchange="TL.from=this.value;render()"></div><div><label>إلى تاريخ</label><input type="date" value="'+factoryEsc(TL.to||"")+'" onchange="TL.to=this.value;render()"></div><div><label>'+(LANGEN?"Search (contains)":"بحث (يحتوي على)")+'</label><input type="search" placeholder="'+(LANGEN?"Search by word or number":"اكتب كلمة أو رقمًا للبحث")+'" value="'+factoryEsc(TL.q||"")+'" onchange="TL.q=this.value;render()"></div><div><label>النوع</label><select onchange="TL.k=this.value;render()">'+sel(TL.k,[["","الكل"],["doc","الفواتير والمرتجعات"],["vch","السندات"],["po","أوامر الإنتاج"],["je","القيود"],["wo","الهالك"]])+'</select></div></div>'+
+      '<table class="l"><thead><tr><th>التاريخ</th><th>النوع</th><th>المرجع</th><th>الطرف</th><th>'+(LANGEN?"Description and details":"البيان والتفاصيل")+'</th><th>المبلغ</th><th></th></tr></thead><tbody>'+
+      (U(rows,x=>'<tr><td>'+fts(x.ts)+'</td><td>'+factoryEsc(x.t)+'</td><td>'+factoryEsc(x.ref)+'</td><td>'+factoryEsc(x.w||"")+'</td><td>'+(LANGEN?"":factoryEsc(x.desc||""))+'</td><td>'+f(x.amt)+'</td><td><a class="factory-action-link" href="#" onclick="event.preventDefault();openRef('+JSON.stringify(x.s)+','+JSON.stringify(String(x.id))+')">'+(LANGEN?"Details":"تفاصيل")+'</a> '+(can("edit")&&x.s!=="wo"?'<button class="g" title="تعديل" aria-label="تعديل" onclick="editRef('+JSON.stringify(x.s)+','+JSON.stringify(String(x.id))+')">✎</button>':"")+(can("del")?'<button class="d" title="تراجع" aria-label="تراجع" onclick="delRef('+JSON.stringify(x.s)+','+JSON.stringify(String(x.id))+')">↶</button>':"")+'</td></tr>')||'<tr><td colspan="7" class="mu">لا توجد حركات مطابقة</td></tr>')+
+      '</tbody></table>';
+  };
+})();
+
+/* Uniform record counts and amount totals for every rendered data table. */
+const factoryUpdateTableSummary = function(table){
+  const meta=table&&table.__factorySummaryMeta;if(!meta)return;
+  const visible=meta.rows.filter(r=>r.style.display!=="none"&&r.querySelector("td")&&!r.querySelector("[colspan]")&&!/الإجمالي|المجموع|لا توجد حركات|لا توجد بيانات/.test(r.textContent));
+  meta.count.textContent=(LANGEN?"Records: ":"عدد البيانات: ")+visible.length.toLocaleString("en-US");
+  const sums=[];
+  if(![...table.querySelectorAll("tr")].some(r=>/الإجمالي|المجموع/.test(r.textContent))){
+    meta.headers.forEach((h,i)=>{
+      if(!/(المبلغ|الإجمالي|التكلفة|مدين|دائن|amount|total|debit|credit)/i.test(h.textContent))return;
+      let sum=0,found=false;
+      visible.forEach(r=>{const cell=r.children[i];if(!cell)return;const raw=cell.textContent.replace(/,/g,"").replace(/[−–]/g,"-"),m=raw.match(/-?\d+(?:\.\d+)?/);if(m){sum+=Number(m[0]);found=true}});
+      if(found)sums.push((LANGEN?"Total ":"إجمالي ")+h.textContent.trim()+": "+f(sum));
+    });
+  }
+  meta.total.textContent=sums.join("  |  ");
+};
+const factoryEnhBeforeSummary=enh;
+enh=function(){
+  factoryEnhBeforeSummary();
+  const root=ACT||document;
+  root.querySelectorAll("table.l").forEach(table=>{
+    if(table.dataset.factorySummaryReady==="1")return;
+    const header=table.querySelector("thead tr")||[...table.querySelectorAll("tr")].find(r=>r.querySelector("th"));
+    if(!header)return;
+    const headers=[...header.children],rows=[...table.querySelectorAll("tr")].filter(r=>r!==header&&r.querySelector("td"));
+    const count=document.createElement("div");count.className="factory-table-count";
+    const total=document.createElement("div");total.className="factory-table-total";
+    const wrapper=table.closest(".factory-table-scroll")||table.parentElement;
+    wrapper.insertBefore(count,table);
+    wrapper.appendChild(total);
+    table.__factorySummaryMeta={headers,rows,count,total};
+    table.dataset.factorySummaryReady="1";
+    factoryUpdateTableSummary(table);
+  });
+  root.querySelectorAll("button[onclick]").forEach(button=>{
+    const action=button.getAttribute("onclick")||"";
+    const rules=[["savePdf","⬇","حفظ PDF"],["sendWaPdf","↗","مشاركة PDF"],["vPrint(","🖨","طباعة"],["poPrint(","🖨","طباعة"],["inv(","🖨","طباعة"],["editDoc(","✎","تعديل"],["editV(","✎","تعديل"],["editPO(","✎","تعديل"]];
+    const match=rules.find(x=>action.includes(x[0]));if(!match)return;
+    button.title=button.title||match[2];button.setAttribute("aria-label",match[2]);button.classList.add("factory-icon-action");
+    button.textContent=match[1];
+  });
+};
+const factoryUpdateChooserBefore=updateColumnChooserLanguage;
+updateColumnChooserLanguage=function(){
+  factoryUpdateChooserBefore();
+  document.querySelectorAll(".factory-column-chooser").forEach(chooser=>{
+    const summary=chooser.querySelector("summary");
+    if(summary)summary.textContent=LANGEN?"Default templates":"قوالب افتراضية";
+    chooser.dir=LANGEN?"ltr":"rtl";
+    chooser.style.marginInlineStart="auto";
+  });
+};
+document.addEventListener("input",e=>{
+  if(e.target.matches(".factory-table-tools input"))document.querySelectorAll("table.l").forEach(factoryUpdateTableSummary);
+});
+
+document.addEventListener("factory-language-changed",()=>{
+  document.querySelectorAll("table.l").forEach(table=>{if(table.__factorySummaryMeta)factoryUpdateTableSummary(table)});
+});
+
+const factoryApplyPrefSummaryRefresh=applyPref;
+applyPref=function(){
+  factoryApplyPrefSummaryRefresh();
+  document.querySelectorAll("table.l").forEach(table=>{if(table.__factorySummaryMeta)factoryUpdateTableSummary(table)});
+};

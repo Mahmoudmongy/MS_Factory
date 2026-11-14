@@ -131,3 +131,59 @@ ensureUi();
 let lastEnglish=english();
 window.addEventListener('factory-language-changed',applyLanguage);
 new MutationObserver(()=>{const next=english();if(next!==lastEnglish){lastEnglish=next;applyLanguage();}}).observe(document.documentElement,{attributes:true,attributeFilter:['lang','dir']});
+
+/* Human-readable business context for audit entries; raw snapshots remain available. */
+function auditBusinessSummary(row){
+  const raw=row.new_row||row.old_row||{};
+  const v=raw.payload&&typeof raw.payload==="object"?raw.payload:raw.data&&typeof raw.data==="object"?raw.data:raw;
+  const parts=[];
+  const money=value=>Number.isFinite(Number(value))?Number(value).toLocaleString("en-US",{minimumFractionDigits:2,maximumFractionDigits:2}):"";
+  const accountName=id=>{try{return typeof window.an==="function"?window.an(id):"حساب #"+id}catch(_){return "حساب #"+id}};
+  const partyName=()=>{try{return v.who|| (v.pid&&typeof window.pn==="function"?window.pn(v.pid):"")}catch(_){return v.who||""}};
+  const add=(label,value)=>{if(value!==undefined&&value!==null&&String(value).trim()!=="")parts.push(label+": "+value)};
+  add("المرجع",v.no||v.ref);
+  add("التاريخ",v.date);
+  const type=row.record_type;
+  if(type==="vch"||type==="vouchers"){
+    add("نوع السند",v.title||(v.dir==="in"?"سند قبض":"سند دفع"));
+    add(v.dir==="out"?"المستفيد":"الدافع",partyName());
+    const ac=Array.isArray(v.ac)?v.ac:[];
+    if(ac.length)add("الحسابات",ac.map(x=>accountName(x.a)+" ("+money(x.m)+" "+(x.cur||"ج.م")+")").join("، "));
+    add("المبلغ",money(v.total)+" ج.م");
+    add("البيان",v.desc);
+  }else if(type==="docs"||type==="invoices"||type==="sret"||type==="pret"){
+    add("نوع المستند",v.t||v.type);
+    add("العميل / المورد",partyName());
+    if(Array.isArray(v.lines))add("الأصناف",v.lines.slice(0,8).map(x=>(x.name||"صنف")+" × "+(x.qty||0)).join("، "));
+    add("الإجمالي",money(v.total)+" ج.م");
+    add("البيان",v.note||v.desc);
+  }else if(type==="partners"||type==="customers"||type==="suppliers"){
+    add("الاسم",v.name||v.full_name);
+    add("الهاتف",v.phone||v.mobile);
+    add("الصفة",v.c&&v.s?"عميل ومورد":v.c?"عميل":v.s?"مورد":"");
+  }else if(type==="accts"){
+    add("كود الحساب",v.code);add("اسم الحساب",v.name);add("العملة",v.cur||v.currency);
+  }else if(type==="wh"){
+    add("اسم المخزن",v.name);add("المخزن الرئيسي",v.parent_name||v.parentId);
+  }else{
+    add("البيان",v.desc||v.description||v.note||v.name||v.title);
+    if(v.total!==undefined)add("المبلغ",money(v.total)+" ج.م");
+    if(v.amount!==undefined)add("القيمة",money(v.amount));
+    if(v.who)add("الطرف",v.who);
+  }
+  return parts.length?parts.join(" — "):"تفاصيل السجل متاحة في البيانات قبل / بعد";
+}
+renderRows = function(){
+  const root=panel?.querySelector("#factory-audit-content");if(!root)return;
+  const q=(panel.querySelector("#factory-audit-search")?.value||"").trim().toLocaleLowerCase();
+  const latest=new Map();
+  for(const row of rows){const key=row.record_type+"|"+row.record_id;if(!latest.has(key)||Number(row.id)>Number(latest.get(key)))latest.set(key,row.id);}
+  const visible=rows.filter(row=>!q||[row.record_type,row.record_id,row.operation,opLabel(row.operation),auditBusinessSummary(row)].join(" ").toLocaleLowerCase().includes(q));
+  if(!visible.length){root.innerHTML='<div class="card">'+text("لا توجد حركات مطابقة.","No matching records.")+'</div>';return;}
+  root.innerHTML='<div class="card" style="overflow:auto"><table class="l" style="min-width:950px;width:100%"><thead><tr><th>'+text("التاريخ","Date")+'</th><th>'+text("العملية","Action")+'</th><th>'+text("القسم","Section")+'</th><th>'+text("رقم السجل","Record ID")+'</th><th>'+text("المنفذ","Actor")+'</th><th>'+text("تفاصيل الحركة","Movement details")+'</th><th>'+text("الإجراء","Action")+'</th></tr></thead><tbody>'+
+  visible.map(row=>{
+    const key=row.record_type+"|"+row.record_id,undoSupported=["partners","items","codes","wh","accts","customers","suppliers"].includes(row.record_type),businessReversal=["docs","vch","po","je","wo","L","mv","sret","pret","payroll"].includes(row.record_type),canUndo=undoSupported&&latest.get(key)===row.id&&["INSERT","UPDATE"].includes(row.operation);
+    const snapshot={before:row.old_row,after:row.new_row};
+    return '<tr><td>'+esc(new Date(row.occurred_at).toLocaleString("en-GB"))+'</td><td>'+esc(opLabel(row.operation))+'</td><td>'+esc(typeLabel(row.record_type))+'</td><td>'+esc(row.record_id)+'</td><td>'+esc(row.actor_id||"—")+'</td><td><b>'+esc(auditBusinessSummary(row))+'</b><details><summary>'+text("تفاصيل البيانات قبل / بعد","Raw before / after data")+'</summary><pre style="white-space:pre-wrap;direction:ltr;text-align:left;max-width:520px;overflow:auto">'+esc(JSON.stringify(snapshot,null,2))+'</pre></details></td><td>'+(canUndo?'<button class="g" type="button" data-undo="'+Number(row.id)+'">'+text("تراجع آمن","Safe undo")+'</button>':businessReversal?'<span class="mu">'+text("عكس من شاشة الحركة","Reverse from movement screen")+'</span>':"—")+'</td></tr>';
+  }).join("")+'</tbody></table></div>';
+};
