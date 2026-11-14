@@ -472,7 +472,7 @@ function TPL0(){
  return {sale:make(TK.sale),pur:make(TK.pur),receipt:make(TK.receipt),payment:make(TK.payment),po:make(TK.po),stmt:make(TK.stmt),rep:make(TK.rep)};
 }
 let TPO=null;
-const tsh=(k,field)=>{const t=(TPO&&TPO[k])||S.tpl?.[k]||TPL0()[k];return !((t?.hide||[]).includes(field));};
+const tsh=(k,field)=>{const t=(TPO&&Array.isArray(TPO.hide)?TPO:(TPO&&TPO[k])||S.tpl?.[k]||TPL0()[k]);return !((t?.hide||[]).includes(field));};
 /* ------------------------------------------------------------------ */
 function migrate(){S.curs=S.curs||["EGP","USD","EUR"];S.codes=S.codes||[];S.accts.forEach(a=>{if(!a.cur)a.cur="EGP"});S.items.forEach(i=>{if(i.model===undefined)i.model="";Object.keys(i.st).forEach(v=>codeFor(i.id,v))});if(!S.tpl)S.tpl=TPL0();else Object.values(S.tpl).forEach(t=>{if(t.fs===14)t.fs=12});S.pend=S.pend||0}
 /* ---- unified balance display: positive = له علينا (plain), negative = عليه لنا (red) ---- */
