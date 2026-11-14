@@ -600,3 +600,10 @@ button,input,select,table,textarea{font-family:inherit}
 .module-setting b{font-size:14px}
 .module-setting small{font-size:11px;color:var(--mu);line-height:1.5}
 @media(max-width:620px){.module-settings{grid-template-columns:1fr}.module-setting{min-height:58px}}
+
+/* === ERP module settings === */
+.module-settings-list{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:8px}
+.module-setting-row{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:11px 12px;border:1px solid var(--bd);border-radius:8px;background:var(--bg);cursor:pointer}
+.module-setting-row span{display:flex;flex-direction:column;gap:3px;min-width:0}
+.module-setting-row small{font-size:12px;line-height:1.5}
+.module-setting-row input[type=checkbox]{width:20px;height:20px;flex:none;accent-color:var(--pr)}
