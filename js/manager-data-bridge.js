@@ -154,7 +154,7 @@ function mapManagerDataToState(data) {
       const itemId = productIds.get(line.product_id);
       const cost = line.product_id ? unitCostAt(line.product_id, inv.invoice_date) : 0;
       const isAdjustment = line.source_line_kind === "extra_adjustment";
-      return { iid:itemId || 0, name:line.item_name || line.account_name || productName(line.product_id), v:line.variant || "-", qty:num(line.quantity), price:num(line.unit_price), cost, note:line.note || "", unit:itemUnit(line.product_id), a:line.raw?.account ? (accountByCode.get(String(line.raw.account)) || accountByName.get(String(line.account_name||"").toLowerCase()) || accountByRole(inv.invoice_type==="sale"?"sales":"cogs")) : (isAdjustment ? accountByName.get(String(line.account_name||"").toLowerCase()) : 0) };
+      return { iid:itemId || 0, name:line.item_name || line.account_name || productName(line.product_id), v:line.variant || "-", qty:isAdjustment?1:num(line.quantity), price:isAdjustment?num(line.line_total):num(line.unit_price), cost, note:rawText(line.raw||{},"lineDescription","LineDescription"), unit:itemUnit(line.product_id), a:line.raw?.account ? (acctIds.get(line.raw.account) || accountByCode.get(String(line.raw.account)) || accountByName.get(String(line.account_name||"").toLowerCase()) || accountByRole(inv.invoice_type==="sale"?"sales":"cogs")) : (isAdjustment ? accountByName.get(String(line.account_name||"").toLowerCase()) : 0) };
     });
     const raw = inv.raw || {}, type = inv.invoice_type === "sale" ? "sale" : "pur";
     const partnerUuid = inv.customer_id || inv.supplier_id;
@@ -171,7 +171,7 @@ function mapManagerDataToState(data) {
   }
   for (const ret of returns) {
     const rows = (returnLinesById.get(String(ret.id)) || []).sort((a,b)=>num(a.line_no)-num(b.line_no));
-    const lines = rows.map(line => ({ iid:productIds.get(line.product_id)||0, name:line.product_name || productName(line.product_id), v:line.variant || "-", qty:num(line.quantity), price:num(line.unit_price), cost:line.product_id?unitCostAt(line.product_id,ret.return_date):0, note:line.note || "", unit:itemUnit(line.product_id) }));
+    const lines = rows.map(line => ({ iid:productIds.get(line.product_id)||0, name:line.product_name || productName(line.product_id), v:line.variant || rawText(line.raw||{},"variant","Variant") || "-", qty:num(line.quantity), price:num(line.unit_price), cost:line.product_id?unitCostAt(line.product_id,ret.return_date):0, note:line.note || "", unit:itemUnit(line.product_id) }));
     const partner = partnerId(ret.customer_id || ret.supplier_id);
     docs.push({ id:returnIds.get(ret.id), cloudId:sourceKey(ret), t:ret.return_type==="sale_return"?"sret":"pret", no:ret.return_no || sourceKey(ret), date:ret.return_date || "", ts:dateMs(ret.created_at), pid:partner, cat:ret.return_type==="sale_return"?"mfg":"sup", dest:"", lines, gross:num(ret.total), disc:0, total:num(ret.total), note:ret.note || rawText(ret.raw||{},"Description"), img:"", legacyManager:true });
   }
@@ -242,13 +242,13 @@ function mapManagerDataToState(data) {
   const po = production.map(order => {
     const mats = (materialsByOrder.get(String(order.id)) || []).sort((a,b)=>num(a.line_no)-num(b.line_no)).map(m=>({ iid:productIds.get(m.product_id)||0, qty:num(m.quantity), cost:num(m.line_total)||num(m.unit_cost)*num(m.quantity), note:m.material_name || "" }));
     const x = (expensesByOrder.get(String(order.id)) || []).sort((a,b)=>num(a.line_no)-num(b.line_no)).map(e=>({ a:acctIds.get(e.account_id), amt:num(e.amount), note:e.account_name || "" }));
-    const subs = normalizeBreakdown(order.breakdown, order.raw?.Qty || order.total_cost);
+    const subs = normalizeBreakdown(order.breakdown, order.raw?.Qty || 0);
     const status = order.status==="delivered"?2:order.status==="in_progress"?1:0;
     const loc = rawText(order.raw||{},"InventoryLocation");
     return { id:productionIds.get(order.id), cloudId:sourceKey(order), no:order.order_no || sourceKey(order), date:order.order_date || "", ts:dateMs(order.created_at), desc:order.description || "", iname:order.item_name || productName(order.product_id), iid:productIds.get(order.product_id)||0, wh:whId(loc), subs, mats, x, st:status, matCost:mats.reduce((a,m)=>a+num(m.cost),0), rec:status===2?subs.map(s=>({v:s.v,qty:s.qty})):[], wc:0, legacyManager:true };
   });
 
-  const wo = writeoffs.map(w => ({ id:writeoffIds.get(w.id), cloudId:sourceKey(w), no:sourceKey(w), date:w.writeoff_date || "", ts:dateMs(w.created_at), desc:w.description || "", c:(Array.isArray(w.items)?w.items:[]).reduce((a,x)=>a+num(x.amount||x.total||x.cost),0), po:0, items:w.items || [], legacyManager:true }));
+  const wo = writeoffs.map(w => ({ id:writeoffIds.get(w.id), cloudId:sourceKey(w), no:sourceKey(w), date:w.writeoff_date || "", ts:dateMs(w.created_at), desc:w.description || "", c:(Array.isArray(w.items)?w.items:Object.values(w.items||{})).reduce((a,x)=>a+num(x.amount||x.total||x.cost||x.Amount),0), po:0, items:w.items || [], legacyManager:true }));
   const mv = [];
   const invoiceUuidByExternal = new Map(invoices.map(i=>[String(i.external_id),i.id]));
   const returnUuidByExternal = new Map(returns.map(r=>[String(r.external_id),r.id]));
