@@ -307,7 +307,7 @@ function mapManagerDataToState(data) {
     const map = sourceMaps[row.source_record_type], rid = map && external ? map.get(external) || 0 : 0;
     const parent=source==="sales_invoices"||source==="purchase_invoices"?invoiceRecordByExternal.get(external):source==="credit_notes"||source==="debit_notes"?returnRecordByExternal.get(external):source==="production_orders"?productionRecordByExternal.get(external):source==="inventory_write_offs"?writeoffRecordByExternal.get(external):null;
     const parentRaw=parent?.raw||{},location=source==="sales_invoices"?rawText(parentRaw,"SalesInventoryLocation","InventoryLocation"):source==="purchase_invoices"?rawText(parentRaw,"PurchaseInventoryLocation","InventoryLocation"):source==="inventory_write_offs"?(parent?.inventory_location_id||rawText(parentRaw,"InventoryLocation")):rawText(parentRaw,"SalesInventoryLocation","PurchaseInventoryLocation","InventoryLocation");
-    const rawLocation=rawText(raw,"InventoryLocation","location"),explicitLocation=!!(location||rawLocation),movementWarehouse=whId(location||rawLocation||product.warehouse);
+    const rawLocation=rawText(raw,"InventoryLocation","location"),explicitLocation=!!(location||rawLocation),movementLocation=src==="po"?(rawLocation||location):(location||rawLocation),movementWarehouse=whId(movementLocation||product.warehouse);
     mv.push({ id:stableId(15,row.id), cloudId:"manager-movement:"+String(row.id), d:row.transaction_date || "", ts:dateMs(row.created_at), iid:productIds.get(product.id), v:"-", q:sign*absQty, val:sign*value, ref:row.reference || "", pid:partnerId(row.customer_id || row.supplier_id), rid, src, wh:movementWarehouse, whSource:explicitLocation?"source":"default", legacyManager:true });
   }
 
