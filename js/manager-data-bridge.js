@@ -141,7 +141,7 @@ function mapManagerDataToState(data) {
     const stockRows = inventory.filter(x => String(x.product_id) === String(p.id));
     const locationRows=locationRowsByProduct.get(String(p.id))||[];
     const primaryLocation=[...locationRows].sort((a,b)=>num(b.quantity)-num(a.quantity))[0];
-    const warehouse = p.warehouse || primaryLocation?.manager_location_id || primaryLocation?.warehouse || stockRows[0]?.warehouse || locations[0]?.name || "";
+    const preferredWh=p.warehouse?whId(p.warehouse):0,primaryWh=primaryLocation?whId(primaryLocation.manager_location_id||primaryLocation.warehouse):0,warehouse=locationRows.length&&(!preferredWh||!locationRows.some(r=>whId(r.manager_location_id||r.warehouse)===preferredWh))?(primaryWh||primaryLocation?.warehouse||""):(p.warehouse||primaryLocation?.manager_location_id||primaryLocation?.warehouse||stockRows[0]?.warehouse||locations[0]?.name||"");
     const defaultWh=whId(warehouse),loc={};
     for(const row of locationRows){const wid=whId(row.manager_location_id||row.warehouse||warehouse),key=String(wid),entry=loc[key]||{st:{},val:0},qty=num(row.quantity);entry.st["-"]=(entry.st["-"]||0)+qty;entry.val+=qty*unitCost;loc[key]=entry;}
     if(!Object.keys(loc).length)loc[String(defaultWh)]={st:{...st},val:quantity*unitCost};
