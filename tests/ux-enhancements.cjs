@@ -48,3 +48,13 @@ assert(ownerInvokerMigration.includes('security invoker') && !ownerInvokerMigrat
 assert(ownerInvokerMigration.includes('revoke all on function public.current_owner_id() from public, anon') && ownerInvokerMigration.includes('grant execute on function public.current_owner_id() to authenticated, service_role'), 'owner lookup grants must be least-privilege');
 assert(ownerInvokerQa.includes('set local role authenticated') && ownerInvokerQa.includes('current_owner_must_be_security_invoker'), 'QA must verify owner lookup under authenticated role');
 console.log('PASS current_owner_id uses invoker rights and least-privilege grants');
+
+const auditTrail = fs.readFileSync(path.join(root, 'js/audit-trail.js'), 'utf8');
+const employeeAccountApi = fs.readFileSync(path.join(root, 'supabase/functions/create-employee-account/index.ts'), 'utf8');
+assert(app.includes('if(p==="edit")return cloudCan("edit")===true') && app.includes('cloudCan("delete")===true&&cloudCan("edit")===true'), 'employee UI must gate edit/delete actions separately');
+assert(app.includes('ai:"reports",set:null'), 'settings remain owner-only while reports-only employees can see reports');
+assert(employeeAccountApi.includes('"edit", "delete"') && employeeAccountApi.includes('profile?.created_by') && employeeAccountApi.includes('permissions.delete && !permissions.edit'), 'employee account API must be owner-only and require edit for delete');
+assert(fs.readFileSync(path.join(root, 'index.html'), 'utf8').includes('js/audit-trail.js') && fs.readFileSync(path.join(root, 'public/sw.js'), 'utf8').includes('js/audit-trail.js'), 'audit trail UI must load and be cached by the PWA');
+assert(auditTrail.includes('undo_factory_record_change') && auditTrail.includes('latest.get(key)===row.id'), 'audit undo must use the guarded latest-entry RPC');
+assert(auditTrail.includes("undoSupported=['partners','items','codes','wh','accts','customers','suppliers']") && !auditTrail.includes("undoSupported=['partners','items','codes','mv'"), 'generic audit undo must exclude financial and stock movement records');
+console.log('PASS owner-only audit UI and module/edit/delete permission enforcement');

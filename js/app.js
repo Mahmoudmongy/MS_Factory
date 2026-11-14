@@ -34,10 +34,10 @@ const colors=()=>[...new Set(S.items.flatMap(i=>Object.keys(i.st).map(k=>k.split
 const sug=(i,k)=>Math.round((av(i)||i.buy)*(1+(S.pct[k]||0)/100)*100)/100;
 const FW=()=>(S.wh.find(w=>/منتج|finished|final/i.test((w.raw?.name||"")+" "+w.name))||S.wh[0]).id,pnm=o=>o.iname||(it_(o.iid)||{}).name||"";
 const poCost=o=>(o.matCost||0)+(o.wc||0)+o.x.reduce((a,x)=>a+x.amt,0)+S.docs.filter(d=>d.t=="pur"&&d.dest==o.id).reduce((a,d)=>a+d.total,0),poQty=o=>o.subs.reduce((a,s)=>a+s.qty,0);
-const CLOUD_SCREEN_PERMISSIONS={sale:"invoices",sret:"invoices",pur:"invoices",pret:"invoices",rc:"invoices",py:"invoices",bank:"settings",cust:"customers",supp:"suppliers",stock:"inventory",prod:"production",coa:"settings",je:"settings",tl:"reports",emp:null,rep:"reports",ai:"settings",set:"settings"};
+const CLOUD_SCREEN_PERMISSIONS={sale:"invoices",sret:"invoices",pur:"invoices",pret:"invoices",rc:"invoices",py:"invoices",bank:"settings",cust:"customers",supp:"suppliers",stock:"inventory",prod:"production",coa:"settings",je:"settings",tl:"reports",emp:null,rep:"reports",ai:"reports",set:null};
 const cloudProfile=()=>window.__factoryAuthProfile||null;
 const cloudCan=(key)=>{const p=cloudProfile();if(!p)return null;if(p.is_admin===true)return true;return p.permissions?.[key]===true;};
-const can=p=>{const cp=cloudProfile();if(cp&&!cp.is_admin){const key=CLOUD_SCREEN_PERMISSIONS[tab];return !!key&&key!=="reports"&&cloudCan(key)===true;}return who=="0"||((S.emp.find(e=>e.id==who)||{}).perm||[]).includes(p);};
+const can=p=>{const cp=cloudProfile();if(cp&&!cp.is_admin){const key=CLOUD_SCREEN_PERMISSIONS[tab];if(!key||cloudCan(key)!==true)return false;if(p==="edit")return cloudCan("edit")===true;if(p==="del")return cloudCan("delete")===true&&cloudCan("edit")===true;return key!=="reports";}return who=="0"||((S.emp.find(e=>e.id==who)||{}).perm||[]).includes(p);};
 /* ===== state + shell ===== */
 let tab="home",who="0",D,PS,V,J,IM="",idImg="",pe=0,dc="all",hs=[],hi=-1,TL={from:"",to:"",k:""},SF={wh:"",nm:"",b1:"",b2:"",q1:"",q2:""},R={rep:"",from:"",to:"",cat:"all",item:0,acct:0,pt:0,ds:"sale",gb:"الصنف",gc:"",ms:"amt",pa:-1,pc:-1,fields:["التاريخ","رقم الفاتورة","الطرف","الصنف","الكمية","الإجمالي"]};
 const APP_ICONS={
