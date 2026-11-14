@@ -686,7 +686,7 @@ const pm=await ev(()=>{const d=S.docs.length,pg=TB.length;const first=S.docs[0];
 ok('employee without permissions cannot edit/delete (even by calling the functions directly)',pm.can[0]===false&&pm.can[1]===false&&pm.docsSame&&pm.noNewTab,pm);ok('employee sees only permitted screens',pm.tabs.split(',').every(x=>['home','sale','set'].includes(x)),pm.tabs);
 await ev(()=>{who="0";S.emp=[];nav()});
 /* ---------- Supabase employee permissions ---------- */
-await ev(()=>{window.setFactoryAuthProfile({id:"cloud-test",is_admin:false,permissions:{invoices:true}});tab="sale";nav();render()});
+await ev(()=>{window.setFactoryAuthProfile({id:"cloud-test",is_admin:false,permissions:{invoices:true,edit:true,delete:false}});tab="sale";nav();render()});
 const cloudInvoicePerm=await ev(()=>({screens:allowed().map(t=>t[0]),edit:can("edit")}));
 ok('Supabase employee sees only the assigned invoice screens and can edit within that module',cloudInvoicePerm.screens.includes("sale")&&!cloudInvoicePerm.screens.includes("stock")&&cloudInvoicePerm.edit,cloudInvoicePerm);
 await ev(()=>{window.setFactoryAuthProfile({id:"cloud-test",is_admin:false,permissions:{reports:true}});tab="rep";nav();render()});
@@ -810,7 +810,7 @@ ok('employee write/delete permissions are enforced by RLS and an owner-checked i
 ok('employee account creation accepts only module/edit/delete flags and owner administrators',employeeCreate.includes('"edit", "delete"')&&employeeCreate.includes('profile?.created_by'));
 const profileAuditMigration=fs.readFileSync(path.join(ROOT,'supabase/migrations/20261114132700_profile_audit_log.sql'),'utf8');
 const profileAuditQa=fs.readFileSync(path.join(ROOT,'tests/sql/profile-audit-qa.sql'),'utf8');
-ok('employee profile changes join the audit timeline without exposing profile undo',profileAuditMigration.includes('after insert or update or delete on public.profiles')&&profileAuditQa.includes('QA_PROFILE_AUDIT_CAPTURE_PASSED')&&fs.readFileSync(path.join(ROOT,'js/audit-trail.js'),'utf8').includes("row.record_type!=='profile'"));
+ok('employee profile changes join the audit timeline without exposing profile undo',profileAuditMigration.includes('after insert or update or delete on public.profiles')&&profileAuditQa.includes('QA_PROFILE_AUDIT_CAPTURE_PASSED')&&(()=>{const ui=fs.readFileSync(path.join(ROOT,'js/audit-trail.js'),'utf8'),match=ui.match(/undoSupported=\[([^\]]+)\]/);return ui.includes("profile:'الموظفون والصلاحيات'")&&!!match&&!match[1].includes("'profile'")})());
 const profileSecurityMigration=fs.readFileSync(path.join(ROOT,'supabase/migrations/20261114132800_protect_profile_permissions.sql'),'utf8');
 const profileSecurityQa=fs.readFileSync(path.join(ROOT,'tests/sql/profile-self-escalation-qa.sql'),'utf8');
 ok('profile RLS cannot be bypassed to self-grant permissions or admin status',profileSecurityMigration.includes('new.permissions is distinct from old.permissions')&&profileSecurityMigration.includes('new.is_admin is distinct from old.is_admin')&&profileSecurityMigration.includes('before update on public.profiles')&&profileSecurityQa.includes('QA_PROFILE_SELF_ADMIN_ESCALATION_NOT_BLOCKED'));
