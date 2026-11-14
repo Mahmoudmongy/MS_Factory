@@ -588,7 +588,7 @@ const code1=await ev(()=>codeFor(S.items.find(x=>x.name=="قماش اختبار"
 await ev(()=>{const i=S.items.find(x=>x.name=="قماش اختبار"),supplier=S.partners.find(x=>!x.c);go('pur');docForm('pur');$("#pt").value=String(supplier.id);$("#ty").value=String(i.wh);fillIt();$("#in").value=i.name;unitSet();$("#cl").value="أحمر";$("#q").value="5";$("#pc").value="110";saveDoc()});await ev(()=>{TB.filter(t=>t.kind=="page").forEach(t=>closeTab(t,1))});
 ok('barcode is stable: repeat purchase of the same variant keeps one code',await ev((c)=>S.codes.filter(x=>x.iid==S.items.find(i=>i.name=="قماش اختبار").id).length==1&&codeFor(S.items.find(i=>i.name=="قماش اختبار").id,"أحمر")==c,code1)&&/^[A-Za-z0-9]+$/.test(code1),code1);
 /* sale */
-await ev(()=>{go('sale');docForm('sale');$("#pt").value="1";$("#it").value="3";unitSet();$("#q").value="2";D.disc=10;saveDoc()});
+await ev(()=>{go('sale');docForm('sale');$("#pt").value="1";$("#it").value="3";$("#ty").value=String(it_(3).wh);unitSet();$("#q").value="2";D.disc=10;saveDoc()});
 const sale=await ev(()=>S.docs.find(d=>d.t=="sale"));ok('sale: total = 2 x retail 250 - discount 10 = 490',sale&&sale.total==490&&sale.gross==500&&sale.disc==10,sale&&[sale.gross,sale.disc,sale.total]);
 ok('sale: stock of item decreased by 2 (20 -> 18)',await ev(()=>tq(it_(3)))==18);
 ok('sale: sales revenue account = 500 and sales-discount = 10 (credit/debit sides correct)',await ev(()=>[bal(ak("sales"),"",td()),bal(ak("sdisc"),"",td())]).then(x=>x[0]==500&&x[1]==10),await ev(()=>[bal(ak("sales"),"",td()),bal(ak("sdisc"),"",td())]));
