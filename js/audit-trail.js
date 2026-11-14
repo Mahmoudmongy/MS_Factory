@@ -1,4 +1,11 @@
-import { supabase } from './supabase.js';
+let supabaseClient = null;
+async function getSupabase() {
+  if (!supabaseClient) {
+    const module = await import('./supabase.js');
+    supabaseClient = module.supabase;
+  }
+  return supabaseClient;
+}
 const esc = value => String(value ?? '').replace(/[&<>"']/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
 const labels = {INSERT:'إضافة',UPDATE:'تعديل',DELETE:'حذف'};
 const typeLabels = {docs:'الفواتير',vch:'السندات',po:'أوامر الإنتاج',je:'القيود اليومية',wo:'الهالك',partners:'العملاء والموردون',customers:'العملاء',suppliers:'الموردون',sret:'مرتجعات المبيعات',pret:'مرتجعات المشتريات',items:'الأصناف',codes:'الباركود',mv:'حركات المخزون',wh:'المخازن',accts:'الحسابات',L:'بيانات المصنع',payroll:'الأجور',profile:'الموظفون والصلاحيات'};
@@ -41,6 +48,7 @@ function ensureUi() {
   document.addEventListener('keydown', e => { if(e.key==='Escape'&&panel.style.display!=='none') closePanel(); });
 }
 async function verifyAdmin() {
+  const supabase = await getSupabase();
   const {data:{user},error} = await supabase.auth.getUser();
   if(error||!user) throw new Error('جلسة الدخول غير صالحة. سجّل الدخول مرة أخرى.');
   const {data,error:profileError} = await supabase.from('profiles').select('id,created_by,is_admin').eq('id',user.id).maybeSingle();
@@ -54,6 +62,7 @@ const status = (message,error=false) => {
 };
 async function loadRows() {
   status('جارٍ تحميل السجل...');
+  const supabase = await getSupabase();
   const {data,error}=await supabase.from('factory_audit_log').select('*').eq('factory_user_id',ownerId).order('occurred_at',{ascending:false}).order('id',{ascending:false}).limit(250);
   if(error) throw new Error('تعذر قراءة سجل التدقيق: '+error.message);
   rows=data||[]; status('تم تحميل '+rows.length.toLocaleString('en-US')+' حركة.'); renderRows();
@@ -76,6 +85,9 @@ async function undoClick(event) {
   const id=Number(button.dataset.undo); if(!Number.isSafeInteger(id)||id<=0)return;
   if(!confirm('سيتم إنشاء حركة عكسية لآخر تعديل على هذا السجل. لن يُحذف سجل التدقيق. هل تريد المتابعة؟'))return;
   button.disabled=true; status('جارٍ تنفيذ التراجع والتحقق من عدم وجود تعديل أحدث...');
+  let supabase;
+  try { supabase = await getSupabase(); }
+  catch (error) { status('تعذر الاتصال بقاعدة البيانات: '+(error?.message||String(error)),true); button.disabled=false; return; }
   const {error}=await supabase.rpc('undo_factory_record_change',{p_audit_id:id});
   if(error){status(error.code==='40001'?'لم يتم التراجع: توجد حركة أحدث أو تعارض. حدّث السجل وراجع آخر تغيير.':'تعذر التراجع: '+error.message,true);button.disabled=false;return;}
   status('تم التراجع بحركة عكسية موثقة. جارٍ تحديث السجل.');

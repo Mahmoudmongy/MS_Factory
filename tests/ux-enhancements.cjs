@@ -63,3 +63,6 @@ assert(app.includes('const EMP_PERMISSION_TEMPLATES=') && app.includes('function
 assert(app.includes('supabase.rpc("update_employee_permissions"') && app.includes('p_permissions:employeeCloudPermissions(data.perm)'), 'editing an existing cloud employee must update database permissions');
 assert(app.includes('delete:selected.includes("del")&&selected.includes("edit")') && app.includes('localPerm.includes("del")&&localPerm.includes("edit")'), 'delete permission must require edit for cloud and local employees');
 console.log('PASS employee templates, existing-account permission updates, and delete-requires-edit UI');
+
+assert(!auditTrail.includes("import { supabase } from './supabase.js'") && auditTrail.includes("import('./supabase.js')"), 'audit screen must defer Supabase initialization until opened');
+console.log('PASS audit UI defers Supabase initialization until opened');
