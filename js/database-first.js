@@ -600,6 +600,7 @@ window.__factoryRefreshManagerBridge = () => {
   if(getQueue().length)throw new Error("يوجد حفظ أو مزامنة معلقة. انتظر اكتمالها قبل تحديث البيانات.");
   localStorage.removeItem(managerCacheKey(actorId));
   localStorage.removeItem(managerWarningKey(actorId));
+  localStorage.removeItem(managerPermissionKey(actorId));
   window.location.reload();
 };
 window.__factoryDatabaseSyncNow = async () => { await flushQueue(); await persistState(getState()); };
