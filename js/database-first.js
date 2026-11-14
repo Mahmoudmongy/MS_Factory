@@ -194,6 +194,10 @@ async function fetchPagedRecords(buildQuery) {
 }
 function managerCacheKey(actor) { return MANAGER_CACHE_KEY + String(actor || "anonymous") + ":" + String(ownerId || "no-owner"); }
 function managerWarningKey(actor) { return MANAGER_CACHE_KEY + "warnings:" + String(actor || "anonymous") + ":" + String(ownerId || "no-owner"); }
+function clearOtherManagerCaches(actor) {
+  const keep=new Set([managerCacheKey(actor),managerWarningKey(actor)]);
+  try { for(let i=localStorage.length-1;i>=0;i--){const key=localStorage.key(i);if(key&&key.startsWith(MANAGER_CACHE_KEY)&&!keep.has(key))localStorage.removeItem(key);} } catch(error) { console.warn("Could not clear another account's Manager cache:",error); }
+}
 function loadManagerCache(actor) {
   try {
     const rows = JSON.parse(localStorage.getItem(managerCacheKey(actor)) || "[]");
@@ -508,6 +512,7 @@ async function bootstrap() {
     actorId = profile?.id || null;
     ownerId = profile?.created_by || profile?.id || null;
     storageScope = ownerId || 'anonymous';
+    clearOtherManagerCaches(actorId);
     clearLegacyDeviceData();
     resetLocalBusinessState();
     const managerRows=profile?.is_admin===true?loadManagerCache(actorId):[];
@@ -538,6 +543,7 @@ async function bootstrap() {
   await retryStartup(() => ensureProfile(actorId, false));
   ownerId = profile.created_by || profile.id;
   storageScope = ownerId;
+  clearOtherManagerCaches(actorId);
   resetLocalBusinessState();
   const managerRows = await getManagerBridgeRows();
   const rows = await retryStartup(() => fetchAllRecords());
@@ -580,6 +586,7 @@ async function reconnectDatabase() {
   await retryStartup(() => ensureProfile(actorId, true));
   ownerId = profile.created_by || profile.id;
   storageScope = ownerId;
+  clearOtherManagerCaches(actorId);
   const since = getLastSyncAt();
   if (since) {
     const changed = await retryStartup(() => fetchChangedRecords(since));
