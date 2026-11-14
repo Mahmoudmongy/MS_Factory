@@ -1,6 +1,7 @@
 import { supabase } from './supabase.js';
 import { createConflictRecovery } from './conflict-recovery.js';
 import { retryStartup } from './startup-retry.mjs';
+import { loadManagerDataBridge } from './manager-data-bridge.js';
 
 const QUEUE_KEY = 'ms-factory-db-queue-v1';
 const BASELINE_KEY = 'ms-factory-db-baseline-v1';
@@ -8,6 +9,7 @@ const LAST_SYNC_KEY = 'ms-factory-db-last-sync-v1';
 const CONFLICT_REVIEW_KEY = 'ms-factory-db-conflict-review-v1';
 const CONFLICT_BLOCK_KEY = 'ms-factory-db-conflict-block-v1';
 const CACHE_PREFIX = 'ms-factory-db-cache-v1:';
+const MANAGER_CACHE_KEY = 'ms-factory-manager-bridge-v1:';
 let storageScope = 'anonymous';
 const scopedKey = key => key + ':' + storageScope;
 const conflictRecovery = () => createConflictRecovery({ scope: storageScope });
@@ -167,9 +169,9 @@ function snapshotBaseline(state) {
 function setBaselineRow(row) {
   baseline.set(mapKey(row.record_type, row.record_id), {
     type: row.record_type, id: row.record_id, payload: clone(row.payload),
-    version: Number(row.version || 1), deleted_at: row.deleted_at || null
+    version: row.version == null ? 1 : Number(row.version), deleted_at: row.deleted_at || null
   });
-  cacheRow(row);
+  if(row.origin!=="manager-import")cacheRow(row);
 }
 async function fetchPagedRecords(buildQuery) {
   const all = [];
@@ -190,6 +192,52 @@ async function fetchPagedRecords(buildQuery) {
   }
   return all;
 }
+function managerCacheKey(actor) { return MANAGER_CACHE_KEY + String(actor || "anonymous") + ":" + String(ownerId || "no-owner"); }
+function managerWarningKey(actor) { return MANAGER_CACHE_KEY + "warnings:" + String(actor || "anonymous") + ":" + String(ownerId || "no-owner"); }
+function loadManagerCache(actor) {
+  try {
+    const rows = JSON.parse(localStorage.getItem(managerCacheKey(actor)) || "[]");
+    window.__factoryManagerBridgeWarnings=JSON.parse(localStorage.getItem(managerWarningKey(actor))||"{}");
+    return Array.isArray(rows) ? rows.filter(r=>r&&r.record_type&&r.record_id) : [];
+  } catch (_) { return []; }
+}
+function saveManagerCache(actor, rows, warnings={}) {
+  try {
+    localStorage.setItem(managerCacheKey(actor),JSON.stringify(rows));
+    localStorage.setItem(managerWarningKey(actor),JSON.stringify(warnings||{}));
+    return true;
+  } catch (error) { console.warn("Manager bridge cache could not be saved; data will be reloaded online:",error); return false; }
+}
+function managerStateToRows(state) {
+  const rows=[];
+  for(const [type,items] of Object.entries(state||{})){
+    if(!Array.isArray(items))continue;
+    items.forEach((payload,index)=>{
+      const id=recordKey(type,payload,index);
+      rows.push({user_id:ownerId,record_type:type,record_id:id,payload:cleanPayload(payload),version:0,deleted_at:null,updated_at:null,updated_by:null,origin:"manager-import"});
+    });
+  }
+  return rows;
+}
+async function getManagerBridgeRows() {
+  if(profile?.is_admin!==true)return [];
+  const cached=loadManagerCache(actorId);
+  if(cached.length){window.__factoryManagerBridgeLoaded=true;return cached;}
+  try{
+    const state=await retryStartup(()=>loadManagerDataBridge(supabase,ownerId));
+    if(!state)return [];
+    const rows=managerStateToRows(state);
+    window.__factoryManagerBridgeWarnings=state.managerBridgeWarnings||{};
+    saveManagerCache(actorId,rows,state.managerBridgeWarnings||{});
+    window.__factoryManagerBridgeLoaded=true;
+    return rows;
+  }catch(error){
+    window.__factoryManagerBridgeError=error?.message||String(error);
+    console.error("Manager data bridge failed:",error);
+    document.dispatchEvent(new CustomEvent("factory-manager-bridge-error",{detail:{message:window.__factoryManagerBridgeError}}));
+    return [];
+  }
+}
 async function fetchAllRecords() {
   return fetchPagedRecords(() => supabase.from('factory_records')
     .select('user_id,record_type,record_id,payload,version,deleted_at,updated_at,updated_by')
@@ -205,18 +253,22 @@ async function fetchChangedRecords(since) {
     .order('updated_at').order('record_type').order('record_id'));
 }
 function hydrateFromRows(rows) {
-  const grouped = {};
-  const metaRow = rows.find(r => r.record_type === '__meta' && r.record_id === 'main' && !r.deleted_at);
-  for (const row of rows) {
+  const groupedMaps = {};
+  const orderedRows = [...(rows || [])].sort((a,b)=>(a.origin==="manager-import"?0:1)-(b.origin==="manager-import"?0:1));
+  const metaRow = orderedRows.find(r => r.record_type === '__meta' && r.record_id === 'main' && !r.deleted_at);
+  for (const row of orderedRows) {
     setBaselineRow(row);
     if (row.record_type === '__meta') continue;
-    const target = (grouped[row.record_type] ||= []);
-    if (!row.deleted_at) {
-      const payload = clone(row.payload);
-      if (payload && typeof payload === 'object' && !Array.isArray(payload)) payload._cloudRecordId = row.record_id;
-      target.push(payload);
+    const target = (groupedMaps[row.record_type] ||= new Map());
+    if (row.deleted_at) {
+      target.delete(String(row.record_id));
+      continue;
     }
+    const payload = clone(row.payload);
+    if (payload && typeof payload === 'object' && !Array.isArray(payload)) payload._cloudRecordId = row.record_id;
+    target.set(String(row.record_id),payload);
   }
+  const grouped = Object.fromEntries(Object.entries(groupedMaps).map(([type,items])=>[type,[...items.values()]]));
   for (const values of Object.values(grouped)) values.sort((a,b) => {
     const ai = Number(a?.id), bi = Number(b?.id);
     return Number.isFinite(ai) && Number.isFinite(bi) ? ai-bi : String(a?.id ?? a?.no ?? '').localeCompare(String(b?.id ?? b?.no ?? ''));
@@ -458,8 +510,10 @@ async function bootstrap() {
     storageScope = ownerId || 'anonymous';
     clearLegacyDeviceData();
     resetLocalBusinessState();
+    const managerRows=profile?.is_admin===true?loadManagerCache(actorId):[];
+    if(managerRows.length)window.__factoryManagerBridgeLoaded=true;
     const cachedRows = loadCachedRows();
-    if (cachedRows.length) hydrateFromRows(cachedRows);
+    if (cachedRows.length || managerRows.length) hydrateFromRows([...managerRows,...cachedRows]);
     else snapshotBaseline(getState());
     const conflictRecoveryPending = conflictRecovery().hasBlock();
     const pendingQueue = getQueue();
@@ -485,9 +539,10 @@ async function bootstrap() {
   ownerId = profile.created_by || profile.id;
   storageScope = ownerId;
   resetLocalBusinessState();
+  const managerRows = await getManagerBridgeRows();
   const rows = await retryStartup(() => fetchAllRecords());
-  // Supabase is the only source of business records. An empty database stays empty.
-  hydrateFromRows(rows);
+  // Manager source rows are a read-only base; factory_records overlays win by version.
+  hydrateFromRows([...managerRows,...rows]);
   clearLegacyDeviceData();
   try { archiveLegacyQueues(); } catch (archiveError) { conflictWriteLock = true; window.__factoryDatabaseFirstFailed = true; console.error('Legacy operations remain local and are blocked from replay:', archiveError); }
   setLastSyncAt(new Date().toISOString());
@@ -530,8 +585,9 @@ async function reconnectDatabase() {
     const changed = await retryStartup(() => fetchChangedRecords(since));
     for (const row of changed) applyRealtimeRow(row);
   } else {
+    const managerRows = await getManagerBridgeRows();
     const initialRows = await retryStartup(() => fetchAllRecords());
-    hydrateFromRows(initialRows);
+    hydrateFromRows([...managerRows,...initialRows]);
     setLastSyncAt(new Date().toISOString());
   }
   for (const op of getQueue()) applyOperationToState(op);
