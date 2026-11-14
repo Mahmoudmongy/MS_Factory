@@ -176,6 +176,7 @@ function mapManagerDataToState(data) {
     docs.push({ id:returnIds.get(ret.id), cloudId:sourceKey(ret), t:ret.return_type==="sale_return"?"sret":"pret", no:ret.return_no || sourceKey(ret), date:ret.return_date || "", ts:dateMs(ret.created_at), pid:partner, cat:ret.return_type==="sale_return"?"mfg":"sup", dest:"", lines, gross:num(ret.total), disc:0, total:num(ret.total), note:ret.note || rawText(ret.raw||{},"Description"), img:"", legacyManager:true });
   }
 
+  const invoiceIdByExternal = new Map(invoices.map(i=>[String(i.external_id),invoiceIds.get(i.id)]));
   const linesByVoucher = new Map();
   for (const line of voucherLines) {
     if (!line.voucher_id) continue;
@@ -195,12 +196,13 @@ function mapManagerDataToState(data) {
         ln.push({ a:hasParty?"p":acctIds.get(counterpartUuid), d:line.account_name || "", m:num(line.amount), x:0, lbl:hasParty?"حساب الطرف":"", pid:hasParty?partnerId(line.customer_id||line.supplier_id):0 });
       }
     }
-    const raw = v.raw || {}, pid = partnerId(v.customer_id || v.supplier_id);
+    const raw = v.raw || {}, pid = partnerId(v.customer_id || v.supplier_id), alloc={};
+    for(const line of (Array.isArray(raw.Lines)?raw.Lines:[])){const external=rawText(line,"AccountsReceivableSalesInvoice","PurchaseInvoice");const docId=invoiceIdByExternal.get(String(external));if(docId)alloc[docId]=(alloc[docId]||0)+num(line.Amount)+num(line.DiscountAmount);}
     if (!ac.length && v.account) {
       const accountId = acctIds.get(accounts.find(a=>a.name===v.account || a.account_code===v.account)?.id);
       if (accountId) ac.push({a:accountId,m:num(v.amount),fc:0});
     }
-    return { id:voucherIds.get(v.id), cloudId:sourceKey(v), no:v.voucher_no || sourceKey(v), date:v.voucher_date || "", ts:dateMs(v.created_at), dir:v.direction==="in"?"in":"out", title:rawText(raw,"TransactionTitle","ReceiptCustomTitle","PaymentCustomTitle") || (v.direction==="in"?"إيصال استلام نقدية":"إيصال صرف نقدية"), pid, who:partnerName(pid) || rawText(raw,"Payee","Contact","Customer","Supplier"), desc:v.note || rawText(raw,"Description"), ac, ln, link:"sales", img:"", total:num(v.amount), alloc:{}, legacyManager:true };
+    return { id:voucherIds.get(v.id), cloudId:sourceKey(v), no:v.voucher_no || sourceKey(v), date:v.voucher_date || "", ts:dateMs(v.created_at), dir:v.direction==="in"?"in":"out", title:rawText(raw,"TransactionTitle","ReceiptCustomTitle","PaymentCustomTitle") || (v.direction==="in"?"إيصال استلام نقدية":"إيصال صرف نقدية"), pid, who:partnerName(pid) || rawText(raw,"Payee","Contact","Customer","Supplier"), desc:v.note || rawText(raw,"Description"), ac, ln, link:"sales", img:"", total:num(v.amount), alloc, legacyManager:true };
   });
   for (const tr of transfers) {
     const id = transferIds.get(tr.id), paid = acctIds.get(tr.paid_from_account_id), received = acctIds.get(tr.received_in_account_id);
