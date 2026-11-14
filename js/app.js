@@ -80,8 +80,24 @@ const APP_ICON_COLORS={
 };
 const ico=k=>'<svg class="nav-ico" data-ico="'+k+'" style="--icon-color:'+(APP_ICON_COLORS[k]||"#cbd5e1")+'" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">'+(APP_ICONS[k]||APP_ICONS.settings)+'</svg>';
 const T=[["home",ico("home"),"الملخص"],["bank",ico("bank"),"الحسابات النقدية والبنوك"],["rc",ico("receipt"),"المقبوضات"],["py",ico("payment"),"المدفوعات"],["cust",ico("customer"),"العملاء"],["supp",ico("supplier"),"الموردون"],["sale",ico("sale"),"فواتير البيع"],["sret",ico("return"),"إشعارات دائنة (مرتجع بيع)"],["pur",ico("purchase"),"فواتير الشراء"],["pret",ico("returnPurchase"),"إشعارات مدينة (مرتجع شراء)"],["stock",ico("inventory"),"أصناف المخزون"],["prod",ico("production"),"أوامر الإنتاج"],["coa",ico("coa"),"شجرة الحسابات"],["je",ico("journal"),"قيود اليومية"],["tl",ico("timeline"),"السجل الزمني"],["emp",ico("employee"),"الموظفون"],["rep",ico("report"),"التقارير"],["ai",ico("ai"),"المساعد الذكي"],["set",ico("settings"),"الإعدادات"]];
+const MODULES=[
+ {id:"home",label:"الملخص",screens:["home"]},
+ {id:"cash",label:"النقدية والبنوك",screens:["bank","rc","py"]},
+ {id:"customers",label:"العملاء",screens:["cust"]},
+ {id:"sales",label:"المبيعات",screens:["sale","sret"]},
+ {id:"suppliers",label:"الموردون",screens:["supp"]},
+ {id:"purchases",label:"المشتريات",screens:["pur","pret"]},
+ {id:"inventory",label:"المخزون",screens:["stock"]},
+ {id:"production",label:"الإنتاج",screens:["prod"]},
+ {id:"accounting",label:"المحاسبة",screens:["coa","je","tl"]},
+ {id:"employees",label:"الموظفون والرواتب",screens:["emp"]},
+ {id:"reports",label:"التقارير",screens:["rep","ai"]},
+ {id:"settings",label:"الإعدادات",screens:["set"]}
+];
+const MODULE_BY_SCREEN=Object.fromEntries(MODULES.flatMap(m=>m.screens.map(id=>[id,m.id])));
+const moduleEnabled=id=>id==="home"||id==="settings"||S.modules?.[id]!==false;
 const N=Object.fromEntries(T.map(t=>[t[0],t[2]])),ph=(t,b)=>`<div class="ph"><h2>${t}</h2><div class="row">${b||""}</div></div>`;
-function allowed(){const cp=cloudProfile();if(cp&&!cp.is_admin){return T.filter(t=>{if(t[0]==="home")return true;const key=CLOUD_SCREEN_PERMISSIONS[t[0]];return !!key&&cloudCan(key)===true;});}const e=S.emp.find(x=>x.id==who);return T.filter(t=>(t[0]=="home"||t[0]=="set"||!S.hide.includes(t[0]))&&(!e||t[0]=="home"||e.perm.includes(t[0])));}
+function allowed(){const cp=cloudProfile();if(cp&&!cp.is_admin){return T.filter(t=>{if(t[0]==="home")return true;const mid=MODULE_BY_SCREEN[t[0]];if(!moduleEnabled(mid))return false;const key=CLOUD_SCREEN_PERMISSIONS[t[0]];return !!key&&cloudCan(key)===true;});}const e=S.emp.find(x=>x.id==who);return T.filter(t=>{const mid=MODULE_BY_SCREEN[t[0]];if(!moduleEnabled(mid))return false;return (t[0]==="home"||t[0]==="set"||!S.hide.includes(t[0]))&&(!e||t[0]==="home"||e.perm.includes(t[0]));});}
 function swho(v){if(cloudProfile()&&!cloudProfile().is_admin)return;who=v;go(allowed()[0][0])}
 function pick(inp,cb){const fl=inp.files[0];if(!fl)return;const r=new FileReader();r.onload=()=>{const im=new Image();im.onload=()=>{const c=document.createElement("canvas"),k=Math.min(1,420/im.width);c.width=im.width*k;c.height=im.height*k;c.getContext("2d").drawImage(im,0,0,c.width,c.height);const v=c.toDataURL("image/jpeg",.6);cb(v);const n=inp.nextElementSibling;if(n&&n.tagName=="IMG")n.remove();inp.insertAdjacentHTML("afterend",`<img src="${v}" width="60">`)};im.src=r.result};r.readAsDataURL(fl)}
 /* ===== global table tools: search (contains) + sort every header + Excel export + date format ===== */
@@ -437,7 +453,7 @@ function nav(){
   onauxclick="if(event.button==1){event.preventDefault(); go('${t[0]}',0,true);}" 
   onmousedown="if(event.button==1) event.preventDefault()"
 >${t[1]} ${t[2]}</a>`;
- $g("#sb").innerHTML=`<span class="br">${S.logo?`<img src="${S.logo}">`:"🧵 "}${S.name}</span><div class="sb-nav-scroll">`+U(items,renderLink)+`</div>`;
+ $g("#sb").innerHTML=`<span class="br">${S.logo?`<img src="${S.logo}">`:"🧵 "}${S.name}</span><div class="sb-nav-scroll">`+U(MODULES.filter(m=>items.some(t=>m.screens.includes(t[0]))),m=>`<section class="sb-group"><div class="sb-group-title">${m.label}</div>${U(items.filter(t=>m.screens.includes(t[0])),renderLink)}</section>`)+`</div>`;
 }
 window.setFactoryAuthProfile=function(profile){window.__factoryAuthProfile=profile||null;if(profile&&!profile.is_admin){who="0";const tabs=allowed();if(!tabs.some(t=>t[0]===tab))tab=tabs[0]?.[0]||"home";}nav();render();};
 function repairImportedWarehouseMap(){if(S.warehouseModelVersion===1)return;const raw=S.wh.find(w=>/مواد خام/.test(w.raw?.name||w.name||"")||w._cloudRecordId==="4143faac-cf13-4f8d-b5c2-5da6b11140ab"),finished=S.wh.find(w=>/منتجات نهائية/.test(w.raw?.name||w.name||"")||w._cloudRecordId==="4cffecfb-39d3-47ae-9c7a-97431887f26c"),sup=S.wh.find(w=>/مستلزمات/.test(w.raw?.name||w.name||""));if(!raw||!finished||!sup)return;raw.id=1;raw.name="المخزن الرئيسي مواد خام";finished.id=2;finished.name="المخزن الرئيسي للمنتجات النهائية";const strings=x=>{const out=[];const walk=v=>{if(typeof v==="string")out.push(v);else if(v&&typeof v==="object")Object.values(v).forEach(walk)};walk(x.raw||{});return out.join(" ").toLowerCase()};S.items.forEach(i=>{const text=strings(i);if(/قماش|fabric|textile/.test(text))i.wh=raw.id;else if(/مستلزمات|suppl(y|ies)|accessor/.test(text))i.wh=sup.id;else if(i.wh==1||i.wh==2)i.wh=finished.id});S.warehouseModelVersion=1;sv();render()}
@@ -748,8 +764,8 @@ function bizForm(){const b=S.biz||{},safe=v=>String(v||"").replace(/&/g,"&amp;")
 function saveBiz(){const companyName=$("#biz_name")?.value.trim();if(companyName)S.name=companyName;S.biz={commercial_no:$("#biz_cr").value.trim(),tax_no:$("#biz_tax").value.trim(),vat_no:$("#biz_vat").value.trim(),legal_form:$("#biz_legal").value.trim(),activity:$("#biz_activity").value.trim(),phone:$("#biz_phone").value.trim(),email:$("#biz_email").value.trim(),website:$("#biz_web").value.trim(),governorate:$("#biz_gov").value.trim(),city:$("#biz_city").value.trim(),address:$("#biz_address").value.trim(),notes:$("#biz_notes").value.trim()};sv();nav();toast("تم حفظ بيانات الشركة");cl()}
 function pctForm(){sh(`<h3>هامش الربح المقترح</h3><p class="mu">على أساس متوسط التكلفة، ويُستخدم لاقتراح سعر البيع.</p><label>نسبة الجملة %</label><input id="pw" type="number" value="${S.pct.w}" placeholder="20"><label>نسبة القطاعي %</label><input id="pr_" type="number" value="${S.pct.r}" placeholder="40"><div class="row"><button onclick="savePct()">حفظ</button>${bk}</div>`)}
 function savePct(){S.pct={w:+$("#pw").value||0,r:+$("#pr_").value||0};sv();toast("تم حفظ نسب الربح");cl()}
-function cust(){sh(`<h3>تخصيص التبويبات</h3>${U(T.filter(t=>t[0]!="home"&&t[0]!="set"),t=>`<label style="display:block"><input type="checkbox" class="cz" value="${t[0]}" ${S.hide.includes(t[0])?"":"checked"}> ${t[1]} ${t[2]}</label>`)}<div class="row"><button onclick="saveCust()">حفظ</button>${bk}</div>`)}
-function saveCust(){S.hide=[...ACT.querySelectorAll(".cz:not(:checked)")].map(x=>x.value);sv();nav();cl()}
+function cust(){sh(`<h3>تخصيص الوحدات</h3><p class="mu">اختر الوحدات التي تحتاجها شركتك. إيقاف أي وحدة يخفيها من القائمة فقط ولا يحذف سجلاتها أو حركاتها. يمكنك إعادة تفعيلها في أي وقت من هذه الصفحة.</p><div class="module-settings">${U(MODULES.filter(m=>!["home","settings"].includes(m.id)),m=>`<label class="module-setting"><input type="checkbox" class="mod-enable" value="${m.id}" ${moduleEnabled(m.id)?"checked":""}><span><b>${m.label}</b><small>${m.screens.map(id=>N[id]).join(" • ")}</small></span></label>`)}</div><details class="card"><summary>تخصيص الشاشات داخل كل وحدة</summary><p class="mu">يمكنك إخفاء شاشة فرعية دون تعطيل الوحدة كلها.</p>${U(T.filter(t=>!["home","set"].includes(t[0])),t=>`<label style="display:block"><input type="checkbox" class="cz" value="${t[0]}" ${S.hide.includes(t[0])?"":"checked"}> ${t[2]}</label>`)}</details><div class="row"><button onclick="saveCust()">حفظ التخصيص</button>${bk}</div>`)}
+function saveCust(){S.modules=S.modules||{};document.querySelectorAll(".mod-enable").forEach(x=>{S.modules[x.value]=x.checked});S.hide=[...ACT.querySelectorAll(".cz:not(:checked)")].map(x=>x.value);sv();const visible=allowed();if(!visible.some(t=>t[0]===tab))go(visible[0]?.[0]||"home");else{nav();cl()}toast("تم حفظ تخصيص الوحدات دون حذف أي بيانات")} 
 
 
 
