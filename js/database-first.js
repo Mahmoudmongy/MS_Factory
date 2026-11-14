@@ -218,7 +218,7 @@ function managerStateToRows(state) {
 async function getManagerBridgeRows() {
   if(profile?.is_admin!==true)return [];
   const cached=loadManagerCache(actorId);
-  if(cached.length)return cached;
+  if(cached.length){window.__factoryManagerBridgeLoaded=true;return cached;}
   try{
     const state=await retryStartup(()=>loadManagerDataBridge(supabase,ownerId));
     if(!state)return [];
@@ -507,6 +507,7 @@ async function bootstrap() {
     resetLocalBusinessState();
     const cachedRows = loadCachedRows();
     const managerRows = profile?.is_admin===true ? loadManagerCache(actorId) : [];
+    if(managerRows.length)window.__factoryManagerBridgeLoaded=true;
     if (cachedRows.length || managerRows.length) hydrateFromRows([...managerRows,...cachedRows]);
     else snapshotBaseline(getState());
     const conflictRecoveryPending = conflictRecovery().hasBlock();
