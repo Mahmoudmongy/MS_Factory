@@ -596,6 +596,8 @@ ok('ledger balanced after sale',await bal());
 const pb=await ev(()=>({raw:pbal(1),shown:btxt(pbal(1)),pos:pvh(500),neg:pvh(-500)}));
 ok('unified balance rule: customer owing us (490) shows positive in plain text',pb.raw==490&&!pb.shown.includes('class="neg"')&&pb.shown.includes('490.00'),pb.shown);
 ok('unified balance rule: positive (we owe him) shows plain, negative shows red',!pb.pos.includes('neg')&&pb.pos.includes('500.00')&&pb.neg.includes('neg')&&pb.neg.includes('-500.00'));
+const supplierBalance=await ev(()=>{const accts=S.accts,ledger=S.L,partners=S.partners;S.accts=[{id:9901,k:"ap",t:"L",name:"Accounts payable"}];S.L=[{pid:9902,a:9901,dr:0,cr:500}];S.partners=[{id:9902,s:true,name:"مورد اختبار"}];const result={raw:pbal(9902),shown:btxt(pbal(9902))};S.accts=accts;S.L=ledger;S.partners=partners;return result});
+ok('supplier payable (credit balance) displays negative in red without altering its ledger lines',supplierBalance.raw===-500&&supplierBalance.shown.includes('class="neg"')&&supplierBalance.shown.includes('-500.00'),supplierBalance);
 /* return */
 await ev(id=>retFrom(id),sale.id);ok('return opens with blank quantities',await ev(()=>D.lines.every(l=>l.qty==0)));
 await ev(()=>{SAVING=0;saveDoc()});ok('return with all-empty quantities is rejected (nothing saved)',await ev(()=>!S.docs.some(d=>d.t=="sret")));
