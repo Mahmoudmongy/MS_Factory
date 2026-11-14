@@ -69,7 +69,7 @@ if (!supabase) {
     if (!email || !password) return say('أدخل اسم المستخدم أو البريد الإلكتروني وكلمة المرور');
     const remember = $('auth-remember')?.checked !== false;
     try { localStorage.setItem('factory-remember', remember ? '1' : '0'); if (remember) localStorage.setItem('factory-login-name', $('auth-email').value.trim()); else localStorage.removeItem('factory-login-name'); } catch (_) {}
-    const projectRef = new URL('https://yvrislcbbhtruwdnuooz.supabase.co').hostname.split('.')[0];
+    const projectRef = new URL('https://amtorqmzctshfzaoiovz.supabase.co').hostname.split('.')[0];
     const storageKey = 'sb-' + projectRef + '-auth-token';
     try { if (remember) sessionStorage.removeItem(storageKey); else localStorage.removeItem(storageKey); } catch (_) {}
     say('جارٍ تسجيل الدخول...', false);

@@ -41,8 +41,8 @@ jobs:
       - name: Build production application
         run: npm run build
         env:
-          VITE_SUPABASE_URL: https://yvrislcbbhtruwdnuooz.supabase.co
-          VITE_SUPABASE_ANON_KEY: sb_publishable_7y8sqUPYv4mCfmpjin3xRQ_1_X5QJfG
+          VITE_SUPABASE_URL: https://amtorqmzctshfzaoiovz.supabase.co
+          VITE_SUPABASE_ANON_KEY: sb_publishable_bin2D3xyMXQjt_Xis6Gj-g_n7VMil-x
 
       - name: Copy legacy runtime files into the Vite output
         run: |
