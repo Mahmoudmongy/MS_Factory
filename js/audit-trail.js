@@ -46,7 +46,7 @@ const status = (message,error=false) => {
 };
 async function loadRows() {
   status('جارٍ تحميل السجل...');
-  const {data,error}=await supabase.from('factory_audit_log').select('*').eq('factory_user_id',ownerId).order('id',{ascending:false}).limit(250);
+  const {data,error}=await supabase.from('factory_audit_log').select('*').eq('factory_user_id',ownerId).order('occurred_at',{ascending:false}).order('id',{ascending:false}).limit(250);
   if(error) throw new Error('تعذر قراءة سجل التدقيق: '+error.message);
   rows=data||[]; status('تم تحميل '+rows.length.toLocaleString('en-US')+' حركة.'); renderRows();
 }
@@ -54,7 +54,7 @@ function renderRows() {
   const root=panel?.querySelector('#factory-audit-content'); if(!root)return;
   const q=(panel.querySelector('#factory-audit-search')?.value||'').trim().toLocaleLowerCase();
   const latest=new Map();
-  for(const row of rows){const key=row.record_type+'|'+row.record_id;if(!latest.has(key))latest.set(key,row.id);}
+  for(const row of rows){const key=row.record_type+'|'+row.record_id;if(!latest.has(key)||Number(row.id)>Number(latest.get(key)))latest.set(key,row.id);}
   const visible=rows.filter(row=>!q||[row.record_type,row.record_id,row.operation,labels[row.operation]].join(' ').toLocaleLowerCase().includes(q));
   if(!visible.length){root.innerHTML='<div class="card">لا توجد حركات مطابقة.</div>';return;}
   root.innerHTML=\`<div class="card" style="overflow:auto"><table class="l" style="min-width:850px;width:100%"><thead><tr><th>التاريخ</th><th>العملية</th><th>القسم</th><th>رقم السجل</th><th>المنفذ</th><th>التفاصيل</th><th>الإجراء</th></tr></thead><tbody>\${visible.map(row=>{
