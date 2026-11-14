@@ -74,7 +74,7 @@ begin
   if jsonb_typeof(p_permissions) is distinct from 'object' then
     raise exception 'EMPLOYEE_PERMISSION_PAYLOAD_INVALID' using errcode='22023';
   end if;
-  if exists (select 1 from jsonb_object_keys(p_permissions) k where not (k = any(v_allowed)))
+  if exists (select 1 from jsonb_object_keys(p_permissions) as keys(key) where not (keys.key = any(v_allowed)))
      or exists (select 1 from jsonb_each(p_permissions) e where jsonb_typeof(e.value) <> 'boolean') then
     raise exception 'EMPLOYEE_PERMISSION_KEYS_INVALID' using errcode='22023';
   end if;
