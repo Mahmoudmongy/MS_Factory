@@ -90,5 +90,7 @@ assert(app.includes('t.style.tableLayout="fixed"') && app.includes('colgroup') &
 assert(app.includes('"مشاركة ملف PDF"') && app.includes('"تحرير"') && app.includes('factory-icon-action'), 'common row actions are icon-only with accessible labels');
 assert(css.includes('max-height:min(72vh,760px)') && css.includes('position:sticky;top:0'), 'table headers remain pinned in the scrollable table viewport');
 assert(index.includes('id="logout-btn"') && index.indexOf('id="logout-btn"') < index.indexOf('id="who"') && index.indexOf('id="who"') < index.indexOf('id="thb"'), 'topbar order is exit, account, theme');
-assert(manager.includes("button.textContent='▤'") && audit.includes("button.textContent = '⟲'"), 'Manager.io history and audit undo launchers are adjacent compact icons');
+const indexHtml = fs.readFileSync(path.join(root, 'index.html'), 'utf8');
+assert(history.includes("button.textContent='▤'") && auditTrail.includes("button.textContent = '⟲'"), 'Manager.io history and audit undo launchers are adjacent compact icons');
+assert(indexHtml.indexOf('id="logout-btn"') < indexHtml.indexOf('id="who"') && indexHtml.indexOf('id="who"') < indexHtml.indexOf('id="thb"'), 'topbar order is exit, account, theme');
 console.log('PASS adaptive A4 PDF layout and service-worker cache refresh');
