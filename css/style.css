@@ -682,3 +682,21 @@ button,input,select,table,textarea{font-family:inherit}
 @media(max-width:380px){
  #top{grid-template-columns:28px 24px 24px minmax(36px,1fr) 28px 24px 24px 28px 66px 28px!important;gap:1px!important}
 }
+
+/* Exact compact hit-area sizes prevent the mobile toolbar grid from overlapping. */
+@media(max-width:860px){
+ #top #bg{width:32px!important;min-width:32px!important;max-width:32px!important;height:30px!important;min-height:30px!important;box-sizing:border-box!important;padding:2px!important}
+ #top .top-nav{width:28px!important;min-width:28px!important;max-width:28px!important;height:30px!important;min-height:30px!important;box-sizing:border-box!important;padding:2px!important}
+ #top #net{width:30px!important;min-width:30px!important;max-width:30px!important;height:30px!important;min-height:30px!important;box-sizing:border-box!important;padding:2px!important}
+ #top #logout-btn{width:32px!important;min-width:32px!important;max-width:32px!important;height:30px!important;min-height:30px!important;box-sizing:border-box!important;padding:2px!important}
+ #top #thb{width:30px!important;min-width:30px!important;max-width:30px!important;height:30px!important;min-height:30px!important;box-sizing:border-box!important;padding:2px!important}
+ #top #who{width:84px!important;min-width:68px!important;max-width:84px!important;box-sizing:border-box!important}
+}
+@media(max-width:380px){
+ #top #bg{width:28px!important;min-width:28px!important;max-width:28px!important}
+ #top .top-nav{width:24px!important;min-width:24px!important;max-width:24px!important}
+ #top #net{width:28px!important;min-width:28px!important;max-width:28px!important}
+ #top #logout-btn{width:28px!important;min-width:28px!important;max-width:28px!important}
+ #top #thb{width:28px!important;min-width:28px!important;max-width:28px!important}
+ #top #who{width:66px!important;min-width:66px!important;max-width:66px!important}
+}
