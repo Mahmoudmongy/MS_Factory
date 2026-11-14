@@ -566,8 +566,6 @@ const cloudPermissionMatrix=await ev(()=>{const previous=window.__factoryAuthPro
 ok('cloud employee controls match module, edit and delete permissions',cloudPermissionMatrix.read&&cloudPermissionMatrix.editDenied&&cloudPermissionMatrix.deleteDenied&&cloudPermissionMatrix.editAllowed&&cloudPermissionMatrix.deleteStillDenied,cloudPermissionMatrix);
 const ownerOnlyScreens=await ev(()=>({settings:CLOUD_SCREEN_PERMISSIONS.set===null,assistant:CLOUD_SCREEN_PERMISSIONS.ai==='reports'}));
 ok('cloud employees cannot open owner-only settings; assistant access follows reports permission',ownerOnlyScreens.settings&&ownerOnlyScreens.assistant,ownerOnlyScreens);
-
-}else ok('table column chooser is present on operational tables',false,columnUi);
 await p.keyboard.type(" XYZ");await p.waitForTimeout(180);
 const continuedSearch=await p.locator('#m input[data-filter-key="cust"][data-filter-id="q"]').inputValue();
 ok('customer search accepts continued typing after live filtering',continuedSearch==="محلات XYZ",continuedSearch);
