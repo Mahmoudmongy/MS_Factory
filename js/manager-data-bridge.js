@@ -154,7 +154,7 @@ function mapManagerDataToState(data) {
       const itemId = productIds.get(line.product_id);
       const cost = line.product_id ? unitCostAt(line.product_id, inv.invoice_date) : 0;
       const isAdjustment = line.source_line_kind === "extra_adjustment";
-      return { iid:itemId || 0, name:line.item_name || line.account_name || productName(line.product_id), v:line.variant || "-", qty:isAdjustment?1:num(line.quantity), price:isAdjustment?num(line.line_total):num(line.unit_price), cost, note:rawText(line.raw||{},"lineDescription","LineDescription"), unit:itemUnit(line.product_id), a:line.raw?.account ? (acctIds.get(line.raw.account) || accountByCode.get(String(line.raw.account)) || accountByName.get(String(line.account_name||"").toLowerCase()) || accountByRole(inv.invoice_type==="sale"?"sales":"cogs")) : (isAdjustment ? accountByName.get(String(line.account_name||"").toLowerCase()) : 0) };
+      return { iid:itemId || 0, name:line.item_name || line.account_name || productName(line.product_id), v:line.variant || "-", qty:isAdjustment?1:num(line.quantity), price:isAdjustment?num(line.line_total):num(line.unit_price), cost, note:rawText(line.raw||{},"lineDescription","LineDescription"), unit:itemUnit(line.product_id), a:rawText(line.raw||{},"account","Account") ? (acctIds.get(rawText(line.raw||{},"account","Account")) || accountByCode.get(rawText(line.raw||{},"account","Account")) || accountByName.get(String(line.account_name||"").toLowerCase()) || accountByRole(inv.invoice_type==="sale"?"sales":"cogs")) : (isAdjustment ? accountByName.get(String(line.account_name||"").toLowerCase()) : 0) };
     });
     const raw = inv.raw || {}, type = inv.invoice_type === "sale" ? "sale" : "pur";
     const partnerUuid = inv.customer_id || inv.supplier_id;
@@ -173,7 +173,7 @@ function mapManagerDataToState(data) {
     const rows = (returnLinesById.get(String(ret.id)) || []).sort((a,b)=>num(a.line_no)-num(b.line_no));
     const lines = rows.map(line => ({ iid:productIds.get(line.product_id)||0, name:line.product_name || productName(line.product_id), v:line.variant || rawText(line.raw||{},"variant","Variant") || "-", qty:num(line.quantity), price:num(line.unit_price), cost:line.product_id?unitCostAt(line.product_id,ret.return_date):0, note:line.note || "", unit:itemUnit(line.product_id) }));
     const partner = partnerId(ret.customer_id || ret.supplier_id);
-    docs.push({ id:returnIds.get(ret.id), cloudId:sourceKey(ret), t:ret.return_type==="sale_return"?"sret":"pret", no:ret.return_no || sourceKey(ret), date:ret.return_date || "", ts:dateMs(ret.created_at), pid:partner, cat:ret.return_type==="sale_return"?"mfg":"sup", dest:"", lines, gross:num(ret.total), disc:0, total:num(ret.total), note:ret.note || rawText(ret.raw||{},"Description"), img:"", legacyManager:true });
+    docs.push({ id:returnIds.get(ret.id), cloudId:sourceKey(ret), t:/sale|credit/i.test(String(ret.return_type||""))?"sret":"pret", no:ret.return_no || sourceKey(ret), date:ret.return_date || "", ts:dateMs(ret.created_at), pid:partner, cat:ret.return_type==="sale_return"?"mfg":"sup", dest:"", lines, gross:num(ret.total), disc:0, total:num(ret.total), note:ret.note || rawText(ret.raw||{},"Description"), img:"", legacyManager:true });
   }
 
   const invoiceIdByExternal = new Map(invoices.map(i=>[String(i.external_id),invoiceIds.get(i.id)]));
@@ -281,14 +281,16 @@ function mapManagerDataToState(data) {
     if (!itemKey || !qtyRaw) continue;
     const product = products.find(p=>String(p.external_id)===itemKey || String(p.sku)===itemKey);
     if (!product) continue;
-    const type = row.transaction_type, absQty = Math.abs(qtyRaw);
-    let sign = 0, src = sourceType[row.source_record_type] || "opening";
-    if (type==="Sales Invoice" || type==="Debit Note" || type==="Inventory Write-off" || (type==="Production Order" && row.credit>0)) sign = -1;
-    else if (type==="Purchase Invoice" || type==="Credit Note" || (type==="Production Order" && row.debit>0)) sign = 1;
-    else if (type==="Journal Entry") sign = row.debit>0 ? 1 : row.credit>0 ? -1 : 0;
+    const source = String(row.source_record_type||""), absQty = Math.abs(qtyRaw);
+    let sign = 0, src = sourceType[source] || "opening";
+    if(source==="sales_invoices"||source==="debit_notes"||source==="inventory_write_offs")sign=-1;
+    else if(source==="purchase_invoices"||source==="credit_notes")sign=1;
+    else if(source==="production_orders")sign=row.credit>0?-1:row.debit>0?1:0;
+    else if(source==="journal_entries")sign=row.debit>0?1:row.credit>0?-1:0;
     if (!sign) continue;
     const cost = unitCostAt(product.id,row.transaction_date);
-    const value = type==="Purchase Invoice" ? Math.abs(num(raw.amount) || num(raw.unitPrice)*absQty) : absQty*cost;
+    const sourceValue=source==="purchase_invoices"||source==="debit_notes";
+    const value = sourceValue ? Math.abs(num(raw.amount) || num(raw.unitPrice)*absQty) : absQty*cost;
     const external = row.source_manager_key || "";
     const map = sourceMaps[row.source_record_type], rid = map && external ? map.get(String(external)) || 0 : 0;
     mv.push({ d:row.transaction_date || "", ts:dateMs(row.created_at), iid:productIds.get(product.id), v:"-", q:sign*absQty, val:sign*value, ref:row.reference || "", pid:partnerId(row.customer_id || row.supplier_id), rid, src });
