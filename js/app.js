@@ -6,7 +6,7 @@ const rng=k=>{const t=td(),d=new Date();d.setDate(d.getDate()-((d.getDay()+1)%7)
 const GEO0={"القاهرة":["القاهرة الجديدة","مدينة نصر","المعادي","شبرا","مصر الجديدة"],"الجيزة":["الدقي","6 أكتوبر","الشيخ زايد","الهرم","إمبابة"],"الإسكندرية":["المنتزه","سموحة","العجمي","برج العرب"],"الدقهلية":["المنصورة","ميت غمر","السنبلاوين","طلخا"],"الشرقية":["الزقازيق","العاشر من رمضان","بلبيس","فاقوس"],"القليوبية":["بنها","شبرا الخيمة","قليوب","العبور"],"الغربية":["طنطا","المحلة الكبرى","كفر الزيات"],"المنوفية":["شبين الكوم","السادات","منوف"],"البحيرة":["دمنهور","كفر الدوار","رشيد"],"كفر الشيخ":["كفر الشيخ","دسوق"],"دمياط":["دمياط","دمياط الجديدة","رأس البر"],"بورسعيد":["بورسعيد","بورفؤاد"],"الإسماعيلية":["الإسماعيلية","التل الكبير"],"السويس":["السويس"],"الفيوم":["الفيوم","سنورس"],"بني سويف":["بني سويف","الواسطي"],"المنيا":["المنيا","ملوي","مغاغة"],"أسيوط":["أسيوط","ديروط"],"سوهاج":["سوهاج","جرجا"],"قنا":["قنا","نجع حمادي"],"الأقصر":["الأقصر","إسنا"],"أسوان":["أسوان","كوم أمبو"],"البحر الأحمر":["الغردقة","سفاجا"],"الوادي الجديد":["الخارجة","الداخلة"],"مطروح":["مرسى مطروح","العلمين"],"شمال سيناء":["العريش"],"جنوب سيناء":["شرم الشيخ","الطور"]};
 const mk=(id,code,name,t,k,cash)=>({id,code,name,t,k:k||"",cash:cash||0,cur:"EGP"});
 function seed(){const d0=td(),n0=Date.now(),op=(a,dr,cr)=>({d:d0,ts:n0,ref:"JE-0001",desc:"رصيد افتتاحي",a,dr,cr,pid:0,src:"je"});
-const s={name:"مدير الشركة",logo:"",pct:{w:20,r:40},geo:JSON.parse(JSON.stringify(GEO0)),per:{from:d0.slice(0,4)+"-01-01",to:d0},hide:[],
+const s={name:"مدير الشركة",logo:"",pct:{w:20,r:40},geo:JSON.parse(JSON.stringify(GEO0)),per:{from:d0.slice(0,4)+"-01-01",to:d0},hide:[],modules:{},
 accts:[mk(1,"1001","الخزنة","A","",1),mk(2,"1002","بنك","A","",1),mk(3,"1003","فودافون كاش","A","",1),mk(4,"1100","العملاء","A","ar"),mk(5,"1200","المخزون","A","inv"),mk(6,"1250","تحت التصنيع","A","wip"),mk(7,"2100","الموردون","L","ap"),mk(8,"3001","رأس المال","Q","cap"),mk(9,"4100","المبيعات","I","sales"),mk(10,"5100","تكلفة المبيعات","X","cogs"),mk(11,"5200","مصروفات التصنيع لدى الغير","X"),mk(12,"5210","نثريات إنتاج","X"),mk(13,"5300","هالك مخزن","X","waste"),mk(14,"5400","مصروفات تحويل بنك","X"),mk(15,"5410","مصروفات فودافون كاش","X"),mk(16,"5500","مصروفات شحن","X"),mk(17,"5600","دعاية وإعلان","X"),mk(18,"5150","خصومات المبيعات","X","sdisc"),mk(19,"4200","خصومات المشتريات","I","pdisc")],
 wh:[{id:1,name:"قماش"},{id:2,name:"مستلزمات"},{id:3,name:"منتج نهائي"}],
 items:[{id:1,name:"قماش جيرسي",sku:"FB001",wh:1,unit:"متر",buy:90,retail:0,wholesale:0,img:"",st:{"أبيض":120},val:10800},{id:2,name:"زراير",sku:"AC001",wh:2,unit:"قطعة",buy:2,retail:0,wholesale:0,img:"",st:{"-":500},val:1000},{id:3,name:"تيشيرت",sku:"TS001",wh:3,unit:"قطعة",buy:120,retail:250,wholesale:190,img:"",st:{"أبيض / M":20},val:2400}],
@@ -299,6 +299,49 @@ async function saveE(id){if(id&&!can("edit"))return;const n=$("#e1").value.trim(
  if(old)Object.assign(old,data,{authUserId});else S.emp.push({id:uid(),...data,...(authUserId?{authUserId,username:createdUsername}:{})});sv();nav();toast(old?"تم تعديل بيانات الموظف":createdUsername?"تم حفظ الموظف وإنشاء حساب الدخول: "+createdUsername:"تم حفظ الموظف");cl();
 }
 /* ===== settings ===== */
+function moduleAdmin(){
+ const cp=cloudProfile();
+ return cp ? cp.is_admin===true : who==="0";
+}
+function toggleModule(id,enabled){
+ if(!moduleAdmin()){toast("إدارة الوحدات متاحة لمدير النظام فقط");return}
+ const module=MODULES.find(m=>m.id===id);
+ if(!module||id==="home"||id==="settings")return;
+ S.modules=S.modules&&typeof S.modules==="object"?S.modules:{};
+ S.modules[id]=!!enabled;
+ sv();
+ if(!enabled&&module.screens.includes(tab)){
+  const active=allowed();
+  go(active.some(x=>x[0]==="home")?"home":active[0]?.[0]||"home");
+ }else{
+  nav();
+  render();
+ }
+ toast(enabled?"تم تفعيل الوحدة":"تم إيقاف ظهور الوحدة");
+}
+function saveCompanyName(){
+ if(!moduleAdmin())return;
+ const input=$g("#factory-company-name"),name=String(input?.value||"").trim();
+ if(!name){toast("اكتب اسم الشركة أولاً");return}
+ S.name=name.slice(0,120);
+ sv();nav();$g("#ttl").textContent=N[tab]||"الإعدادات";
+ toast("تم حفظ اسم الشركة");
+}
+function vSet(){
+ const admin=moduleAdmin(),modules=S.modules&&typeof S.modules==="object"?S.modules:{};
+ const moduleRows=MODULES.filter(m=>m.id!=="home"&&m.id!=="settings").map(m=>{
+  const enabled=modules[m.id]!==false;
+  const screens=m.screens.map(id=>N[id]||id).join("، ");
+  return '<label class="module-setting-row"><span><b>'+m.label+'</b><small class="mu">'+screens+'</small></span><input type="checkbox" '+(enabled?'checked':'')+(admin?'':' disabled')+' onchange="toggleModule(\''+m.id+'\',this.checked)" aria-label="تفعيل وحدة '+m.label+'"></label>';
+ }).join("");
+ return ph(N.set,'<button class="g" onclick="syncPage()">حالة الاتصال</button>')+
+ '<section class="card"><h3>بيانات الشركة</h3><label for="factory-company-name">اسم الشركة الظاهر في البرنامج</label><div class="row"><input id="factory-company-name" maxlength="120" value="'+String(S.name||"").replace(/&/g,"&amp;").replace(/"/g,"&quot;")+'" '+(admin?'':'disabled')+'><button '+(admin?'':'disabled')+' onclick="saveCompanyName()">حفظ الاسم</button></div><p class="mu">يظهر الاسم في القائمة الرئيسية وشاشة الدخول.</p></section>'+
+ '<section class="card"><h3>إدارة وحدات البرنامج</h3><p class="mu">تقدر توقف ظهور أي وحدة مش محتاجها حاليًا وترجع تفعّلها في أي وقت. إيقاف الوحدة لا يحذف فواتيرها أو حساباتها أو أي بيانات محفوظة.</p>'+
+ '<div class="module-settings-list">'+moduleRows+'</div>'+
+ '<p class="mu">الملخص والإعدادات يظلان متاحين دائمًا حتى لا تفقد طريقة الرجوع وإعادة تفعيل الوحدات.</p></section>'+
+ '<section class="card"><h3>المظهر واللغة</h3><div class="row"><button class="g" onclick="togTheme()">تغيير الوضع الفاتح / الداكن</button><button class="g" onclick="togLang()">العربية / English</button></div></section>'+
+ '<section class="card"><h3>معلومات النظام</h3><p>الواجهة: مدير المصنع</p><p>قاعدة البيانات: Supabase</p><p class="mu">إعدادات ظهور الوحدات ليست بديلًا عن صلاحيات الحسابات؛ صلاحيات الموظفين والتحقق من الخادم تظل هي الحاكمة للوصول للبيانات.</p></section>';
+}
 /* ===== smart assistant ===== */
 function vAi(){return ph(N.ai)+`<div class="card"><p class="mu">مساعد بيانات الشركة: اسأله عن الأرصدة والمبيعات والمشتريات والمخزون والإنتاج. الإجابات الحسابية تُستخرج من بيانات الشركة الحالية دون إرسالها إلى خدمة خارجية.</p><div class="row ai-prompts"><button class="g" onclick="askPreset('إجمالي المبيعات')">إجمالي المبيعات</button><button class="g" onclick="askPreset('إجمالي المشتريات')">إجمالي المشتريات</button><button class="g" onclick="askPreset('أكثر صنف مبيعًا')">أكثر صنف مبيعًا</button><button class="g" onclick="askPreset('عدد العملاء')">عدد العملاء</button><button class="g" onclick="askPreset('قيمة المخزون')">قيمة المخزون</button></div><textarea id="aq" rows="3" placeholder="اكتب سؤالك هنا..."></textarea><button onclick="ask()">اسأل</button><div id="aa" style="white-space:pre-wrap;margin-top:10px"></div></div>`}
 function askPreset(q){const e=$("#aq");if(e)e.value=q;ask()}
