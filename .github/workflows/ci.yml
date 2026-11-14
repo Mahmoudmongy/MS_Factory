@@ -4,7 +4,7 @@ on:
   pull_request:
     branches: [main]
   push:
-    branches: [main]
+    branches: [main, erp-foundation]
 
 concurrency:
   group: factory-ci-v2-${{ github.event.pull_request.number || github.ref }}
