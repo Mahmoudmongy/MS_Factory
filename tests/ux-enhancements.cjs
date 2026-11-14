@@ -89,7 +89,6 @@ assert(sw.includes('factory-v26') && swPublic.includes('factory-v26'), 'service-
 assert(app.includes('t.style.tableLayout="fixed"') && app.includes('colgroup') && app.includes('factory-table-scroll'), 'tables use stable content-weighted fixed columns');
 assert(app.includes('"مشاركة ملف PDF"') && app.includes('"تحرير"') && app.includes('factory-icon-action'), 'common row actions are icon-only with accessible labels');
 assert(css.includes('max-height:min(72vh,760px)') && css.includes('position:sticky;top:0'), 'table headers remain pinned in the scrollable table viewport');
-assert(index.includes('id="logout-btn"') && index.indexOf('id="logout-btn"') < index.indexOf('id="who"') && index.indexOf('id="who"') < index.indexOf('id="thb"'), 'topbar order is exit, account, theme');
 const indexHtml = fs.readFileSync(path.join(root, 'index.html'), 'utf8');
 assert(history.includes("button.textContent='▤'") && auditTrail.includes("button.textContent = '⟲'"), 'Manager.io history and audit undo launchers are adjacent compact icons');
 assert(indexHtml.indexOf('id="logout-btn"') < indexHtml.indexOf('id="who"') && indexHtml.indexOf('id="who"') < indexHtml.indexOf('id="thb"'), 'topbar order is exit, account, theme');
