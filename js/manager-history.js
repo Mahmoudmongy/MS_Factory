@@ -97,12 +97,16 @@ function ensureUi() {
   const netButton=$('#net');
   if(netButton?.parentNode)netButton.parentNode.insertBefore(launcher,netButton.nextSibling);else top.appendChild(launcher);
   const moveConflictExport=()=>{
-    const notice=$('#factory-conflict-export-notice');if(!notice||launcher.contains(notice))return;
-    notice.style.cssText='position:static;z-index:auto;display:'+(notice.hidden?'none':'flex')+';align-items:center;gap:4px;max-width:min(42vw,420px);margin:0;';
-    const exportButton=$('#factory-conflict-export',notice),closeButton=$('#factory-conflict-export-close',notice);
-    if(exportButton)exportButton.style.cssText='max-width:220px;min-height:34px;padding:6px 9px;border:0;border-radius:8px;background:#7c2d12;color:#fff;font:600 12px Arial;line-height:1.3;white-space:normal;overflow-wrap:anywhere;cursor:pointer';
-    if(closeButton)closeButton.style.cssText='flex:0 0 28px;min-width:28px;min-height:30px;border:0;border-radius:7px;background:#7c2d12;color:#fff;font:700 20px/1 Arial;cursor:pointer';
-    launcher.appendChild(notice);
+    const notice=$('#factory-conflict-export-notice');
+    if(!notice)return;
+    if(!launcher.contains(notice)){
+      notice.style.cssText='position:static;z-index:auto;display:'+(notice.hidden?'none':'flex')+';align-items:center;gap:4px;max-width:min(40vw,380px);margin:0;';
+      const exportButton=$('#factory-conflict-export',notice),closeButton=$('#factory-conflict-export-close',notice);
+      if(exportButton)exportButton.style.cssText='max-width:min(30vw,200px);min-height:34px;padding:6px 9px;border:0;border-radius:8px;background:#7c2d12;color:#fff;font:600 12px Arial;line-height:1.3;white-space:normal;overflow-wrap:anywhere;cursor:pointer';
+      if(closeButton)closeButton.style.cssText='flex:0 0 28px;min-width:28px;min-height:30px;border:0;border-radius:7px;background:#7c2d12;color:#fff;font:700 20px/1 Arial;cursor:pointer';
+      launcher.appendChild(notice);
+    }
+    notice.style.display=notice.hidden?'none':'flex';
   };
   new MutationObserver(moveConflictExport).observe(document.body,{childList:true,subtree:true,attributes:true,attributeFilter:['hidden']});moveConflictExport();
 

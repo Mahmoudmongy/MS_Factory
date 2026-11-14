@@ -6,6 +6,7 @@ const app = fs.readFileSync(path.join(root, 'js/app.js'), 'utf8');
 const css = fs.readFileSync(path.join(root, 'css/style.css'), 'utf8');
 const history = fs.readFileSync(path.join(root, 'js/manager-history.js'), 'utf8');
 const migration = fs.readFileSync(path.join(root, 'supabase/migrations/20261114153000_guard_factory_record_deletes.sql'), 'utf8');
+new Function(app); // Syntax-check the complete production browser script before testing behavior.
 const parserStart = app.indexOf('function factorySearchMatch(');
 const parserEnd = app.indexOf('function factorySearchApply(', parserStart);
 assert(parserStart >= 0 && parserEnd > parserStart, 'advanced search parser must exist');
@@ -26,8 +27,9 @@ assert(app.includes('function accountTreeBalance') && app.includes('function tog
 assert(app.includes('function whPath') && app.includes('function addWh()') && app.includes('parentId:parent'), 'nested warehouse hierarchy must exist');
 assert(app.includes('id="materialWarehouse"') && app.includes('function addProductionMaterial') && app.includes('wh:m.wh||it_(m.iid)?.wh||0'), 'production material rows must persist their selected warehouse');
 assert(app.includes('function undoRef') && app.includes('undoOf:{src,id:String(id)}') && app.includes('عكس آمن للحركة'), 'undo must append compensating entries');
+assert(app.includes('function factoryEnhanceNameSelects') && app.includes('factory-search-options'), 'name selectors must show searchable name-only dropdowns');
 assert(migration.includes('FACTORY_RECORD_PHYSICAL_DELETE_BLOCKED') && migration.includes('FACTORY_RECORD_DELETE_BLOCKED'), 'database must block physical deletes and unsafe soft deletes');
-assert(history.includes("insertBefore(launcher,netButton.nextSibling)") && history.includes('moveConflictExport'), 'Manager.io and saved-operations export controls must share the top bar');
+assert(history.includes("insertBefore(launcher,netButton.nextSibling)") && history.includes('moveConflictExport') && history.includes("notice.style.display=notice.hidden?'none':'flex'"), 'Manager.io and saved-operations export controls must share the top bar and respect close/export state');
 assert(css.includes('.factory-table-scroll') && css.includes('overflow-wrap:anywhere') && css.includes('.factory-search-options'), 'tables and name dropdowns must be responsive');
 console.log('PASS advanced search: AND / OR / numeric comparisons');
 console.log('PASS saved sorting, column selection, and summary expansion');
