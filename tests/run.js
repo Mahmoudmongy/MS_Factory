@@ -85,6 +85,12 @@ await recoveryPage.close();
 const app=fs.readFileSync(path.join(ROOT,'js/app.js'),'utf8'),idx=fs.readFileSync(path.join(ROOT,'index.html'),'utf8'),authPage=fs.readFileSync(path.join(ROOT,'js/auth.js'),'utf8'),cloud=fs.readFileSync(path.join(ROOT,'js/cloud-sync.js'),'utf8'),dbSync=fs.readFileSync(path.join(ROOT,'js/database-first.js'),'utf8').replace(/\r\n/g,'\n'),conflictStorage=fs.readFileSync(path.join(ROOT,'js/conflict-recovery.js'),'utf8'),css=fs.readFileSync(path.join(ROOT,'css/style.css'),'utf8');
 try { new vm.Script(app,{filename:'js/app.js'}); } catch (error) { console.error('APP SYNTAX ERROR:',error.stack||error); process.exit(2); }
 ok('app.js contains no output-truncation artifacts',!app.includes('tokens truncated')&&!app.includes('Warning: truncated output')&&!app.includes('Total output lines:'));
+ok('settings screen is implemented and no longer points to a missing renderer',app.includes('function vSet()')&&app.includes('set:()=>vSet()'));
+ok('module visibility controls are restricted to the system administrator',app.includes('function moduleAdmin()')&&app.includes('cp.is_admin===true')&&app.includes('who==="0"'));
+ok('module visibility preferences are saved in application state without deleting business records',app.includes('S.modules[id]=!!enabled')&&app.includes('sv();')&&app.includes('لا يحذف فواتيرها أو حساباتها'));
+ok('home and settings modules cannot be disabled',app.includes('id==="home"||id==="settings"'));
+ok('company name is validated before being saved',app.includes('function saveCompanyName()')&&app.includes('if(!name){toast("اكتب اسم الشركة أولاً")'));
+
 const names=[...app.matchAll(/^(?:async )?function ([A-Za-z0-9_$]+)\(/gm)].map(m=>m[1]),dup=[...new Set(names.filter((n,i)=>names.indexOf(n)!==i))];
 ok('app.js has no duplicate top-level function definitions',dup.length==0,dup);
 ok('customer/supplier names open details and edit stays permission-gated inside details',app.includes('partyView(${p.id})')&&app.includes('pForm(${p.c?1:0},${id})')&&app.includes('can("edit")'));
