@@ -82,3 +82,8 @@ console.log('PASS targeted MS Factory UX and audit-detail regression checks');
 assert(app.includes('if(!post(dd,no,TN[t],Ls,"doc",id,ts))') && app.includes('oldMoves.forEach(m=>') && app.includes('oldLedger.forEach(x=>S.L.push(x))'), 'invoice edits must roll back stock and restore the prior invoice if ledger posting fails');
 assert(app.includes('if(!post(d,no,$("#vx").value||$("#vtl").value,Ls,"vch",id,ts))') && app.includes('oldLedger.forEach(x=>S.L.push(x));S.vch.push(old)'), 'voucher edits must not save an orphan voucher if ledger posting fails');
 console.log('PASS invoice and voucher posting failures fail closed with safe rollback');
+const sw = fs.readFileSync(path.join(root, 'sw.js'), 'utf8');
+const swPublic = fs.readFileSync(path.join(root, 'public/sw.js'), 'utf8');
+assert(app.includes('landscape=c.width/c.height>1.1') && app.includes('windowWidth:captureWidth') && app.includes('W=landscape?297:210'), 'PDF export captures the full table width and selects landscape A4 for wide documents');
+assert(sw.includes('factory-v25') && swPublic.includes('factory-v25'), 'service-worker cache version changes when the application assets change');
+console.log('PASS adaptive A4 PDF layout and service-worker cache refresh');
