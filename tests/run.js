@@ -708,6 +708,33 @@ ok('mobile date fields remain hidden until the separate period button is pressed
 await m.evaluate(()=>docForm('sale'));const fw=await m.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1);
 ok('mobile: invoice form fits the screen width',fw);
 ok('mobile: no JavaScript errors',merr.length==0,merr.slice(0,2));await mc.close();
+const bridgePage=await browser.newPage();
+await bridgePage.goto(BASE+'auth.html');
+const bridgeFixture=await bridgePage.evaluate(async()=>{
+ const {mapManagerDataToState}=await import('/js/manager-data-bridge.js');
+ const data={
+  accounts:[{id:'a1',external_id:'cash',account_code:'1000',name:'Cash',account_type:'asset',account_role:'cash',is_cash_account:true,currency_code:'EGP'},{id:'a2',external_id:'ar',account_code:'1100',name:'AR',account_type:'asset',account_role:'accounts_receivable',is_cash_account:false,currency_code:'EGP'},{id:'a3',external_id:'sales',account_code:'4000',name:'Sales',account_type:'income',account_role:'sales',is_cash_account:false,currency_code:'EGP'}],
+  customers:[{id:'c1',external_id:'customer-1',name:'Customer',customer_type:'retail'}],suppliers:[],
+  products:[{id:'p1',external_id:'item-1',name:'Shirt',sku:'SH001',unit:'piece',buy_price:60,retail_price:100,warehouse:'Finished'}],
+  inventory:[{id:'i1',product_id:'p1',variant:'-',quantity:9,warehouse:'Finished'}],
+  costs:[{id:'co1',product_id:'p1',effective_date:'2026-01-01',unit_cost:60}],
+  locations:[{id:'w1',external_id:'wh1',name:'Finished'}],inventoryLocationBalances:[{id:'bal1',warehouse:'Finished',quantity:9}],
+  invoices:[{id:'inv1',external_id:'invoice-1',invoice_no:'SI-001',invoice_type:'sale',customer_id:'c1',invoice_date:'2026-01-02',total:100,discount:0,raw:{}}],
+  invoiceLines:[{id:'il1',invoice_id:'inv1',line_no:1,product_id:'p1',item_name:'Shirt',quantity:1,unit_price:100,line_total:100,source_line_kind:'nested_detail',raw:{}}],
+  returns:[],returnLines:[],
+  vouchers:[{id:'v1',external_id:'receipt-1',voucher_no:'RC-001',direction:'in',customer_id:'c1',voucher_date:'2026-01-03',amount:100,raw:{Lines:[{AccountsReceivableSalesInvoice:'invoice-1',Amount:70,DiscountAmount:30}]}},{id:'v2',external_id:'receipt-2',voucher_no:'RC-002',direction:'in',customer_id:'c1',voucher_date:'2026-01-04',amount:50,raw:{ReceivedIn:'cash'}}],
+  voucherLines:[{id:'vl1',voucher_id:'v1',line_type:'receipt',bank_account_id:'a1',account_id:'a2',customer_id:'c1',amount:100},{id:'orphan1',voucher_id:null,line_type:'receipt',bank_account_id:'a1',account_id:'a2',amount:25},{id:'open1',voucher_id:null,line_type:'opening_balance',bank_account_id:'a1',account_id:'a2',amount:10}],
+  ledger:[{id:'l1',transaction_date:'2026-01-02',transaction_type:'Sales Invoice',reference:'SI-001',account_id:'a2',customer_id:'c1',debit:100,credit:0,source_record_type:'sales_invoices',source_manager_key:'invoice-1',raw:{item:'item-1',qty:'1'}},{id:'l2',transaction_date:'2026-01-02',transaction_type:'Sales Invoice',reference:'SI-001',account_id:'a3',debit:0,credit:100,source_record_type:'sales_invoices',source_manager_key:'invoice-1',raw:{}},{id:'l3',transaction_date:'2026-01-04',transaction_type:'Receipt',reference:'RC-002',account_id:'a1',debit:50,credit:0,source_record_type:'receipts',source_manager_key:'receipt-2',raw:{}},{id:'l4',transaction_date:'2026-01-04',transaction_type:'Receipt',reference:'RC-002',account_id:'a2',customer_id:'c1',debit:0,credit:50,source_record_type:'receipts',source_manager_key:'receipt-2',raw:{}}],
+  journals:[],production:[{id:'po1',external_id:'po-1',order_no:'PO-001',product_id:'p1',item_name:'Shirt',order_date:'2026-01-04',status:'completed',breakdown:{bill_of_materials:[],expense_items:[],inventory_location:'wh1'},raw:{Qty:10,InventoryLocation:'wh1',BillOfMaterials:[{BillOfMaterials:'item-1',Qty:2}]}}],
+  materials:[],expenses:[],writeoffs:[],transfers:[],currencies:[]
+ };
+ const state=mapManagerDataToState(data),doc=state.docs[0],voucher=state.vch[0],order=state.po[0];
+ const ledgerDr=state.L.reduce((a,x)=>a+x.dr,0),ledgerCr=state.L.reduce((a,x)=>a+x.cr,0);
+ const movementQty=state.mv.filter(x=>x.iid===state.items[0].id).reduce((a,x)=>a+x.q,0);
+ return {accounts:state.accts.length,invoice:state.docs.length,voucher:state.vch.length,production:state.po.length,ledgerBalanced:Math.abs(ledgerDr-ledgerCr)<.005,partyLinked:doc.pid===state.partners[0].id,voucherCashAndCounterpart:voucher.ac.length===1&&voucher.ln.length===1,invoiceAllocation:voucher.alloc[doc.id]===100,ledgerVoucherFallback:state.vch[1].ac.length===1&&state.vch[1].ln.length===1,productionQuantity:order.subs[0]?.qty===10,productionRawBom:order.mats.length===1&&order.matCost===120,stockReconciled:Math.abs(movementQty-9)<.001,integrityWarnings:state.managerBridgeWarnings.ledgerBalanced&&state.managerBridgeWarnings.inventoryReconciled&&state.managerBridgeWarnings.unlinkedVoucherLines===1&&state.managerBridgeWarnings.vouchersRecoveredFromLedger===1&&state.managerBridgeWarnings.productionOrdersUsingRawBomFallback===1};
+});
+ok('Manager bridge maps real application shapes, invoice allocations and stock opening balances',bridgeFixture.accounts===3&&bridgeFixture.invoice===1&&bridgeFixture.voucher===1&&bridgeFixture.production===1&&bridgeFixture.ledgerBalanced&&bridgeFixture.partyLinked&&bridgeFixture.voucherCashAndCounterpart&&bridgeFixture.invoiceAllocation&&bridgeFixture.ledgerVoucherFallback&&bridgeFixture.productionQuantity&&bridgeFixture.productionRawBom&&bridgeFixture.stockReconciled&&bridgeFixture.integrityWarnings,bridgeFixture);
+await bridgePage.close();
 await browser.close();server.close();
 ok('legacy cloud-sync polling is disabled in database-first mode',cloud.includes('if (!window.__factoryDatabaseFirst) {')&&cloud.indexOf('if (!window.__factoryDatabaseFirst) {')<cloud.indexOf('const _origSetItem')&&cloud.includes('setInterval(() => {'));
 ok('database startup reuses the cached profile and avoids duplicate getUser requests',dbSync.includes('ensureProfile(actorId, false)')&&dbSync.includes('supabase.auth.getSession()')&&!dbSync.includes('supabase.auth.getUser()'));
@@ -748,33 +775,7 @@ ok('Manager.io bridge errors are surfaced to the user without clearing source re
 ok('Manager source rows retain expected version zero so the first edit creates a new overlay row',dbSync.includes('row.version == null ? 1 : Number(row.version)')&&dbSync.includes('expectedVersion: old?.version || 0'));
 ok('Manager source cache is isolated per administrator and is never copied into shared employee cache',dbSync.includes('MANAGER_CACHE_KEY + String(actor || "anonymous") + ":" + String(ownerId || "no-owner")')&&dbSync.includes('if(row.origin!=="manager-import")cacheRow(row)'));
 
-const bridgePage=await browser.newPage();
-await bridgePage.goto(BASE+'auth.html');
-const bridgeFixture=await bridgePage.evaluate(async()=>{
- const {mapManagerDataToState}=await import('/js/manager-data-bridge.js');
- const data={
-  accounts:[{id:'a1',external_id:'cash',account_code:'1000',name:'Cash',account_type:'asset',account_role:'cash',is_cash_account:true,currency_code:'EGP'},{id:'a2',external_id:'ar',account_code:'1100',name:'AR',account_type:'asset',account_role:'accounts_receivable',is_cash_account:false,currency_code:'EGP'},{id:'a3',external_id:'sales',account_code:'4000',name:'Sales',account_type:'income',account_role:'sales',is_cash_account:false,currency_code:'EGP'}],
-  customers:[{id:'c1',external_id:'customer-1',name:'Customer',customer_type:'retail'}],suppliers:[],
-  products:[{id:'p1',external_id:'item-1',name:'Shirt',sku:'SH001',unit:'piece',buy_price:60,retail_price:100,warehouse:'Finished'}],
-  inventory:[{id:'i1',product_id:'p1',variant:'-',quantity:9,warehouse:'Finished'}],
-  costs:[{id:'co1',product_id:'p1',effective_date:'2026-01-01',unit_cost:60}],
-  locations:[{id:'w1',external_id:'wh1',name:'Finished'}],inventoryLocationBalances:[{id:'bal1',warehouse:'Finished',quantity:9}],
-  invoices:[{id:'inv1',external_id:'invoice-1',invoice_no:'SI-001',invoice_type:'sale',customer_id:'c1',invoice_date:'2026-01-02',total:100,discount:0,raw:{}}],
-  invoiceLines:[{id:'il1',invoice_id:'inv1',line_no:1,product_id:'p1',item_name:'Shirt',quantity:1,unit_price:100,line_total:100,source_line_kind:'nested_detail',raw:{}}],
-  returns:[],returnLines:[],
-  vouchers:[{id:'v1',external_id:'receipt-1',voucher_no:'RC-001',direction:'in',customer_id:'c1',voucher_date:'2026-01-03',amount:100,raw:{Lines:[{AccountsReceivableSalesInvoice:'invoice-1',Amount:70,DiscountAmount:30}]}},{id:'v2',external_id:'receipt-2',voucher_no:'RC-002',direction:'in',customer_id:'c1',voucher_date:'2026-01-04',amount:50,raw:{ReceivedIn:'cash'}}],
-  voucherLines:[{id:'vl1',voucher_id:'v1',line_type:'receipt',bank_account_id:'a1',account_id:'a2',customer_id:'c1',amount:100},{id:'orphan1',voucher_id:null,line_type:'receipt',bank_account_id:'a1',account_id:'a2',amount:25},{id:'open1',voucher_id:null,line_type:'opening_balance',bank_account_id:'a1',account_id:'a2',amount:10}],
-  ledger:[{id:'l1',transaction_date:'2026-01-02',transaction_type:'Sales Invoice',reference:'SI-001',account_id:'a2',customer_id:'c1',debit:100,credit:0,source_record_type:'sales_invoices',source_manager_key:'invoice-1',raw:{item:'item-1',qty:'1'}},{id:'l2',transaction_date:'2026-01-02',transaction_type:'Sales Invoice',reference:'SI-001',account_id:'a3',debit:0,credit:100,source_record_type:'sales_invoices',source_manager_key:'invoice-1',raw:{}},{id:'l3',transaction_date:'2026-01-04',transaction_type:'Receipt',reference:'RC-002',account_id:'a1',debit:50,credit:0,source_record_type:'receipts',source_manager_key:'receipt-2',raw:{}},{id:'l4',transaction_date:'2026-01-04',transaction_type:'Receipt',reference:'RC-002',account_id:'a2',customer_id:'c1',debit:0,credit:50,source_record_type:'receipts',source_manager_key:'receipt-2',raw:{}}],
-  journals:[],production:[{id:'po1',external_id:'po-1',order_no:'PO-001',product_id:'p1',item_name:'Shirt',order_date:'2026-01-04',status:'completed',breakdown:{bill_of_materials:[],expense_items:[],inventory_location:'wh1'},raw:{Qty:10,InventoryLocation:'wh1',BillOfMaterials:[{BillOfMaterials:'item-1',Qty:2}]}}],
-  materials:[],expenses:[],writeoffs:[],transfers:[],currencies:[]
- };
- const state=mapManagerDataToState(data),doc=state.docs[0],voucher=state.vch[0],order=state.po[0];
- const ledgerDr=state.L.reduce((a,x)=>a+x.dr,0),ledgerCr=state.L.reduce((a,x)=>a+x.cr,0);
- const movementQty=state.mv.filter(x=>x.iid===state.items[0].id).reduce((a,x)=>a+x.q,0);
- return {accounts:state.accts.length,invoice:state.docs.length,voucher:state.vch.length,production:state.po.length,ledgerBalanced:Math.abs(ledgerDr-ledgerCr)<.005,partyLinked:doc.pid===state.partners[0].id,voucherCashAndCounterpart:voucher.ac.length===1&&voucher.ln.length===1,invoiceAllocation:voucher.alloc[doc.id]===100,ledgerVoucherFallback:state.vch[1].ac.length===1&&state.vch[1].ln.length===1,productionQuantity:order.subs[0]?.qty===10,productionRawBom:order.mats.length===1&&order.matCost===120,stockReconciled:Math.abs(movementQty-9)<.001,integrityWarnings:state.managerBridgeWarnings.ledgerBalanced&&state.managerBridgeWarnings.inventoryReconciled&&state.managerBridgeWarnings.unlinkedVoucherLines===1&&state.managerBridgeWarnings.vouchersRecoveredFromLedger===1&&state.managerBridgeWarnings.productionOrdersUsingRawBomFallback===1};
-});
-ok('Manager bridge maps real application shapes, invoice allocations and stock opening balances',bridgeFixture.accounts===3&&bridgeFixture.invoice===1&&bridgeFixture.voucher===1&&bridgeFixture.production===1&&bridgeFixture.ledgerBalanced&&bridgeFixture.partyLinked&&bridgeFixture.voucherCashAndCounterpart&&bridgeFixture.invoiceAllocation&&bridgeFixture.ledgerVoucherFallback&&bridgeFixture.productionQuantity&&bridgeFixture.productionRawBom&&bridgeFixture.stockReconciled&&bridgeFixture.integrityWarnings,bridgeFixture);
-await bridgePage.close();
+
 
 
 
