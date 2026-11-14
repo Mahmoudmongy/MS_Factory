@@ -3,7 +3,7 @@
  * Run: npm test   (requires: npm install  -> playwright)                                         */
 const http=require('http'),fs=require('fs'),path=require('path'),vm=require('vm');let pw;try{pw=require('playwright')}catch(e){console.error('playwright is not installed. Run: npm install && npx playwright install chromium');process.exit(2)}
 const ROOT=path.join(__dirname,'..'),IMPORT_FIXTURE=path.join(require('os').tmpdir(),'ms-factory-items.csv'),MIME={'.html':'text/html','.js':'text/javascript','.mjs':'text/javascript','.css':'text/css','.json':'application/json','.png':'image/png','.svg':'image/svg+xml','.md':'text/plain'};
-const server=http.createServer((q,r)=>{let u=decodeURIComponent(q.url.split('?')[0]);if(u.endsWith('/'))u+='index.html';if(u==='/index.html'){let html=fs.readFileSync(path.join(ROOT,'index.html'),'utf8');html=html.replace(/<style>html\{visibility:visible\}#app\{visibility:hidden\}<\/style>/,'');html=html.replace(/<div id="factory-boot-screen"[\s\S]*?<\/div>/,'');html=html.replace(/<script type="module">[\s\S]*?<\/script>/,'');html=html.replace('<script type="module" src="./js/cloud-sync.js"></script>','');html=html.replace('<script type="module" src="./js/database-first.js"></script>','');r.writeHead(200,{'Content-Type':'text/html'});r.end(html);return}const f=path.join(ROOT,u);if(!f.startsWith(ROOT)||!fs.existsSync(f)||fs.statSync(f).isDirectory()){r.writeHead(404);r.end('nf');return}r.writeHead(200,{'Content-Type':MIME[path.extname(f)]||'application/octet-stream'});fs.createReadStream(f).pipe(r)});
+const server=http.createServer((q,r)=>{let u=decodeURIComponent(q.url.split('?')[0]);if(u.endsWith('/'))u+='index.html';if(u==='/index.html'){let html=fs.readFileSync(path.join(ROOT,'index.html'),'utf8');html=html.replace(/<style>html\{visibility:visible\}#app\{visibility:hidden\}<\/style>/,'');html=html.replace(/<div id="factory-boot-screen"[\s\S]*?<\/div>/,'');html=html.replace(/<script type="module">[\s\S]*?<\/script>/,'');html=html.replace('<script type="module" src="./js/cloud-sync.js"></script>','');html=html.replace('<script type="module" src="./js/database-first.js"></script>','');html=html.replace('<script type="module" src="./js/manager-history.js"></script>','');r.writeHead(200,{'Content-Type':'text/html'});r.end(html);return}const f=path.join(ROOT,u);if(!f.startsWith(ROOT)||!fs.existsSync(f)||fs.statSync(f).isDirectory()){r.writeHead(404);r.end('nf');return}r.writeHead(200,{'Content-Type':MIME[path.extname(f)]||'application/octet-stream'});fs.createReadStream(f).pipe(r)});
 const R=[];let fails=0;const ok=(n,c,x)=>{R.push(`${c?'PASS':'FAIL'}  ${n}${x!==undefined?'  => '+(typeof x=='object'?JSON.stringify(x):x):''}`);if(!c)fails++};
 (async()=>{
 await new Promise(r=>server.listen(0,r));const BASE='http://localhost:'+server.address().port+'/';
@@ -499,7 +499,7 @@ ok('online startup sync runs even when local cache already has data',/if \(navig
 ok('offline startup never authorizes from a cached profile',!/cachedProfile/.test(idx)&&/offlineError\.code = 'OFFLINE'/.test(idx)&&/location\.replace\('auth\.html'\)/.test(idx));
 ok('reconnect refreshes the profile before using permissions for cloud sync',/myProfile = null; ownerIdCache = null; window\.__factoryAuthProfile = null;/.test(cloud)&&/const freshProfile = await getMyProfile\(\)/.test(cloud));
 
-ok('offline shell precaches the stable production app and first-login password page',/auth\.html/.test(sw)&&/change-password\.html/.test(sw)&&/js\/change-password\.js/.test(sw)&&/js\/app\.js/.test(sw)&&/factory-v20/.test(sw));
+ok('offline shell precaches the stable production app and first-login password page',/auth\.html/.test(sw)&&/change-password\.html/.test(sw)&&/js\/change-password\.js/.test(sw)&&/js\/app\.js/.test(sw)&&/factory-v22/.test(sw));
 ok('mobile and desktop usability includes visible keyboard focus and safe-area spacing',/focus-visible/.test(css)&&/safe-area-inset-bottom/.test(css));
 ok('offline-created detail records are uploaded even when the full snapshot has a preserved conflict',/if \(admin && !snapshotConflict\)/.test(cloud)&&/for \(const \{ key, arr \} of partnerArrays\)/.test(cloud)&&/hasSnapshotConflict/.test(cloud));
 ok('local save writes a durable pending-sync marker before network recovery',/mgr6-sync-pending/.test(app)&&/localStorage\.setItem\("mgr6-sync-pending"/.test(app));
@@ -511,7 +511,7 @@ ok('opening an existing screen in a separate tab activates it instead of duplica
 ok('Excel export splits currency labels into a separate adjacent cell and keeps amounts numeric',/function exportCurrencyCell/.test(app)&&/\[h\+" \(قيمة\)","العملة"\]/.test(app));
 ok('legacy Excel importer supports multiple named sheets for customers, suppliers and inventory',/function impSheet\(/.test(app)&&/function templateExcel\(/.test(app)&&/customers:\[/.test(app)&&/suppliers:\[/.test(app)&&/WZ\.sheetNames/.test(app));
 ok('module navigation uses consistent purpose-specific SVG icons',/const APP_ICONS=/.test(app)&&/ico\("customer"\)/.test(app)&&/ico\("inventory"\)/.test(app));
-ok('offline service worker pre-caches Vite module assets discovered from the HTML shell',sw.includes('matchAll')&&sw.includes('modulepreload')&&/factory-v20/.test(sw));
+ok('offline service worker pre-caches Vite module assets discovered from the HTML shell',sw.includes('matchAll')&&sw.includes('modulepreload')&&/factory-v22/.test(sw));
 
 
 ok('invoice sync migration uses optimistic version checks and invoker security',/sync_version/.test(fs.readFileSync(path.join(ROOT,'supabase/migrations/20261107090901_20261107111000_atomic_invoice_sync.sql'),'utf8'))&&/SECURITY INVOKER/.test(fs.readFileSync(path.join(ROOT,'supabase/migrations/20261107090901_20261107111000_atomic_invoice_sync.sql'),'utf8'))&&/40001/.test(fs.readFileSync(path.join(ROOT,'supabase/migrations/20261107090901_20261107111000_atomic_invoice_sync.sql'),'utf8')));
@@ -595,6 +595,18 @@ await ev(()=>{go('rc');vForm('in');$("#vt").value="c";vpt();$("#vp").value="1";$
 ok('over-allocation above the remaining amount is clamped',await ev(()=>+$("#lkw").querySelector("input[data-d]").value<99999999));await ev(()=>closeTab(CUR,1));
 await ev(()=>{go('rc');vForm('in');$("#va").value="1";$("#vm").value="100";vAc();$("#la").value=String(ak("sales"));$("#lm").value="150";vLn();saveV()});
 ok('voucher with unequal accounts/lines totals is rejected',await ev(()=>S.vch.length==1));await ev(()=>closeTab(CUR,1));
+/* ---------- imported historical voucher with no account breakdown ---------- */
+const missingAccountVoucherRuntime=await ev(()=>{
+ const oldVch=S.vch,oldLedger=S.L; FL.vin={};
+ const imported={id:987654321,dir:"in",date:td(),ts:Date.now(),no:"RC-IMPORTED",title:"سند قبض مستورد",who:"عميل تاريخي",desc:"سند منقول",total:100,ac:[],ln:[],manager_read_only:true};
+ S.vch=[imported];
+ S.L=[...oldLedger,{d:td(),ts:Date.now(),ref:imported.no,desc:"حركة نقدية مستوردة",a:1,dr:100,cr:0,pid:0,src:"vch",rid:imported.id,fc:0}];
+ const listHtml=vVch("in"),derived=voucherAccounts(imported),printHtml=vchPrintHtml(imported);
+ const result={visible:listHtml.includes("RC-IMPORTED"),accountRecovered:derived.length===1&&derived[0].a===1,accountShown:listHtml.includes("الخزنة (EGP)"),printSafe:printHtml.includes("الخزنة")};
+ S.vch=oldVch;S.L=oldLedger;go("home");return result;
+});
+ok('historical imported receipt with empty account details opens safely and recovers its cash account from the ledger',missingAccountVoucherRuntime.visible&&missingAccountVoucherRuntime.accountRecovered&&missingAccountVoucherRuntime.accountShown&&missingAccountVoucherRuntime.printSafe,missingAccountVoucherRuntime);
+
 /* ---------- currency ---------- */
 await ev(()=>{go('bank');bForm();$("#bn").value="الخزنة بالدولار";$("#bcu").value="USD";saveAcc(1)});const usd=await ev(()=>S.accts.find(a=>a.name=="الخزنة بالدولار"));
 ok('USD account created',usd&&usd.cur=="USD");
@@ -648,7 +660,7 @@ ok('import detects new / duplicate-in-file / invalid / already-existing rows',JS
 await ev(()=>importGo());ok('import creates only the valid rows with opening stock; ledger balanced',await ev(()=>!!S.items.find(i=>i.sku=="IMP001")&&!S.items.find(i=>i.sku=="IMP003")&&!S.items.find(i=>i.sku=="IMP004")&&tq(S.items.find(i=>i.sku=="IMP001"))==30)&&await bal());
 /* ---------- templates ---------- */
 await ev(()=>{tplForm();$("#tk").value="sale";tplFill();$("#t_title").value="فاتورة ضريبية";ACT.querySelector('.t_c[value="unit"]').checked=false;tplPrev()});
-ok('print-template preview reflects title and hidden column',await ev(()=>{const h=$("#tpv").innerHTML;return h.includes("فاتورة ضريبية")&&!h.includes("<th>الوحدة</th>")}));await ev(()=>closeTab(CUR,1));
+const templatePreviewCheck=await ev(()=>{const h=$("#tpv").innerHTML;return {title:h.includes("فاتورة ضريبية"),unitHidden:!h.includes("<th>الوحدة</th>"),excerpt:h.slice(0,900)}});ok('print-template preview reflects title and hidden column',templatePreviewCheck.title&&templatePreviewCheck.unitHidden,templatePreviewCheck);await ev(()=>closeTab(CUR,1));
 /* ---------- language ---------- */
 await ev(()=>{PRF.lang='en';applyPref()});const left=[];for(const s of ['home','bank','rc','py','cust','supp','sale','sret','pur','pret','stock','prod','coa','je','tl','emp','rep','ai','set']){await ev(x=>go(x),s);await p.waitForTimeout(40);const t=await ev(x=>{const out=[],w=document.createTreeWalker(document.body,NodeFilter.SHOW_TEXT);let n;while(n=w.nextNode()){if(n.parentElement&&n.parentElement.tagName=='SCRIPT')continue;if(/[\u0600-\u06FF]/.test(n.nodeValue)&&n.nodeValue.trim()!='ع')out.push(n.nodeValue.trim())}return out},s);t.forEach(x=>{if(!/محلات|عميل قطاعي|اختبار|استيراد|النسيج|جيرسي|زراير|تيشيرت|جاكيت|بنطلون|قماش|أحمر|أسود|جهة|الخزنة بالدولار|موظف/.test(x))left.push(s+': '+x)})}
 ok('English mode: no untranslated UI text on the 19 main screens',left.length==0,left.slice(0,12));await ev(()=>{PRF.lang='ar';applyPref()});
@@ -684,7 +696,7 @@ ok('middle-click is the only sidebar gesture that opens a new tab',app.includes(
 /* ---------- C. PWA: service worker + offline shell ---------- */
 const c2=await browser.newContext({viewport:{width:1280,height:800}}),q=await c2.newPage(),swConsole=[];q.on('console',m=>swConsole.push(m.type()+': '+m.text()));q.on('pageerror',e=>swConsole.push('pageerror: '+e.message));await q.goto(BASE);const swReg=await q.evaluate(async()=>{try{const reg=await navigator.serviceWorker.register('./sw.js');return {ok:true,scope:reg.scope,installing:reg.installing?.state,waiting:reg.waiting?.state,active:reg.active?.state}}catch(e){return {ok:false,error:e.message}}});const swReady=await q.evaluate(()=>Promise.race([navigator.serviceWorker.ready.then(()=>true),new Promise(resolve=>setTimeout(()=>resolve(false),15000))]));if(!swReady){const diag=await q.evaluate(async()=>{const r=await navigator.serviceWorker.getRegistration();return r?{installing:r.installing?.state,waiting:r.waiting?.state,active:r.active?.state,scope:r.scope}:null});await c2.close();throw new Error('Service Worker did not become ready: '+JSON.stringify({swReg,diag,console:swConsole.slice(-20)}))}await q.reload();await q.waitForTimeout(600);
 const swi=await q.evaluate(async()=>({ctl:!!navigator.serviceWorker.controller,keys:await caches.keys(),cached:(await (await caches.open((await caches.keys())[0])).keys()).map(r=>new URL(r.url).pathname)}));
-ok('service worker installed and controlling the page; single versioned cache',swi.ctl&&swi.keys.length==1&&/^factory-v20$/.test(swi.keys[0]),swi.keys);
+ok('service worker installed and controlling the page; single versioned cache',swi.ctl&&swi.keys.length==1&&/^factory-v22$/.test(swi.keys[0]),swi.keys);
 ok('stable app shell files are precached; linked CSS and scripts are cached on first request',['/index.html','/auth.html','/change-password.html','/js/change-password.js','/','/js/app.js','/css/style.css'].every(f=>swi.cached.includes(f)),swi.cached);
 ok('offline cache does not include authenticated API responses or user records',swi.cached.every(f=>!f.includes('/rest/v1/')&&!f.includes('/auth/v1/')&&!f.includes('/storage/v1/')));
 await q.evaluate(()=>{const s=JSON.parse(localStorage.getItem('mgr6')||'null');localStorage.setItem('mgr6',JSON.stringify(s))});
@@ -775,5 +787,9 @@ ok('summary screen keeps the selected date range in a collapsible panel',app.inc
 ok('mobile double-back uses one exit confirmation',app.includes('signOutNow(true)'));
 
 ok('first-login password change clears the cached must-change-password flag before returning to the app',changePasswordPage.includes('factory-profile-verified:')&&changePasswordPage.includes('currentProfile.must_change_password = false'));
+const managerHistory=fs.readFileSync(path.join(ROOT,'js/manager-history.js'),'utf8');
+ok('Manager.io history screen is connected from the main app and cached for PWA use',fs.readFileSync(path.join(ROOT,'index.html'),'utf8').includes('js/manager-history.js')&&fs.readFileSync(path.join(ROOT,'public/sw.js'),'utf8').includes('js/manager-history.js'));
+ok('Manager.io history module includes all migrated business areas', ['customers','suppliers','products','inventory_location_balances','invoices','invoice_items','returns','vouchers','production_orders','manager_accounts','manager_ledger_transactions'].every(t=>managerHistory.includes(t)));
+ok('Manager.io history is explicitly read-only and does not write imported history',managerHistory.includes('للقراءة فقط')&&!['.insert(','.update(','.upsert(','.delete('].some(token=>managerHistory.includes(token)));
 console.log(R.join('\n'));console.log(`\n${R.length-fails}/${R.length} checks passed, ${fails} failed`);process.exit(fails?1:0);
 })().catch(e=>{console.error('TEST RUN CRASHED:',e.message);process.exit(2)});
