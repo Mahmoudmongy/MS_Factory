@@ -82,8 +82,9 @@ begin
   elsif old.record_type = 'accts' then
     select exists (
       select 1 from public.factory_records r
-      where r.user_id = old.user_id and r.record_type = 'L'
-        and r.deleted_at is null and r.payload->>'a' = old.record_id
+      where r.user_id = old.user_id and r.deleted_at is null
+        and ((r.record_type = 'accts' and r.payload->>'parentId' = old.record_id)
+          or (r.record_type = 'L' and r.payload->>'a' = old.record_id))
     ) into v_referenced;
     if v_referenced then
       raise exception 'FACTORY_RECORD_DELETE_BLOCKED: an account referenced by ledger entries cannot be deleted';
@@ -95,6 +96,13 @@ begin
       where r.user_id = old.user_id and r.record_type = 'L'
         and r.deleted_at is null and r.payload->>'rid' = old.record_id
         and r.payload->>'src' = 'je'
+        and not exists (
+          select 1 from public.factory_records reversal
+          where reversal.user_id = old.user_id and reversal.record_type = 'L'
+            and reversal.deleted_at is null and reversal.payload->>'src' = 'undo'
+            and reversal.payload->'undoOf'->>'src' = 'je'
+            and reversal.payload->'undoOf'->>'id' = old.record_id
+        )
     ) into v_referenced;
     if v_referenced then
       raise exception 'FACTORY_RECORD_DELETE_BLOCKED: reverse the journal entry before deleting it';
