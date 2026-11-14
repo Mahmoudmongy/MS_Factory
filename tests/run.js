@@ -100,6 +100,8 @@ ok('grouped navigation and module settings have responsive styles',css.includes(
 const names=[...app.matchAll(/^(?:async )?function ([A-Za-z0-9_$]+)\(/gm)].map(m=>m[1]),dup=[...new Set(names.filter((n,i)=>names.indexOf(n)!==i))];
 ok('app.js has no duplicate top-level function definitions',dup.length==0,dup);
 ok('customer/supplier names open details and edit stays permission-gated inside details',app.includes('partyView(${p.id})')&&app.includes('pForm(${p.c?1:0},${id})')&&app.includes('can("edit")'));
+ok('posted journal entries cannot be edited or deleted and can only be corrected by a balanced reversal',app.includes('function journalValidationError(lines)')&&app.includes('function reverseJ(id)')&&app.includes('if(original.reversedBy){')&&app.includes('original.reversedBy=rid')&&app.includes('if(src==="je"){toast("لا يمكن حذف قيد يومية مرحّل')&&app.includes('if(pre?.id){toast("القيود المرحلة لا تُعدّل')&&app.includes('reverseJ('));
+
 ok('customer and supplier screens expose unlinked historical invoices and vouchers for manual review without auto-linking',app.includes('function partnerReferenceExists')&&app.includes('function unlinkedPartyRows')&&app.includes('unlinkedPartyReview()+')&&app.includes('لم يتم ربطها تلقائياً')&&app.includes('فتح لربط الطرف'));
 ok('customer and supplier lists sort balances high-to-low with an alphabetical tie-break',app.includes('.sort((a,b)=>Math.abs(pbal(b.id))-Math.abs(pbal(a.id))||a.name.localeCompare(b.name,"ar"))'));
 ok('partner edit preserves the stable record ID and updates the existing object',app.includes('function saveP(id)')&&app.includes('if(old)Object.assign(old,data)'));
