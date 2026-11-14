@@ -659,3 +659,26 @@ button,input,select,table,textarea{font-family:inherit}
  .factory-icon-action{width:30px!important;min-width:30px!important;height:30px!important;min-height:30px!important}
  .filter-card input,.filter-card select{min-height:34px;font-size:13px}
 }
+
+/* Compact, predictable toolbar layout: exit, account selector and theme stay together. */
+#top{grid-template-columns:38px 32px 32px minmax(100px,1fr) 34px 30px 30px 36px minmax(92px,130px) 34px!important;grid-template-areas:"menu back forward title net history history logout who theme"!important;grid-auto-rows:36px!important;min-height:44px!important;gap:4px!important;align-items:center}
+#top #bg{grid-area:menu}
+#top button.top-nav[onclick="bkw(-1)"]{grid-area:back}
+#top button.top-nav[onclick="bkw(1)"]{grid-area:forward}
+#top #ttl{grid-area:title;min-width:0}
+#top #net{grid-area:net}
+#top #manager-history-launcher{grid-area:history;display:flex!important;align-items:center;justify-content:center;gap:2px;max-width:none!important;width:100%;min-width:0;overflow:visible}
+#top #manager-history-open,#top #factory-audit-open{width:28px!important;min-width:28px!important;height:28px!important;min-height:28px!important;padding:1px!important;font-size:15px!important}
+#top #logout-btn{grid-area:logout}
+#top #who{grid-area:who;width:100%;max-width:none;min-width:0}
+#top #thb{grid-area:theme}
+@media(max-width:860px){
+ #top{grid-template-columns:32px 28px 28px minmax(45px,1fr) 30px 27px 27px 32px minmax(68px,84px) 30px!important;grid-template-areas:"menu back forward title net history history logout who theme"!important;grid-auto-rows:34px!important;min-height:40px!important;gap:2px!important;padding:4px!important}
+ #top #bg,#top .top-nav,#top #logout-btn,#top #thb{width:30px;min-width:30px;height:30px;min-height:30px;padding:2px}
+ #top #who{min-height:30px!important;height:30px!important;font-size:11px!important;padding:3px 16px 3px 3px!important}
+ #top #manager-history-launcher{gap:1px}
+ #top #manager-history-open,#top #factory-audit-open{width:26px!important;min-width:26px!important;height:26px!important;min-height:26px!important;font-size:14px!important}
+}
+@media(max-width:380px){
+ #top{grid-template-columns:28px 24px 24px minmax(36px,1fr) 28px 24px 24px 28px 66px 28px!important;gap:1px!important}
+}
