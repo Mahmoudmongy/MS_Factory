@@ -793,5 +793,11 @@ ok('Manager.io history module includes all migrated business areas', ['customers
 ok('Manager.io history is explicitly read-only and does not write imported history',managerHistory.includes('للقراءة فقط')&&!['.insert(','.update(','.upsert(','.delete('].some(token=>managerHistory.includes(token)));
 const auditModule=fs.readFileSync(path.join(ROOT,'js/audit-trail.js'),'utf8');
 ok('database audit screen is linked, offline-cached, owner-admin-only, and calls the guarded undo RPC',fs.readFileSync(path.join(ROOT,'index.html'),'utf8').includes('js/audit-trail.js')&&fs.readFileSync(path.join(ROOT,'public/sw.js'),'utf8').includes('js/audit-trail.js')&&auditModule.includes("data.is_admin!==true || data.created_by")&&auditModule.includes("undo_factory_record_change")&&auditModule.includes("latest.get(key)===row.id"));
+const permissionMigration=fs.readFileSync(path.join(ROOT,'supabase/migrations/20261114132500_employee_permission_templates_and_write_guards.sql'),'utf8');
+const permissionRpcMigration=fs.readFileSync(path.join(ROOT,'supabase/migrations/20261114132600_employee_permission_rpc_invoker_wrapper.sql'),'utf8');
+const permissionQa=fs.readFileSync(path.join(ROOT,'tests/sql/employee-permissions-qa.sql'),'utf8');
+const employeeCreate=fs.readFileSync(path.join(ROOT,'supabase/functions/create-employee-account/index.ts'),'utf8');
+ok('employee write/delete permissions are enforced by RLS and an owner-checked invoker RPC',permissionMigration.includes("actor.permissions ->> 'edit' = 'true'")&&permissionMigration.includes('private.can_delete_factory_record')&&permissionMigration.includes('deleted_at is null or private.can_delete_factory_record')&&permissionRpcMigration.includes('security invoker')&&permissionQa.includes('QA_EMPLOYEE_DELETE_PERMISSION_FAILED'));
+ok('employee account creation accepts only module/edit/delete flags and owner administrators',employeeCreate.includes('"edit", "delete"')&&employeeCreate.includes('profile?.created_by'));
 console.log(R.join('\n'));console.log(`\n${R.length-fails}/${R.length} checks passed, ${fails} failed`);process.exit(fails?1:0);
 })().catch(e=>{console.error('TEST RUN CRASHED:',e.message);process.exit(2)});
