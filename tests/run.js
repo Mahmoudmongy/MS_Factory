@@ -811,5 +811,8 @@ ok('profile RLS cannot be bypassed to self-grant permissions or admin status',pr
 ok('employee permission updates import the shared Supabase client from the application asset path',fs.readFileSync(path.join(ROOT,'js/app.js'),'utf8').includes('import("./js/supabase.js")'));
 const deleteRequiresEditMigration=fs.readFileSync(path.join(ROOT,'supabase/migrations/20261114132900_delete_requires_edit.sql'),'utf8');
 ok('database permission updates reject delete without edit',deleteRequiresEditMigration.includes('EMPLOYEE_DELETE_REQUIRES_EDIT')&&fs.readFileSync(path.join(ROOT,'tests/sql/employee-permissions-qa.sql'),'utf8').includes('QA_DELETE_REQUIRES_EDIT_NOT_ENFORCED'));
+const reportScopeMigration=fs.readFileSync(path.join(ROOT,'supabase/migrations/20261114133100_restore_reports_read_scope.sql'),'utf8');
+ok('report-only employees keep read access without gaining write access',reportScopeMigration.includes("p_write is false and actor.permissions ->> 'reports' = 'true'")&&reportScopeMigration.includes("p_write is false or actor.permissions ->> 'edit' = 'true'"));
+ok('employee account API rejects delete without edit',fs.readFileSync(path.join(ROOT,'supabase/functions/create-employee-account/index.ts'),'utf8').includes('صلاحية الحذف تتطلب صلاحية التعديل'));
 console.log(R.join('\n'));console.log(`\n${R.length-fails}/${R.length} checks passed, ${fails} failed`);process.exit(fails?1:0);
 })().catch(e=>{console.error('TEST RUN CRASHED:',e.message);process.exit(2)});
