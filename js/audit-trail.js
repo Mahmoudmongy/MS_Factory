@@ -1,7 +1,7 @@
 import { supabase } from './supabase.js';
 const esc = value => String(value ?? '').replace(/[&<>"']/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
 const labels = {INSERT:'إضافة',UPDATE:'تعديل',DELETE:'حذف'};
-const typeLabels = {docs:'الفواتير',vch:'السندات',po:'أوامر الإنتاج',je:'القيود اليومية',wo:'الهالك',partners:'العملاء والموردون',items:'الأصناف',wh:'المخازن',payroll:'الأجور'};
+const typeLabels = {docs:'الفواتير',vch:'السندات',po:'أوامر الإنتاج',je:'القيود اليومية',wo:'الهالك',partners:'العملاء والموردون',items:'الأصناف',wh:'المخازن',payroll:'الأجور',profile:'الموظفون والصلاحيات'};
 let ownerId = null, rows = [], panel = null, launcher = null;
 function ensureUi() {
   if (document.getElementById('factory-audit-open')) return;
@@ -58,7 +58,7 @@ function renderRows() {
   const visible=rows.filter(row=>!q||[row.record_type,row.record_id,row.operation,labels[row.operation]].join(' ').toLocaleLowerCase().includes(q));
   if(!visible.length){root.innerHTML='<div class="card">لا توجد حركات مطابقة.</div>';return;}
   root.innerHTML=\`<div class="card" style="overflow:auto"><table class="l" style="min-width:850px;width:100%"><thead><tr><th>التاريخ</th><th>العملية</th><th>القسم</th><th>رقم السجل</th><th>المنفذ</th><th>التفاصيل</th><th>الإجراء</th></tr></thead><tbody>\${visible.map(row=>{
-    const key=row.record_type+'|'+row.record_id,canUndo=latest.get(key)===row.id&&['INSERT','UPDATE'].includes(row.operation);
+    const key=row.record_type+'|'+row.record_id,canUndo=row.record_type!=='profile'&&latest.get(key)===row.id&&['INSERT','UPDATE'].includes(row.operation);
     const snapshot={before:row.old_row,after:row.new_row};
     return \`<tr><td>\${esc(new Date(row.occurred_at).toLocaleString('en-GB'))}</td><td>\${esc(labels[row.operation]||row.operation)}</td><td>\${esc(typeLabels[row.record_type]||row.record_type)}</td><td>\${esc(row.record_id)}</td><td>\${esc(row.actor_id||'—')}</td><td><details><summary>عرض قبل / بعد</summary><pre style="white-space:pre-wrap;direction:ltr;text-align:left;max-width:520px;overflow:auto">\${esc(JSON.stringify(snapshot,null,2))}</pre></details></td><td>\${canUndo?\`<button class="g" type="button" data-undo="\${Number(row.id)}">تراجع آمن</button>\`:'—'}</td></tr>\`;
   }).join('')}</tbody></table></div>\`;

@@ -799,5 +799,8 @@ const permissionQa=fs.readFileSync(path.join(ROOT,'tests/sql/employee-permission
 const employeeCreate=fs.readFileSync(path.join(ROOT,'supabase/functions/create-employee-account/index.ts'),'utf8');
 ok('employee write/delete permissions are enforced by RLS and an owner-checked invoker RPC',permissionMigration.includes("actor.permissions ->> 'edit' = 'true'")&&permissionMigration.includes('private.can_delete_factory_record')&&permissionMigration.includes('deleted_at is null or private.can_delete_factory_record')&&permissionRpcMigration.includes('security invoker')&&permissionQa.includes('QA_EMPLOYEE_DELETE_PERMISSION_FAILED'));
 ok('employee account creation accepts only module/edit/delete flags and owner administrators',employeeCreate.includes('"edit", "delete"')&&employeeCreate.includes('profile?.created_by'));
+const profileAuditMigration=fs.readFileSync(path.join(ROOT,'supabase/migrations/20261114132700_profile_audit_log.sql'),'utf8');
+const profileAuditQa=fs.readFileSync(path.join(ROOT,'tests/sql/profile-audit-qa.sql'),'utf8');
+ok('employee profile changes join the audit timeline without exposing profile undo',profileAuditMigration.includes('after insert or update or delete on public.profiles')&&profileAuditQa.includes('QA_PROFILE_AUDIT_CAPTURE_PASSED')&&fs.readFileSync(path.join(ROOT,'js/audit-trail.js'),'utf8').includes("row.record_type!=='profile'"));
 console.log(R.join('\n'));console.log(`\n${R.length-fails}/${R.length} checks passed, ${fails} failed`);process.exit(fails?1:0);
 })().catch(e=>{console.error('TEST RUN CRASHED:',e.message);process.exit(2)});
