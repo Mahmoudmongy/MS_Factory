@@ -574,6 +574,14 @@ async function bootstrap() {
   window.dispatchEvent(new CustomEvent('factory-database-ready'));
 }
 window.__factoryPersistState = persistState;
+window.__factoryRefreshManagerBridge = () => {
+  if(profile?.is_admin!==true)throw new Error("تحديث بيانات Manager.io متاح لمدير النظام فقط.");
+  if(!navigator.onLine||window.__factoryOfflineMode===true)throw new Error("يلزم اتصال بالإنترنت لتحديث بيانات Manager.io.");
+  if(getQueue().length)throw new Error("يوجد حفظ أو مزامنة معلقة. انتظر اكتمالها قبل تحديث البيانات.");
+  localStorage.removeItem(managerCacheKey(actorId));
+  localStorage.removeItem(managerWarningKey(actorId));
+  window.location.reload();
+};
 window.__factoryDatabaseSyncNow = async () => { await flushQueue(); await persistState(getState()); };
 async function reconnectDatabase() {
   if (conflictWriteLock || conflictRecovery().hasBlock() || getQueue().length) {
