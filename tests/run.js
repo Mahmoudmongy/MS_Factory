@@ -564,6 +564,9 @@ const viewerTemplate=await ev(()=>{applyEmployeePermissionTemplate('viewer');ret
 ok('read-only employee template does not grant edit or delete rights',viewerTemplate.includes('rep')&&viewerTemplate.includes('tl')&&!viewerTemplate.includes('edit')&&!viewerTemplate.includes('del'),viewerTemplate);
 const cloudPermissionMatrix=await ev(()=>{const previous=window.__factoryAuthProfile,previousTab=tab;window.__factoryAuthProfile={is_admin:false,permissions:{inventory:true,edit:false,delete:false}};tab='stock';const read=can(),editDenied=!can('edit'),deleteDenied=!can('del');window.__factoryAuthProfile.permissions.edit=true;const editAllowed=can('edit'),deleteStillDenied=!can('del');window.__factoryAuthProfile=previous;tab=previousTab;return {read,editDenied,deleteDenied,editAllowed,deleteStillDenied};});
 ok('cloud employee controls match module, edit and delete permissions',cloudPermissionMatrix.read&&cloudPermissionMatrix.editDenied&&cloudPermissionMatrix.deleteDenied&&cloudPermissionMatrix.editAllowed&&cloudPermissionMatrix.deleteStillDenied,cloudPermissionMatrix);
+const ownerOnlyScreens=await ev(()=>({settings:CLOUD_SCREEN_PERMISSIONS.set===null,assistant:CLOUD_SCREEN_PERMISSIONS.ai==='reports'}));
+ok('cloud employees cannot open owner-only settings; assistant access follows reports permission',ownerOnlyScreens.settings&&ownerOnlyScreens.assistant,ownerOnlyScreens);
+
 }else ok('table column chooser is present on operational tables',false,columnUi);
 await p.keyboard.type(" XYZ");await p.waitForTimeout(180);
 const continuedSearch=await p.locator('#m input[data-filter-key="cust"][data-filter-id="q"]').inputValue();
