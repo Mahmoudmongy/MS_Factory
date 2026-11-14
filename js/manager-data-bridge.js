@@ -307,8 +307,8 @@ function mapManagerDataToState(data) {
     const map = sourceMaps[row.source_record_type], rid = map && external ? map.get(external) || 0 : 0;
     const parent=source==="sales_invoices"||source==="purchase_invoices"?invoiceRecordByExternal.get(external):source==="credit_notes"||source==="debit_notes"?returnRecordByExternal.get(external):source==="production_orders"?productionRecordByExternal.get(external):source==="inventory_write_offs"?writeoffRecordByExternal.get(external):null;
     const parentRaw=parent?.raw||{},location=source==="sales_invoices"?rawText(parentRaw,"SalesInventoryLocation","InventoryLocation"):source==="purchase_invoices"?rawText(parentRaw,"PurchaseInventoryLocation","InventoryLocation"):source==="inventory_write_offs"?(parent?.inventory_location_id||rawText(parentRaw,"InventoryLocation")):rawText(parentRaw,"SalesInventoryLocation","PurchaseInventoryLocation","InventoryLocation");
-    const movementWarehouse=whId(location||rawText(raw,"InventoryLocation","location")||product.warehouse);
-    mv.push({ d:row.transaction_date || "", ts:dateMs(row.created_at), iid:productIds.get(product.id), v:"-", q:sign*absQty, val:sign*value, ref:row.reference || "", pid:partnerId(row.customer_id || row.supplier_id), rid, src, wh:movementWarehouse });
+    const rawLocation=rawText(raw,"InventoryLocation","location"),explicitLocation=!!(location||rawLocation),movementWarehouse=whId(location||rawLocation||product.warehouse);
+    mv.push({ d:row.transaction_date || "", ts:dateMs(row.created_at), iid:productIds.get(product.id), v:"-", q:sign*absQty, val:sign*value, ref:row.reference || "", pid:partnerId(row.customer_id || row.supplier_id), rid, src, wh:movementWarehouse, whSource:explicitLocation?"source":"default" });
   }
 
   // Reconcile each warehouse's movement history to its current imported stock balance.
@@ -318,7 +318,10 @@ function mapManagerDataToState(data) {
   const openingDate=allMovementDates.length?new Date(new Date(allMovementDates[0]+"T00:00:00").getTime()-86400000).toISOString().slice(0,10):"1970-01-01";
   for(const item of items){for(const [warehouse,location] of Object.entries(item.loc||{})){for(const [variant,quantity] of Object.entries(location.st||{})){const key=String(item.id)+"|"+String(variant||"-")+"|"+String(warehouse),sum=movementTotals.get(key)||{q:0,val:0},openingQty=num(quantity)-sum.q,openingValue=num(location.val)-sum.val;if(Math.abs(openingQty)>.0001||Math.abs(openingValue)>.005){mv.push({d:openingDate,ts:dateMs(openingDate),iid:item.id,v:variant||"-",q:openingQty,val:openingValue,ref:"رصيد افتتاحي مستورد من Manager.io",pid:0,rid:0,src:"opening",wh:num(warehouse),legacyManager:true});}}}}
   const ledgerDebit=ledger.reduce((a,x)=>a+num(x.debit),0),ledgerCredit=ledger.reduce((a,x)=>a+num(x.credit),0);
-  const inventoryQuantity=inventory.reduce((a,x)=>a+num(x.quantity),0),locationQuantity=(data.inventoryLocationBalances||[]).reduce((a,x)=>a+num(x.quantity),0);
+  const inventoryQuantity=inventory.reduce((a,x)=>a+num(x.quantity),0),locationQuantity=locationBalances.reduce((a,x)=>a+num(x.quantity),0);
+  const inventoryByProductCheck=new Map(),locationByProductCheck=new Map();for(const x of inventory)inventoryByProductCheck.set(String(x.product_id),(inventoryByProductCheck.get(String(x.product_id))||0)+num(x.quantity));for(const x of locationBalances)locationByProductCheck.set(String(x.product_id),(locationByProductCheck.get(String(x.product_id))||0)+num(x.quantity));
+  const allProductKeys=new Set([...inventoryByProductCheck.keys(),...locationByProductCheck.keys()]),inventoryMismatchCount=[...allProductKeys].filter(k=>Math.abs((inventoryByProductCheck.get(k)||0)-(locationByProductCheck.get(k)||0))>.001).length;
+  const multiWarehouseItems=new Set(items.filter(i=>Object.keys(i.loc||{}).length>1).map(i=>i.id));
   const managerBridgeWarnings={
     unlinkedVoucherLines:voucherLines.filter(x=>!x.voucher_id&&x.line_type!=="opening_balance").length,
     invoiceLinesWithoutProduct:invoiceLines.filter(x=>x.source_line_kind==="nested_detail"&&!x.product_id).length,
@@ -326,7 +329,8 @@ function mapManagerDataToState(data) {
     vouchersRecoveredFromLedger:vouchers.filter(v=>!voucherLines.some(l=>String(l.voucher_id)===String(v.id)&&l.line_type!=="opening_balance")).length,
     productionOrdersUsingRawBomFallback:production.filter(o=>!(materialsByOrder.get(String(o.id))||[]).length&&Array.isArray(o.raw?.BillOfMaterials)&&o.raw.BillOfMaterials.length>0).length,
     ledgerBalanced:Math.abs(ledgerDebit-ledgerCredit)<0.01,
-    inventoryReconciled:Math.abs(inventoryQuantity-locationQuantity)<0.001
+    inventoryReconciled:Math.abs(inventoryQuantity-locationQuantity)<0.001&&inventoryMismatchCount===0,
+    movementRowsUsingDefaultWarehouse:mv.filter(m=>multiWarehouseItems.has(m.iid)&&m.whSource==="default").length
   };
   const curs = ["EGP","USD","EUR",...currencies.map(c=>c.code).filter(Boolean)];
   return { accts:accounts.map(a=>({ id:acctIds.get(a.id), cloudId:sourceKey(a), code:a.account_code || "", name:a.name || "", t:accountType(a.account_type), k:accountRole(a.account_role), cash:!!a.is_cash_account, cur:a.currency_code || "EGP", parentId:acctIds.get(a.parent_account_id)||null, legacyManager:true })), partners, wh, items, docs, vch, je, L, po, wo, mv, codes:[], emp:[], curs:[...new Set(curs)], managerBridgeWarnings, managerBridgeVersion:1 };
