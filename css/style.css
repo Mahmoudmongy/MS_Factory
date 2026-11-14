@@ -700,3 +700,11 @@ button,input,select,table,textarea{font-family:inherit}
  #top #thb{width:28px!important;min-width:28px!important;max-width:28px!important}
  #top #who{width:66px!important;min-width:66px!important;max-width:66px!important}
 }
+
+/* Override legacy nth-child sizing for the two navigation hit areas. */
+@media(max-width:860px){
+ #top>.top-nav:nth-child(2),#top>.top-nav:nth-child(3){width:28px!important;min-width:28px!important;max-width:28px!important;height:30px!important;min-height:30px!important;max-height:30px!important;box-sizing:border-box!important;padding:2px!important}
+}
+@media(max-width:380px){
+ #top>.top-nav:nth-child(2),#top>.top-nav:nth-child(3){width:24px!important;min-width:24px!important;max-width:24px!important}
+}
