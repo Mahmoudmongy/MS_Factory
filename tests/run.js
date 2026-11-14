@@ -572,6 +572,7 @@ ok('cloud employee controls match module, edit and delete permissions',cloudPerm
 const ownerOnlyScreens=await ev(()=>{const p=globalThis.__factoryTestHooks.screenPermissions();return {settings:p.set===null,assistant:p.ai==='reports'};});
 ok('cloud employees cannot open owner-only settings; assistant access follows reports permission',ownerOnlyScreens.settings&&ownerOnlyScreens.assistant,ownerOnlyScreens);
 await ev(()=>globalThis.__factoryTestHooks.openCustomerScreen());
+await p.locator('#m input[data-filter-key="cust"][data-filter-id="q"]').fill('محلات');
 await p.locator('#m input[data-filter-key="cust"][data-filter-id="q"]').focus();
 await p.keyboard.type(" XYZ");await p.waitForTimeout(180);
 const continuedSearch=await p.locator('#m input[data-filter-key="cust"][data-filter-id="q"]').inputValue();
