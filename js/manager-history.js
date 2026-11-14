@@ -82,20 +82,24 @@ function ensureUi() {
   const top = $('#top');
   const tabsBar = $('#tabs');
   if (!top || !tabsBar) return;
-  const launcher = document.createElement('span');
-  launcher.id = 'manager-history-launcher';
-  launcher.style.cssText = 'display:inline-flex;align-items:center;gap:6px;max-width:min(55vw,520px);vertical-align:middle;';
+  const existingToolbar = $('#factory-audit-launcher');
+  const launcher = existingToolbar || document.createElement('div');
+  if (!existingToolbar) {
+    launcher.id = 'manager-history-launcher';
+    launcher.className = 'factory-history-toolbar';
+    launcher.style.cssText = 'display:flex;align-items:center;justify-content:flex-start;gap:5px;flex-wrap:wrap;padding:3px 10px;background:var(--bg,#f7f8fa);min-height:34px;';
+  }
   const button = document.createElement('button');
   button.id='manager-history-open';
   button.type='button';
-  button.className='g';
-  button.textContent='سجل Manager.io';
+  button.className='g factory-history-icon';
+  button.innerHTML='<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 4.8A2.8 2.8 0 0 1 6.8 2H20v17H6.8A2.8 2.8 0 0 0 4 21.8z"/><path d="M4 5v16.8M8 6h8M8 10h8M8 14h5"/></svg>';
   button.title='عرض البيانات التاريخية المنقولة من Manager.io';
-  button.style.cssText='white-space:nowrap;font-weight:700;min-height:34px';
+  button.setAttribute('aria-label',button.title);
+  button.style.cssText='white-space:nowrap;min-height:28px;width:30px;min-width:30px;height:28px;padding:3px;';
   button.addEventListener('click',openPanel);
-  launcher.appendChild(button);
-  const netButton=$('#net');
-  if(netButton?.parentNode)netButton.parentNode.insertBefore(launcher,netButton.nextSibling);else top.appendChild(launcher);
+  if (existingToolbar) launcher.insertBefore(button,launcher.firstChild);
+  else { launcher.appendChild(button); top.insertAdjacentElement('afterend',launcher); }
   const moveConflictExport=()=>{
     const notice=$('#factory-conflict-export-notice');
     if(!notice)return;

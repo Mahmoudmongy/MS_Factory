@@ -29,12 +29,14 @@ function ensureUi() {
   if (!tabs?.parentNode) return;
   launcher = document.createElement('div');
   launcher.id = 'factory-audit-launcher';
-  launcher.style.cssText = 'display:flex;justify-content:flex-end;align-items:center;gap:7px;flex-wrap:wrap;padding:5px 12px;background:var(--bg,#f7f8fa)';
+  launcher.className = 'factory-history-toolbar';
+  launcher.style.cssText = 'display:flex;justify-content:flex-start;align-items:center;gap:5px;flex-wrap:wrap;padding:3px 10px;background:var(--bg,#f7f8fa);min-height:34px';
   const button = document.createElement('button');
-  button.id = 'factory-audit-open'; button.type = 'button'; button.className = 'g';
-  button.textContent = text('سجل التدقيق والتراجع','Audit log & safe undo');
-  button.title = text('عرض سجل تغييرات قاعدة البيانات والتراجع الآمن','View database change history and safe undo');
-  button.style.cssText = 'white-space:normal;min-height:34px';
+  button.id = 'factory-audit-open'; button.type = 'button'; button.className = 'g factory-history-icon';
+  button.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 4 6v5c0 5 3.4 8.4 8 10 4.6-1.6 8-5 8-10V6z"/><path d="m8.5 12 2.2 2.2 4.8-5"/></svg>';
+  button.title = text('سجل التدقيق والتراجع الآمن','Audit log & safe undo');
+  button.setAttribute('aria-label',button.title);
+  button.style.cssText = 'white-space:normal;min-height:28px;width:30px;min-width:30px;height:28px;padding:3px';
   button.addEventListener('click', openPanel);
   const managerButton = document.getElementById('manager-history-open');
   if (managerButton?.parentNode) {
@@ -116,7 +118,7 @@ async function openPanel() {
 function closePanel(){if(panel)panel.style.display='none';document.body.style.overflow='';}
 function applyLanguage() {
   const button=document.getElementById('factory-audit-open');
-  if(button){button.textContent=text('سجل التدقيق والتراجع','Audit log & safe undo');button.title=text('عرض سجل تغييرات قاعدة البيانات والتراجع الآمن','View database change history and safe undo');}
+  if(button){button.title=text('سجل التدقيق والتراجع الآمن','Audit log & safe undo');button.setAttribute('aria-label',button.title);}
   if(!panel)return;
   panel.dir=english()?'ltr':'rtl';
   panel.setAttribute('aria-label',text('سجل التدقيق','Audit log'));

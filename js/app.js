@@ -18,7 +18,7 @@ const SYS_ACCOUNTS=(S.accts||[]).map(x=>({...x}));
 window.__factoryDatabaseFirst=true;
 window.__factoryGetState=()=>S;
 window.__factoryReplaceArrays=(data)=>{if(!data||typeof data!=="object")return;for(const [k,v] of Object.entries(data)){if(Array.isArray(v))S[k]=v;else if(k==="__meta"&&v&&typeof v==="object")Object.assign(S,v);}cachePublicFactoryBranding();try{render()}catch(e){}};
-const sv=()=>{try{S.pend=(S.pend||0)+1;if(window.__factoryDatabaseFirstFailed&&navigator.onLine){alert("تعذر الاتصال بقاعدة البيانات. لم يتم تأكيد حفظ العملية؛ حاول مرة أخرى بعد عودة الاتصال.");return;}if(window.__factoryDatabaseFirstReady&&typeof window.__factoryPersistState==="function"){window.__factoryPersistState(S).catch(e=>{console.error("Database save failed:",e);alert(e.message||"تعذر حفظ التغييرات في قاعدة البيانات");});}else if(!navigator.onLine){localStorage.setItem("mgr6",JSON.stringify(S));localStorage.setItem("mgr6-sync-pending",JSON.stringify({at:Date.now(),pend:S.pend}));}else{alert("البرنامج لسه بيجهز الاتصال بقاعدة البيانات. انتظر لحظات ثم أعد المحاولة.");return;}}catch(e){console.error("State save failed:",e)}};
+const sv=()=>{try{S.pend=(S.pend||0)+1;if(window.__factoryDatabaseFirstFailed&&navigator.onLine){alert("تعذر الاتصال بقاعدة البيانات. لم يتم تأكيد حفظ العملية؛ حاول مرة أخرى بعد عودة الاتصال.");return Promise.resolve(false);}if(window.__factoryDatabaseFirstReady&&typeof window.__factoryPersistState==="function"){return Promise.resolve(window.__factoryPersistState(S)).then(()=>true).catch(e=>{console.error("Database save failed:",e);alert(e.message||"تعذر حفظ التغييرات في قاعدة البيانات");return false;});}else if(!navigator.onLine){localStorage.setItem("mgr6",JSON.stringify(S));localStorage.setItem("mgr6-sync-pending",JSON.stringify({at:Date.now(),pend:S.pend}));return Promise.resolve(true);}else{alert("البرنامج لسه بيجهز الاتصال بقاعدة البيانات. انتظر لحظات ثم أعد المحاولة.");return Promise.resolve(false);}}catch(e){console.error("State save failed:",e);return Promise.resolve(false)}};
 const TN={sale:"فاتورة بيع",pur:"فاتورة شراء",sret:"إشعار دائن (مرتجع بيع)",pret:"إشعار مدين (مرتجع شراء)"},PF={sale:"SA",pur:"PU",sret:"SR",pret:"RP"},CT={mfg:"تصنيع",sup:"مشتريات"},TT={A:"الأصول",L:"الالتزامات",Q:"حقوق الملكية",I:"الإيرادات",X:"المصروفات"};
 /* ===== ledger + stock core ===== */
 const ACCOUNT_AR={"Accounts receivable":"العملاء","Accounts payable":"الموردون","Cash & cash equivalents":"النقدية وما في حكمها","Cash and cash equivalents":"النقدية وما في حكمها","Inventory":"المخزون","Inventory - cost":"تكلفة المخزون","Sales":"المبيعات","Cost of sales":"تكلفة المبيعات","Retained earnings":"الأرباح المحتجزة","Owners equity":"حقوق الملكية"},accountLabel=a=>!LANGEN?(ACCOUNT_AR[a?.name]||a?.name||""):(a?.name||"");
@@ -1018,7 +1018,7 @@ saveAcc=factorySaveAcc;
 function factoryEditAcc(id){if(!can("edit"))return;const a=ac_(id);if(!a.id)return;sh('<h3>تعديل الحساب</h3><input id="an2" value="'+factoryEsc(a.name)+'" placeholder="اسم الحساب"><label>الحساب الرئيسي</label><select id="ap2"><option value="">حساب رئيسي</option>'+accountParentOptions(id)+'</select><div class="row"><button onclick="saveAccName('+JSON.stringify(String(id))+')">حفظ</button>'+bk+'</div>');$("#ap2").value=a.parentId||"";}
 editAcc=factoryEditAcc;
 
-function factorySaveAccName(id){if(!can("edit"))return;const a=ac_(id),n=$("#an2").value.trim(),parent=$("#ap2").value||null;if(!a.id||!n)return;if(S.accts.some(x=>String(x.id)!==String(id)&&x.name===n)){toast("يوجد حساب بنفس الاسم");return}if(parent){const p=ac_(parent);if(!p.id||p.t!==a.t||cur_(p)!==cur_(a)||accountDescendants(id).some(x=>String(x.id)===String(parent))){toast("الحساب الرئيسي غير صالح أو يسبب دورة");return}}if(!guard())return;a.name=n;a.parentId=parent;sv();toast("تم تعديل الحساب");cl();}
+async function factorySaveAccName(id){if(!can("edit"))return;const a=ac_(id),n=$("#an2").value.trim(),parent=$("#ap2").value||null;if(!a.id||!n)return;if(S.accts.some(x=>String(x.id)!==String(id)&&x.name===n)){toast("يوجد حساب بنفس الاسم");return}if(parent){const p=ac_(parent);if(!p.id||p.t!==a.t||cur_(p)!==cur_(a)||accountDescendants(id).some(x=>String(x.id)===String(parent))){toast("الحساب الرئيسي غير صالح أو يسبب دورة");return}}if(!guard())return;const previous={name:a.name,parentId:a.parentId};a.name=n;a.parentId=parent;const saved=await sv();if(!saved){a.name=previous.name;a.parentId=previous.parentId;toast("لم يتم حفظ تعديل الحساب؛ تم الاحتفاظ بالبيانات الأصلية ويمكنك إعادة المحاولة");return}toast("تم تعديل الحساب");cl();}
 saveAccName=factorySaveAccName;
 
 function whChildren(id){return S.wh.filter(w=>String(w.parentId||"")===String(id||""));}
@@ -1032,7 +1032,7 @@ wForm=factoryWForm;
 function factoryEditWh(id){if(!can("edit"))return;const w=S.wh.find(x=>String(x.id)===String(id));if(!w)return;sh('<h3>تعديل موقع التخزين</h3><input id="wn2" value="'+factoryEsc(w.name)+'"><label>يتبع المخزن</label><select id="wnparent2"><option value="">مخزن رئيسي</option>'+warehouseParentOptions(id)+'</select><div class="row"><button onclick="saveWh('+JSON.stringify(String(id))+')">حفظ</button>'+bk+'</div>');$("#wnparent2").value=w.parentId||"";}
 editWh=factoryEditWh;
 
-function factorySaveWh(id){if(!can("edit"))return;const w=S.wh.find(x=>String(x.id)===String(id)),n=$("#wn2").value.trim(),parent=$("#wnparent2").value||null;if(!w||!n)return;if(S.wh.some(x=>String(x.id)!==String(id)&&x.name===n&&String(x.parentId||"")===String(parent||""))){toast("يوجد موقع بنفس الاسم تحت نفس المخزن");return}if(parent&&(String(parent)===String(id)||whDescendants(id).some(x=>String(x.id)===String(parent)))){toast("لا يمكن نقل المخزن إلى نفسه أو إلى أحد فروعه");return}if(!guard())return;w.name=n;w.parentId=parent;sv();toast("تم تعديل موقع التخزين");cl();}
+async function factorySaveWh(id){if(!can("edit"))return;const w=S.wh.find(x=>String(x.id)===String(id)),n=$("#wn2").value.trim(),parent=$("#wnparent2").value||null;if(!w||!n)return;if(S.wh.some(x=>String(x.id)!==String(id)&&x.name===n&&String(x.parentId||"")===String(parent||""))){toast("يوجد موقع بنفس الاسم تحت نفس المخزن");return}if(parent&&(String(parent)===String(id)||whDescendants(id).some(x=>String(x.id)===String(parent)))){toast("لا يمكن نقل المخزن إلى نفسه أو إلى أحد فروعه");return}if(!guard())return;const previous={name:w.name,parentId:w.parentId};w.name=n;w.parentId=parent;const saved=await sv();if(!saved){w.name=previous.name;w.parentId=previous.parentId;toast("لم يتم حفظ تعديل المخزن؛ تم الاحتفاظ بالبيانات الأصلية ويمكنك إعادة المحاولة");return}toast("تم تعديل موقع التخزين");cl();}
 saveWh=factorySaveWh;
 
 function factoryAddWh(){const n=$("#wn").value.trim(),parent=$("#wnparent")?.value||null;if(!n)return;if(S.wh.some(w=>w.name===n&&String(w.parentId||"")===String(parent||""))){toast("المخزن موجود بالفعل تحت نفس المستوى");return}if(!guard())return;S.wh.push({id:uid(),name:n,parentId:parent});sv();cl();}
@@ -1157,14 +1157,15 @@ updateColumnChooserLanguage();
 
   vBank = function(){
     const k="bank",q=fv(k,"q")||"",currency=fv(k,"cur")||"";
-    const cash=S.accts.filter(a=>a.cash),children=id=>cash.filter(a=>String(a.parentId||"")===String(id));
+    const cash=S.accts.filter(a=>a.cash);const children=id=>{const out=[],seen=new Set([String(id)]);const walk=parent=>S.accts.filter(a=>String(a.parentId||"")===String(parent||"")).forEach(a=>{if(seen.has(String(a.id)))return;seen.add(String(a.id));if(a.cash)out.push(a);else walk(a.id)});walk(id);return out};
+    const hasCashAncestor=a=>{let parent=a.parentId;const seen=new Set();while(parent!==null&&parent!==undefined&&parent!==""){const p=S.accts.find(x=>String(x.id)===String(parent));if(!p||seen.has(String(p.id)))break;if(p.cash)return true;seen.add(String(p.id));parent=p.parentId}return false};
     const matches=a=>ci(a.name,q)||ci(a.code,q)||children(a.id).some(matches);
     const total=(a,seen)=>{seen=seen||new Set();if(seen.has(String(a.id)))return 0;seen.add(String(a.id));return balc(a.id,"",S.per.to)+children(a.id).reduce((n,x)=>n+total(x,seen),0)};
     const totals={};cash.forEach(a=>{if(!children(a.id).length)totals[cur_(a)]=(totals[cur_(a)]||0)+balc(a.id,"",S.per.to)});
     const row=(a,level)=>{const kids=children(a.id),closed=localStorage.getItem("factory-account-collapsed:"+a.id)==="1";
       return '<tr><td style="padding-inline-start:'+(10+level*20)+'px">'+(kids.length?'<button class="g account-tree-toggle" title="إظهار أو إخفاء الحسابات الفرعية" aria-label="إظهار أو إخفاء الحسابات الفرعية" onclick="toggleAccountTree('+JSON.stringify(String(a.id))+')">'+(closed?"▸":"▾")+'</button> ':"")+factoryEsc(accountLabel(a))+'</td><td>'+factoryEsc(cur_(a))+'</td><td>'+lk(cf(a,total(a)),'drillAcct('+a.id+',\'\',\''+S.per.to+'\')')+'</td><td>'+ (cur_(a)==="EGP"?"—":f(bal(a.id,"",S.per.to))+" ج.م")+'</td><td>'+(can("edit")?'<button class="g" title="تعديل الحساب" aria-label="تعديل الحساب" onclick="editAcc('+JSON.stringify(String(a.id))+')">✎</button>':"")+'</td></tr>'+(closed?"":kids.filter(matches).map(x=>row(x,level+1)).join(""));
     };
-    const roots=cash.filter(a=>!cash.some(p=>String(p.id)===String(a.parentId))&&(!currency||cur_(a)===currency)&&matches(a));
+    const roots=cash.filter(a=>!hasCashAncestor(a)&&(!currency||cur_(a)===currency)&&matches(a));
     return ph(N.bank,'<button class="new" onclick="bForm()">+ حساب نقدي / بنك جديد</button>')+
       fbar(k,[["q","text","اسم أو كود الحساب"],["cur","sel","العملة",["",...S.curs]]])+
       '<table class="l"><thead><tr><th>الحساب</th><th>العملة</th><th>الرصيد بعملة الحساب</th><th>'+(LANGEN?"EGP equivalent":"المعادل بالجنيه")+'</th><th>إجراءات</th></tr></thead><tbody>'+
@@ -1255,3 +1256,95 @@ applyPref=function(){
   factoryApplyPrefSummaryRefresh();
   document.querySelectorAll("table.l").forEach(table=>{if(table.__factorySummaryMeta)factoryUpdateTableSummary(table)});
 };
+
+/* Compact icon-only actions and fixed-width, wrapping tables. */
+const factoryActionSvg={view:'<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2.5 12s3.4-6 9.5-6 9.5 6 9.5 6-3.4 6-9.5 6-9.5-6-9.5-6Z"/><circle cx="12" cy="12" r="2.6"/></svg>',edit:'<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m4 16.8-.9 4.1 4.1-.9L20 7.2 16.8 4z"/><path d="m14.9 5.9 3.2 3.2"/></svg>',print:'<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 8V3h12v5M6 17H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><path d="M6 14h12v7H6z"/></svg>',save:'<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 3h12l4 4v14H3V3z"/><path d="M7 3v6h10V3M7 21v-8h10v8"/></svg>',delete:'<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3m3 0-1 14H7L6 7m3 4v6m6-6v6"/></svg>',share:'<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 16V3m-5 5 5-5 5 5"/><path d="M5 13v7h14v-7"/></svg>'};
+function factoryIconizeActions(root){
+  root.querySelectorAll('button:not([data-factory-iconized])').forEach(button=>{
+    if(button.closest('.factory-table-tools')||button.classList.contains('new'))return;
+    const label=(button.textContent||'').replace(/\s+/g,' ').trim().replace(/^[^\p{L}\p{N}]+/u,'').trim();
+    if(!label)return;
+    let kind='';
+    if(/^عرض(?:\s|$)/.test(label)||/^(?:فتح|تفاصيل)$/.test(label))kind='view';
+    else if(/^(?:تعديل|تحرير)(?:\s|$)/.test(label))kind='edit';
+    else if(/^طباعة(?:\s|$)/.test(label))kind='print';
+    else if(/^حفظ(?:\s|$)/.test(label))kind='save';
+    else if(/^حذف(?:\s|$)/.test(label))kind='delete';
+    else if(/^مشاركة(?:\s|$)/.test(label))kind='share';
+    if(!kind)return;
+    button.dataset.factoryIconized='1';
+    button.title=button.title||label;
+    button.setAttribute('aria-label',button.title);
+    button.classList.add('factory-icon-action');
+    button.innerHTML=factoryActionSvg[kind];
+  });
+}
+function factoryApplyFixedTableLayout(table){
+  const header=table.querySelector('thead tr')||[...table.querySelectorAll('tr')].find(row=>row.querySelector('th'));
+  if(!header)return;
+  const headers=[];[...header.children].forEach(cell=>{for(let i=0;i<Math.max(1,cell.colSpan||1);i++)headers.push(cell)});const rows=[...table.querySelectorAll('tr')].filter(row=>row!==header&&row.querySelector('td')&&!row.querySelector('[colspan]'));
+  if(!headers.length)return;
+  const wrapper=table.closest('.factory-table-scroll')||table.parentElement;
+  const widths=headers.map((cell,index)=>{
+    const name=(cell.textContent||'').trim();
+    const samples=rows.slice(0,18).map(row=>(row.children[index]?.textContent||'').trim().length);
+    const sample=Math.min(22,Math.max(0,...samples));
+    if(/إجراء|الإجراء|عمليات|action|details/i.test(name)||(!name&&rows.some(row=>row.children[index]?.querySelector('button,a'))))return 54;
+    if(/تاريخ|وقت|date|time/i.test(name))return Math.max(76,Math.min(94,48+name.length*4));
+    if(/مبلغ|إجمالي|السعر|كمية|رصيد|مدين|دائن|تكلفة|amount|total|price|quantity|balance|debit|credit/i.test(name))return 76;
+    if(/بيان|وصف|تفاصيل|ملاحظات|description|details|note/i.test(name))return Math.min(150,Math.max(112,58+sample*3));
+    if(/اسم|حساب|صنف|طرف|عميل|مورد|مخزن|name|account|item|party/i.test(name))return Math.min(142,Math.max(92,58+Math.max(name.length,sample)*3.2));
+    return Math.min(118,Math.max(68,48+Math.max(name.length,sample)*3));
+  });
+  const available=wrapper.clientWidth||wrapper.parentElement?.clientWidth||0;
+  let total=widths.reduce((sum,width)=>sum+width,0);
+  if(available>total){
+    const flexible=widths.map((width,index)=>({index,width})).filter(x=>x.width>76&&x.width!==54);
+    if(flexible.length){const extra=(available-total)/flexible.length;flexible.forEach(x=>widths[x.index]+=extra);total=available;}
+  }
+  table.querySelector('colgroup')?.remove();
+  const group=document.createElement('colgroup');
+  widths.forEach(width=>{const col=document.createElement('col');col.style.width=Math.round(width)+'px';group.appendChild(col)});
+  table.insertBefore(group,table.firstChild);const syncColumnVisibility=()=>{const cols=[...table.querySelectorAll('colgroup col')];headers.forEach((cell,index)=>{if(cols[index]&&cols[index].hidden!==!!cell.hidden)cols[index].hidden=!!cell.hidden})};syncColumnVisibility();if(!table.__factoryColumnVisibilityObserver){table.__factoryColumnVisibilityObserver=new MutationObserver(syncColumnVisibility);table.__factoryColumnVisibilityObserver.observe(table,{attributes:true,subtree:true,attributeFilter:['hidden']})}
+  table.style.display='table';table.style.tableLayout='fixed';table.style.width=Math.ceil(Math.max(total,available))+'px';table.style.minWidth=Math.ceil(widths.reduce((sum,width)=>sum+width,0))+'px';table.style.maxWidth='none';
+  wrapper.style.overflow='auto';
+  wrapper.style.maxHeight=rows.length>=8?'min(72vh, 680px)':'';
+  table.querySelectorAll('th,td').forEach(cell=>{
+    const length=(cell.textContent||'').trim().length;
+    cell.classList.toggle('factory-long-cell',length>42);
+    cell.classList.toggle('factory-very-long-cell',length>90);
+  });
+}
+const factoryEnhBeforeFixedLayout=enh;
+enh=function(){
+  factoryEnhBeforeFixedLayout();
+  const root=ACT||document;
+  root.querySelectorAll('table.l').forEach(factoryApplyFixedTableLayout);
+  factoryIconizeActions(document);
+  factoryIconizeActionLinks(document);
+};
+window.addEventListener('resize',()=>{
+  clearTimeout(window.__factoryTableResizeTimer);
+  window.__factoryTableResizeTimer=setTimeout(()=>{const root=ACT||document;root.querySelectorAll('table.l').forEach(factoryApplyFixedTableLayout)},120);
+});
+
+function factoryIconizeActionLinks(root){
+  root.querySelectorAll('a:not([data-factory-iconized])').forEach(link=>{
+    const label=(link.textContent||'').replace(/\s+/g,' ').trim();
+    let kind='';
+    if(/^(?:عرض|تفاصيل|View|Details)(?:\s|$)/i.test(label))kind='view';
+    else if(/^(?:تعديل|تحرير|Edit)(?:\s|$)/i.test(label))kind='edit';
+    else if(/^مشاركة(?:\s|$)/.test(label))kind='share';
+    if(!kind)return;
+    link.dataset.factoryIconized='1';link.title=link.title||label;link.setAttribute('aria-label',link.title);
+    link.classList.add('factory-icon-action-link');link.innerHTML=factoryActionSvg[kind];
+  });
+}
+
+if(document.body&&!window.__factoryActionObserver){
+  window.__factoryActionObserver=new MutationObserver(()=>{
+    factoryIconizeActions(document);
+    factoryIconizeActionLinks(document);
+  });
+  window.__factoryActionObserver.observe(document.body,{childList:true,subtree:true});
+}
