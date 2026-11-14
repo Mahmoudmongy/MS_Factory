@@ -17,6 +17,13 @@ BEGIN
     PERFORM set_config('role','authenticated',true);
     INSERT INTO public.factory_records(user_id,record_type,record_id,payload,version)
     VALUES(v_owner,'items',v_record_id,'{"name":"QA permission fixture"}',1);
+    v_count:=0;
+    BEGIN
+      PERFORM public.update_employee_permissions(v_employee,'{"inventory":true,"edit":false,"delete":true}'::jsonb);
+      RAISE EXCEPTION 'QA_DELETE_WITHOUT_EDIT_PERMISSION_ACCEPTED';
+    EXCEPTION WHEN invalid_parameter_value THEN v_count:=1;
+    END;
+    IF v_count<>1 THEN RAISE EXCEPTION 'QA_DELETE_REQUIRES_EDIT_NOT_ENFORCED'; END IF;
     PERFORM public.update_employee_permissions(v_employee,'{"inventory":true,"edit":false,"delete":false}'::jsonb);
     PERFORM set_config('request.jwt.claim.sub',v_employee::text,true);
     PERFORM set_config('request.jwt.claims',jsonb_build_object('sub',v_employee,'role','authenticated')::text,true);

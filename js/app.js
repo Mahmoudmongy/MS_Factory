@@ -56,7 +56,7 @@ const poCost=o=>(o.matCost||0)+(o.wc||0)+o.x.reduce((a,x)=>a+x.amt,0)+S.docs.fil
 const CLOUD_SCREEN_PERMISSIONS={sale:"invoices",sret:"invoices",pur:"invoices",pret:"invoices",rc:"invoices",py:"invoices",bank:"settings",cust:"customers",supp:"suppliers",stock:"inventory",prod:"production",coa:"settings",je:"settings",tl:"reports",emp:null,rep:"reports",ai:"reports",set:null};
 const cloudProfile=()=>window.__factoryAuthProfile||null;
 const cloudCan=(key)=>{const p=cloudProfile();if(!p)return null;if(p.is_admin===true)return true;return p.permissions?.[key]===true;};
-const can=p=>{const cp=cloudProfile();if(cp&&!cp.is_admin){const key=CLOUD_SCREEN_PERMISSIONS[tab];if(!key||cloudCan(key)!==true)return false;if(p==="edit")return cloudCan("edit")===true;if(p==="del")return cloudCan("delete")===true;return key!=="reports";}return who=="0"||((S.emp.find(e=>e.id==who)||{}).perm||[]).includes(p);};
+const can=p=>{const cp=cloudProfile();if(cp&&!cp.is_admin){const key=CLOUD_SCREEN_PERMISSIONS[tab];if(!key||cloudCan(key)!==true)return false;if(p==="edit")return cloudCan("edit")===true;if(p==="del")return cloudCan("delete")===true&&cloudCan("edit")===true;return key!=="reports";}return who=="0"||((S.emp.find(e=>e.id==who)||{}).perm||[]).includes(p);};
 /* ===== state + shell ===== */
 let tab="home",who="0",D,PS,V,J,IM="",idImg="",pe=0,dc="all",hs=[],hi=-1,TL={from:"",to:"",k:""},SF={wh:"",nm:"",b1:"",b2:"",q1:"",q2:""},R={rep:"",from:"",to:"",cat:"all",item:0,acct:0,pt:0,ds:"sale",gb:"الصنف",gc:"",ms:"amt",pa:-1,pc:-1,fields:["التاريخ","رقم الفاتورة","الطرف","الصنف","الكمية","الإجمالي"]};
 const APP_ICONS={
@@ -444,7 +444,7 @@ function employeeCloudPermissions(selected){
   inventory:selected.includes("stock"),customers:selected.includes("cust"),suppliers:selected.includes("supp"),
   production:selected.includes("prod"),reports:selected.some(x=>["rep","tl","ai"].includes(x)),
   settings:selected.some(x=>["set","coa","je","bank"].includes(x)),
-  edit:selected.includes("edit"),delete:selected.includes("del")
+  edit:selected.includes("edit"),delete:selected.includes("del")&&selected.includes("edit")
  };
 }
 function eForm(id){

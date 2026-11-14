@@ -37,6 +37,7 @@ Deno.serve(async (req: Request) => {
   const requested = body.permissions && typeof body.permissions === "object" && !Array.isArray(body.permissions) ? body.permissions as Record<string, unknown> : {};
   const permissions: Record<string, boolean> = {};
   for (const key of ALLOWED_PERMISSIONS) permissions[key] = requested[key] === true;
+  if (permissions.delete && !permissions.edit) return json(400, { error: "صلاحية الحذف تتطلب صلاحية التعديل" });
   if (!/^[a-z0-9._-]{3,40}$/.test(username)) return json(400, { error: "اسم المستخدم يجب أن يكون من 3 إلى 40 حرفاً إنجليزياً أو رقماً أو . _ -" });
   if (password.length < 8) return json(400, { error: "كلمة المرور يجب ألا تقل عن 8 أحرف" });
 
