@@ -424,7 +424,12 @@ if(typeof location!=="undefined"&&["127.0.0.1","localhost"].includes(location.ho
  globalThis.__factoryTestHooks={
   firstItem:()=>{const item=S.items[0];return item?{id:item.id,name:item.name,warehouse:whn(item.wh)}:null},
   renderProductionMaterial:qty=>{const item=S.items[0];if(!item)return false;PS.mats=[{iid:item.id,qty}];drawP();return true},
-  materialQty:index=>PS.mats[index]?.qty
+  materialQty:index=>PS.mats[index]?.qty,
+  openProductionForm:()=>{go('prod');poForm()},
+  openEmployeeForm:()=>{go('emp');eForm()},
+  applyPermissionTemplate:key=>{applyEmployeePermissionTemplate(key);return [...document.querySelectorAll('.pm:checked')].map(x=>x.value)},
+  canFor:(screen,permission,profile)=>{const previous=globalThis.__factoryAuthProfile,previousTab=tab;globalThis.__factoryAuthProfile=profile;tab=screen;const result=can(permission);globalThis.__factoryAuthProfile=previous;tab=previousTab;return result},
+  screenPermissions:()=>CLOUD_SCREEN_PERMISSIONS
  };
 }
 function drawP(){const cs=PS.cs.length?PS.cs:[""],zs=PS.zs.length?PS.zs:[""];$("#pg").innerHTML=`<table><tr><th>اللون \\ المقاس</th>${U(zs,z=>`<th>${z||"الكمية"}</th>`)}</tr>${U(cs,c=>`<tr><th>${c||"—"}</th>${U(zs,z=>`<td><input type="number" data-k="${vk(c,z)}" value="${PS.grid[vk(c,z)]||""}" placeholder="0" style="margin:0;width:70px" onchange="setG(this)"></td>`)}</tr>`)}</table><b>إجمالي القطع: <span id="gt">${subsOf().reduce((a,s)=>a+s.qty,0)}</span></b>`;
