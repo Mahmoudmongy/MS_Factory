@@ -802,5 +802,8 @@ ok('employee account creation accepts only module/edit/delete flags and owner ad
 const profileAuditMigration=fs.readFileSync(path.join(ROOT,'supabase/migrations/20261114132700_profile_audit_log.sql'),'utf8');
 const profileAuditQa=fs.readFileSync(path.join(ROOT,'tests/sql/profile-audit-qa.sql'),'utf8');
 ok('employee profile changes join the audit timeline without exposing profile undo',profileAuditMigration.includes('after insert or update or delete on public.profiles')&&profileAuditQa.includes('QA_PROFILE_AUDIT_CAPTURE_PASSED')&&fs.readFileSync(path.join(ROOT,'js/audit-trail.js'),'utf8').includes("row.record_type!=='profile'"));
+const profileSecurityMigration=fs.readFileSync(path.join(ROOT,'supabase/migrations/20261114132800_protect_profile_permissions.sql'),'utf8');
+const profileSecurityQa=fs.readFileSync(path.join(ROOT,'tests/sql/profile-self-escalation-qa.sql'),'utf8');
+ok('profile RLS cannot be bypassed to self-grant permissions or admin status',profileSecurityMigration.includes('new.permissions is distinct from old.permissions')&&profileSecurityMigration.includes('new.is_admin is distinct from old.is_admin')&&profileSecurityMigration.includes('before update on public.profiles')&&profileSecurityQa.includes('QA_PROFILE_SELF_ADMIN_ESCALATION_NOT_BLOCKED'));
 console.log(R.join('\n'));console.log(`\n${R.length-fails}/${R.length} checks passed, ${fails} failed`);process.exit(fails?1:0);
 })().catch(e=>{console.error('TEST RUN CRASHED:',e.message);process.exit(2)});
