@@ -240,7 +240,7 @@ function managerStateToRows(state) {
   return rows;
 }
 async function getManagerBridgeRows() {
-  if(!profile?.id||!ownerId)return [];
+  if(profile?.is_admin!==true||!profile?.id||!ownerId)return [];
   const cached=loadManagerCache(actorId);
   if(cached.length){window.__factoryManagerBridgeLoaded=true;return cached;}
   try{
@@ -595,6 +595,7 @@ async function bootstrap() {
 }
 window.__factoryPersistState = persistState;
 window.__factoryRefreshManagerBridge = () => {
+  if(profile?.is_admin!==true)throw new Error("تحديث بيانات Manager.io متاح لمدير النظام فقط.");
   if(!profile?.id)throw new Error("يجب تسجيل الدخول لتحديث بيانات Manager.io.");
   if(!navigator.onLine||window.__factoryOfflineMode===true)throw new Error("يلزم اتصال بالإنترنت لتحديث بيانات Manager.io.");
   if(getQueue().length)throw new Error("يوجد حفظ أو مزامنة معلقة. انتظر اكتمالها قبل تحديث البيانات.");
