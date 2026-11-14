@@ -303,8 +303,19 @@ function mapManagerDataToState(data) {
   const allMovementDates=mv.map(m=>m.d).filter(Boolean).sort();
   const openingDate=allMovementDates.length?new Date(new Date(allMovementDates[0]+"T00:00:00").getTime()-86400000).toISOString().slice(0,10):"1970-01-01";
   for(const item of items){for(const [variant,quantity] of Object.entries(item.st||{})){const key=String(item.id)+"|"+String(variant||"-"),sum=movementTotals.get(key)||{q:0,val:0};const openingQty=num(quantity)-sum.q,openingValue=num(item.val)-sum.val;if(Math.abs(openingQty)>.0001||Math.abs(openingValue)>.005){mv.push({d:openingDate,ts:dateMs(openingDate),iid:item.id,v:variant||"-",q:openingQty,val:openingValue,ref:"رصيد افتتاحي مستورد من Manager.io",pid:0,rid:0,src:"opening",legacyManager:true});}}}
+  const ledgerDebit=ledger.reduce((a,x)=>a+num(x.debit),0),ledgerCredit=ledger.reduce((a,x)=>a+num(x.credit),0);
+  const inventoryQuantity=inventory.reduce((a,x)=>a+num(x.quantity),0),locationQuantity=(data.inventoryLocationBalances||[]).reduce((a,x)=>a+num(x.quantity),0);
+  const managerBridgeWarnings={
+    unlinkedVoucherLines:voucherLines.filter(x=>!x.voucher_id).length,
+    invoiceLinesWithoutProduct:invoiceLines.filter(x=>x.source_line_kind==="nested_detail"&&!x.product_id).length,
+    journalsWithoutLedger:journals.filter(j=>!ledger.some(l=>l.source_record_type==="journal_entries"&&String(l.source_manager_key)===String(j.external_id))).length,
+    vouchersRecoveredFromLedger:vouchers.filter(v=>!voucherLines.some(l=>String(l.voucher_id)===String(v.id)&&l.line_type!=="opening_balance")).length,
+    productionOrdersUsingRawBomFallback:production.filter(o=>!(materialsByOrder.get(String(o.id))||[]).length&&Array.isArray(o.raw?.BillOfMaterials)&&o.raw.BillOfMaterials.length>0).length,
+    ledgerBalanced:Math.abs(ledgerDebit-ledgerCredit)<0.01,
+    inventoryReconciled:Math.abs(inventoryQuantity-locationQuantity)<0.001
+  };
   const curs = ["EGP","USD","EUR",...currencies.map(c=>c.code).filter(Boolean)];
-  return { accts:accounts.map(a=>({ id:acctIds.get(a.id), cloudId:sourceKey(a), code:a.account_code || "", name:a.name || "", t:accountType(a.account_type), k:accountRole(a.account_role), cash:!!a.is_cash_account, cur:a.currency_code || "EGP", parentId:acctIds.get(a.parent_account_id)||null, legacyManager:true })), partners, wh, items, docs, vch, je, L, po, wo, mv, codes:[], emp:[], curs:[...new Set(curs)], managerBridgeVersion:1 };
+  return { accts:accounts.map(a=>({ id:acctIds.get(a.id), cloudId:sourceKey(a), code:a.account_code || "", name:a.name || "", t:accountType(a.account_type), k:accountRole(a.account_role), cash:!!a.is_cash_account, cur:a.currency_code || "EGP", parentId:acctIds.get(a.parent_account_id)||null, legacyManager:true })), partners, wh, items, docs, vch, je, L, po, wo, mv, codes:[], emp:[], curs:[...new Set(curs)], managerBridgeWarnings, managerBridgeVersion:1 };
 }
 export async function loadManagerDataBridge(client, ownerId) {
   if (!client || !ownerId) return null;
