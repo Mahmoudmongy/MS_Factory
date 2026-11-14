@@ -552,7 +552,7 @@ ok('warehouse locations support nested parent-child paths and stable tree orderi
 await ev(()=>{go('prod');poForm();PS.mats=[{iid:S.items[0].id,qty:7}];drawP();});
 const matQty=p.locator('#pl input[data-mat-index="0"]');await matQty.fill("11");await matQty.press("Enter");
 const matEdit=await ev(()=>({qty:PS.mats[0]?.qty,warehouse:document.querySelector('#pl .production-material-row')?.textContent||''}));
-ok('production material rows expose editable quantities and show the source warehouse',matEdit.qty===11&&matEdit.warehouse.includes(whn(S.items[0].wh)),matEdit);
+ok('production material rows expose editable quantities and show the source warehouse',matEdit.qty===11&&matEdit.warehouse.includes(whPath(S.items[0].wh)),matEdit);
 const selectSearch=await ev(()=>{const host=document.createElement('div');host.id='qa-select-search';host.innerHTML='<select id="qa-large-select">'+Array.from({length:12},(_,i)=>'<option value="'+i+'">اختيار '+i+'</option>').join('')+'</select>';document.querySelector('#m').append(host);enhanceFactorySelects(host);return {input:!!host.querySelector('.select-search-input'),enhanced:host.querySelector('select').dataset.searchEnhanced==='1'};});
 await p.locator('#qa-select-search .select-search-input').fill('اختيار 10');
 const selectFiltered=await ev(()=>{const select=document.querySelector('#qa-large-select');return {visible:[...select.options].filter(o=>!o.hidden).map(o=>o.textContent),hidden:[...select.options].filter(o=>o.hidden).length};});
