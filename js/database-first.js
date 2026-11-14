@@ -1,6 +1,7 @@
 import { supabase } from './supabase.js';
 import { createConflictRecovery } from './conflict-recovery.js';
 import { retryStartup } from './startup-retry.mjs';
+import { loadManagerDataBridge } from './manager-data-bridge.js';
 
 const QUEUE_KEY = 'ms-factory-db-queue-v1';
 const BASELINE_KEY = 'ms-factory-db-baseline-v1';
@@ -8,6 +9,7 @@ const LAST_SYNC_KEY = 'ms-factory-db-last-sync-v1';
 const CONFLICT_REVIEW_KEY = 'ms-factory-db-conflict-review-v1';
 const CONFLICT_BLOCK_KEY = 'ms-factory-db-conflict-block-v1';
 const CACHE_PREFIX = 'ms-factory-db-cache-v1:';
+const MANAGER_CACHE_KEY = 'ms-factory-manager-bridge-v1:';
 let storageScope = 'anonymous';
 const scopedKey = key => key + ':' + storageScope;
 const conflictRecovery = () => createConflictRecovery({ scope: storageScope });
@@ -190,6 +192,46 @@ async function fetchPagedRecords(buildQuery) {
   }
   return all;
 }
+function managerCacheKey(actor) { return MANAGER_CACHE_KEY + String(actor || "anonymous"); }
+function loadManagerCache(actor) {
+  try {
+    const rows = JSON.parse(localStorage.getItem(managerCacheKey(actor)) || "[]");
+    return Array.isArray(rows) ? rows.filter(r=>r&&r.record_type&&r.record_id) : [];
+  } catch (_) { return []; }
+}
+function saveManagerCache(actor, rows) {
+  try { localStorage.setItem(managerCacheKey(actor),JSON.stringify(rows)); return true; }
+  catch (error) { console.warn("Manager bridge cache could not be saved; data will be reloaded online:",error); return false; }
+}
+function managerStateToRows(state) {
+  const rows=[];
+  for(const [type,items] of Object.entries(state||{})){
+    if(!Array.isArray(items))continue;
+    items.forEach((payload,index)=>{
+      const id=recordKey(type,payload,index);
+      rows.push({user_id:ownerId,record_type:type,record_id:id,payload:cleanPayload(payload),version:0,deleted_at:null,updated_at:null,updated_by:null,origin:"manager-import"});
+    });
+  }
+  return rows;
+}
+async function getManagerBridgeRows() {
+  if(profile?.is_admin!==true)return [];
+  const cached=loadManagerCache(actorId);
+  if(cached.length)return cached;
+  try{
+    const state=await retryStartup(()=>loadManagerDataBridge(supabase,ownerId));
+    if(!state)return [];
+    const rows=managerStateToRows(state);
+    saveManagerCache(actorId,rows);
+    window.__factoryManagerBridgeLoaded=true;
+    return rows;
+  }catch(error){
+    window.__factoryManagerBridgeError=error?.message||String(error);
+    console.error("Manager data bridge failed:",error);
+    document.dispatchEvent(new CustomEvent("factory-manager-bridge-error",{detail:{message:window.__factoryManagerBridgeError}}));
+    return [];
+  }
+}
 async function fetchAllRecords() {
   return fetchPagedRecords(() => supabase.from('factory_records')
     .select('user_id,record_type,record_id,payload,version,deleted_at,updated_at,updated_by')
@@ -205,18 +247,22 @@ async function fetchChangedRecords(since) {
     .order('updated_at').order('record_type').order('record_id'));
 }
 function hydrateFromRows(rows) {
-  const grouped = {};
-  const metaRow = rows.find(r => r.record_type === '__meta' && r.record_id === 'main' && !r.deleted_at);
-  for (const row of rows) {
+  const groupedMaps = {};
+  const orderedRows = [...(rows || [])].sort((a,b)=>(a.origin==="manager-import"?0:1)-(b.origin==="manager-import"?0:1));
+  const metaRow = orderedRows.find(r => r.record_type === '__meta' && r.record_id === 'main' && !r.deleted_at);
+  for (const row of orderedRows) {
     setBaselineRow(row);
     if (row.record_type === '__meta') continue;
-    const target = (grouped[row.record_type] ||= []);
-    if (!row.deleted_at) {
-      const payload = clone(row.payload);
-      if (payload && typeof payload === 'object' && !Array.isArray(payload)) payload._cloudRecordId = row.record_id;
-      target.push(payload);
+    const target = (groupedMaps[row.record_type] ||= new Map());
+    if (row.deleted_at) {
+      target.delete(String(row.record_id));
+      continue;
     }
+    const payload = clone(row.payload);
+    if (payload && typeof payload === 'object' && !Array.isArray(payload)) payload._cloudRecordId = row.record_id;
+    target.set(String(row.record_id),payload);
   }
+  const grouped = Object.fromEntries(Object.entries(groupedMaps).map(([type,items])=>[type,[...items.values()]]));
   for (const values of Object.values(grouped)) values.sort((a,b) => {
     const ai = Number(a?.id), bi = Number(b?.id);
     return Number.isFinite(ai) && Number.isFinite(bi) ? ai-bi : String(a?.id ?? a?.no ?? '').localeCompare(String(b?.id ?? b?.no ?? ''));
@@ -459,7 +505,8 @@ async function bootstrap() {
     clearLegacyDeviceData();
     resetLocalBusinessState();
     const cachedRows = loadCachedRows();
-    if (cachedRows.length) hydrateFromRows(cachedRows);
+    const managerRows = profile?.is_admin===true ? loadManagerCache(actorId) : [];
+    if (cachedRows.length || managerRows.length) hydrateFromRows([...managerRows,...cachedRows]);
     else snapshotBaseline(getState());
     const conflictRecoveryPending = conflictRecovery().hasBlock();
     const pendingQueue = getQueue();
@@ -486,8 +533,9 @@ async function bootstrap() {
   storageScope = ownerId;
   resetLocalBusinessState();
   const rows = await retryStartup(() => fetchAllRecords());
-  // Supabase is the only source of business records. An empty database stays empty.
-  hydrateFromRows(rows);
+  // Legacy Manager.io records remain the immutable base; factory_records overlays edits and tombstones.
+  const managerRows = await getManagerBridgeRows();
+  hydrateFromRows([...managerRows,...rows]);
   clearLegacyDeviceData();
   try { archiveLegacyQueues(); } catch (archiveError) { conflictWriteLock = true; window.__factoryDatabaseFirstFailed = true; console.error('Legacy operations remain local and are blocked from replay:', archiveError); }
   setLastSyncAt(new Date().toISOString());
@@ -531,7 +579,8 @@ async function reconnectDatabase() {
     for (const row of changed) applyRealtimeRow(row);
   } else {
     const initialRows = await retryStartup(() => fetchAllRecords());
-    hydrateFromRows(initialRows);
+    const managerRows = await getManagerBridgeRows();
+    hydrateFromRows([...managerRows,...initialRows]);
     setLastSyncAt(new Date().toISOString());
   }
   for (const op of getQueue()) applyOperationToState(op);
