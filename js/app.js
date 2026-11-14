@@ -24,8 +24,8 @@ const TN={sale:"فاتورة بيع",pur:"فاتورة شراء",sret:"إشعا�
 const ACCOUNT_AR={"Accounts receivable":"العملاء","Accounts payable":"الموردون","Cash & cash equivalents":"النقدية وما في حكمها","Cash and cash equivalents":"النقدية وما في حكمها","Inventory":"المخزون","Inventory - cost":"تكلفة المخزون","Sales":"المبيعات","Cost of sales":"تكلفة المبيعات","Retained earnings":"الأرباح المحتجزة","Owners equity":"حقوق الملكية"},accountLabel=a=>!LANGEN?(ACCOUNT_AR[a?.name]||a?.name||""):(a?.name||"");
 const ak=k=>{let a=S.accts.find(x=>x.k==k);if(!a){const t=SYS_ACCOUNTS.find(x=>x.k==k);if(!t)throw new Error("الحساب الافتراضي غير معروف: "+k);a={...t,id:uid()};S.accts.push(a)}return a.id},ac_=id=>S.accts.find(a=>a.id==id)||{},an=id=>accountLabel(ac_(id)),nat=a=>"AX".includes(a.t)?1:-1;
 const bal=(id,fr,to)=>S.L.filter(l=>l.a==id&&(!fr||l.d>=fr)&&(!to||l.d<=to)).reduce((s,l)=>s+l.dr-l.cr,0)*nat(ac_(id));
-const it_=id=>S.items.find(i=>i.id==id),tq=i=>Object.values(i.st||{}).reduce((a,b)=>a+(+b||0),0),av=i=>tq(i)>0?i.val/tq(i):i.buy,stockAt=(i,wh)=>S.mv.filter(m=>m.iid==i.id&&(m.wh||i.wh)==wh).reduce((a,m)=>a+(+m.q||0),0),stockValueAt=(i,wh)=>S.mv.filter(m=>m.iid==i.id&&(m.wh||i.wh)==wh).reduce((a,m)=>a+(+m.val||0),0),avAt=(i,wh)=>stockAt(i,wh)>0?stockValueAt(i,wh)/stockAt(i,wh):av(i),pn=id=>(S.partners.find(p=>p.id==id)||{}).name||"",whn=id=>whPath(id);function whTree(){
- const all=S.wh||[],byParent=new Map(),out=[],seen=new Set();
+const it_=id=>S.items.find(i=>i.id==id),tq=i=>Object.values(i.st||{}).reduce((a,b)=>a+(+b||0),0),av=i=>tq(i)>0?i.val/tq(i):i.buy,stockAt=(i,wh)=>S.mv.filter(m=>m.iid==i.id&&(m.wh||i.wh)==wh).reduce((a,m)=>a+(+m.q||0),0),stockValueAt=(i,wh)=>S.mv.filter(m=>m.iid==i.id&&(m.wh||i.wh)==wh).reduce((a,m)=>a+(+m.val||0),0),avAt=(i,wh)=>stockAt(i,wh)>0?stockValueAt(i,wh)/stockAt(i,wh):av(i),pn=id=>(S.partners.find(p=>p.id==id)||{}).name||"",whn=id=>whPath(id);function buildWarehouseTree(all){
+ all=Array.isArray(all)?all:[];const byParent=new Map(),out=[],seen=new Set();
  const parentOf=w=>all.some(x=>String(x.id)===String(w.parentId))&&String(w.parentId)!==String(w.id)?String(w.parentId):"root";
  for(const w of all){const p=parentOf(w);if(!byParent.has(p))byParent.set(p,[]);byParent.get(p).push(w)}
  const walk=(parent,depth)=>{for(const w of byParent.get(parent)||[]){const id=String(w.id);if(seen.has(id))continue;seen.add(id);out.push({...w,_depth:depth});walk(id,depth+1)}};
@@ -33,17 +33,19 @@ const it_=id=>S.items.find(i=>i.id==id),tq=i=>Object.values(i.st||{}).reduce((a,
  for(const w of all)if(!seen.has(String(w.id))){seen.add(String(w.id));out.push({...w,_depth:0});walk(String(w.id),1)}
  return out;
 }
-function whPath(id){
- const all=S.wh||[],parts=[],seen=new Set();let current=all.find(w=>String(w.id)===String(id));
+function buildWarehousePath(all,id){
+ all=Array.isArray(all)?all:[];const parts=[],seen=new Set();let current=all.find(w=>String(w.id)===String(id));
  while(current&&!seen.has(String(current.id))){seen.add(String(current.id));parts.unshift(current.name);current=all.find(w=>String(w.id)===String(current.parentId))}
  return parts.join(" / ")||"";
 }
+function whTree(){return buildWarehouseTree(S.wh||[])}
+function whPath(id){return buildWarehousePath(S.wh||[],id)}
 function whDescendants(id,seen=new Set()){
  const key=String(id);if(seen.has(key))return [];seen.add(key);
  const children=(S.wh||[]).filter(w=>String(w.parentId)===key);
  return children.flatMap(w=>[w.id,...whDescendants(w.id,seen)]);
 }
-globalThis.whTree=whTree;globalThis.whPath=whPath;globalThis.whDescendants=whDescendants;
+globalThis.whTree=whTree;globalThis.whPath=whPath;globalThis.whDescendants=whDescendants;globalThis.buildWarehouseTree=buildWarehouseTree;globalThis.buildWarehousePath=buildWarehousePath;
 
 function rev(rid,src){const match=x=>x.rid==rid&&(!src||x.src==src);S.L=S.L.filter(l=>!match(l));S.mv=S.mv.filter(m=>{if(match(m)){const i=it_(m.iid);if(i){i.st[m.v]-=m.q;i.val-=m.val}return false}return true})}
 function ensureItem(name,wh,unit,buy){let i=S.items.find(x=>x.name==name&&x.wh==wh)||S.items.find(x=>x.name==name);if(!i){const itemId=uid();i={id:itemId,cloudId:String(itemId),name,sku:"IT"+itemId.toString(36).toUpperCase(),wh,unit:unit||"قطعة",buy:buy||0,retail:0,wholesale:0,img:"",st:{},val:0};S.items.push(i)}return i}
@@ -418,6 +420,13 @@ function setG(e){PS.grid[e.dataset.k]=+e.value||0;$("#gt").textContent=subsOf().
 function addM(w){const q=+$("#mq"+w).value;if(!q)return;PS.mats.push({iid:+$("#ms"+w).value,qty:q});$("#mq"+w).value="";drawP()}
 function addX(){const m=+$("#xm").value;if(!m)return;PS.x.push({a:+$("#xa").value,amt:m,note:$("#xn").value.trim()});clr(["xm","xn"]);drawP()}
 function setMatQty(index,value){if(!PS.mats[index])return;PS.mats[index].qty=Math.max(0,Number(value)||0);drawP()}
+if(typeof location!=="undefined"&&["127.0.0.1","localhost"].includes(location.hostname)){
+ globalThis.__factoryTestHooks={
+  firstItem:()=>{const item=S.items[0];return item?{id:item.id,name:item.name,warehouse:whn(item.wh)}:null},
+  renderProductionMaterial:qty=>{const item=S.items[0];if(!item)return false;PS.mats=[{iid:item.id,qty}];drawP();return true},
+  materialQty:index=>PS.mats[index]?.qty
+ };
+}
 function drawP(){const cs=PS.cs.length?PS.cs:[""],zs=PS.zs.length?PS.zs:[""];$("#pg").innerHTML=`<table><tr><th>اللون \\ المقاس</th>${U(zs,z=>`<th>${z||"الكمية"}</th>`)}</tr>${U(cs,c=>`<tr><th>${c||"—"}</th>${U(zs,z=>`<td><input type="number" data-k="${vk(c,z)}" value="${PS.grid[vk(c,z)]||""}" placeholder="0" style="margin:0;width:70px" onchange="setG(this)"></td>`)}</tr>`)}</table><b>إجمالي القطع: <span id="gt">${subsOf().reduce((a,s)=>a+s.qty,0)}</span></b>`;
  $("#pl").innerHTML=`<div class="card"><b>المواد (يمكن تعديل الكمية أو حذف السطر)</b>${U(PS.mats,(m,i)=>`<div class="row sp production-material-row"><span>${it_(m.iid).name} — ${whn(it_(m.iid).wh)} (${it_(m.iid).unit})</span><input aria-label="كمية ${it_(m.iid).name}" type="number" min="0" step="0.001" data-mat-index="${i}" value="${m.qty}" style="width:105px;margin:0" onchange="setMatQty(${i},this.value)"><span>تكلفة تقديرية: ${f(av(it_(m.iid))*m.qty)}</span><button class="d" onclick="PS.mats.splice(${i},1);drawP()">✕</button></div>`)}<br><b>تكاليف غير مخزونة</b>${U(PS.x,(x,i)=>`<div class="row sp"><span>${an(x.a)} — ${x.note||""}: ${f(x.amt)}</span><button class="d" onclick="PS.x.splice(${i},1);drawP()">✕</button></div>`)}<br><b>الإجمالي التقديري: ${f(PS.mats.reduce((a,m)=>a+av(it_(m.iid))*m.qty,0)+PS.x.reduce((a,x)=>a+x.amt,0))}</b></div>`}
 function adv(id){const o=S.po.find(x=>x.id==id),d=td(),Ls=[];o.matCost=0;o.mats.forEach(m=>{const i=it_(m.iid),v=bestV(i),c=avAt(i,i.wh)*m.qty;m.cost=c;o.matCost+=c;stk(d,i,v,-m.qty,-c,"صرف خامات "+o.no,0,o.id,"po",i.wh);Ls.push({a:ak("inv"),cr:c})});o.x.forEach(x=>Ls.push({a:x.a,cr:x.amt,desc:x.note}));Ls.push({a:ak("wip"),dr:o.matCost+o.x.reduce((a,x)=>a+x.amt,0)});post(d,o.no,"بدء أمر إنتاج",Ls,"po",o.id,o.ts);o.st=1;sv();render()}
