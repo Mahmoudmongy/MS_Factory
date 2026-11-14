@@ -1,7 +1,7 @@
 /* Service Worker v13 - refreshed application shell.
  * Business data stays in Supabase. Authenticated API responses are never cached.
  */
-const VERSION = 'factory-v22';
+const VERSION = 'factory-v23';
 const CORE = ['./','./index.html','./auth.html','./change-password.html','./css/style.css','./manifest.json','./assets/icon-192.png','./assets/icon-512.png','./assets/icon.svg','./js/app.js','./js/manager-history.js','./js/change-password.js'];
 const PAGES = ['./index.html','./auth.html','./change-password.html'];
 // The HTML href scan also captures Vite modulepreload assets for offline use.

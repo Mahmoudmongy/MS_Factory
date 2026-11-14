@@ -1,6 +1,7 @@
 import { supabase } from './supabase.js';
 import { createConflictRecovery } from './conflict-recovery.js';
 import { retryStartup } from './startup-retry.mjs';
+import { loadManagerDataBridge } from './manager-data-bridge.js';
 
 const QUEUE_KEY = 'ms-factory-db-queue-v1';
 const BASELINE_KEY = 'ms-factory-db-baseline-v1';
@@ -8,6 +9,7 @@ const LAST_SYNC_KEY = 'ms-factory-db-last-sync-v1';
 const CONFLICT_REVIEW_KEY = 'ms-factory-db-conflict-review-v1';
 const CONFLICT_BLOCK_KEY = 'ms-factory-db-conflict-block-v1';
 const CACHE_PREFIX = 'ms-factory-db-cache-v1:';
+const MANAGER_CACHE_KEY = 'ms-factory-manager-bridge-v1:';
 let storageScope = 'anonymous';
 const scopedKey = key => key + ':' + storageScope;
 const conflictRecovery = () => createConflictRecovery({ scope: storageScope });
@@ -22,6 +24,7 @@ let ownerId = null;
 let actorId = null;
 let profile = null;
 let baseline = new Map();
+let managerBaseline = new Map();
 let stateReady = false;
 let saveChain = Promise.resolve();
 let channel = null;
@@ -97,7 +100,8 @@ function clearLegacyDeviceData() {
 }
 function archiveLegacyQueues() {
   if (conflictRecovery().hasBlock()) return;
-  const keys = [QUEUE_KEY, scopedKey(QUEUE_KEY)];
+  const legacyOwnerQueueKey=QUEUE_KEY+':'+String(ownerId||'anonymous');
+  const keys = [...new Set([QUEUE_KEY,legacyOwnerQueueKey,scopedKey(QUEUE_KEY)])];
   for (const key of keys) {
     const raw = localStorage.getItem(key);
     if (!raw) continue;
@@ -119,6 +123,8 @@ function archiveLegacyQueues() {
   }
 }
 function resetLocalBusinessState() {
+  baseline = new Map();
+  managerBaseline = new Map();
   const state = getState();
   const { arrays } = splitState(state);
   const patch = {};
@@ -137,6 +143,7 @@ function persistBaseline() {
 }
 function snapshotBaseline(state) {
   baseline = new Map();
+  managerBaseline = new Map();
   const { arrays, meta } = splitState(state);
   const current = new Map();
   for (const [type,items] of Object.entries(arrays)) {
@@ -165,9 +172,15 @@ function snapshotBaseline(state) {
   persistBaseline();
 }
 function setBaselineRow(row) {
-  baseline.set(mapKey(row.record_type, row.record_id), {
+  const key=mapKey(row.record_type,row.record_id);
+  if(row.origin==="manager-import"){
+    managerBaseline.set(key,{type:row.record_type,id:row.record_id,payload:cleanPayload(row.payload),version:0,deleted_at:null});
+    return;
+  }
+  managerBaseline.delete(key);
+  baseline.set(key, {
     type: row.record_type, id: row.record_id, payload: clone(row.payload),
-    version: Number(row.version || 1), deleted_at: row.deleted_at || null
+    version: row.version == null ? 1 : Number(row.version), deleted_at: row.deleted_at || null
   });
   cacheRow(row);
 }
@@ -190,6 +203,61 @@ async function fetchPagedRecords(buildQuery) {
   }
   return all;
 }
+function managerCacheKey(actor) { return MANAGER_CACHE_KEY + String(actor || "anonymous") + ":" + String(ownerId || "no-owner"); }
+function managerWarningKey(actor) { return MANAGER_CACHE_KEY + "warnings:" + String(actor || "anonymous") + ":" + String(ownerId || "no-owner"); }
+function managerPermissionKey(actor) { return MANAGER_CACHE_KEY + "permissions:" + String(actor || "anonymous") + ":" + String(ownerId || "no-owner"); }
+function clearOtherManagerCaches(actor) {
+  const keep=new Set([managerCacheKey(actor),managerWarningKey(actor),managerPermissionKey(actor)]);
+  try { for(let i=localStorage.length-1;i>=0;i--){const key=localStorage.key(i);if(key&&key.startsWith(MANAGER_CACHE_KEY)&&!keep.has(key))localStorage.removeItem(key);} } catch(error) { console.warn("Could not clear another account's Manager cache:",error); }
+}
+function managerPermissionFingerprint(){return stable({is_admin:profile?.is_admin===true,permissions:profile?.permissions||{}});}
+function loadManagerCache(actor) {
+  try {
+    const savedPermission=localStorage.getItem(managerPermissionKey(actor));
+    if(savedPermission!==managerPermissionFingerprint()){localStorage.removeItem(managerCacheKey(actor));localStorage.removeItem(managerWarningKey(actor));localStorage.removeItem(managerPermissionKey(actor));return [];}
+    const rows = JSON.parse(localStorage.getItem(managerCacheKey(actor)) || "[]");
+    window.__factoryManagerBridgeWarnings=JSON.parse(localStorage.getItem(managerWarningKey(actor))||"{}");
+    return Array.isArray(rows) ? rows.filter(r=>r&&r.record_type&&r.record_id) : [];
+  } catch (_) { return []; }
+}
+function saveManagerCache(actor, rows, warnings={}) {
+  try {
+    localStorage.setItem(managerCacheKey(actor),JSON.stringify(rows));
+    localStorage.setItem(managerWarningKey(actor),JSON.stringify(warnings||{}));
+    localStorage.setItem(managerPermissionKey(actor),managerPermissionFingerprint());
+    return true;
+  } catch (error) { console.warn("Manager bridge cache could not be saved; data will be reloaded online:",error); return false; }
+}
+function managerStateToRows(state) {
+  const rows=[];
+  for(const [type,items] of Object.entries(state||{})){
+    if(!Array.isArray(items))continue;
+    items.forEach((payload,index)=>{
+      const id=recordKey(type,payload,index);
+      rows.push({user_id:ownerId,record_type:type,record_id:id,payload:cleanPayload(payload),version:0,deleted_at:null,updated_at:null,updated_by:null,origin:"manager-import"});
+    });
+  }
+  return rows;
+}
+async function getManagerBridgeRows() {
+  if(profile?.is_admin!==true||!profile?.id||!ownerId)return [];
+  const cached=loadManagerCache(actorId);
+  if(cached.length){window.__factoryManagerBridgeLoaded=true;return cached;}
+  try{
+    const state=await retryStartup(()=>loadManagerDataBridge(supabase,ownerId));
+    if(!state)return [];
+    const rows=managerStateToRows(state);
+    window.__factoryManagerBridgeWarnings=state.managerBridgeWarnings||{};
+    saveManagerCache(actorId,rows,state.managerBridgeWarnings||{});
+    window.__factoryManagerBridgeLoaded=true;
+    return rows;
+  }catch(error){
+    window.__factoryManagerBridgeError=error?.message||String(error);
+    console.error("Manager data bridge failed:",error);
+    document.dispatchEvent(new CustomEvent("factory-manager-bridge-error",{detail:{message:window.__factoryManagerBridgeError}}));
+    return [];
+  }
+}
 async function fetchAllRecords() {
   return fetchPagedRecords(() => supabase.from('factory_records')
     .select('user_id,record_type,record_id,payload,version,deleted_at,updated_at,updated_by')
@@ -205,18 +273,22 @@ async function fetchChangedRecords(since) {
     .order('updated_at').order('record_type').order('record_id'));
 }
 function hydrateFromRows(rows) {
-  const grouped = {};
-  const metaRow = rows.find(r => r.record_type === '__meta' && r.record_id === 'main' && !r.deleted_at);
-  for (const row of rows) {
+  const groupedMaps = {};
+  const orderedRows = [...(rows || [])].sort((a,b)=>(a.origin==="manager-import"?0:1)-(b.origin==="manager-import"?0:1));
+  const metaRow = orderedRows.find(r => r.record_type === '__meta' && r.record_id === 'main' && !r.deleted_at);
+  for (const row of orderedRows) {
     setBaselineRow(row);
     if (row.record_type === '__meta') continue;
-    const target = (grouped[row.record_type] ||= []);
-    if (!row.deleted_at) {
-      const payload = clone(row.payload);
-      if (payload && typeof payload === 'object' && !Array.isArray(payload)) payload._cloudRecordId = row.record_id;
-      target.push(payload);
+    const target = (groupedMaps[row.record_type] ||= new Map());
+    if (row.deleted_at) {
+      target.delete(String(row.record_id));
+      continue;
     }
+    const payload = clone(row.payload);
+    if (payload && typeof payload === 'object' && !Array.isArray(payload)) payload._cloudRecordId = row.record_id;
+    target.set(String(row.record_id),payload);
   }
+  const grouped = Object.fromEntries(Object.entries(groupedMaps).map(([type,items])=>[type,[...items.values()]]));
   for (const values of Object.values(grouped)) values.sort((a,b) => {
     const ai = Number(a?.id), bi = Number(b?.id);
     return Number.isFinite(ai) && Number.isFinite(bi) ? ai-bi : String(a?.id ?? a?.no ?? '').localeCompare(String(b?.id ?? b?.no ?? ''));
@@ -256,14 +328,18 @@ function makeOperations(state) {
   current.set(mapKey('__meta','main'), { type:'__meta', id:'main', payload:meta });
   const operations = [];
   for (const [key, item] of current) {
-    const old = baseline.get(key);
-    if (!old || stable(old.payload) !== stable(item.payload) || old.deleted_at) {
-      operations.push({ ...item, expectedVersion: old?.version || 0, deleted: false });
+    const old = baseline.get(key),source=old||managerBaseline.get(key);
+    if (!source || stable(source.payload) !== stable(item.payload) || source.deleted_at) {
+      operations.push({ ...item, expectedVersion: source?.version || 0, deleted: false });
     }
   }
   for (const [key, old] of baseline) {
     if (old.deleted_at) continue;
     if (!current.has(key)) operations.push({ type:old.type, id:old.id, payload:null, expectedVersion:old.version || 0, deleted:true });
+  }
+  for (const [key, old] of managerBaseline) {
+    if (baseline.has(key)||current.has(key)) continue;
+    operations.push({type:old.type,id:old.id,payload:null,expectedVersion:0,deleted:true});
   }
   return operations;
 }
@@ -455,11 +531,14 @@ async function bootstrap() {
     if (!profile || window.__factoryOfflineMode !== true) throw new Error('يلزم اتصال مباشر بقاعدة بيانات الإنتاج لتوثيق الحساب.');
     actorId = profile?.id || null;
     ownerId = profile?.created_by || profile?.id || null;
-    storageScope = ownerId || 'anonymous';
+    storageScope = String(ownerId || 'anonymous') + ':' + String(actorId || 'anonymous');
+    clearOtherManagerCaches(actorId);
     clearLegacyDeviceData();
     resetLocalBusinessState();
+    const managerRows=profile?.is_admin===true?loadManagerCache(actorId):[];
+    if(managerRows.length)window.__factoryManagerBridgeLoaded=true;
     const cachedRows = loadCachedRows();
-    if (cachedRows.length) hydrateFromRows(cachedRows);
+    if (cachedRows.length || managerRows.length) hydrateFromRows([...managerRows,...cachedRows]);
     else snapshotBaseline(getState());
     const conflictRecoveryPending = conflictRecovery().hasBlock();
     const pendingQueue = getQueue();
@@ -483,11 +562,13 @@ async function bootstrap() {
   actorId = user.id;
   await retryStartup(() => ensureProfile(actorId, false));
   ownerId = profile.created_by || profile.id;
-  storageScope = ownerId;
+  storageScope = String(ownerId) + ':' + String(actorId);
+  clearOtherManagerCaches(actorId);
   resetLocalBusinessState();
+  const managerRows = await getManagerBridgeRows();
   const rows = await retryStartup(() => fetchAllRecords());
-  // Supabase is the only source of business records. An empty database stays empty.
-  hydrateFromRows(rows);
+  // Manager source rows are a read-only base; factory_records overlays win by version.
+  hydrateFromRows([...managerRows,...rows]);
   clearLegacyDeviceData();
   try { archiveLegacyQueues(); } catch (archiveError) { conflictWriteLock = true; window.__factoryDatabaseFirstFailed = true; console.error('Legacy operations remain local and are blocked from replay:', archiveError); }
   setLastSyncAt(new Date().toISOString());
@@ -513,6 +594,16 @@ async function bootstrap() {
   window.dispatchEvent(new CustomEvent('factory-database-ready'));
 }
 window.__factoryPersistState = persistState;
+window.__factoryRefreshManagerBridge = () => {
+  if(profile?.is_admin!==true)throw new Error("تحديث بيانات Manager.io متاح لمدير النظام فقط.");
+  if(!profile?.id)throw new Error("يجب تسجيل الدخول لتحديث بيانات Manager.io.");
+  if(!navigator.onLine||window.__factoryOfflineMode===true)throw new Error("يلزم اتصال بالإنترنت لتحديث بيانات Manager.io.");
+  if(getQueue().length)throw new Error("يوجد حفظ أو مزامنة معلقة. انتظر اكتمالها قبل تحديث البيانات.");
+  localStorage.removeItem(managerCacheKey(actorId));
+  localStorage.removeItem(managerWarningKey(actorId));
+  localStorage.removeItem(managerPermissionKey(actorId));
+  window.location.reload();
+};
 window.__factoryDatabaseSyncNow = async () => { await flushQueue(); await persistState(getState()); };
 async function reconnectDatabase() {
   if (conflictWriteLock || conflictRecovery().hasBlock() || getQueue().length) {
@@ -525,13 +616,15 @@ async function reconnectDatabase() {
   await retryStartup(() => ensureProfile(actorId, true));
   ownerId = profile.created_by || profile.id;
   storageScope = ownerId;
+  clearOtherManagerCaches(actorId);
   const since = getLastSyncAt();
   if (since) {
     const changed = await retryStartup(() => fetchChangedRecords(since));
     for (const row of changed) applyRealtimeRow(row);
   } else {
+    const managerRows = await getManagerBridgeRows();
     const initialRows = await retryStartup(() => fetchAllRecords());
-    hydrateFromRows(initialRows);
+    hydrateFromRows([...managerRows,...initialRows]);
     setLastSyncAt(new Date().toISOString());
   }
   for (const op of getQueue()) applyOperationToState(op);

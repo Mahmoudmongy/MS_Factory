@@ -82,12 +82,26 @@ await recoveryPage.evaluate(({scope,queueKey})=>{
 },{scope:dualFailure.scope,queueKey:dualFailure.queueKey});
 await recoveryPage.close();
 /* ---------- A. static checks on the real files ---------- */
-const app=fs.readFileSync(path.join(ROOT,'js/app.js'),'utf8'),idx=fs.readFileSync(path.join(ROOT,'index.html'),'utf8'),authPage=fs.readFileSync(path.join(ROOT,'js/auth.js'),'utf8'),cloud=fs.readFileSync(path.join(ROOT,'js/cloud-sync.js'),'utf8'),dbSync=fs.readFileSync(path.join(ROOT,'js/database-first.js'),'utf8').replace(/\r\n/g,'\n'),conflictStorage=fs.readFileSync(path.join(ROOT,'js/conflict-recovery.js'),'utf8'),css=fs.readFileSync(path.join(ROOT,'css/style.css'),'utf8');
+const app=fs.readFileSync(path.join(ROOT,'js/app.js'),'utf8'),idx=fs.readFileSync(path.join(ROOT,'index.html'),'utf8'),authPage=fs.readFileSync(path.join(ROOT,'js/auth.js'),'utf8'),cloud=fs.readFileSync(path.join(ROOT,'js/cloud-sync.js'),'utf8'),dbSync=fs.readFileSync(path.join(ROOT,'js/database-first.js'),'utf8').replace(/\r\n/g,'\n'),bridge=fs.readFileSync(path.join(ROOT,'js/manager-data-bridge.js'),'utf8'),conflictStorage=fs.readFileSync(path.join(ROOT,'js/conflict-recovery.js'),'utf8'),css=fs.readFileSync(path.join(ROOT,'css/style.css'),'utf8');
 try { new vm.Script(app,{filename:'js/app.js'}); } catch (error) { console.error('APP SYNTAX ERROR:',error.stack||error); process.exit(2); }
 ok('app.js contains no output-truncation artifacts',!app.includes('tokens truncated')&&!app.includes('Warning: truncated output')&&!app.includes('Total output lines:'));
+ok('ERP module registry groups every operational screen and preserves always-available Home and Settings',app.includes('const MODULES=')&&app.includes('const MODULE_GROUPS=')&&app.includes('const moduleEnabled=id=>')&&app.includes('screens:["home"]')&&app.includes('screens:["set"]'));
+ok('module visibility is administrator-controlled, persisted, and non-destructive',app.includes('function moduleAdmin()')&&app.includes('function toggleModule(id,enabled)')&&app.includes('S.modules[id]=!!enabled')&&app.includes('never deletes its invoices')&&app.includes('لا يحذف فواتيرها'));
+ok("Manager.io bridge loads only rows allowed by the current user's RLS permissions",dbSync.includes("loadManagerDataBridge(supabase,ownerId)")&&dbSync.includes('if(profile?.is_admin!==true||!profile?.id||!ownerId)return []')&&dbSync.includes('origin:"manager-import"')&&dbSync.includes('hydrateFromRows([...managerRows,...rows])')&&dbSync.includes('if(row.origin==="manager-import")')&&dbSync.includes("managerBaseline.set(key,")&&bridge.includes('manager_read_only:true'));
+ok('Manager.io bridge loading and manual refresh both require the system administrator',dbSync.includes('if(profile?.is_admin!==true||!profile?.id||!ownerId)return []')&&dbSync.includes('if(profile?.is_admin!==true)throw new Error("تحديث بيانات Manager.io متاح لمدير النظام فقط.")'));
+
+ok('Manager bridge cache is administrator-scoped and cleared when a different account signs in',dbSync.includes('function managerCacheKey(actor)')&&dbSync.includes('function clearOtherManagerCaches(actor)')&&dbSync.includes('clearOtherManagerCaches(actorId)')&&dbSync.includes('function managerPermissionFingerprint()')&&dbSync.includes('managerPermissionKey(actor)')&&dbSync.includes('window.__factoryRefreshManagerBridge'));
+ok('Manager bridge refresh is guarded against offline use and pending writes',dbSync.includes('if(!navigator.onLine||window.__factoryOfflineMode===true)')&&dbSync.includes('if(getQueue().length)')&&app.includes('function refreshManagerBridge()')&&dbSync.includes('let managerBaseline = new Map()')&&dbSync.includes('source=old||managerBaseline.get(key)')&&dbSync.includes("storageScope = String(ownerId) + ':' + String(actorId)"));
+
+ok('Manager.io bridge has stable IDs and retains per-warehouse stock movements',bridge.includes('id:stableId(15,row.id)')&&bridge.includes('id:stableId(16')&&bridge.includes('warehouseId:location?whId(location):0')&&bridge.includes('movementRowsUsingDefaultWarehouse'));
+ok('warehouse-aware production and write-off workflows use the selected warehouse',app.includes('stockVariantAt=')&&app.includes('bestVAt=')&&app.includes('m.wh||i.wh')&&app.includes('stockVariantAt(i,warehouseId,variant)')&&app.includes('function repIm()')&&app.includes('warehouseId'));
+ok('grouped navigation and module settings have responsive styles',css.includes('.sb-group-title')&&css.includes('.module-settings-list')&&css.includes('.module-setting-row'));
+
 const names=[...app.matchAll(/^(?:async )?function ([A-Za-z0-9_$]+)\(/gm)].map(m=>m[1]),dup=[...new Set(names.filter((n,i)=>names.indexOf(n)!==i))];
 ok('app.js has no duplicate top-level function definitions',dup.length==0,dup);
 ok('customer/supplier names open details and edit stays permission-gated inside details',app.includes('partyView(${p.id})')&&app.includes('pForm(${p.c?1:0},${id})')&&app.includes('can("edit")'));
+ok('posted journal entries cannot be edited or deleted and can only be corrected by a balanced reversal',app.includes('function journalValidationError(lines)')&&app.includes('function reverseJ(id)')&&app.includes('Math.max(0,...S.je.map')&&app.includes('if(original.reversedBy){')&&app.includes('original.reversedBy=rid')&&app.includes('if(src==="je"){toast("لا يمكن حذف قيد يومية مرحّل')&&app.includes('if(pre?.id){toast("القيود المرحلة لا تُعدّل')&&app.includes('reverseJ('));
+
 ok('customer and supplier screens expose unlinked historical invoices and vouchers for manual review without auto-linking',app.includes('function partnerReferenceExists')&&app.includes('function unlinkedPartyRows')&&app.includes('unlinkedPartyReview()+')&&app.includes('لم يتم ربطها تلقائياً')&&app.includes('فتح لربط الطرف'));
 ok('customer and supplier lists sort balances high-to-low with an alphabetical tie-break',app.includes('.sort((a,b)=>Math.abs(pbal(b.id))-Math.abs(pbal(a.id))||a.name.localeCompare(b.name,"ar"))'));
 ok('partner edit preserves the stable record ID and updates the existing object',app.includes('function saveP(id)')&&app.includes('if(old)Object.assign(old,data)'));
@@ -126,7 +140,7 @@ ok('public PWA icons have valid PNG signatures and declared dimensions',man.icon
 
 ok('mobile header reserves a wider account selector and adapts the icon columns',css.includes('minmax(92px,116px)')&&css.includes('minmax(86px,98px)')&&css.includes('#top #who{width:100%'));
 ok('mobile toolbar uses a two-row named grid with separate slots for every control',css.includes('grid-template-areas:"menu back forward title title title" "net who who who theme logout"')&&css.includes('#top #ttl{grid-area:title')&&css.includes('#top #logout-btn{grid-area:logout'));
-ok('settings is rendered in the scrollable sidebar navigation',app.includes('class="sb-nav-scroll"')&&app.includes('U(items,renderLink)')&&!app.includes('class="sb-footer"')&&css.includes('#sb .sb-nav-scroll{flex:1 1 auto;min-height:0;overflow-y:auto'));
+ok('settings is rendered in the scrollable sidebar navigation',app.includes('class="sb-nav-scroll"')&&app.includes('class="sb-group"')&&app.includes('class="sb-group-title"')&&app.includes('U(visible,renderLink)')&&!app.includes('class="sb-footer"')&&css.includes('#sb .sb-nav-scroll{flex:1 1 auto;min-height:0;overflow-y:auto'));
 
 ok('mobile settings link remains reachable above the bottom safe area',css.includes('#sb a[onclick*="\'set\'"]{position:sticky')&&css.includes('padding-bottom:calc(76px + env(safe-area-inset-bottom'));
 ok('company name and logo are centered in the mobile navigation drawer',css.includes('#sb .br{text-align:center!important;display:flex!important')&&css.includes('align-items:center;justify-content:center'));
@@ -170,7 +184,7 @@ ok('previous conflict archives are appended and never silently truncated',confli
 ok('export uses the active account scope and clearing requires export plus explicit confirmation',dbSync.includes('factory-conflict-export')&&dbSync.includes('currentRecovery.getExportPayload(getQueue()')&&dbSync.includes('link.download =')&&dbSync.includes('factory-conflict-resolve')&&dbSync.includes('if (!conflictExportedInSession)')&&dbSync.includes('if (!confirm(')&&dbSync.includes('localStorage.removeItem(scopedKey(QUEUE_KEY))'));
 ok('stale-version conflict locks the session and archives the rejected batch without re-enqueueing',dbSync.includes('let conflictWriteLock = false')&&conflictBranchSource.includes('conflictWriteLock = true;')&&conflictBranchSource.includes('archiveRejectedQueue(rejectedQueue')&&!conflictBranchSource.includes('queueOperations('));
 ok('writes and queue flushes are blocked after conflict until a fresh page session',conflictHandlerSource.includes('if (conflictWriteLock || conflictRecovery().hasBlock() || window.__factoryDatabaseFirstFailed) throw')&&dbSync.includes('if (conflictWriteLock || conflictRecovery().hasBlock())'));
-ok('fresh startup hydrates Supabase rows and blocks either a durable marker or any leftover queue before replay',/const (?:initialRows|rows) = await retryStartup\(\(\) => fetchAllRecords\(\)\)/.test(bootstrapSource)&&bootstrapSource.search(/hydrateFromRows\((?:initialRows|rows)\)/)>=0&&bootstrapSource.lastIndexOf('const pendingQueue = getQueue();')>bootstrapSource.search(/hydrateFromRows\((?:initialRows|rows)\)/)&&bootstrapSource.lastIndexOf('if (conflictWriteLock || conflictRecoveryPending || pendingQueue.length)')>bootstrapSource.lastIndexOf('const pendingQueue = getQueue();')&&bootstrapSource.lastIndexOf('await flushQueue();')>bootstrapSource.lastIndexOf('if (conflictWriteLock || conflictRecoveryPending || pendingQueue.length)')&&bootstrapSource.includes('for (const op of pendingQueue) applyOperationToState(op)'));ok('leftover queue blocks startup and reconnect even without a persistent conflict marker',bootstrapSource.includes('if (conflictWriteLock || conflictRecoveryPending || pendingQueue.length)')&&dbSync.includes('async function reconnectDatabase() {\n  if (conflictWriteLock || conflictRecovery().hasBlock() || getQueue().length)')&&dbSync.includes("window.addEventListener('online', async () => {\n  if (!stateReady) return;\n  if (conflictWriteLock || conflictRecovery().hasBlock() || getQueue().length)"));
+ok('fresh startup hydrates Supabase rows and blocks either a durable marker or any leftover queue before replay',/const (?:initialRows|rows) = await retryStartup\(\(\) => fetchAllRecords\(\)\)/.test(bootstrapSource)&&bootstrapSource.includes("hydrateFromRows([...managerRows,...rows])")&&bootstrapSource.lastIndexOf('const pendingQueue = getQueue();')>bootstrapSource.search(/hydrateFromRows\((?:initialRows|rows)\)/)&&bootstrapSource.lastIndexOf('if (conflictWriteLock || conflictRecoveryPending || pendingQueue.length)')>bootstrapSource.lastIndexOf('const pendingQueue = getQueue();')&&bootstrapSource.lastIndexOf('await flushQueue();')>bootstrapSource.lastIndexOf('if (conflictWriteLock || conflictRecoveryPending || pendingQueue.length)')&&bootstrapSource.includes('for (const op of pendingQueue) applyOperationToState(op)'));ok('leftover queue blocks startup and reconnect even without a persistent conflict marker',bootstrapSource.includes('if (conflictWriteLock || conflictRecoveryPending || pendingQueue.length)')&&dbSync.includes('async function reconnectDatabase() {\n  if (conflictWriteLock || conflictRecovery().hasBlock() || getQueue().length)')&&dbSync.includes("window.addEventListener('online', async () => {\n  if (!stateReady) return;\n  if (conflictWriteLock || conflictRecovery().hasBlock() || getQueue().length)"));
 ok('live updates subscribe to individual factory_records rows instead of reloading the whole factory',/postgres_changes/.test(dbSync)&&/applyRealtimeRow\(payload\.new\)/.test(dbSync)&&!/refreshFromDatabase|loadFromTablesMerge/.test(dbSync));
 ok('reconnect reads only rows changed since the last sync cursor',/fetchChangedRecords\(since\)/.test(dbSync)&&/gt\('updated_at', since\)/.test(dbSync)&&/LAST_SYNC_KEY/.test(dbSync));
 ok('offline cache stores individual rows and version metadata, not a full local state snapshot during online saves',/CACHE_PREFIX/.test(dbSync)&&/cacheRow\(row\)/.test(dbSync)&&!/JSON\.stringify\(\[\.\.\.baseline\.values\(\)\]\)/.test(dbSync)&&/if\(!navigator\.onLine\)\{localStorage\.setItem\("mgr6"/.test(app));
@@ -432,7 +446,7 @@ ok('planner adopts an existing remote tombstone instead of recreating it',delete
 const resurrect=planSourceEffectSync?planSourceEffectSync(canonicalFixture,[{...sameRemote,sync_version:4,deleted_at:'2026-11-08T00:00:00Z',payload:null}],{'["doc","91"]':3},[]):{conflicts:[{}]};
 ok('planner never resurrects a remotely deleted source automatically',resurrect.actions.length===0&&resurrect.conflicts.some(x=>x.reason==='remote_effect_deleted'));
 ok('source deletions are queued as durable offline tombstones before local reversal',/function queueCloudEffectTombstone\(src,id\)/.test(app)&&/mgr6-cloud-effect-tombstones/.test(app)&&/queueCloudEffectTombstone\(src,id\);rev\(id,src\)/.test(app));
-ok('editing and deleting transactions reverses only matching source type plus ID',/function rev\(rid,src\)/.test(app)&&/rev\(id,src\)/.test(app)&&/rev\(old\.id,"doc"\)/.test(app)&&/rev\(old\.id,"vch"\)/.test(app)&&/rev\(old\.id,"po"\)/.test(app)&&/rev\(old\.id,"je"\)/.test(app));
+ok('editing and deleting transactions reverses only matching source type plus ID',/function rev\(rid,src\)/.test(app)&&/rev\(id,src\)/.test(app)&&/rev\(old\.id,"doc"\)/.test(app)&&/rev\(old\.id,"vch"\)/.test(app)&&/rev\(old\.id,"po"\)/.test(app)&&/S\.L\.filter\(l=>l\.src==="je"&&l\.rid==id\)/.test(app));
 const applyState={accts:[{id:1,code:'1001',name:'الخزنة',t:'A'},{id:2,code:'1100',name:'العملاء',t:'A'}],items:[{id:21,name:'قماش',sku:'FB021',wh:1,unit:'متر',st:{'أبيض':8},val:80}],partners:[{id:31,name:'عميل تجريبي'}],L:[{src:'doc',rid:91,a:1,dr:100,cr:0},{src:'doc',rid:91,a:2,dr:0,cr:100,pid:31}],mv:[{src:'doc',rid:91,iid:21,v:'أبيض',q:-2,val:-20}]};
 const replacementEffect={...normalized.effects[0],movements:[{...normalized.effects[0].movements[0],quantity:-3,value:-30}]};
 const appliedOnce=applyCanonicalSourceEffect?applyCanonicalSourceEffect(applyState,replacementEffect):{applied:false};
@@ -487,7 +501,7 @@ ok('online startup sync runs even when local cache already has data',/if \(navig
 ok('offline startup never authorizes from a cached profile',!/cachedProfile/.test(idx)&&/offlineError\.code = 'OFFLINE'/.test(idx)&&/location\.replace\('auth\.html'\)/.test(idx));
 ok('reconnect refreshes the profile before using permissions for cloud sync',/myProfile = null; ownerIdCache = null; window\.__factoryAuthProfile = null;/.test(cloud)&&/const freshProfile = await getMyProfile\(\)/.test(cloud));
 
-ok('offline shell precaches the stable production app and first-login password page',/auth\.html/.test(sw)&&/change-password\.html/.test(sw)&&/js\/change-password\.js/.test(sw)&&/js\/app\.js/.test(sw)&&/factory-v22/.test(sw));
+ok('offline shell precaches the stable production app and first-login password page',/auth\.html/.test(sw)&&/change-password\.html/.test(sw)&&/js\/change-password\.js/.test(sw)&&/js\/app\.js/.test(sw)&&/factory-v23/.test(sw));
 ok('mobile and desktop usability includes visible keyboard focus and safe-area spacing',/focus-visible/.test(css)&&/safe-area-inset-bottom/.test(css));
 ok('offline-created detail records are uploaded even when the full snapshot has a preserved conflict',/if \(admin && !snapshotConflict\)/.test(cloud)&&/for \(const \{ key, arr \} of partnerArrays\)/.test(cloud)&&/hasSnapshotConflict/.test(cloud));
 ok('local save writes a durable pending-sync marker before network recovery',/mgr6-sync-pending/.test(app)&&/localStorage\.setItem\("mgr6-sync-pending"/.test(app));
@@ -499,7 +513,7 @@ ok('opening an existing screen in a separate tab activates it instead of duplica
 ok('Excel export splits currency labels into a separate adjacent cell and keeps amounts numeric',/function exportCurrencyCell/.test(app)&&/\[h\+" \(قيمة\)","العملة"\]/.test(app));
 ok('legacy Excel importer supports multiple named sheets for customers, suppliers and inventory',/function impSheet\(/.test(app)&&/function templateExcel\(/.test(app)&&/customers:\[/.test(app)&&/suppliers:\[/.test(app)&&/WZ\.sheetNames/.test(app));
 ok('module navigation uses consistent purpose-specific SVG icons',/const APP_ICONS=/.test(app)&&/ico\("customer"\)/.test(app)&&/ico\("inventory"\)/.test(app));
-ok('offline service worker pre-caches Vite module assets discovered from the HTML shell',sw.includes('matchAll')&&sw.includes('modulepreload')&&/factory-v22/.test(sw));
+ok('offline service worker pre-caches Vite module assets discovered from the HTML shell',sw.includes('matchAll')&&sw.includes('modulepreload')&&/factory-v23/.test(sw));
 
 
 ok('invoice sync migration uses optimistic version checks and invoker security',/sync_version/.test(fs.readFileSync(path.join(ROOT,'supabase/migrations/20261107090901_20261107111000_atomic_invoice_sync.sql'),'utf8'))&&/SECURITY INVOKER/.test(fs.readFileSync(path.join(ROOT,'supabase/migrations/20261107090901_20261107111000_atomic_invoice_sync.sql'),'utf8'))&&/40001/.test(fs.readFileSync(path.join(ROOT,'supabase/migrations/20261107090901_20261107111000_atomic_invoice_sync.sql'),'utf8')));
@@ -684,7 +698,7 @@ ok('middle-click is the only sidebar gesture that opens a new tab',app.includes(
 /* ---------- C. PWA: service worker + offline shell ---------- */
 const c2=await browser.newContext({viewport:{width:1280,height:800}}),q=await c2.newPage(),swConsole=[];q.on('console',m=>swConsole.push(m.type()+': '+m.text()));q.on('pageerror',e=>swConsole.push('pageerror: '+e.message));await q.goto(BASE);const swReg=await q.evaluate(async()=>{try{const reg=await navigator.serviceWorker.register('./sw.js');return {ok:true,scope:reg.scope,installing:reg.installing?.state,waiting:reg.waiting?.state,active:reg.active?.state}}catch(e){return {ok:false,error:e.message}}});const swReady=await q.evaluate(()=>Promise.race([navigator.serviceWorker.ready.then(()=>true),new Promise(resolve=>setTimeout(()=>resolve(false),15000))]));if(!swReady){const diag=await q.evaluate(async()=>{const r=await navigator.serviceWorker.getRegistration();return r?{installing:r.installing?.state,waiting:r.waiting?.state,active:r.active?.state,scope:r.scope}:null});await c2.close();throw new Error('Service Worker did not become ready: '+JSON.stringify({swReg,diag,console:swConsole.slice(-20)}))}await q.reload();await q.waitForTimeout(600);
 const swi=await q.evaluate(async()=>({ctl:!!navigator.serviceWorker.controller,keys:await caches.keys(),cached:(await (await caches.open((await caches.keys())[0])).keys()).map(r=>new URL(r.url).pathname)}));
-ok('service worker installed and controlling the page; single versioned cache',swi.ctl&&swi.keys.length==1&&/^factory-v22$/.test(swi.keys[0]),swi.keys);
+ok('service worker installed and controlling the page; single versioned cache',swi.ctl&&swi.keys.length==1&&/^factory-v23$/.test(swi.keys[0]),swi.keys);
 ok('stable app shell files are precached; linked CSS and scripts are cached on first request',['/index.html','/auth.html','/change-password.html','/js/change-password.js','/','/js/app.js','/css/style.css'].every(f=>swi.cached.includes(f)),swi.cached);
 ok('offline cache does not include authenticated API responses or user records',swi.cached.every(f=>!f.includes('/rest/v1/')&&!f.includes('/auth/v1/')&&!f.includes('/storage/v1/')));
 await q.evaluate(()=>{const s=JSON.parse(localStorage.getItem('mgr6')||'null');localStorage.setItem('mgr6',JSON.stringify(s))});
@@ -714,6 +728,47 @@ ok('mobile date fields remain hidden until the separate period button is pressed
 await m.evaluate(()=>docForm('sale'));const fw=await m.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1);
 ok('mobile: invoice form fits the screen width',fw);
 ok('mobile: no JavaScript errors',merr.length==0,merr.slice(0,2));await mc.close();
+
+const bridgePage=await browser.newPage();
+await bridgePage.goto(BASE+'auth.html');
+const bridgeFixture=await bridgePage.evaluate(async()=>{
+ const {mapManagerDataToState}=await import('/js/manager-data-bridge.js');
+ const data={
+  accounts:[{id:'a1',external_id:'cash',name:'Cash',account_type:'asset',account_role:'cash',is_cash_account:true},{id:'a2',external_id:'ar',name:'AR',account_type:'asset',account_role:'ar'},{id:'a3',external_id:'sales',name:'Sales',account_type:'income',account_role:'sales'}],
+  customers:[{id:'c1',external_id:'customer-1',name:'Customer'}],suppliers:[],
+  products:[{id:'p1',external_id:'item-1',name:'Shirt',sku:'SH001',buy_price:60,unit:'piece',warehouse:'Finished'}],
+  inventory:[{id:'i1',product_id:'p1',variant:'-',quantity:9,warehouse:'Finished'}],
+  costs:[{id:'co1',product_id:'p1',effective_date:'2026-01-01',unit_cost:60}],
+  locations:[{id:'w1',external_id:'wh1',name:'Finished'},{id:'w2',external_id:'wh2',name:'Raw'}],
+  inventoryLocationBalances:[{id:'bal1',product_id:'p1',manager_location_id:'wh1',warehouse:'Finished',quantity:5},{id:'bal2',product_id:'p1',manager_location_id:'wh2',warehouse:'Raw',quantity:4}],
+  invoices:[{id:'inv1',external_id:'invoice-1',invoice_no:'SI-001',invoice_type:'sale',customer_id:'c1',invoice_date:'2026-01-02',total:100,raw:{SalesInventoryLocation:'wh1'}}],
+  invoiceLines:[{id:'il1',invoice_id:'inv1',line_no:1,product_id:'p1',item_name:'Shirt',quantity:1,unit_price:100,line_total:100,source_line_kind:'nested_detail',raw:{}}],
+  returns:[],returnLines:[],
+  vouchers:[{id:'v1',external_id:'receipt-1',direction:'in',customer_id:'c1',amount:100,raw:{Lines:[{AccountsReceivableSalesInvoice:'invoice-1',Amount:70,DiscountAmount:30}]}},{id:'v2',external_id:'receipt-2',direction:'in',customer_id:'c1',amount:50,raw:{ReceivedIn:'cash'}}],
+  voucherLines:[{id:'vl1',voucher_id:'v1',line_type:'receipt',bank_account_id:'a1',account_id:'a2',customer_id:'c1',amount:100},{id:'orphan',voucher_id:null,line_type:'receipt',bank_account_id:'a1',account_id:'a2',amount:25},{id:'open',voucher_id:null,line_type:'opening_balance',bank_account_id:'a1',account_id:'a2',amount:10}],
+  ledger:[{id:'l1',transaction_date:'2026-01-02',transaction_type:'Sales Invoice',account_id:'a2',customer_id:'c1',debit:100,credit:0,source_record_type:'sales_invoices',source_manager_key:'invoice-1',raw:{item:'item-1',qty:'1'}},{id:'l2',transaction_date:'2026-01-02',transaction_type:'Sales Invoice',account_id:'a3',debit:0,credit:100,source_record_type:'sales_invoices',source_manager_key:'invoice-1',raw:{}},{id:'l3',transaction_date:'2026-01-04',transaction_type:'Receipt',account_id:'a1',debit:50,credit:0,source_record_type:'receipts',source_manager_key:'receipt-2',raw:{}},{id:'l4',transaction_date:'2026-01-04',transaction_type:'Receipt',account_id:'a2',customer_id:'c1',debit:0,credit:50,source_record_type:'receipts',source_manager_key:'receipt-2',raw:{}}],
+  journals:[],production:[{id:'po1',external_id:'po-1',order_no:'PO-001',product_id:'p1',item_name:'Shirt',order_date:'2026-01-04',status:'delivered',breakdown:{},raw:{Qty:10,InventoryLocation:'wh1',BillOfMaterials:[{BillOfMaterials:'item-1',Qty:2}]}}],
+  materials:[],expenses:[],writeoffs:[],transfers:[],currencies:[]
+ };
+ const state=mapManagerDataToState(data),item=state.items[0],finished=state.wh.find(w=>w.name==='Finished'),raw=state.wh.find(w=>w.name==='Raw'),doc=state.docs[0];
+ const movementQty=state.mv.filter(x=>x.iid===item.id).reduce((a,x)=>a+x.q,0);
+ return {
+  twoWarehouses:Object.keys(item.loc||{}).length===2&&item.loc[String(finished.id)].st['-']===5&&item.loc[String(raw.id)].st['-']===4,
+  ledgerBalanced:state.managerBridgeWarnings.ledgerBalanced,
+  inventoryReconciled:state.managerBridgeWarnings.inventoryReconciled,
+  sourceMovementWarehouse:state.mv.some(m=>m.src==='doc'&&m.wh===finished.id),
+  warehouseOpeningReconciles:Math.abs(movementQty-9)<.001,
+  invoiceWarehouse:doc.warehouseId===finished.id&&doc.dest==='',
+  importedDocsReadOnly:doc.manager_read_only===true&&state.vch[0].manager_read_only===true&&state.po[0].manager_read_only===true,
+  voucherFallback:state.vch.length===2&&state.vch[1].ac.length===1&&state.vch[1].ln.length===1,
+  voucherAllocation:state.vch[0].alloc[doc.id]===100,
+  rawBomFallback:state.po[0].mats.length===1&&state.po[0].matCost===120,
+  unlinkedLinesPreserved:state.managerBridgeWarnings.unlinkedVoucherLines===1&&state.managerBridgeWarnings.openingVoucherLines===1,
+  stableMovementIds:new Set(state.mv.map(m=>m.id)).size===state.mv.length
+ };
+});
+ok('Manager.io fixture preserves ledger balance, voucher allocation, read-only documents and two-warehouse stock',Object.values(bridgeFixture).every(Boolean),bridgeFixture);
+await bridgePage.close();
 await browser.close();server.close();
 ok('legacy cloud-sync polling is disabled in database-first mode',cloud.includes('if (!window.__factoryDatabaseFirst) {')&&cloud.indexOf('if (!window.__factoryDatabaseFirst) {')<cloud.indexOf('const _origSetItem')&&cloud.includes('setInterval(() => {'));
 ok('database startup reuses the cached profile and avoids duplicate getUser requests',dbSync.includes('ensureProfile(actorId, false)')&&dbSync.includes('supabase.auth.getSession()')&&!dbSync.includes('supabase.auth.getUser()'));
