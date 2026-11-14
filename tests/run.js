@@ -126,7 +126,7 @@ ok('public PWA icons have valid PNG signatures and declared dimensions',man.icon
 
 ok('mobile header reserves a wider account selector and adapts the icon columns',css.includes('minmax(92px,116px)')&&css.includes('minmax(86px,98px)')&&css.includes('#top #who{width:100%'));
 ok('mobile toolbar uses a two-row named grid with separate slots for every control',css.includes('grid-template-areas:"menu back forward title title title" "net who who who theme logout"')&&css.includes('#top #ttl{grid-area:title')&&css.includes('#top #logout-btn{grid-area:logout'));
-ok('settings is rendered in the scrollable sidebar navigation',app.includes('class="sb-nav-scroll"')&&app.includes('U(items,renderLink)')&&!app.includes('class="sb-footer"')&&css.includes('#sb .sb-nav-scroll{flex:1 1 auto;min-height:0;overflow-y:auto'));
+ok('settings is rendered in the scrollable sidebar navigation',app.includes('class="sb-nav-scroll"')&&app.includes('U(MODULES.filter')&&app.includes('class="sb-group"')&&!app.includes('class="sb-footer"')&&css.includes('#sb .sb-nav-scroll{flex:1 1 auto;min-height:0;overflow-y:auto'));
 
 ok('mobile settings link remains reachable above the bottom safe area',css.includes('#sb a[onclick*="\'set\'"]{position:sticky')&&css.includes('padding-bottom:calc(76px + env(safe-area-inset-bottom'));
 ok('company name and logo are centered in the mobile navigation drawer',css.includes('#sb .br{text-align:center!important;display:flex!important')&&css.includes('align-items:center;justify-content:center'));
@@ -724,3 +724,9 @@ ok('mobile double-back uses one exit confirmation',app.includes('signOutNow(true
 ok('first-login password change clears the cached must-change-password flag before returning to the app',changePasswordPage.includes('factory-profile-verified:')&&changePasswordPage.includes('currentProfile.must_change_password = false'));
 console.log(R.join('\n'));console.log(`\n${R.length-fails}/${R.length} checks passed, ${fails} failed`);process.exit(fails?1:0);
 })().catch(e=>{console.error('TEST RUN CRASHED:',e.message);process.exit(2)});
+
+ok('ERP module registry groups the existing screens without changing their stable screen IDs',app.includes('const MODULES=[')&&app.includes('MODULE_BY_SCREEN=')&&['cash','customers','sales','suppliers','purchases','inventory','accounting','employees','reports'].every(k=>app.includes('id:"'+k+'"')));
+ok('company module customization hides modules without deleting their records and allows reactivation',app.includes('S.modules=S.modules||{}')&&app.includes('S.modules[x.value]=x.checked')&&app.includes('لا يحذف سجلاتها أو حركاتها'));
+ok('legacy per-screen visibility preferences remain supported alongside module settings',app.includes('S.hide=[...ACT.querySelectorAll(".cz:not(:checked)")]')&&app.includes('!S.hide.includes(t[0])'));
+ok('disabled modules are excluded from navigation and permission-filtered screen access',app.includes('if(!moduleEnabled(mid))return false')&&app.includes('MODULES.filter(m=>items.some'));
+ok('sidebar navigation renders the available modules under Arabic group headings',app.includes('class="sb-group"')&&app.includes('class="sb-group-title"')&&css.includes('#sb .sb-group-title'));
