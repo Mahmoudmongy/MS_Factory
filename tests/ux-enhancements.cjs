@@ -94,4 +94,7 @@ assert(history.includes("button.textContent='▤'") && auditTrail.includes("butt
 assert(indexHtml.indexOf('id="logout-btn"') < indexHtml.indexOf('id="who"') && indexHtml.indexOf('id="who"') < indexHtml.indexOf('id="thb"'), 'topbar order is exit, account, theme');
 assert(app.includes('const sv=(strict=false)=>') && app.includes('await sv(true)'), 'account and warehouse edits wait for confirmed database persistence');
 assert(app.includes('const oldName=a.name,oldParent=a.parentId') && app.includes('تم إلغاء التعديل المحلي'), 'failed account and warehouse edits restore their prior local values');
+assert(app.includes('الكمية المطلوبة أكبر من المتاح') && app.includes('t==="sale"||t==="pret"'), 'sales and purchase returns cannot consume more stock than the selected warehouse and variant holds');
+assert(app.includes('J.lines.length<2') && app.includes('dr>0&&cr>0'), 'manual journal entries require at least two one-sided lines and balanced totals');
+
 console.log('PASS adaptive A4 PDF layout and service-worker cache refresh');
