@@ -349,7 +349,7 @@ export async function loadManagerDataBridge(client, ownerId) {
   };
   const entries=[];const tableEntries=Object.entries(tables);for(let i=0;i<tableEntries.length;i+=4){const batch=await Promise.all(tableEntries.slice(i,i+4).map(async ([key,table])=>[key,await readRows(client,table,ownerId)]));entries.push(...batch)}
   const data = Object.fromEntries(entries);
-  const meaningful = ["accounts","customers","suppliers","products","invoices","ledger","vouchers"].some(key => data[key]?.length);
+  const meaningful = ["accounts","customers","suppliers","products","inventory","invoices","returns","ledger","vouchers","journals","production","materials","expenses","writeoffs","transfers","locations","inventoryLocationBalances"].some(key => data[key]?.length);
   return meaningful ? mapManagerDataToState(data) : null;
 }
 export { mapManagerDataToState, stableId };
