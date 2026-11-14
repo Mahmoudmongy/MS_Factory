@@ -618,44 +618,90 @@ window.addEventListener('online', async () => {
   }
 });
 let conflictExportedInSession = false;
+let conflictNoticeDismissedInSession = false;
+let conflictExportError = '';
+const conflictNoticeStateKey = 'ms-factory-conflict-export-notice:' + String(ownerId || 'unknown');
+function wasConflictExportedInSession() {
+  try { return sessionStorage.getItem(conflictNoticeStateKey) === 'exported'; }
+  catch (_) { return false; }
+}
+function rememberConflictExport() {
+  try { sessionStorage.setItem(conflictNoticeStateKey, 'exported'); } catch (_) {}
+}
+function resetConflictNotice() {
+  conflictExportedInSession = false;
+  conflictNoticeDismissedInSession = false;
+  conflictExportError = '';
+  try { sessionStorage.removeItem(conflictNoticeStateKey); } catch (_) {}
+}
+conflictExportedInSession = wasConflictExportedInSession();
 function updateConflictExportButton() {
   try {
     const recovery = conflictRecovery();
     const archives = recovery.readArchives();
     const queue = getQueue();
+    let notice = document.getElementById('factory-conflict-export-notice');
     let button = document.getElementById('factory-conflict-export');
-    if (!button) {
+    let closeButton = document.getElementById('factory-conflict-export-close');
+    if (!notice) {
+      notice = document.createElement('div');
+      notice.id = 'factory-conflict-export-notice';
+      notice.style.cssText = 'position:fixed;z-index:100000;left:16px;bottom:calc(12px + env(safe-area-inset-bottom,0px));display:flex;align-items:stretch;gap:6px;max-width:calc(100vw - 24px);';
       button = document.createElement('button');
       button.id = 'factory-conflict-export';
       button.type = 'button';
-      button.style.cssText = 'position:fixed;z-index:100000;left:16px;bottom:16px;padding:11px 16px;border:0;border-radius:9px;background:#7c2d12;color:#fff;font:600 14px Arial;box-shadow:0 3px 14px #0003;cursor:pointer';
+      button.style.cssText = 'max-width:calc(100vw - 76px);padding:11px 14px;border:0;border-radius:9px;background:#7c2d12;color:#fff;font:600 14px Arial;line-height:1.4;white-space:normal;overflow-wrap:anywhere;text-align:right;box-shadow:0 3px 14px #0003;cursor:pointer';
       button.addEventListener('click', () => {
         try {
           const currentRecovery = conflictRecovery();
           const payload = currentRecovery.getExportPayload(getQueue(), { accountId:ownerId });
-          const blob = new Blob([JSON.stringify(payload,null,2)], {type:'application/json;charset=utf-8'});
+          const json = JSON.stringify(payload, null, 2);
+          if (!json || json === 'undefined') throw new Error('لم يتم إنشاء محتوى ملف التصدير.');
+          const blob = new Blob([json], {type:'application/json;charset=utf-8'});
+          if (!blob.size) throw new Error('ملف التصدير فارغ.');
           const url = URL.createObjectURL(blob);
+          if (!url) throw new Error('تعذر تجهيز ملف التنزيل في المتصفح.');
           const link = document.createElement('a');
           const stamp = new Date().toISOString().replace(/[:.]/g,'-');
           const unique = globalThis.crypto?.randomUUID?.() || String(Date.now());
           link.href = url;
           link.download = 'ms-factory-conflict-review-' + stamp + '-' + unique + '.json';
+          link.style.display = 'none';
           document.body.appendChild(link);
           link.click();
           link.remove();
-          setTimeout(() => URL.revokeObjectURL(url),1000);
+          setTimeout(() => URL.revokeObjectURL(url), 60000);
           conflictExportedInSession = true;
+          conflictExportError = '';
+          rememberConflictExport();
           updateConflictExportButton();
-        } catch (error) { alert('تعذر تصدير العمليات المحفوظة: ' + (error.message || error)); }
+        } catch (error) {
+          conflictExportError = 'تعذر التصدير: ' + (error?.message || String(error));
+          console.error('Saved operations export failed:', error);
+          updateConflictExportButton();
+        }
       });
-      document.body.appendChild(button);
+      closeButton = document.createElement('button');
+      closeButton.id = 'factory-conflict-export-close';
+      closeButton.type = 'button';
+      closeButton.textContent = '×';
+      closeButton.setAttribute('aria-label', 'إغلاق تنبيه تصدير العمليات المحفوظة');
+      closeButton.title = 'إغلاق التنبيه';
+      closeButton.style.cssText = 'flex:0 0 38px;min-width:38px;border:0;border-radius:9px;background:#7c2d12;color:#fff;font:700 25px/1 Arial;box-shadow:0 3px 14px #0003;cursor:pointer';
+      closeButton.addEventListener('click', () => {
+        if (conflictExportError) return;
+        conflictNoticeDismissedInSession = true;
+        notice.hidden = true;
+      });
+      notice.append(button, closeButton);
+      document.body.appendChild(notice);
     }
     let resolveButton = document.getElementById('factory-conflict-resolve');
     if (!resolveButton) {
       resolveButton = document.createElement('button');
       resolveButton.id = 'factory-conflict-resolve';
       resolveButton.type = 'button';
-      resolveButton.style.cssText = 'position:fixed;z-index:100000;left:16px;bottom:66px;padding:11px 16px;border:0;border-radius:9px;background:#475569;color:#fff;font:600 14px Arial;box-shadow:0 3px 14px #0003;cursor:pointer';
+      resolveButton.style.cssText = 'position:fixed;z-index:100000;left:16px;bottom:calc(66px + env(safe-area-inset-bottom,0px));max-width:calc(100vw - 32px);padding:11px 14px;border:0;border-radius:9px;background:#475569;color:#fff;font:600 14px Arial;white-space:normal;box-shadow:0 3px 14px #0003;cursor:pointer';
       resolveButton.textContent = 'متابعة بعد تصدير العمليات';
       resolveButton.addEventListener('click', () => {
         if (!conflictExportedInSession) {
@@ -682,14 +728,20 @@ function updateConflictExportButton() {
     }
     const count = archives.reduce((sum,item)=>sum+Number(item.rejectedOperationCount||0),0) + queue.length;
     const needsReview = Boolean(queue.length || recovery.hasBlock() || conflictWriteLock);
-    button.hidden = !(archives.length || needsReview);
-    button.textContent = 'تصدير العمليات المحفوظة (' + count + ')';
+    const shouldShow = (Boolean(archives.length || needsReview) && !wasConflictExportedInSession() && !conflictNoticeDismissedInSession) || Boolean(conflictExportError);
+    notice.hidden = !shouldShow;
+    button.textContent = conflictExportError || ('تصدير العمليات المحفوظة (' + count + ')');
+    button.title = conflictExportError || 'تنزيل نسخة من العمليات المحفوظة للمراجعة';
+    closeButton.disabled = Boolean(conflictExportError);
+    closeButton.style.opacity = conflictExportError ? '.45' : '1';
+    closeButton.style.cursor = conflictExportError ? 'not-allowed' : 'pointer';
     resolveButton.hidden = !needsReview;
     resolveButton.disabled = !conflictExportedInSession;
   } catch (error) { console.warn('Could not refresh conflict export control:',error); }
 }
 window.addEventListener('factory-db-conflict', event => {
   console.warn('Factory database conflict:',event.detail?.message || event.detail);
+  resetConflictNotice();
   updateConflictExportButton();
 });
 updateConflictExportButton();
