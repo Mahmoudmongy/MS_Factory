@@ -575,13 +575,28 @@ button,input,select,table,textarea{font-family:inherit}
 #sb.icons-only .br{display:none!important}
 #sb.icons-only .sb-controls{justify-content:center!important;padding-inline:4px}
 #sb.icons-only .sb-mode{width:32px;min-width:32px;height:32px;min-height:32px;padding:0}
-#sb.icons-only .sb-nav-scroll>a{justify-content:center;padding-inline:5px;gap:0}
-#sb.icons-only .sb-nav-scroll>a .nav-ico{width:25px;height:25px}
+#sb.icons-only .sb-nav-scroll .sb-group>a{justify-content:center;padding-inline:5px;gap:0}
+#sb.icons-only .sb-nav-scroll .sb-group>a .nav-ico{width:25px;height:25px}
 @media(max-width:860px){
   #sb.icons-only{width:56px!important;min-width:56px!important;max-width:56px!important}
-  #sb.icons-only .sb-nav-scroll>a{min-height:48px}
+  #sb.icons-only .sb-nav-scroll .sb-group>a{min-height:48px}
 }
 
 .party-summary{display:flex;flex-wrap:wrap;gap:6px 18px;align-items:center;font-size:13px;line-height:1.4}.party-summary span{min-width:0}table.l th,table.l td{white-space:nowrap}table.l td:last-child{white-space:normal;min-width:170px}@media(max-width:860px){.party-summary{gap:6px 12px;font-size:12px}table.l td:last-child{min-width:150px}}
 
 .summary-details>summary{cursor:pointer;color:var(--pr);padding:8px 12px;font-weight:600}.summary-details[open]>summary{border-bottom:1px solid var(--bd)}
+
+
+/* ERP module navigation and company-level module selection. */
+#sb .sb-group{display:block;margin:5px 0 9px}
+#sb .sb-group-title{padding:9px 13px 4px;color:rgba(255,255,255,.58);font-size:11px;font-weight:700;letter-spacing:.2px}
+#sb .sb-group>a{margin:2px 6px}
+#sb.icons-only .sb-group-title{display:none}
+#sb.icons-only .sb-group{margin:4px 0}
+.module-settings{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin:14px 0}
+.module-setting{display:flex!important;align-items:center;gap:10px;padding:13px;border:1px solid var(--bd);border-radius:12px;background:var(--card);cursor:pointer;min-height:66px}
+.module-setting input{width:18px;height:18px;flex:none;margin:0}
+.module-setting span{display:grid;gap:3px;min-width:0}
+.module-setting b{font-size:14px}
+.module-setting small{font-size:11px;color:var(--mu);line-height:1.5}
+@media(max-width:620px){.module-settings{grid-template-columns:1fr}.module-setting{min-height:58px}}
