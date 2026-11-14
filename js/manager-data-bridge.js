@@ -85,7 +85,7 @@ function mapManagerDataToState(data) {
   const partnerRows = new Map();
   for (const p of customers) {
     const key = sourceKey(p), id = customerIds.get(p.id);
-    partnerRows.set(key, { id, cloudId:key, name:p.name || "", phone:p.phone || "", email:p.email || "", c:1, s:0, type:p.customer_type === "wholesale" ? "w" : "r", gov:p.governorate || "", city:p.city || "", adr:p.address || "", legacyManager:true, manager_read_only:true });
+    partnerRows.set(key, { id, cloudId:key, name:p.name || "", phone:p.phone || "", email:p.email || "", c:1, s:0, type:p.customer_type === "wholesale" ? "w" : "r", gov:p.governorate || "", city:p.city || "", adr:p.address || "", legacyManager:true });
   }
   for (const p of suppliers) {
     const key = sourceKey(p), existing = partnerRows.get(key), id = supplierIds.get(p.id);
@@ -272,9 +272,9 @@ function mapManagerDataToState(data) {
     list.push(x); expensesByOrder.set(key,list);
   }
   const po = production.map(order => {
-    let mats = (materialsByOrder.get(String(order.id)) || []).sort((a,b)=>num(a.line_no)-num(b.line_no)).map(m=>({ iid:productIds.get(m.product_id)||0, qty:num(m.quantity), cost:num(m.line_total)||num(m.unit_cost)*num(m.quantity), note:m.material_name || "", wh:whId(rawText(m.raw||{},"InventoryLocation","Warehouse")||rawText(order.raw||{},"InventoryLocation")||products.find(p=>String(p.id)===String(m.product_id))?.warehouse) }));
+    let mats = (materialsByOrder.get(String(order.id)) || []).sort((a,b)=>num(a.line_no)-num(b.line_no)).map(m=>({ iid:productIds.get(m.product_id)||0, qty:num(m.quantity), cost:num(m.line_total)||num(m.unit_cost)*num(m.quantity), note:m.material_name || rawText(m.raw||{},"Item","ItemName","Description") || "", wh:whId(rawText(m.raw||{},"InventoryLocation","Warehouse")||rawText(order.raw||{},"InventoryLocation")||products.find(p=>String(p.id)===String(m.product_id))?.warehouse) }));
     let x = (expensesByOrder.get(String(order.id)) || []).sort((a,b)=>num(a.line_no)-num(b.line_no)).map(e=>({ a:acctIds.get(e.account_id), amt:num(e.amount), note:e.account_name || "" }));
-    if(!mats.length&&Array.isArray(order.raw?.BillOfMaterials))mats=order.raw.BillOfMaterials.map(m=>{const key=rawText(m,"BillOfMaterials","InventoryItem","item"),product=products.find(p=>String(p.external_id)===String(key)||String(p.sku)===String(key)),qty=num(m.Qty||m.qty);return {iid:product?productIds.get(product.id):0,qty,cost:product?qty*unitCostAt(product.id,order.order_date):0,note:product?.name||key,wh:whId(rawText(m,"InventoryLocation","Warehouse")||rawText(order.raw||{},"InventoryLocation")||product?.warehouse)}}).filter(m=>m.iid&&m.qty);
+    if(!mats.length&&Array.isArray(order.raw?.BillOfMaterials))mats=order.raw.BillOfMaterials.map(m=>{const key=rawText(m,"BillOfMaterials","InventoryItem","item"),product=products.find(p=>String(p.external_id)===String(key)||String(p.sku)===String(key)),qty=num(m.Qty||m.qty);return {iid:product?productIds.get(product.id):0,qty,cost:product?qty*unitCostAt(product.id,order.order_date):0,note:product?.name||key,wh:whId(rawText(m,"InventoryLocation","Warehouse")||rawText(order.raw||{},"InventoryLocation")||product?.warehouse)}}).filter(m=>m.qty);
     if(!x.length&&Array.isArray(order.raw?.ExpenseItems))x=order.raw.ExpenseItems.map(e=>({a:acctIds.get(e.Account),amt:num(e.Amount),note:""})).filter(e=>e.a&&e.amt);
     const subs = normalizeBreakdown(order.raw?.FinishedBreakdown || null, order.raw?.Qty || 0);
     const status = ["delivered","completed","complete","finished"].includes(String(order.status||"").toLowerCase())?2:["in_progress","in progress","processing"].includes(String(order.status||"").toLowerCase())?1:0;
