@@ -276,6 +276,13 @@ function mapManagerDataToState(data) {
     mv.push({ d:row.transaction_date || "", ts:dateMs(row.created_at), iid:productIds.get(product.id), v:"-", q:sign*absQty, val:sign*value, ref:row.reference || "", pid:partnerId(row.customer_id || row.supplier_id), rid, src });
   }
 
+  // Reconcile the movement history to the current imported stock snapshot.
+  // Any history not represented by source movements becomes an explicit opening balance.
+  const movementTotals=new Map();
+  for(const m of mv){const key=String(m.iid)+"|"+String(m.v||"-"),sum=movementTotals.get(key)||{q:0,val:0};sum.q+=num(m.q);sum.val+=num(m.val);movementTotals.set(key,sum);}
+  const allMovementDates=mv.map(m=>m.d).filter(Boolean).sort();
+  const openingDate=allMovementDates.length?new Date(new Date(allMovementDates[0]+"T00:00:00").getTime()-86400000).toISOString().slice(0,10):"1970-01-01";
+  for(const item of items){for(const [variant,quantity] of Object.entries(item.st||{})){const key=String(item.id)+"|"+String(variant||"-"),sum=movementTotals.get(key)||{q:0,val:0};const openingQty=num(quantity)-sum.q,openingValue=num(item.val)-sum.val;if(Math.abs(openingQty)>.0001||Math.abs(openingValue)>.005){mv.push({d:openingDate,ts:dateMs(openingDate),iid:item.id,v:variant||"-",q:openingQty,val:openingValue,ref:"رصيد افتتاحي مستورد من Manager.io",pid:0,rid:0,src:"opening",legacyManager:true});}}}
   const curs = ["EGP","USD","EUR",...currencies.map(c=>c.code).filter(Boolean)];
   return { accts:accounts.map(a=>({ id:acctIds.get(a.id), cloudId:sourceKey(a), code:a.account_code || "", name:a.name || "", t:accountType(a.account_type), k:accountRole(a.account_role), cash:!!a.is_cash_account, cur:a.currency_code || "EGP", parentId:acctIds.get(a.parent_account_id)||null, legacyManager:true })), partners, wh, items, docs, vch, je, L, po, wo, mv, codes:[], emp:[], curs:[...new Set(curs)], managerBridgeVersion:1 };
 }
