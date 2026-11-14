@@ -585,3 +585,13 @@ button,input,select,table,textarea{font-family:inherit}
 .party-summary{display:flex;flex-wrap:wrap;gap:6px 18px;align-items:center;font-size:13px;line-height:1.4}.party-summary span{min-width:0}table.l th,table.l td{white-space:nowrap}table.l td:last-child{white-space:normal;min-width:170px}@media(max-width:860px){.party-summary{gap:6px 12px;font-size:12px}table.l td:last-child{min-width:150px}}
 
 .summary-details>summary{cursor:pointer;color:var(--pr);padding:8px 12px;font-weight:600}.summary-details[open]>summary{border-bottom:1px solid var(--bd)}
+
+/* ERP navigation groups and module settings */
+.sb-group{margin:4px 0 10px}
+.sb-group-title{padding:9px 13px 4px;color:var(--muted,#94a3b8);font-size:11px;font-weight:700;letter-spacing:.2px}
+.sb-group>a{display:block}
+.module-settings-list{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:8px}
+.module-setting-row{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:11px 12px;border:1px solid var(--bd);border-radius:8px;background:var(--bg);cursor:pointer}
+.module-setting-row span{display:flex;flex-direction:column;gap:3px;min-width:0}
+.module-setting-row small{font-size:12px;line-height:1.5}
+.module-setting-row input[type=checkbox]{width:20px;height:20px;flex:none;accent-color:var(--pr)}
