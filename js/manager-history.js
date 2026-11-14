@@ -78,17 +78,21 @@ async function getOwner() {
 function ensureUi() {
   if ($('#manager-history-open')) return;
   const top = $('#top');
-  if (!top) return;
+  const tabsBar = $('#tabs');
+  if (!top || !tabsBar) return;
+  const launcher = document.createElement('div');
+  launcher.id = 'manager-history-launcher';
+  launcher.style.cssText = 'display:flex;justify-content:flex-end;align-items:center;padding:5px 12px;background:var(--bg,#f7f8fa);';
   const button = document.createElement('button');
   button.id='manager-history-open';
   button.type='button';
   button.className='g';
   button.textContent='سجل Manager.io';
   button.title='عرض البيانات التاريخية المنقولة من Manager.io';
-  button.style.cssText='white-space:nowrap;font-weight:700;margin-inline:4px';
+  button.style.cssText='white-space:nowrap;font-weight:700;min-height:34px';
   button.addEventListener('click',openPanel);
-  const net=$('#net');
-  top.insertBefore(button,net || top.firstChild);
+  launcher.appendChild(button);
+  tabsBar.parentNode.insertBefore(launcher,tabsBar);
 
   const style=document.createElement('style');
   style.textContent=`
