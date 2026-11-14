@@ -225,7 +225,7 @@ function reverseJ(id){
  if(!can("edit")||!guard())return;
  const original=S.je.find(j=>j.id==id);if(!original||original.reversalOf||original.reversedBy){toast("لا يمكن عكس هذا القيد أو سبق عكسه");return}
  const source=S.L.filter(l=>l.rid==id&&l.src==="je");if(source.length<2){toast("تعذر العثور على سطور القيد الأصلية؛ لم يتم إجراء أي تغيير");return}
- const lines=source.map(l=>({a:l.a,dr:l.cr,cr:l.dr,desc:"عكس: "+(l.desc||original.desc||"") ,pid:l.pid||0,fc:l.fc||0}));
+ const lines=source.map(l=>({a:l.a,dr:l.cr,cr:l.dr,desc:"عكس: "+(l.desc||original.desc||""),pid:l.pid||0,fc:-(l.fc||0)}));
  const error=validateJournalLines(lines);if(error){toast("تعذر إنشاء القيد العكسي: "+error);return}
  const rid=uid(),no=nextJournalNo(),date=td(),ts=Date.now(),desc="قيد عكسي للقيد "+original.no+" — "+(original.desc||"");
  if(!post(date,no,desc,lines,"je",rid,ts)){toast("فشل ترحيل القيد العكسي؛ لم يتم حفظ أي تغيير");return}
