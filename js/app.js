@@ -479,7 +479,6 @@ function repairImportedWarehouseMap(){if(S.warehouseModelVersion===1)return;cons
 addEventListener("factory-database-ready",repairImportedWarehouseMap,{once:true});
 
 function migrate(){S.curs=S.curs||["EGP","USD","EUR"];S.codes=S.codes||[];S.accts.forEach(a=>{if(!a.cur)a.cur="EGP"});S.items.forEach(i=>{if(i.model===undefined)i.model="";Object.keys(i.st).forEach(v=>codeFor(i.id,v))});if(!S.tpl)S.tpl=TPL0();else Object.values(S.tpl).forEach(t=>{if(t.fs===14)t.fs=12});S.pend=S.pend||0}
-S.modules=S.modules&&typeof S.modules==="object"?S.modules:{};
 /* ---- unified balance display: positive = له علينا (plain), negative = عليه لنا (red) ---- */
 function pvh(v){const s=`${f(Math.abs(v))} ج.م`;return Math.abs(v)<.005?`${f(0)} ج.م`:v<0?`<span class="neg">-${s}</span>`:s}
 function lgTbl(ls,sg,pm){let b=0;return `<table class="l"><tr><th>التاريخ</th><th>المرجع</th><th>البيان</th><th>الطرف</th><th>مدين</th><th>دائن</th><th>الرصيد</th><th></th></tr>${U(ls,l=>{b+=(l.dr-l.cr)*sg;return `<tr><td>${dfm(l.d||(l.ts?lday(new Date(l.ts)):""))}</td><td>${l.ref}</td><td>${l.desc||""}</td><td>${l.pid?pn(l.pid):""}</td><td>${l.dr?f(l.dr):""}</td><td>${l.cr?f(l.cr):""}</td><td>${pm?pvh(b):f(b)}</td><td>${rb(l)}</td></tr>`})}</table>`}
