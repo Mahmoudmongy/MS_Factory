@@ -1236,8 +1236,8 @@ enh=function(){
     const action=button.getAttribute("onclick")||"";
     const labels=[
       [/savePdf|downloadPdf/i,"⬇","حفظ PDF"],[/sendWaPdf|sharePdf/i,"↗","مشاركة ملف PDF"],
-      [/vPrint\\(|poPrint\\(|inv\\(|stPrint\\(/,"⎙","طباعة"],[/editDoc\\(|editV\\(|editPO\\(|editAcc\\(|editWh\\(/,"✎","تعديل"],
-      [/delGo\\(|factoryDelRef\\(|delete/i,"⌫","حذف"]
+      [/vPrint\(|poPrint\\(|inv\\(|stPrint\\(/,"⎙","طباعة"],[/editDoc\(|editV\\(|editPO\\(|editAcc\\(|editWh\\(/,"✎","تعديل"],
+      [/delGo\(|factoryDelRef\\(|delete/i,"⌫","حذف"]
     ];
     const byAction=labels.find(x=>x[0].test(action));
     const textLabel=button.textContent.trim();
