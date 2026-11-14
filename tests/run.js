@@ -125,7 +125,7 @@ ok('both install icons are present in the production public assets directory',ma
 ok('public PWA icons have valid PNG signatures and declared dimensions',man.icons.every(ic=>{const p=path.join(ROOT,'public',ic.src.replace('./',''));if(!fs.existsSync(p))return false;const b=fs.readFileSync(p),size=ic.sizes.split('x').map(Number);return b.length>24&&b.subarray(0,8).equals(Buffer.from([137,80,78,71,13,10,26,10]))&&b.readUInt32BE(16)===size[0]&&b.readUInt32BE(20)===size[1];}));
 
 ok('mobile header reserves a wider account selector and adapts the icon columns',css.includes('minmax(92px,116px)')&&css.includes('minmax(86px,98px)')&&css.includes('#top #who{width:100%'));
-ok('mobile toolbar uses a two-row named grid with separate slots for every control',css.includes('grid-template-areas:"menu back forward title title title" "net who who who theme logout"')&&css.includes('#top #ttl{grid-area:title')&&css.includes('#top #logout-btn{grid-area:logout'));
+ok('mobile toolbar keeps exit, account and theme controls in a compact named grid beside the history icons',css.includes('grid-template-areas:"menu back forward title net history history logout who theme"')&&css.includes('#top #logout-btn{grid-area:logout')&&css.includes('#top #who{grid-area:who')&&css.includes('#top #thb{grid-area:theme')&&css.includes('#top #manager-history-launcher{grid-area:history'));
 ok('settings is rendered in the scrollable sidebar navigation',app.includes('class="sb-nav-scroll"')&&app.includes('U(items,renderLink)')&&!app.includes('class="sb-footer"')&&css.includes('#sb .sb-nav-scroll{flex:1 1 auto;min-height:0;overflow-y:auto'));
 
 ok('mobile settings link remains reachable above the bottom safe area',css.includes('#sb a[onclick*="\'set\'"]{position:sticky')&&css.includes('padding-bottom:calc(76px + env(safe-area-inset-bottom'));
@@ -773,4 +773,4 @@ ok('Manager.io history screen is connected from the main app and cached for PWA 
 ok('Manager.io history module includes all migrated business areas', ['customers','suppliers','products','inventory_location_balances','invoices','invoice_items','returns','vouchers','production_orders','manager_accounts','manager_ledger_transactions'].every(t=>managerHistory.includes(t)));
 ok('Manager.io history is explicitly read-only and does not write imported history',managerHistory.includes('للقراءة فقط')&&!['.insert(','.update(','.upsert(','.delete('].some(token=>managerHistory.includes(token)));
 console.log(R.join('\n'));console.log(`\n${R.length-fails}/${R.length} checks passed, ${fails} failed`);process.exit(fails?1:0);
-})().catch(e=>{console.error('TEST RUN CRASHED:',e.message);process.exit(2)});
+})().catch(e=>{console.error('TEST RUN CRASHED:',e.stack||e.message);process.exit(2)});
