@@ -100,7 +100,8 @@ function clearLegacyDeviceData() {
 }
 function archiveLegacyQueues() {
   if (conflictRecovery().hasBlock()) return;
-  const keys = [QUEUE_KEY, scopedKey(QUEUE_KEY)];
+  const legacyOwnerQueueKey=QUEUE_KEY+':'+String(ownerId||'anonymous');
+  const keys = [...new Set([QUEUE_KEY,legacyOwnerQueueKey,scopedKey(QUEUE_KEY)])];
   for (const key of keys) {
     const raw = localStorage.getItem(key);
     if (!raw) continue;
