@@ -26,13 +26,13 @@ const CONFIG = {
     ['customers','العملاء','name'],['suppliers','الموردون','name']
   ],
   inventory: [
-    ['products','الأصناف','name'],['inventory_location_balances','أرصدة المواقع','warehouse'],['manager_inventory_cost_history','تاريخ التكلفة','effective_date']
+    ['products','الأصناف','name'],['inventory_location_balances','أرصدة المواقع','warehouse'],['manager_inventory_cost_history','تاريخ التكلفة','effective_date'],['manager_inventory_write_offs','تسويات المخزون','writeoff_date']
   ],
   documents: [
-    ['invoices','الفواتير','invoice_date'],['invoice_items','بنود الفواتير','id'],['returns','المرتجعات','return_date'],['return_items','بنود المرتجعات','id'],['manager_invoice_source_lines','تفاصيل مصدر الفواتير','issue_date'],['invoice_line_adjustments','بنود الشراء الإضافية','created_at']
+    ['invoices','الفواتير','invoice_date'],['invoice_items','بنود الفواتير','id'],['customers','العملاء','name'],['suppliers','الموردون','name'],['returns','المرتجعات','return_date'],['return_items','بنود المرتجعات','id'],['manager_invoice_source_lines','تفاصيل مصدر الفواتير','issue_date'],['invoice_line_adjustments','بنود الشراء الإضافية','created_at']
   ],
   vouchers: [
-    ['vouchers','السندات','voucher_date'],['manager_voucher_lines','تفاصيل السندات','transaction_date']
+    ['vouchers','السندات','voucher_date'],['manager_voucher_lines','تفاصيل السندات','transaction_date'],['customers','العملاء','name'],['suppliers','الموردون','name']
   ],
   production: [
     ['production_orders','أوامر الإنتاج','order_date']
@@ -207,7 +207,7 @@ function renderTabContent(tab){
   } else if(tab==='inventory'){
     const products=filtered(get('products'),r=>[r.name,r.sku,r.model,r.external_id].join(' '));
     const balances=get('inventory_location_balances');
-    const costs=get('manager_inventory_cost_history');
+    const costs=get('manager_inventory_cost_history'),writeoffs=get('manager_inventory_write_offs');
     const locations=[...new Set(balances.map(x=>x.warehouse||x.manager_location_id||'غير محدد'))];
     const rows=products.slice(0,600).map(p=>{
       const b=balances.filter(x=>x.product_id===p.id);
@@ -217,22 +217,22 @@ function renderTabContent(tab){
       return `<tr><td>${esc(p.sku||'—')}</td><td>${esc(p.name)}</td><td>${esc(p.unit||'قطعة')}</td><td>${qty(total)}</td><td>${loc}</td><td>${money(latest?.unit_cost??p.buy_price)}</td><td>${money(total*Number(latest?.unit_cost??p.buy_price??0))}</td><td>${detail(p.raw||p)}</td></tr>`;
     });
     const neg=balances.filter(x=>Number(x.quantity)<0);
-    root.innerHTML=card('المخزون حسب المخزن',`<div class="mh-muted">عدد الأصناف: ${products.length} — مواقع التخزين: ${locations.length} — أرصدة المواقع السالبة: <b class="mh-negative">${neg.length}</b></div>`+searchBox()+table(['الكود','الصنف','الوحدة','إجمالي الكمية','تفصيل كل مخزن','آخر تكلفة وحدة','قيمة تقديرية','المصدر'],rows))+card('تفاصيل مواقع التخزين',table(['المخزن','الصنف','الكمية','مرجع المصدر'],filtered(balances,r=>[r.warehouse,r.manager_location_id,get('products').find(p=>p.id===r.product_id)?.name].join(' ')).slice(0,500).map(r=>`<tr><td>${esc(r.warehouse||'—')}</td><td>${esc(get('products').find(p=>p.id===r.product_id)?.name||shortId(r.product_id))}</td><td class="${Number(r.quantity)<0?'mh-negative':''}">${qty(r.quantity)}</td><td>${esc(r.source_record_key||'—')}</td></tr>`)));
+    root.innerHTML=card('المخزون حسب المخزن',`<div class="mh-muted">عدد الأصناف: ${products.length} — مواقع التخزين: ${locations.length} — أرصدة المواقع السالبة: <b class="mh-negative">${neg.length}</b></div>`+searchBox()+table(['الكود','الصنف','الوحدة','إجمالي الكمية','تفصيل كل مخزن','آخر تكلفة وحدة','قيمة تقديرية','المصدر'],rows))+card('تفاصيل مواقع التخزين',table(['المخزن','الصنف','الكمية','مرجع المصدر'],filtered(balances,r=>[r.warehouse,r.manager_location_id,get('products').find(p=>p.id===r.product_id)?.name].join(' ')).slice(0,500).map(r=>`<tr><td>${esc(r.warehouse||'—')}</td><td>${esc(get('products').find(p=>p.id===r.product_id)?.name||shortId(r.product_id))}</td><td class="${Number(r.quantity)<0?'mh-negative':''}">${qty(r.quantity)}</td><td>${esc(r.source_record_key||'—')}</td></tr>`)))+card('تاريخ تكاليف الأصناف',table(['التاريخ','الصنف','تكلفة الوحدة','التفاصيل'],costs.slice(0,500).map(r=>`<tr><td>${date(r.effective_date)}</td><td>${esc(get('products').find(p=>p.id===r.product_id)?.name||shortId(r.product_id))}</td><td>${money(r.unit_cost)}</td><td>${detail(r.raw||r)}</td></tr>`)))+card('تسويات وهالك المخزون',table(['التاريخ','الوصف','المخزن','الأصناف','التفاصيل'],writeoffs.map(r=>`<tr><td>${date(r.writeoff_date)}</td><td>${esc(r.description||'')}</td><td>${esc(r.inventory_location_id||'—')}</td><td>${Array.isArray(r.items)?r.items.length:0}</td><td>${detail(r.raw||r)}</td></tr>`)));
   } else if(tab==='documents'){
     const invoices=filtered(get('invoices'),r=>[r.invoice_no,r.customer_name,r.note,r.invoice_type,r.external_id].join(' '));
-    const items=get('invoice_items'),returns=filtered(get('returns'),r=>[r.return_no,r.note,r.return_type].join(' '));
+    const items=get('invoice_items'),returns=filtered(get('returns'),r=>[r.return_no,r.note,r.return_type].join(' ')),customers=get('customers'),suppliers=get('suppliers');
     const sourceLines=get('manager_invoice_source_lines'),adjustments=get('invoice_line_adjustments');
     root.innerHTML=card('الفواتير ('+invoices.length+')',searchBox()+table(['التاريخ','النوع','رقم الفاتورة','العميل / المورد','الإجمالي','البنود','تفاصيل'],invoices.slice(0,600).map(r=>{
       const lines=items.filter(x=>x.invoice_id===r.id);
       const extras=adjustments.filter(x=>x.invoice_id===r.id);
-      return `<tr><td>${date(r.invoice_date)}</td><td>${r.invoice_type==='sale'?'بيع':'شراء'}</td><td>${esc(r.invoice_no)}</td><td>${esc(r.customer_name||'—')}</td><td>${money(r.total)}</td><td>${lines.length} بند / ${extras.length} إضافي</td><td>${detail({invoice:r,lines,extra_lines:extras,source_lines:sourceLines.filter(x=>x.invoice_id===r.id)})}</td></tr>`;
+      return `<tr><td>${date(r.invoice_date)}</td><td>${r.invoice_type==='sale'?'بيع':'شراء'}</td><td>${esc(r.invoice_no)}</td><td>${esc(r.customer_name||(r.customer_id?customers.find(p=>p.id===r.customer_id)?.name:null)||(r.supplier_id?suppliers.find(p=>p.id===r.supplier_id)?.name:null)||'—')}</td><td>${money(r.total)}</td><td>${lines.length} بند / ${extras.length} إضافي</td><td>${detail({invoice:r,lines,extra_lines:extras,source_lines:sourceLines.filter(x=>x.invoice_id===r.id)})}</td></tr>`;
     })))+card('المرتجعات ('+returns.length+')',table(['التاريخ','النوع','الرقم','الإجمالي','البيان','تفاصيل'],returns.slice(0,400).map(r=>`<tr><td>${date(r.return_date)}</td><td>${r.return_type==='sale_return'?'مرتجع بيع':'مرتجع شراء'}</td><td>${esc(r.return_no)}</td><td>${money(r.total)}</td><td>${esc(r.note||'')}</td><td>${detail({return:r,lines:get('return_items').filter(x=>x.return_id===r.id)})}</td></tr>`)))+card('مراجعة البنود الإضافية في فواتير الشراء',`<p>عدد البنود المستقلة: <b>${adjustments.length}</b> — إجمالي قيمتها: <b>${money(adjustments.reduce((n,x)=>n+Number(x.amount||0),0))} ج.م</b>.</p><p class="mh-muted">تم الاحتفاظ بها منفصلة عن بنود الفاتورة الأساسية؛ لا يتم دمجها تلقائيًا في كميات المخزون.</p>`);
   } else if(tab==='vouchers'){
     const vouchers=filtered(get('vouchers'),r=>[r.voucher_no,r.direction,r.account,r.note,r.external_id].join(' '));
     const lines=get('manager_voucher_lines');
     root.innerHTML=card('سندات القبض والصرف ('+vouchers.length+')',searchBox()+table(['التاريخ','النوع','رقم السند','الطرف','المبلغ','الحساب','التفاصيل'],vouchers.slice(0,600).map(r=>{
       const detailLines=lines.filter(x=>x.voucher_id===r.id);
-      return `<tr><td>${date(r.voucher_date)}</td><td>${r.direction==='in'?'قبض':'صرف'}</td><td>${esc(r.voucher_no)}</td><td>${esc(r.customer_id||r.supplier_id||'—')}</td><td>${money(r.amount)}</td><td>${esc(r.account||'—')}</td><td>${detail({voucher:r,lines:detailLines})}</td></tr>`;
+      return `<tr><td>${date(r.voucher_date)}</td><td>${r.direction==='in'?'قبض':'صرف'}</td><td>${esc(r.voucher_no)}</td><td>${esc((r.customer_id?get('customers').find(p=>p.id===r.customer_id)?.name:null)||(r.supplier_id?get('suppliers').find(p=>p.id===r.supplier_id)?.name:null)||'—')}</td><td>${money(r.amount)}</td><td>${esc(r.account||'—')}</td><td>${detail({voucher:r,lines:detailLines})}</td></tr>`;
     })));
   } else if(tab==='production'){
     const rows=filtered(get('production_orders'),r=>[r.order_no,r.item_name,r.description,r.status].join(' '));
@@ -249,7 +249,7 @@ function renderTabContent(tab){
     })))+card('دفتر الأستاذ ('+ledgerRows.length+' حركة)',table(['التاريخ','النوع','المرجع','الحساب','البيان','مدين','دائن','تفاصيل'],ledgerRows.slice(0,250).map(l=>{
       const a=accounts.find(x=>x.id===l.account_id);
       return `<tr><td>${date(l.transaction_date)}</td><td>${esc(l.transaction_type||'')}</td><td>${esc(l.reference||'')}</td><td>${esc(a?.name||shortId(l.account_id))}</td><td>${esc(l.line_description||l.description||'')}</td><td>${money(l.debit)}</td><td>${money(l.credit)}</td><td>${detail(l.raw||l)}</td></tr>`;
-    }))+'<p class="mh-muted">يعرض الجدول أول 250 حركة لتجنب تحميل واجهة المتصفح بعدد كبير من الصفوف؛ إجمالي الحركات المحملة: '+ledger.length.toLocaleString('en-US')+'.');
+    })))+card('القيود اليومية',table(['التاريخ','البيان','التفاصيل'],get('manager_journal_entries').map(r=>`<tr><td>${date(r.entry_date)}</td><td>${esc(r.narration||'')}</td><td>${detail(r.raw||r)}</td></tr>`)))+card('التحويلات بين الحسابات',table(['التاريخ','من حساب','إلى حساب','المبلغ','العملة','البيان','التفاصيل'],get('manager_inter_account_transfers').map(r=>`<tr><td>${date(r.transfer_date)}</td><td>${esc(accounts.find(a=>a.id===r.paid_from_account_id)?.name||shortId(r.paid_from_account_id))}</td><td>${esc(accounts.find(a=>a.id===r.received_in_account_id)?.name||shortId(r.received_in_account_id))}</td><td>${money(r.amount)}</td><td>${esc(r.currency_code||'EGP')}</td><td>${esc(r.description||'')}</td><td>${detail(r.raw||r)}</td></tr>`)))+'<p class="mh-muted">يعرض دفتر الأستاذ أول 250 حركة لتجنب تحميل واجهة المتصفح بعدد كبير من الصفوف؛ إجمالي الحركات المحملة: '+ledger.length.toLocaleString('en-US')+'.');
   }
 }
 window.addEventListener('factory-database-ready',()=>{
