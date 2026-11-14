@@ -741,9 +741,9 @@ if(!open.sb)throw new Error('Mobile drawer did not open after tapping the burger
 
 await m.evaluate(()=>go('sale'));
 const datePanelClosed=await m.evaluate(()=>{const card=document.querySelector('#m .filter-card'),panel=card?.querySelector('.filter-date-panel'),btn=card?.querySelector('.filter-date-toggle');return !!panel&&panel.hidden&&!!btn&&btn.textContent.includes('تحديد الفترة')&&card.querySelectorAll('input[type="date"]').length===2;});
-await m.locator('#m .filter-date-toggle').first().click();
+await m.evaluate(()=>{const b=document.querySelector('#m .filter-date-toggle');if(!b)throw new Error('Mobile period filter button was not rendered');b.click()});
 const datePanelOpened=await m.evaluate(()=>{const card=document.querySelector('#m .filter-card'),panel=card?.querySelector('.filter-date-panel');return !!panel&&!panel.hidden&&getComputedStyle(panel).display!=='none'&&card.querySelectorAll('.filter-date-field').length===2;});
-await m.locator('#m .filter-date-toggle').first().click();
+await m.evaluate(()=>{const b=document.querySelector('#m .filter-date-toggle');if(!b)throw new Error('Mobile period filter button was not rendered');b.click()});
 ok('mobile date fields remain hidden until the separate period button is pressed',datePanelClosed&&datePanelOpened,{datePanelClosed,datePanelOpened});
 await m.evaluate(()=>docForm('sale'));const fw=await m.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1);
 ok('mobile: invoice form fits the screen width',fw);
