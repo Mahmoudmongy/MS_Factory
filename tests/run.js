@@ -718,7 +718,7 @@ const bridgeFixture=await bridgePage.evaluate(async()=>{
   products:[{id:'p1',external_id:'item-1',name:'Shirt',sku:'SH001',unit:'piece',buy_price:60,retail_price:100,warehouse:'Finished'}],
   inventory:[{id:'i1',product_id:'p1',variant:'-',quantity:9,warehouse:'Finished'}],
   costs:[{id:'co1',product_id:'p1',effective_date:'2026-01-01',unit_cost:60}],
-  locations:[{id:'w1',external_id:'wh1',name:'Finished'},{id:'w2',external_id:'wh2',name:'Raw'}],inventoryLocationBalances:[{id:'bal1',manager_location_id:'wh1',warehouse:'Finished',quantity:5},{id:'bal2',manager_location_id:'wh2',warehouse:'Raw',quantity:4}],
+  locations:[{id:'w1',external_id:'wh1',name:'Finished'},{id:'w2',external_id:'wh2',name:'Raw'}],inventoryLocationBalances:[{id:'bal1',product_id:'p1',manager_location_id:'wh1',warehouse:'Finished',quantity:5},{id:'bal2',product_id:'p1',manager_location_id:'wh2',warehouse:'Raw',quantity:4}],
   invoices:[{id:'inv1',external_id:'invoice-1',invoice_no:'SI-001',invoice_type:'sale',customer_id:'c1',invoice_date:'2026-01-02',total:100,discount:0,raw:{SalesInventoryLocation:'wh1'}}],
   invoiceLines:[{id:'il1',invoice_id:'inv1',line_no:1,product_id:'p1',item_name:'Shirt',quantity:1,unit_price:100,line_total:100,source_line_kind:'nested_detail',raw:{}}],
   returns:[],returnLines:[],
