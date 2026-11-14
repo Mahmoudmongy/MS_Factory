@@ -332,13 +332,22 @@ function vSet(){
  const moduleRows=MODULES.filter(m=>m.id!=="home"&&m.id!=="settings").map(m=>{
   const enabled=modules[m.id]!==false;
   const screens=m.screens.map(id=>N[id]||id).join("، ");
-  return '<label class="module-setting-row"><span><b>'+m.label+'</b><small class="mu">'+screens+'</small></span><input type="checkbox" '+(enabled?'checked':'')+(admin?'':' disabled')+' onchange="toggleModule(\''+m.id+'\',this.checked)" aria-label="تفعيل وحدة '+m.label+'"></label>';
+  return '<label class="module-setting-row"><span><b>'+m.label+'</b><small class="mu">'+screens+'</small></span><input type="checkbox" '+(enabled?'checked':'')+(admin?'':' disabled')+' onchange="toggleModule(\\''+m.id+'\\',this.checked)" aria-label="تفعيل وحدة '+m.label+'"></label>';
  }).join("");
+ const tiles=[
+  ["coa","شجرة الحسابات","go('coa')"],["company","بيانات الشركة التفصيلية","bizForm()"],
+  ["print","قوالب الطباعة","tplForm()"],["import","استيراد من Excel","impForm()"],
+  ["margin","هامش الربح المقترح","pctForm()"],["warehouse","مخازن فرعية","wForm()"],
+  ["customize","تخصيص الشاشات الفرعية","cust()"],["employee","الموظفون والصلاحيات","go('emp')"],
+  ["language","اللغة: عربي / English","togLang()"]
+ ];
+ if(canInstall()&&!isStandalone())tiles.push(["install","تثبيت التطبيق","promptInstall()"]);
  return ph(N.set,'<button class="g" onclick="syncPage()">حالة الاتصال</button>')+
  '<section class="card"><h3>بيانات الشركة</h3><label for="factory-company-name">اسم الشركة الظاهر في البرنامج</label><div class="row"><input id="factory-company-name" maxlength="120" value="'+String(S.name||"").replace(/&/g,"&amp;").replace(/"/g,"&quot;")+'" '+(admin?'':'disabled')+'><button '+(admin?'':'disabled')+' onclick="saveCompanyName()">حفظ الاسم</button></div><p class="mu">يظهر الاسم في القائمة الرئيسية وشاشة الدخول.</p></section>'+
  '<section class="card"><h3>إدارة وحدات البرنامج</h3><p class="mu">تقدر توقف ظهور أي وحدة مش محتاجها حاليًا وترجع تفعّلها في أي وقت. إيقاف الوحدة لا يحذف فواتيرها أو حساباتها أو أي بيانات محفوظة.</p>'+
  '<div class="module-settings-list">'+moduleRows+'</div>'+
  '<p class="mu">الملخص والإعدادات يظلان متاحين دائمًا حتى لا تفقد طريقة الرجوع وإعادة تفعيل الوحدات.</p></section>'+
+ '<section class="card"><h3>إعدادات إضافية</h3><div class="tiles">'+U(tiles,t=>'<button type="button" class="tile" onclick="'+t[2]+'"><span class="tile-ico">'+ico(t[0])+'</span><span>'+t[1]+'</span></button>')+'</div></section>'+
  '<section class="card"><h3>المظهر واللغة</h3><div class="row"><button class="g" onclick="togTheme()">تغيير الوضع الفاتح / الداكن</button><button class="g" onclick="togLang()">العربية / English</button></div></section>'+
  '<section class="card"><h3>معلومات النظام</h3><p>الواجهة: مدير المصنع</p><p>قاعدة البيانات: Supabase</p><p class="mu">إعدادات ظهور الوحدات ليست بديلًا عن صلاحيات الحسابات؛ صلاحيات الموظفين والتحقق من الخادم تظل هي الحاكمة للوصول للبيانات.</p></section>';
 }
@@ -790,7 +799,7 @@ function importGo(){if(WZ.t==="all"){prepareFullImport();return;}const ok=WZ.out
  else ok.forEach(x=>{const o=x.o,r=String(o.role||""),both=r.includes("كلاهما"),c=WZ.t==="customers"||both||r.includes("عميل")||(WZ.t!=="suppliers"&&!r),s=WZ.t==="suppliers"||both||r.includes("مورد");S.partners.push({id:uid(),name:String(o.name),phone:String(o.phone||""),c:c?1:0,s:s?1:0,type:String(o.kind).includes("جملة")?"w":"r",gov:String(o.gov||""),city:String(o.city||""),adr:String(o.adr||"")});n++});
  sv();toast("تم استيراد "+n+" صف من شيت "+WZ.sheet);WZ.out=[];impMap()}
 /* ---- settings ---- */
-function vSet(){
+function vSetLegacy(){
  const tiles=[
   ["coa","شجرة الحسابات","go('coa')"],["company","بيانات الشركة","bizForm()"],
   ["print","قوالب الطباعة","tplForm()"],["import","استيراد من Excel","impForm()"],
@@ -807,8 +816,8 @@ function bizForm(){const b=S.biz||{},safe=v=>String(v||"").replace(/&/g,"&amp;")
 function saveBiz(){const companyName=$("#biz_name")?.value.trim();if(companyName)S.name=companyName;S.biz={commercial_no:$("#biz_cr").value.trim(),tax_no:$("#biz_tax").value.trim(),vat_no:$("#biz_vat").value.trim(),legal_form:$("#biz_legal").value.trim(),activity:$("#biz_activity").value.trim(),phone:$("#biz_phone").value.trim(),email:$("#biz_email").value.trim(),website:$("#biz_web").value.trim(),governorate:$("#biz_gov").value.trim(),city:$("#biz_city").value.trim(),address:$("#biz_address").value.trim(),notes:$("#biz_notes").value.trim()};sv();nav();toast("تم حفظ بيانات الشركة");cl()}
 function pctForm(){sh(`<h3>هامش الربح المقترح</h3><p class="mu">على أساس متوسط التكلفة، ويُستخدم لاقتراح سعر البيع.</p><label>نسبة الجملة %</label><input id="pw" type="number" value="${S.pct.w}" placeholder="20"><label>نسبة القطاعي %</label><input id="pr_" type="number" value="${S.pct.r}" placeholder="40"><div class="row"><button onclick="savePct()">حفظ</button>${bk}</div>`)}
 function savePct(){S.pct={w:+$("#pw").value||0,r:+$("#pr_").value||0};sv();toast("تم حفظ نسب الربح");cl()}
-function cust(){sh(`<h3>تخصيص الوحدات</h3><p class="mu">اختر الوحدات التي تحتاجها شركتك. إيقاف أي وحدة يخفيها من القائمة فقط ولا يحذف سجلاتها أو حركاتها. يمكنك إعادة تفعيلها في أي وقت من هذه الصفحة.</p><div class="module-settings">${U(MODULES.filter(m=>!["home","settings"].includes(m.id)),m=>`<label class="module-setting"><input type="checkbox" class="mod-enable" value="${m.id}" ${moduleEnabled(m.id)?"checked":""}><span><b>${m.label}</b><small>${m.screens.map(id=>N[id]).join(" • ")}</small></span></label>`)}</div><details class="card"><summary>تخصيص الشاشات داخل كل وحدة</summary><p class="mu">يمكنك إخفاء شاشة فرعية دون تعطيل الوحدة كلها.</p>${U(T.filter(t=>!["home","set"].includes(t[0])),t=>`<label style="display:block"><input type="checkbox" class="cz" value="${t[0]}" ${S.hide.includes(t[0])?"":"checked"}> ${t[2]}</label>`)}</details><div class="row"><button onclick="saveCust()">حفظ التخصيص</button>${bk}</div>`)}
-function saveCust(){S.modules=S.modules||{};document.querySelectorAll(".mod-enable").forEach(x=>{S.modules[x.value]=x.checked});S.hide=[...ACT.querySelectorAll(".cz:not(:checked)")].map(x=>x.value);sv();const visible=allowed();if(!visible.some(t=>t[0]===tab))go(visible[0]?.[0]||"home");else{nav();cl()}toast("تم حفظ تخصيص الوحدات دون حذف أي بيانات")} 
+function cust(){if(!moduleAdmin()){toast("تخصيص الشاشات متاح لمدير النظام فقط");return}sh(`<h3>تخصيص الوحدات</h3><p class="mu">اختر الوحدات التي تحتاجها شركتك. إيقاف أي وحدة يخفيها من القائمة فقط ولا يحذف سجلاتها أو حركاتها. يمكنك إعادة تفعيلها في أي وقت من هذه الصفحة.</p><div class="module-settings">${U(MODULES.filter(m=>!["home","settings"].includes(m.id)),m=>`<label class="module-setting"><input type="checkbox" class="mod-enable" value="${m.id}" ${moduleEnabled(m.id)?"checked":""}><span><b>${m.label}</b><small>${m.screens.map(id=>N[id]).join(" • ")}</small></span></label>`)}</div><details class="card"><summary>تخصيص الشاشات داخل كل وحدة</summary><p class="mu">يمكنك إخفاء شاشة فرعية دون تعطيل الوحدة كلها.</p>${U(T.filter(t=>!["home","set"].includes(t[0])),t=>`<label style="display:block"><input type="checkbox" class="cz" value="${t[0]}" ${S.hide.includes(t[0])?"":"checked"}> ${t[2]}</label>`)}</details><div class="row"><button onclick="saveCust()">حفظ التخصيص</button>${bk}</div>`)}
+function saveCust(){if(!moduleAdmin())return;S.modules=S.modules||{};document.querySelectorAll(".mod-enable").forEach(x=>{S.modules[x.value]=x.checked});S.hide=[...ACT.querySelectorAll(".cz:not(:checked)")].map(x=>x.value);sv();const visible=allowed();if(!visible.some(t=>t[0]===tab))go(visible[0]?.[0]||"home");else{nav();cl()}toast("تم حفظ تخصيص الوحدات دون حذف أي بيانات")} 
 
 
 
