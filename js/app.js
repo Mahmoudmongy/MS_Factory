@@ -43,6 +43,7 @@ function whDescendants(id,seen=new Set()){
  const children=(S.wh||[]).filter(w=>String(w.parentId)===key);
  return children.flatMap(w=>[w.id,...whDescendants(w.id,seen)]);
 }
+window.whTree=whTree;window.whPath=whPath;window.whDescendants=whDescendants;
 
 function rev(rid,src){const match=x=>x.rid==rid&&(!src||x.src==src);S.L=S.L.filter(l=>!match(l));S.mv=S.mv.filter(m=>{if(match(m)){const i=it_(m.iid);if(i){i.st[m.v]-=m.q;i.val-=m.val}return false}return true})}
 function ensureItem(name,wh,unit,buy){let i=S.items.find(x=>x.name==name&&x.wh==wh)||S.items.find(x=>x.name==name);if(!i){const itemId=uid();i={id:itemId,cloudId:String(itemId),name,sku:"IT"+itemId.toString(36).toUpperCase(),wh,unit:unit||"قطعة",buy:buy||0,retail:0,wholesale:0,img:"",st:{},val:0};S.items.push(i)}return i}
