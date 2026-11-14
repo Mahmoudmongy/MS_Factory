@@ -306,7 +306,7 @@ function mapManagerDataToState(data) {
   const ledgerDebit=ledger.reduce((a,x)=>a+num(x.debit),0),ledgerCredit=ledger.reduce((a,x)=>a+num(x.credit),0);
   const inventoryQuantity=inventory.reduce((a,x)=>a+num(x.quantity),0),locationQuantity=(data.inventoryLocationBalances||[]).reduce((a,x)=>a+num(x.quantity),0);
   const managerBridgeWarnings={
-    unlinkedVoucherLines:voucherLines.filter(x=>!x.voucher_id).length,
+    unlinkedVoucherLines:voucherLines.filter(x=>!x.voucher_id&&x.line_type!=="opening_balance").length,
     invoiceLinesWithoutProduct:invoiceLines.filter(x=>x.source_line_kind==="nested_detail"&&!x.product_id).length,
     journalsWithoutLedger:journals.filter(j=>!ledger.some(l=>l.source_record_type==="journal_entries"&&String(l.source_manager_key)===String(j.external_id))).length,
     vouchersRecoveredFromLedger:vouchers.filter(v=>!voucherLines.some(l=>String(l.voucher_id)===String(v.id)&&l.line_type!=="opening_balance")).length,
