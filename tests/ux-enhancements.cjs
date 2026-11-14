@@ -34,8 +34,13 @@ assert(migration.includes('FACTORY_RECORD_PHYSICAL_DELETE_BLOCKED') && migration
 assert(safeUndoMigration.includes('UNDO_NOT_LATEST') && safeUndoMigration.includes('UNDO_VERSION_CONFLICT') && safeUndoMigration.includes('UNDO_ADMIN_ONLY'), 'audit undo must be admin-only and latest-version safe');
 assert(permissionMigration.includes('EMPLOYEE_DELETE_REQUIRES_EDIT'), 'delete permission must require edit permission');
 assert(app.includes('function updateColumnChooserLanguage') && app.includes('Choose visible columns and save'), 'column chooser labels must follow application language');
-assert(history.includes("insertBefore(launcher,netButton.nextSibling)") && history.includes('moveConflictExport') && history.includes("notice.style.display=notice.hidden?'none':'flex'"), 'Manager.io and saved-operations export controls must share the top bar and respect close/export state');
-assert(css.includes('.factory-table-scroll') && css.includes('overflow-wrap:anywhere') && css.includes('.factory-search-options'), 'tables and name dropdowns must be responsive');
+assert(history.includes("top.insertAdjacentElement('afterend',launcher)") && history.includes('factory-audit-launcher') && history.includes('factory-history-icon') && history.includes('moveConflictExport') && history.includes("notice.style.display=notice.hidden?'none':'flex'"), 'Manager.io and audit history icons share a compact toolbar below the header');
+assert(css.includes('.factory-table-scroll') && css.includes('overflow-wrap:anywhere') && css.includes('.factory-search-options') && css.includes('table-layout:fixed!important') && css.includes('.factory-very-long-cell'), 'tables use fixed column widths and shrink/wrap long text');
+assert(app.includes('factoryApplyFixedTableLayout') && app.includes('factoryIconizeActions'), 'tables receive stable measured columns and action buttons become icons');
+assert(app.includes('const hasCashAncestor') && app.includes('if(a.cash)out.push(a);else walk(a.id)'), 'cash balances roll up through non-cash grouping levels');
+assert(app.includes('async function factorySaveAccName') && app.includes('async function factorySaveWh') && app.includes('const saved=await sv()') && app.includes('a.name=previous.name') && app.includes('w.name=previous.name') && app.includes('return Promise.resolve(false)'), 'master-data edits await cloud persistence and restore original values on failure');
+assert(app.includes('function factoryIconizeActionLinks') && app.includes('factoryIconizeActionLinks(document)') && app.includes('__factoryActionObserver') && css.includes('.factory-icon-action-link'), 'view/edit/share links become compact accessible icons');
+assert(css.includes('grid-template-areas:"menu back forward title net logout who theme"') && css.includes('grid-template-areas:"menu back forward title title title" "net logout who who theme theme"'), 'header keeps the requested exit/account/theme order on desktop and mobile');
 console.log('PASS advanced search: AND / OR / numeric comparisons');
 console.log('PASS saved sorting, column selection, and summary expansion');
 console.log('PASS supplier sign, account hierarchy, nested warehouses, production material locations');
@@ -85,5 +90,5 @@ console.log('PASS invoice and voucher posting failures fail closed with safe rol
 const sw = fs.readFileSync(path.join(root, 'sw.js'), 'utf8');
 const swPublic = fs.readFileSync(path.join(root, 'public/sw.js'), 'utf8');
 assert(app.includes('landscape=c.width/c.height>1.1') && app.includes('windowWidth:captureWidth') && app.includes('W=landscape?297:210'), 'PDF export captures the full table width and selects landscape A4 for wide documents');
-assert(sw.includes('factory-v25') && swPublic.includes('factory-v25'), 'service-worker cache version changes when the application assets change');
+assert(sw.includes('factory-v26') && swPublic.includes('factory-v26'), 'service-worker cache version changes when the application assets change');
 console.log('PASS adaptive A4 PDF layout and service-worker cache refresh');
