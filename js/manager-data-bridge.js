@@ -248,7 +248,7 @@ function mapManagerDataToState(data) {
     return { id:productionIds.get(order.id), cloudId:sourceKey(order), no:order.order_no || sourceKey(order), date:order.order_date || "", ts:dateMs(order.created_at), desc:order.description || "", iname:order.item_name || productName(order.product_id), iid:productIds.get(order.product_id)||0, wh:whId(loc), subs, mats, x, st:status, matCost:mats.reduce((a,m)=>a+num(m.cost),0), rec:status===2?subs.map(s=>({v:s.v,qty:s.qty})):[], wc:0, legacyManager:true };
   });
 
-  const wo = writeoffs.map(w => ({ id:writeoffIds.get(w.id), cloudId:sourceKey(w), no:sourceKey(w), date:w.writeoff_date || "", ts:dateMs(w.created_at), desc:w.description || "", c:(Array.isArray(w.items)?w.items:Object.values(w.items||{})).reduce((a,x)=>a+num(x.amount||x.total||x.cost||x.Amount),0), po:0, items:w.items || [], legacyManager:true }));
+  const wo = writeoffs.map(w => ({ id:writeoffIds.get(w.id), cloudId:sourceKey(w), no:sourceKey(w), ref:sourceKey(w), date:w.writeoff_date || "", ts:dateMs(w.created_at), desc:w.description || "", c:(Array.isArray(w.items)?w.items:Object.values(w.items||{})).reduce((a,x)=>a+num(x.amount||x.total||x.cost||x.Amount),0), po:0, items:w.items || [], legacyManager:true }));
   const mv = [];
   const invoiceUuidByExternal = new Map(invoices.map(i=>[String(i.external_id),i.id]));
   const returnUuidByExternal = new Map(returns.map(r=>[String(r.external_id),r.id]));
@@ -271,7 +271,7 @@ function mapManagerDataToState(data) {
   }
 
   const curs = ["EGP","USD","EUR",...currencies.map(c=>c.code).filter(Boolean)];
-  return { accts:accounts.map(a=>({ id:acctIds.get(a.id), cloudId:sourceKey(a), code:a.account_code || "", name:a.name || "", t:accountType(a.account_type), k:accountRole(a.account_role), cash:!!a.is_cash_account, cur:a.currency_code || "EGP", parent:acctIds.get(a.parent_account_id)||0, legacyManager:true })), partners, wh, items, docs, vch, je, L, po, wo, mv, codes:[], emp:[], curs:[...new Set(curs)], managerBridgeVersion:1 };
+  return { accts:accounts.map(a=>({ id:acctIds.get(a.id), cloudId:sourceKey(a), code:a.account_code || "", name:a.name || "", t:accountType(a.account_type), k:accountRole(a.account_role), cash:!!a.is_cash_account, cur:a.currency_code || "EGP", parentId:acctIds.get(a.parent_account_id)||null, legacyManager:true })), partners, wh, items, docs, vch, je, L, po, wo, mv, codes:[], emp:[], curs:[...new Set(curs)], managerBridgeVersion:1 };
 }
 export async function loadManagerDataBridge(client, ownerId) {
   if (!client || !ownerId) return null;
@@ -285,7 +285,7 @@ export async function loadManagerDataBridge(client, ownerId) {
     expenses:"production_order_expenses", writeoffs:"manager_inventory_write_offs",
     transfers:"manager_inter_account_transfers", currencies:"manager_foreign_currencies"
   };
-  const entries = await Promise.all(Object.entries(tables).map(async ([key,table]) => [key,await readRows(client,table,ownerId)]));
+  const entries=[];const tableEntries=Object.entries(tables);for(let i=0;i<tableEntries.length;i+=4){const batch=await Promise.all(tableEntries.slice(i,i+4).map(async ([key,table])=>[key,await readRows(client,table,ownerId)]));entries.push(...batch)}
   const data = Object.fromEntries(entries);
   const meaningful = ["accounts","customers","suppliers","products","invoices","ledger","vouchers"].some(key => data[key]?.length);
   return meaningful ? mapManagerDataToState(data) : null;
