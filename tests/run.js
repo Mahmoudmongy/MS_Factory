@@ -722,11 +722,12 @@ ok('summary screen keeps the selected date range in a collapsible panel',app.inc
 ok('mobile double-back uses one exit confirmation',app.includes('signOutNow(true)'));
 
 ok('first-login password change clears the cached must-change-password flag before returning to the app',changePasswordPage.includes('factory-profile-verified:')&&changePasswordPage.includes('currentProfile.must_change_password = false'));
-console.log(R.join('\n'));console.log(`\n${R.length-fails}/${R.length} checks passed, ${fails} failed`);process.exit(fails?1:0);
-})().catch(e=>{console.error('TEST RUN CRASHED:',e.message);process.exit(2)});
 
 ok('ERP module registry groups the existing screens without changing their stable screen IDs',app.includes('const MODULES=[')&&app.includes('MODULE_BY_SCREEN=')&&['cash','customers','sales','suppliers','purchases','inventory','accounting','employees','reports'].every(k=>app.includes('id:"'+k+'"')));
 ok('company module customization hides modules without deleting their records and allows reactivation',app.includes('S.modules=S.modules||{}')&&app.includes('S.modules[x.value]=x.checked')&&app.includes('لا يحذف سجلاتها أو حركاتها'));
 ok('legacy per-screen visibility preferences remain supported alongside module settings',app.includes('S.hide=[...ACT.querySelectorAll(".cz:not(:checked)")]')&&app.includes('!S.hide.includes(t[0])'));
 ok('disabled modules are excluded from navigation and permission-filtered screen access',app.includes('if(!moduleEnabled(mid))return false')&&app.includes('MODULES.filter(m=>items.some'));
 ok('sidebar navigation renders the available modules under Arabic group headings',app.includes('class="sb-group"')&&app.includes('class="sb-group-title"')&&css.includes('#sb .sb-group-title'));
+
+console.log(R.join('\n'));console.log(`\n${R.length-fails}/${R.length} checks passed, ${fails} failed`);process.exit(fails?1:0);
+})().catch(e=>{console.error('TEST RUN CRASHED:',e.message);process.exit(2)});
