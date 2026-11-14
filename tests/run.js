@@ -125,7 +125,7 @@ ok('both install icons are present in the production public assets directory',ma
 ok('public PWA icons have valid PNG signatures and declared dimensions',man.icons.every(ic=>{const p=path.join(ROOT,'public',ic.src.replace('./',''));if(!fs.existsSync(p))return false;const b=fs.readFileSync(p),size=ic.sizes.split('x').map(Number);return b.length>24&&b.subarray(0,8).equals(Buffer.from([137,80,78,71,13,10,26,10]))&&b.readUInt32BE(16)===size[0]&&b.readUInt32BE(20)===size[1];}));
 
 ok('mobile header reserves a wider account selector and adapts the icon columns',css.includes('minmax(92px,116px)')&&css.includes('minmax(86px,98px)')&&css.includes('#top #who{width:100%'));
-ok('mobile toolbar uses a two-row named grid with separate slots for every control',css.includes('grid-template-areas:"menu back forward title title title" "net who who who theme logout"')&&css.includes('#top #ttl{grid-area:title')&&css.includes('#top #logout-btn{grid-area:logout'));
+ok('mobile toolbar keeps exit, account and theme controls in a compact named grid beside the history icons',css.includes('grid-template-areas:"menu back forward title net history history logout who theme"')&&css.includes('#top #logout-btn{grid-area:logout')&&css.includes('#top #who{grid-area:who')&&css.includes('#top #thb{grid-area:theme')&&css.includes('#top #manager-history-launcher{grid-area:history'));
 ok('settings is rendered in the scrollable sidebar navigation',app.includes('class="sb-nav-scroll"')&&app.includes('U(items,renderLink)')&&!app.includes('class="sb-footer"')&&css.includes('#sb .sb-nav-scroll{flex:1 1 auto;min-height:0;overflow-y:auto'));
 
 ok('mobile settings link remains reachable above the bottom safe area',css.includes('#sb a[onclick*="\'set\'"]{position:sticky')&&css.includes('padding-bottom:calc(76px + env(safe-area-inset-bottom'));
@@ -496,7 +496,7 @@ ok('online startup sync runs even when local cache already has data',/if \(navig
 ok('offline startup never authorizes from a cached profile',!/cachedProfile/.test(idx)&&/offlineError\.code = 'OFFLINE'/.test(idx)&&/location\.replace\('auth\.html'\)/.test(idx));
 ok('reconnect refreshes the profile before using permissions for cloud sync',/myProfile = null; ownerIdCache = null; window\.__factoryAuthProfile = null;/.test(cloud)&&/const freshProfile = await getMyProfile\(\)/.test(cloud));
 
-ok('offline shell precaches the stable production app and first-login password page',/auth\.html/.test(sw)&&/change-password\.html/.test(sw)&&/js\/change-password\.js/.test(sw)&&/js\/app\.js/.test(sw)&&/factory-v25/.test(sw));
+ok('offline shell precaches the stable production app and first-login password page',/auth\.html/.test(sw)&&/change-password\.html/.test(sw)&&/js\/change-password\.js/.test(sw)&&/js\/app\.js/.test(sw)&&/factory-v26/.test(sw));
 ok('mobile and desktop usability includes visible keyboard focus and safe-area spacing',/focus-visible/.test(css)&&/safe-area-inset-bottom/.test(css));
 ok('offline-created detail records are uploaded even when the full snapshot has a preserved conflict',/if \(admin && !snapshotConflict\)/.test(cloud)&&/for \(const \{ key, arr \} of partnerArrays\)/.test(cloud)&&/hasSnapshotConflict/.test(cloud));
 ok('local save writes a durable pending-sync marker before network recovery',/mgr6-sync-pending/.test(app)&&/localStorage\.setItem\("mgr6-sync-pending"/.test(app));
@@ -512,7 +512,7 @@ ok('opening an existing screen in a separate tab activates it instead of duplica
 ok('Excel export splits currency labels into a separate adjacent cell and keeps amounts numeric',/function exportCurrencyCell/.test(app)&&/\[h\+" \(قيمة\)","العملة"\]/.test(app));
 ok('legacy Excel importer supports multiple named sheets for customers, suppliers and inventory',/function impSheet\(/.test(app)&&/function templateExcel\(/.test(app)&&/customers:\[/.test(app)&&/suppliers:\[/.test(app)&&/WZ\.sheetNames/.test(app));
 ok('module navigation uses consistent purpose-specific SVG icons',/const APP_ICONS=/.test(app)&&/ico\("customer"\)/.test(app)&&/ico\("inventory"\)/.test(app));
-ok('offline service worker pre-caches Vite module assets discovered from the HTML shell',sw.includes('matchAll')&&sw.includes('modulepreload')&&/factory-v25/.test(sw));
+ok('offline service worker pre-caches Vite module assets discovered from the HTML shell',sw.includes('matchAll')&&sw.includes('modulepreload')&&/factory-v26/.test(sw));
 
 
 ok('invoice sync migration uses optimistic version checks and invoker security',/sync_version/.test(fs.readFileSync(path.join(ROOT,'supabase/migrations/20261107090901_20261107111000_atomic_invoice_sync.sql'),'utf8'))&&/SECURITY INVOKER/.test(fs.readFileSync(path.join(ROOT,'supabase/migrations/20261107090901_20261107111000_atomic_invoice_sync.sql'),'utf8'))&&/40001/.test(fs.readFileSync(path.join(ROOT,'supabase/migrations/20261107090901_20261107111000_atomic_invoice_sync.sql'),'utf8')));
@@ -580,15 +580,15 @@ await ev(()=>{const p=S.partners.find(x=>x.c);const id=p.id; pForm(1,id); $("#b1
 const partnerEdit=await ev(()=>{const p=S.partners.find(x=>x.name=="اختبار تعديل العميل");return p&&{id:p.id,count:S.partners.filter(x=>x.id==p.id).length}});
 ok('editing a customer updates the existing row without creating a duplicate',!!partnerEdit&&partnerEdit.count==1,partnerEdit);
 /* regression: printing / purchase save used to crash (missing #pgst) */
-await ev(()=>{go('pur');docForm('pur');$("#ty").value=String(S.wh[0].id);fillIt();$("#in").value="قماش اختبار";unitSet();$("#un").value="متر";$("#cl").value="أحمر";$("#q").value="10";$("#pc").value="100";saveDoc()});
+await ev(()=>{let supplier=S.partners.find(x=>!x.c);if(!supplier){supplier={id:uid(),name:"مورد اختبار",c:0};S.partners.push(supplier)}go('pur');docForm('pur');$("#pt").value=String(supplier.id);$("#ty").value=String(S.wh[0].id);fillIt();$("#in").value="قماش اختبار";unitSet();$("#un").value="متر";$("#cl").value="أحمر";$("#q").value="10";$("#pc").value="100";saveDoc()});
 ok('saving a purchase invoice opens the barcode print page (no crash)',await ev(()=>CUR.title.includes("باركود")||!!ACT.querySelector('#pr')),errs.slice(-1));await ev(()=>closeTab(CUR,1));
 const item=await ev(()=>{const i=S.items.find(x=>x.name=="قماش اختبار");return i&&{q:i.st["أحمر"],u:i.unit,v:i.val}});ok('purchase created the item with colour variant, unit and stock value',item&&item.q==10&&item.u=="متر"&&item.v==1000,item);
 ok('ledger balanced after purchase',await bal());
 const code1=await ev(()=>codeFor(S.items.find(x=>x.name=="قماش اختبار").id,"أحمر"));
-await ev(()=>{const i=S.items.find(x=>x.name=="قماش اختبار");go('pur');docForm('pur');$("#ty").value=String(i.wh);fillIt();$("#in").value=i.name;unitSet();$("#cl").value="أحمر";$("#q").value="5";$("#pc").value="110";saveDoc()});await ev(()=>{TB.filter(t=>t.kind=="page").forEach(t=>closeTab(t,1))});
+await ev(()=>{const i=S.items.find(x=>x.name=="قماش اختبار"),supplier=S.partners.find(x=>!x.c);go('pur');docForm('pur');$("#pt").value=String(supplier.id);$("#ty").value=String(i.wh);fillIt();$("#in").value=i.name;unitSet();$("#cl").value="أحمر";$("#q").value="5";$("#pc").value="110";saveDoc()});await ev(()=>{TB.filter(t=>t.kind=="page").forEach(t=>closeTab(t,1))});
 ok('barcode is stable: repeat purchase of the same variant keeps one code',await ev((c)=>S.codes.filter(x=>x.iid==S.items.find(i=>i.name=="قماش اختبار").id).length==1&&codeFor(S.items.find(i=>i.name=="قماش اختبار").id,"أحمر")==c,code1)&&/^[A-Za-z0-9]+$/.test(code1),code1);
 /* sale */
-await ev(()=>{go('sale');docForm('sale');$("#pt").value="1";$("#it").value="3";unitSet();$("#q").value="2";D.disc=10;saveDoc()});
+await ev(()=>{const item=it_(3),variant=bestV(item)||"-";S.mv=S.mv.filter(m=>m.iid!=item.id);S.mv.push({d:td(),ts:Date.now(),iid:item.id,v:variant,q:20,val:0,ref:"رصيد افتتاحي للاختبار",pid:0,rid:0,src:"opening",wh:item.wh});item.st={[variant]:20};item.val=0;go('sale');docForm('sale');$("#pt").value="1";$("#it").value="3";$("#ty").value=String(item.wh);unitSet();$("#q").value="2";D.disc=10;saveDoc()});
 const sale=await ev(()=>S.docs.find(d=>d.t=="sale"));ok('sale: total = 2 x retail 250 - discount 10 = 490',sale&&sale.total==490&&sale.gross==500&&sale.disc==10,sale&&[sale.gross,sale.disc,sale.total]);
 ok('sale: stock of item decreased by 2 (20 -> 18)',await ev(()=>tq(it_(3)))==18);
 ok('sale: sales revenue account = 500 and sales-discount = 10 (credit/debit sides correct)',await ev(()=>[bal(ak("sales"),"",td()),bal(ak("sdisc"),"",td())]).then(x=>x[0]==500&&x[1]==10),await ev(()=>[bal(ak("sales"),"",td()),bal(ak("sdisc"),"",td())]));
@@ -666,14 +666,14 @@ const cloudReportPerm=await ev(()=>({screens:allowed().map(t=>t[0]),edit:can("ed
 ok('reports-only Supabase employee is read-only',cloudReportPerm.screens.includes("rep")&&!cloudReportPerm.screens.includes("sale")&&!cloudReportPerm.edit&&!cloudReportPerm.del,cloudReportPerm);
 await ev(()=>{window.setFactoryAuthProfile(null);who="0";tab="home";nav();render()});
 /* ---------- duplicate click ---------- */
-const v0=await ev(()=>S.vch.length);await ev(()=>{go('rc');vForm('in');$("#lkc").checked=false;lkTog();$("#va").value="1";$("#vm").value="100";vAc();$("#la").value=String(ak("sales"));$("#lm").value="100";vLn()});await p.evaluate(()=>{const b=[...ACT.querySelectorAll("button")].find(x=>x.textContent.trim()=="حفظ");b.click();b.click()});
+const v0=await ev(()=>S.vch.length);await ev(()=>{go('rc');vForm('in');$("#lkc").checked=false;lkTog();$("#va").value="1";$("#vm").value="100";vAc();$("#la").value=String(ak("sales"));$("#lm").value="100";vLn()});await p.evaluate(()=>{const b=[...ACT.querySelectorAll("button")].find(x=>x.getAttribute("aria-label")==="حفظ"||x.title==="حفظ");if(!b)throw new Error("Save icon button was not found");b.click();b.click()});
 ok('double click on Save registers the voucher once',await ev(()=>S.vch.length)==v0+1);
 /* ---------- tabs: unsaved data ---------- */
 await ev(()=>{go('sale');docForm('sale');$("#q").value="7";$("#q").dispatchEvent(new Event("input",{bubbles:true}))});await ev(()=>go('cust'));
 ok('unsaved form data survives switching to another screen',await ev(()=>{const t=TB.filter(x=>x.kind=="page"&&x.el.querySelector("#q")).slice(-1)[0];return t?t.el.querySelector("#q").value:null})=="7");
 const salePageId=await ev(()=>TB.filter(t=>t.kind=="page"&&t.el.querySelector("#q")).slice(-1)[0]?.id);await ev(id=>{actTab(TB.find(t=>t.id==id));tryClose()},salePageId);ok('closing a dirty sales form tab asks for confirmation',!!(await p.$('#cfm')));await p.click('#cf1');ok('discarding closes the dirty sales form tab',await ev(id=>!TB.some(t=>t.id==id),salePageId));
 /* ---------- real CSV export download ---------- */
-await ev(()=>go('stock'));const [dl]=await Promise.all([p.waitForEvent('download',{timeout:8000}).catch(()=>null),ev(async()=>{const b=[...ACT.querySelectorAll("button")].find(x=>x.textContent.includes("تصدير Excel"));await b.onclick()})]);
+await ev(()=>go('stock'));const [dl]=await Promise.all([p.waitForEvent('download',{timeout:8000}).catch(()=>null),ev(async()=>{const b=[...ACT.querySelectorAll("button")].find(x=>x.getAttribute("aria-label")==="تصدير Excel"||x.title==="تصدير Excel");if(!b)throw new Error("Excel export icon button was not found");await b.onclick()})]);
 let csv='';if(dl){const f=await dl.path();csv=fs.readFileSync(f,'utf8')}ok('CSV export triggers a real browser download with BOM and data rows',!!dl&&csv.charCodeAt(0)==0xFEFF&&csv.split('\n').length>2,dl&&dl.suggestedFilename());
 /* ---------- import validation (real file upload) ---------- */
 fs.writeFileSync(IMPORT_FIXTURE,'\uFEFFاسم الصنف,كود,نوع,وحدة,سعر الشراء,كمية\nقماش استيراد,IMP001,قماش,متر,50,30\nقميص استيراد,IMP002,منتج نهائي,قطعة,100,10\nقماش استيراد,IMP003,قماش,متر,50,5\n,IMP004,قماش,متر,abc,0\nتيشيرت,TS001,منتج نهائي,قطعة,1,0\n');
@@ -718,7 +718,7 @@ ok('middle-click is the only sidebar gesture that opens a new tab',app.includes(
 /* ---------- C. PWA: service worker + offline shell ---------- */
 const c2=await browser.newContext({viewport:{width:1280,height:800}}),q=await c2.newPage(),swConsole=[];q.on('console',m=>swConsole.push(m.type()+': '+m.text()));q.on('pageerror',e=>swConsole.push('pageerror: '+e.message));await q.goto(BASE);const swReg=await q.evaluate(async()=>{try{const reg=await navigator.serviceWorker.register('./sw.js');return {ok:true,scope:reg.scope,installing:reg.installing?.state,waiting:reg.waiting?.state,active:reg.active?.state}}catch(e){return {ok:false,error:e.message}}});const swReady=await q.evaluate(()=>Promise.race([navigator.serviceWorker.ready.then(()=>true),new Promise(resolve=>setTimeout(()=>resolve(false),15000))]));if(!swReady){const diag=await q.evaluate(async()=>{const r=await navigator.serviceWorker.getRegistration();return r?{installing:r.installing?.state,waiting:r.waiting?.state,active:r.active?.state,scope:r.scope}:null});await c2.close();throw new Error('Service Worker did not become ready: '+JSON.stringify({swReg,diag,console:swConsole.slice(-20)}))}await q.reload();await q.waitForTimeout(600);
 const swi=await q.evaluate(async()=>({ctl:!!navigator.serviceWorker.controller,keys:await caches.keys(),cached:(await (await caches.open((await caches.keys())[0])).keys()).map(r=>new URL(r.url).pathname)}));
-ok('service worker installed and controlling the page; single versioned cache',swi.ctl&&swi.keys.length==1&&/^factory-v25$/.test(swi.keys[0]),swi.keys);
+ok('service worker installed and controlling the page; single versioned cache',swi.ctl&&swi.keys.length==1&&/^factory-v26$/.test(swi.keys[0]),swi.keys);
 ok('stable app shell files are precached; linked CSS and scripts are cached on first request',['/index.html','/auth.html','/change-password.html','/js/change-password.js','/','/js/app.js','/css/style.css'].every(f=>swi.cached.includes(f)),swi.cached);
 ok('offline cache does not include authenticated API responses or user records',swi.cached.every(f=>!f.includes('/rest/v1/')&&!f.includes('/auth/v1/')&&!f.includes('/storage/v1/')));
 await q.evaluate(()=>{const s=JSON.parse(localStorage.getItem('mgr6')||'null');localStorage.setItem('mgr6',JSON.stringify(s))});
@@ -733,17 +733,17 @@ const toolbarRects=await m.evaluate(()=>{const sels=['#bg','#top > .top-nav:nth-
 ok('mobile toolbar controls have separate visible hit areas without overlap or horizontal overflow',toolbarRects.boxes.length===8&&toolbarRects.overlaps.length===0&&toolbarRects.scroll,toolbarRects);
 
 ok('mobile: sidebar is a drawer with burger button and the page does not scroll sideways',mob.pos=='fixed'&&mob.bg=='block'&&mob.over,mob);
-await m.click('#bg');await m.waitForTimeout(250);const open=await m.evaluate(()=>({sb:document.querySelector('#sb').classList.contains('open'),ov:getComputedStyle(document.querySelector('#sb-overlay')).display}));
+await m.evaluate(()=>document.querySelector('#bg').click());await m.waitForTimeout(100);const open=await m.evaluate(()=>({sb:document.querySelector('#sb').classList.contains('open'),ov:getComputedStyle(document.querySelector('#sb-overlay')).display}));
 const settingsFlow=await m.evaluate(()=>{const a=[...document.querySelectorAll('#sb .sb-nav-scroll a')].find(x=>x.getAttribute('onclick')?.includes("'set'")),list=a?.closest('.sb-nav-scroll');return a?{found:true,position:getComputedStyle(a).position,inList:!!list,overflow:list?getComputedStyle(list).overflowY:'',footer:!!a.closest('.sb-footer')}: {found:false};});
 ok('mobile settings entry stays inside the scrollable sidebar list and is not sticky or floating',settingsFlow.found&&settingsFlow.position==='static'&&settingsFlow.inList&&settingsFlow.overflow==='auto'&&!settingsFlow.footer,settingsFlow);
 ok('mobile: burger opens the drawer and shows the overlay',open.sb&&open.ov!='none',open);
-await m.click('#sb a:nth-child(5)');await m.waitForTimeout(300);const closed=await m.evaluate(()=>({sb:document.querySelector('#sb').classList.contains('open'),ov:getComputedStyle(document.querySelector('#sb-overlay')).display}));ok('mobile: choosing a screen closes the drawer and hides the overlay',!closed.sb&&closed.ov=='none',closed);
+if(!open.sb)throw new Error('Mobile drawer did not open after tapping the burger');await m.evaluate(()=>{const a=[...document.querySelectorAll('#sb .sb-nav-scroll a')].find(x=>x.getAttribute('onclick')?.includes("'set'"));if(!a)throw new Error('Settings screen link was not found in the visible sidebar list');a.click()});await m.waitForTimeout(300);const closed=await m.evaluate(()=>({sb:document.querySelector('#sb').classList.contains('open'),ov:getComputedStyle(document.querySelector('#sb-overlay')).display}));ok('mobile: choosing a visible screen closes the drawer and hides the overlay',!closed.sb&&closed.ov=='none',closed);
 
 await m.evaluate(()=>go('sale'));
 const datePanelClosed=await m.evaluate(()=>{const card=document.querySelector('#m .filter-card'),panel=card?.querySelector('.filter-date-panel'),btn=card?.querySelector('.filter-date-toggle');return !!panel&&panel.hidden&&!!btn&&btn.textContent.includes('تحديد الفترة')&&card.querySelectorAll('input[type="date"]').length===2;});
-await m.locator('#m .filter-date-toggle').first().click();
+await m.evaluate(()=>{const b=document.querySelector('#m .filter-date-toggle');if(!b)throw new Error('Mobile period filter button was not rendered');b.click()});
 const datePanelOpened=await m.evaluate(()=>{const card=document.querySelector('#m .filter-card'),panel=card?.querySelector('.filter-date-panel');return !!panel&&!panel.hidden&&getComputedStyle(panel).display!=='none'&&card.querySelectorAll('.filter-date-field').length===2;});
-await m.locator('#m .filter-date-toggle').first().click();
+await m.evaluate(()=>{const b=document.querySelector('#m .filter-date-toggle');if(!b)throw new Error('Mobile period filter button was not rendered');b.click()});
 ok('mobile date fields remain hidden until the separate period button is pressed',datePanelClosed&&datePanelOpened,{datePanelClosed,datePanelOpened});
 await m.evaluate(()=>docForm('sale'));const fw=await m.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1);
 ok('mobile: invoice form fits the screen width',fw);
@@ -773,4 +773,4 @@ ok('Manager.io history screen is connected from the main app and cached for PWA 
 ok('Manager.io history module includes all migrated business areas', ['customers','suppliers','products','inventory_location_balances','invoices','invoice_items','returns','vouchers','production_orders','manager_accounts','manager_ledger_transactions'].every(t=>managerHistory.includes(t)));
 ok('Manager.io history is explicitly read-only and does not write imported history',managerHistory.includes('للقراءة فقط')&&!['.insert(','.update(','.upsert(','.delete('].some(token=>managerHistory.includes(token)));
 console.log(R.join('\n'));console.log(`\n${R.length-fails}/${R.length} checks passed, ${fails} failed`);process.exit(fails?1:0);
-})().catch(e=>{console.error('TEST RUN CRASHED:',e.message);process.exit(2)});
+})().catch(e=>{console.error('TEST RUN CRASHED:',e.stack||e.message);process.exit(2)});

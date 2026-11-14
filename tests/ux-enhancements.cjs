@@ -85,5 +85,18 @@ console.log('PASS invoice and voucher posting failures fail closed with safe rol
 const sw = fs.readFileSync(path.join(root, 'sw.js'), 'utf8');
 const swPublic = fs.readFileSync(path.join(root, 'public/sw.js'), 'utf8');
 assert(app.includes('landscape=c.width/c.height>1.1') && app.includes('windowWidth:captureWidth') && app.includes('W=landscape?297:210'), 'PDF export captures the full table width and selects landscape A4 for wide documents');
-assert(sw.includes('factory-v25') && swPublic.includes('factory-v25'), 'service-worker cache version changes when the application assets change');
+assert(sw.includes('factory-v26') && swPublic.includes('factory-v26'), 'service-worker cache version changes when the application assets change');
+assert(app.includes('t.style.tableLayout="fixed"') && app.includes('colgroup') && app.includes('factory-table-scroll'), 'tables use stable content-weighted fixed columns');
+assert(app.includes('"مشاركة ملف PDF"') && app.includes('"تحرير"') && app.includes('factory-icon-action'), 'common row actions are icon-only with accessible labels');
+assert(app.includes('textLabel.startsWith("حفظ")') && app.includes('textLabel.startsWith("عرض")') && app.includes('textLabel.startsWith("تحرير")'), 'multi-word action labels are also converted to icons with their full text retained as tooltips');
+assert(css.includes('max-height:min(72vh,760px)') && css.includes('position:sticky;top:0'), 'table headers remain pinned in the scrollable table viewport');
+const indexHtml = fs.readFileSync(path.join(root, 'index.html'), 'utf8');
+assert(history.includes("button.textContent='▤'") && auditTrail.includes("button.textContent = '⟲'"), 'Manager.io history and audit undo launchers are adjacent compact icons');
+assert(indexHtml.indexOf('id="logout-btn"') < indexHtml.indexOf('id="who"') && indexHtml.indexOf('id="who"') < indexHtml.indexOf('id="thb"'), 'topbar order is exit, account, theme');
+assert(app.includes('const sv=(strict=false)=>') && app.includes('await sv(true)'), 'account and warehouse edits wait for confirmed database persistence');
+assert(app.includes('const oldName=a.name,oldParent=a.parentId') && app.includes('تم إلغاء التعديل المحلي'), 'failed account and warehouse edits restore their prior local values');
+assert(app.includes('الكمية المطلوبة أكبر من المتاح') && app.includes('t==="sale"||t==="pret"'), 'sales and purchase returns cannot consume more stock than the selected warehouse and variant holds');
+assert(app.includes('J.lines.length<2') && app.includes('dr>0&&cr>0'), 'manual journal entries require at least two one-sided lines and balanced totals');
+assert(app.includes('function rebuildItemStock(i)') && app.includes('rebuildItemStock(i)') && app.includes('function rebuildAllStock()'), 'item stock and valuation are recalculated from the movement ledger after every stock change');
+
 console.log('PASS adaptive A4 PDF layout and service-worker cache refresh');
