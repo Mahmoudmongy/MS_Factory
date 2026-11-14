@@ -1013,3 +1013,26 @@ function undoRef(src,id){
  sv();toast("تم إنشاء حركة عكسية "+ref+" والاحتفاظ بالحركة الأصلية في سجل التدقيق");cl();
 }
 
+
+
+/* Searchable name-only dropdowns for partner, item and warehouse selectors. */
+function factoryEnhanceNameSelects(root){
+ const ids=["pt","vp","wi","it","materialItem","materialWarehouse","a0","pwh","ty","ww","rw"];
+ root.querySelectorAll("select").forEach(sel=>{
+  if(!ids.includes(sel.id)||sel.multiple||sel.dataset.factorySearchReady==="1")return;
+  sel.dataset.factorySearchReady="1";
+  const wrapper=document.createElement("div");wrapper.className="factory-search-select";
+  const input=document.createElement("input");input.type="search";input.autocomplete="off";input.spellcheck=false;
+  input.placeholder=({pt:"ابحث باسم العميل أو المورد",vp:"ابحث باسم الطرف",wi:"ابحث باسم الصنف",it:"ابحث باسم الصنف",materialItem:"ابحث باسم المادة",materialWarehouse:"ابحث باسم المخزن",a0:"ابحث باسم المخزن",pwh:"ابحث باسم المخزن",ty:"ابحث باسم المخزن",ww:"ابحث باسم المخزن",rw:"ابحث باسم المخزن"})[sel.id]||"اكتب الاسم للاختيار";
+  const list=document.createElement("div");list.className="factory-search-options";list.hidden=true;list.setAttribute("role","listbox");
+  const selected=()=>sel.options[sel.selectedIndex]?.textContent?.trim()||"";
+  const draw=filter=>{const q=String(filter||"").trim().toLocaleLowerCase("ar");list.replaceChildren();[...sel.options].filter(o=>!q||o.textContent.toLocaleLowerCase("ar").includes(q)).slice(0,80).forEach(o=>{const b=document.createElement("button");b.type="button";b.textContent=o.textContent.trim();b.setAttribute("role","option");b.addEventListener("pointerdown",e=>e.preventDefault());b.addEventListener("click",()=>{sel.value=o.value;input.value=o.textContent.trim();list.hidden=true;sel.dispatchEvent(new Event("change",{bubbles:true}))});list.appendChild(b)});if(!list.childElementCount){const empty=document.createElement("div");empty.className="factory-search-empty";empty.textContent="لا توجد أسماء مطابقة";list.appendChild(empty)}};
+  input.value=selected();input.addEventListener("focus",()=>{draw(input.value);list.hidden=false});input.addEventListener("input",()=>{draw(input.value);list.hidden=false});input.addEventListener("keydown",e=>{if(e.key==="Escape"){list.hidden=true;input.blur()}if(e.key==="Enter"){const first=list.querySelector("button");if(first){e.preventDefault();first.click()}}});
+  sel.addEventListener("change",()=>{input.value=selected()});sel.insertAdjacentElement("beforebegin",wrapper);wrapper.append(input,list);wrapper.append(sel);sel.style.display="none";
+ });
+}
+document.addEventListener("pointerdown",e=>{if(!e.target.closest(".factory-search-select"))document.querySelectorAll(".factory-search-options:not([hidden])").forEach(x=>x.hidden=true)});
+const factorySelectObserver=new MutationObserver(records=>{if(records.some(r=>r.addedNodes.length))factoryEnhanceNameSelects(document)});
+factorySelectObserver.observe(document.body,{childList:true,subtree:true});
+setTimeout(()=>factoryEnhanceNameSelects(document),0);
+
