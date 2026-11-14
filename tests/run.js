@@ -808,7 +808,7 @@ ok('employee profile changes join the audit timeline without exposing profile un
 const profileSecurityMigration=fs.readFileSync(path.join(ROOT,'supabase/migrations/20261114132800_protect_profile_permissions.sql'),'utf8');
 const profileSecurityQa=fs.readFileSync(path.join(ROOT,'tests/sql/profile-self-escalation-qa.sql'),'utf8');
 ok('profile RLS cannot be bypassed to self-grant permissions or admin status',profileSecurityMigration.includes('new.permissions is distinct from old.permissions')&&profileSecurityMigration.includes('new.is_admin is distinct from old.is_admin')&&profileSecurityMigration.includes('before update on public.profiles')&&profileSecurityQa.includes('QA_PROFILE_SELF_ADMIN_ESCALATION_NOT_BLOCKED'));
-ok('employee permission updates import the shared Supabase client from the application asset path',fs.readFileSync(path.join(ROOT,'js/app.js'),'utf8').includes('import("./js/supabase.js")'));
+ok('employee permission updates import the shared Supabase client from the application asset path',fs.readFileSync(path.join(ROOT,'js/app.js'),'utf8').includes('import("./supabase.js")'));
 const deleteRequiresEditMigration=fs.readFileSync(path.join(ROOT,'supabase/migrations/20261114132900_delete_requires_edit.sql'),'utf8');
 ok('database permission updates reject delete without edit',deleteRequiresEditMigration.includes('EMPLOYEE_DELETE_REQUIRES_EDIT')&&fs.readFileSync(path.join(ROOT,'tests/sql/employee-permissions-qa.sql'),'utf8').includes('QA_DELETE_REQUIRES_EDIT_NOT_ENFORCED'));
 const reportScopeMigration=fs.readFileSync(path.join(ROOT,'supabase/migrations/20261114133100_restore_reports_read_scope.sql'),'utf8');
