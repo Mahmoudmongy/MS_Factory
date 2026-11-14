@@ -44,11 +44,11 @@ function accountType(type) {
 function accountRole(role) {
   return ({ accounts_receivable:"ar", accounts_payable:"ap", cash:"cash", cash_account:"cash", inventory:"inv", capital:"cap", cost_of_goods_sold:"cogs", sales:"sales", sales_discount:"sdisc", purchase_discount:"pdisc", waste:"waste" })[role] || role || "";
 }
-function warehouseName(value, locations) {
+function warehouseName(value, locations, balances=[]) {
   if (value == null || value === "") return "";
   const v = String(value);
-  const found = locations.find(x => String(x.external_id) === v || String(x.id) === v || x.name === v);
-  return found?.name || v;
+  const found = locations.find(x => String(x.external_id) === v || String(x.id) === v || x.name === v) || balances.find(x=>String(x.manager_location_id)===v||String(x.warehouse)===v);
+  return found?.name || found?.warehouse || v;
 }
 function normalizeBreakdown(value, fallbackQty) {
   if (Array.isArray(value)) {
@@ -68,7 +68,7 @@ function normalizeBreakdown(value, fallbackQty) {
 function mapManagerDataToState(data) {
   const accounts = data.accounts || [], customers = data.customers || [], suppliers = data.suppliers || [];
   const products = data.products || [], inventory = data.inventory || [], costs = data.costs || [];
-  const locations = data.locations || [], invoices = data.invoices || [], invoiceLines = data.invoiceLines || [];
+  const locations = data.locations || [], locationBalances=data.inventoryLocationBalances||[], invoices = data.invoices || [], invoiceLines = data.invoiceLines || [];
   const returns = data.returns || [], returnLines = data.returnLines || [], vouchers = data.vouchers || [];
   const voucherLines = data.voucherLines || [], ledger = data.ledger || [], journals = data.journals || [];
   const production = data.production || [], materials = data.materials || [], expenses = data.expenses || [];
@@ -100,13 +100,13 @@ function mapManagerDataToState(data) {
 
   const warehouseNames = new Set();
   locations.forEach(x => { if (x.name) warehouseNames.add(String(x.name)); });
-  (data.inventoryLocationBalances || []).forEach(x => { if (x.warehouse) warehouseNames.add(String(x.warehouse)); });
+  locationBalances.forEach(x => { if (x.warehouse) warehouseNames.add(String(x.warehouse)); });
   inventory.forEach(x => { if (x.warehouse) warehouseNames.add(String(x.warehouse)); });
-  products.forEach(x => { if (x.warehouse) warehouseNames.add(warehouseName(x.warehouse, locations)); });
+  products.forEach(x => { if (x.warehouse) warehouseNames.add(warehouseName(x.warehouse, locations,locationBalances)); });
   if (!warehouseNames.size) warehouseNames.add("المخزن الرئيسي");
   const wh = [...warehouseNames].sort((a,b)=>a.localeCompare(b,"ar")).map(name => ({ id:stableId(4,name), name, legacyManager:true }));
   const whId = value => {
-    const name = warehouseName(value, locations) || [...warehouseNames][0];
+    const name = warehouseName(value, locations,locationBalances) || [...warehouseNames][0];
     return wh.find(x => x.name === name)?.id || wh[0]?.id || 0;
   };
 
@@ -141,9 +141,9 @@ function mapManagerDataToState(data) {
     const stockRows = inventory.filter(x => String(x.product_id) === String(p.id));
     const locationRows=locationRowsByProduct.get(String(p.id))||[];
     const primaryLocation=[...locationRows].sort((a,b)=>num(b.quantity)-num(a.quantity))[0];
-    const preferredWh=p.warehouse?whId(p.warehouse):0,primaryWh=primaryLocation?whId(primaryLocation.manager_location_id||primaryLocation.warehouse):0,warehouse=locationRows.length&&(!preferredWh||!locationRows.some(r=>whId(r.manager_location_id||r.warehouse)===preferredWh))?(primaryWh||primaryLocation?.warehouse||""):(p.warehouse||primaryLocation?.manager_location_id||primaryLocation?.warehouse||stockRows[0]?.warehouse||locations[0]?.name||"");
+    const preferredWh=p.warehouse?whId(p.warehouse):0,primaryWh=primaryLocation?whId(primaryLocation.warehouse||primaryLocation.manager_location_id):0,warehouse=locationRows.length&&(!preferredWh||!locationRows.some(r=>whId(r.manager_location_id||r.warehouse)===preferredWh))?(primaryWh||primaryLocation?.warehouse||""):(p.warehouse||primaryLocation?.manager_location_id||primaryLocation?.warehouse||stockRows[0]?.warehouse||locations[0]?.name||"");
     const defaultWh=whId(warehouse),loc={};
-    for(const row of locationRows){const wid=whId(row.manager_location_id||row.warehouse||warehouse),key=String(wid),entry=loc[key]||{st:{},val:0},qty=num(row.quantity);entry.st["-"]=(entry.st["-"]||0)+qty;entry.val+=qty*unitCost;loc[key]=entry;}
+    for(const row of locationRows){const wid=whId(row.warehouse||row.manager_location_id||warehouse),key=String(wid),entry=loc[key]||{st:{},val:0},qty=num(row.quantity);entry.st["-"]=(entry.st["-"]||0)+qty;entry.val+=qty*unitCost;loc[key]=entry;}
     if(!Object.keys(loc).length)loc[String(defaultWh)]={st:{...st},val:quantity*unitCost};
     const locationTotal=Object.values(loc).reduce((a,x)=>a+Object.values(x.st||{}).reduce((q,v)=>q+num(v),0),0),difference=quantity-locationTotal;
     if(Math.abs(difference)>.001){const key=String(defaultWh),entry=loc[key]||{st:{},val:0};entry.st["-"]=(entry.st["-"]||0)+difference;entry.val+=difference*unitCost;loc[key]=entry;}
