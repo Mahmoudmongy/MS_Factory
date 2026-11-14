@@ -205,12 +205,16 @@ async function fetchPagedRecords(buildQuery) {
 }
 function managerCacheKey(actor) { return MANAGER_CACHE_KEY + String(actor || "anonymous") + ":" + String(ownerId || "no-owner"); }
 function managerWarningKey(actor) { return MANAGER_CACHE_KEY + "warnings:" + String(actor || "anonymous") + ":" + String(ownerId || "no-owner"); }
+function managerPermissionKey(actor) { return MANAGER_CACHE_KEY + "permissions:" + String(actor || "anonymous") + ":" + String(ownerId || "no-owner"); }
 function clearOtherManagerCaches(actor) {
-  const keep=new Set([managerCacheKey(actor),managerWarningKey(actor)]);
+  const keep=new Set([managerCacheKey(actor),managerWarningKey(actor),managerPermissionKey(actor)]);
   try { for(let i=localStorage.length-1;i>=0;i--){const key=localStorage.key(i);if(key&&key.startsWith(MANAGER_CACHE_KEY)&&!keep.has(key))localStorage.removeItem(key);} } catch(error) { console.warn("Could not clear another account's Manager cache:",error); }
 }
+function managerPermissionFingerprint(){return stable({is_admin:profile?.is_admin===true,permissions:profile?.permissions||{}});}
 function loadManagerCache(actor) {
   try {
+    const savedPermission=localStorage.getItem(managerPermissionKey(actor));
+    if(savedPermission!==managerPermissionFingerprint()){localStorage.removeItem(managerCacheKey(actor));localStorage.removeItem(managerWarningKey(actor));localStorage.removeItem(managerPermissionKey(actor));return [];}
     const rows = JSON.parse(localStorage.getItem(managerCacheKey(actor)) || "[]");
     window.__factoryManagerBridgeWarnings=JSON.parse(localStorage.getItem(managerWarningKey(actor))||"{}");
     return Array.isArray(rows) ? rows.filter(r=>r&&r.record_type&&r.record_id) : [];
@@ -220,6 +224,7 @@ function saveManagerCache(actor, rows, warnings={}) {
   try {
     localStorage.setItem(managerCacheKey(actor),JSON.stringify(rows));
     localStorage.setItem(managerWarningKey(actor),JSON.stringify(warnings||{}));
+    localStorage.setItem(managerPermissionKey(actor),managerPermissionFingerprint());
     return true;
   } catch (error) { console.warn("Manager bridge cache could not be saved; data will be reloaded online:",error); return false; }
 }
