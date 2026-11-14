@@ -666,7 +666,7 @@ const cloudReportPerm=await ev(()=>({screens:allowed().map(t=>t[0]),edit:can("ed
 ok('reports-only Supabase employee is read-only',cloudReportPerm.screens.includes("rep")&&!cloudReportPerm.screens.includes("sale")&&!cloudReportPerm.edit&&!cloudReportPerm.del,cloudReportPerm);
 await ev(()=>{window.setFactoryAuthProfile(null);who="0";tab="home";nav();render()});
 /* ---------- duplicate click ---------- */
-const v0=await ev(()=>S.vch.length);await ev(()=>{go('rc');vForm('in');$("#lkc").checked=false;lkTog();$("#va").value="1";$("#vm").value="100";vAc();$("#la").value=String(ak("sales"));$("#lm").value="100";vLn()});await p.evaluate(()=>{const b=[...ACT.querySelectorAll("button")].find(x=>x.textContent.trim()=="حفظ");b.click();b.click()});
+const v0=await ev(()=>S.vch.length);await ev(()=>{go('rc');vForm('in');$("#lkc").checked=false;lkTog();$("#va").value="1";$("#vm").value="100";vAc();$("#la").value=String(ak("sales"));$("#lm").value="100";vLn()});await p.evaluate(()=>{const b=[...ACT.querySelectorAll("button")].find(x=>x.getAttribute("aria-label")==="حفظ"||x.title==="حفظ");if(!b)throw new Error("Save icon button was not found");b.click();b.click()});
 ok('double click on Save registers the voucher once',await ev(()=>S.vch.length)==v0+1);
 /* ---------- tabs: unsaved data ---------- */
 await ev(()=>{go('sale');docForm('sale');$("#q").value="7";$("#q").dispatchEvent(new Event("input",{bubbles:true}))});await ev(()=>go('cust'));
