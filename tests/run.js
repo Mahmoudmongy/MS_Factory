@@ -82,7 +82,7 @@ await recoveryPage.evaluate(({scope,queueKey})=>{
 },{scope:dualFailure.scope,queueKey:dualFailure.queueKey});
 await recoveryPage.close();
 /* ---------- A. static checks on the real files ---------- */
-const app=fs.readFileSync(path.join(ROOT,'js/app.js'),'utf8'),idx=fs.readFileSync(path.join(ROOT,'index.html'),'utf8'),authPage=fs.readFileSync(path.join(ROOT,'js/auth.js'),'utf8'),cloud=fs.readFileSync(path.join(ROOT,'js/cloud-sync.js'),'utf8'),dbSync=fs.readFileSync(path.join(ROOT,'js/database-first.js'),'utf8').replace(/\r\n/g,'\n'),conflictStorage=fs.readFileSync(path.join(ROOT,'js/conflict-recovery.js'),'utf8'),css=fs.readFileSync(path.join(ROOT,'css/style.css'),'utf8');
+const app=fs.readFileSync(path.join(ROOT,'js/app.js'),'utf8'),idx=fs.readFileSync(path.join(ROOT,'index.html'),'utf8'),authPage=fs.readFileSync(path.join(ROOT,'js/auth.js'),'utf8'),cloud=fs.readFileSync(path.join(ROOT,'js/cloud-sync.js'),'utf8'),dbSync=fs.readFileSync(path.join(ROOT,'js/database-first.js'),'utf8').replace(/\r\n/g,'\n'),bridge=fs.readFileSync(path.join(ROOT,'js/manager-data-bridge.js'),'utf8'),conflictStorage=fs.readFileSync(path.join(ROOT,'js/conflict-recovery.js'),'utf8'),css=fs.readFileSync(path.join(ROOT,'css/style.css'),'utf8');
 try { new vm.Script(app,{filename:'js/app.js'}); } catch (error) { console.error('APP SYNTAX ERROR:',error.stack||error); process.exit(2); }
 ok('app.js contains no output-truncation artifacts',!app.includes('tokens truncated')&&!app.includes('Warning: truncated output')&&!app.includes('Total output lines:'));
 ok('settings screen is implemented and no longer points to a missing renderer',app.includes('function vSet()')&&app.includes('set:()=>vSet()'));
@@ -740,6 +740,12 @@ ok('journal numbers are generated without reusing an existing reference',app.inc
 ok('journal correction creates a reversing entry and retains the original journal',app.includes('function reverseJ(id)')&&app.includes('original.reversedBy=rid')&&app.includes('reversalOf:id')&&app.includes('قيد عكسي للقيد'));
 ok('journal list distinguishes reversed entries and offers reversal instead of edit/delete',app.includes('تم عكسه')&&app.includes('عكس القيد')&&!app.includes('onclick="editJ('));
 ok('journal reversal labels and audit warning are fully translated in English mode',app.includes('"مرحّل":"Posted"')&&app.includes('"تم عكسه":"Reversed"')&&app.includes('"قيد عكسي":"Reversal entry"')&&app.includes('"عكس القيد":"Reverse entry"'));
+ok('Manager.io bridge is wired into the database-first startup and cached per administrator',dbSync.includes("loadManagerDataBridge")&&dbSync.includes("managerStateToRows")&&dbSync.includes("loadManagerCache(actorId)")&&dbSync.includes("hydrateFromRows([...managerRows,...rows])"));
+ok('Manager.io bridge maps imported accounts, parties, stock, invoices, vouchers, ledger and production records',bridge.includes('function mapManagerDataToState(data)')&&bridge.includes('manager_ledger_transactions')&&bridge.includes('manager_invoice_source_lines')&&bridge.includes('production_order_materials')&&bridge.includes('manager_voucher_lines'));
+ok('Manager.io record IDs are stable numeric IDs suitable for the existing UI and factory_records overlay',bridge.includes('function stableId(namespace, key)')&&bridge.includes('namespace * 1000000000000'));
+ok('imported Manager.io financial documents are protected from in-place edits and deletion',app.includes('if(d?.legacyManager)')&&app.includes('if(v?.legacyManager)')&&app.includes('if(pre.legacyManager)')&&app.includes('if(imported?.legacyManager)'));
+ok('Manager.io bridge errors are surfaced to the user without clearing source records',dbSync.includes('factory-manager-bridge-error')&&app.includes('factory-manager-bridge-error'));
+
 
 
 
