@@ -332,7 +332,7 @@ function makeOperations(state) {
     if (!current.has(key)) operations.push({ type:old.type, id:old.id, payload:null, expectedVersion:old.version || 0, deleted:true });
   }
   for (const [key, old] of managerBaseline) {
-    if (baseline.has(key)||!current.has(key)) continue;
+    if (baseline.has(key)||current.has(key)) continue;
     operations.push({type:old.type,id:old.id,payload:null,expectedVersion:0,deleted:true});
   }
   return operations;
