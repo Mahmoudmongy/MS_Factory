@@ -45,8 +45,7 @@ begin
   end if;
   select * into v_audit
   from public.factory_audit_log
-  where id = p_audit_id and factory_user_id = v_actor
-  for update;
+  where id = p_audit_id and factory_user_id = v_actor;
   if not found then
     raise exception 'UNDO_AUDIT_NOT_FOUND' using errcode = 'P0002';
   end if;
