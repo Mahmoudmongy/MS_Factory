@@ -755,6 +755,9 @@ await m.locator('#m .filter-date-toggle').first().click();
 ok('mobile date fields remain hidden until the separate period button is pressed',datePanelClosed&&datePanelOpened,{datePanelClosed,datePanelOpened});
 await m.evaluate(()=>docForm('sale'));const fw=await m.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1);
 ok('mobile: invoice form fits the screen width',fw);
+const mobileScreenIds=await m.evaluate(()=>allowed().map(t=>t[0])),mobileScreenAudit=[];for(const sid of mobileScreenIds){await m.evaluate(x=>go(x),sid);await m.waitForTimeout(25);mobileScreenAudit.push(await m.evaluate(x=>({screen:x,documentWidth:document.documentElement.scrollWidth,viewport:innerWidth,mainWidth:document.querySelector('#m')?.clientWidth,mainScroll:document.querySelector('#m')?.scrollWidth}),sid));}
+const mobileOverflow=mobileScreenAudit.filter(x=>x.documentWidth>x.viewport+1);
+ok(`all ${mobileScreenIds.length} screens render on 390px mobile without page-level horizontal overflow`,mobileScreenIds.length===19&&mobileOverflow.length===0,mobileOverflow);
 ok('mobile: no JavaScript errors',merr.length==0,merr.slice(0,2));await mc.close();
 await browser.close();server.close();
 ok('legacy cloud-sync polling is disabled in database-first mode',cloud.includes('if (!window.__factoryDatabaseFirst) {')&&cloud.indexOf('if (!window.__factoryDatabaseFirst) {')<cloud.indexOf('const _origSetItem')&&cloud.includes('setInterval(() => {'));
