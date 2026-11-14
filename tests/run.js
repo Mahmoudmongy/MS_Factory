@@ -597,7 +597,7 @@ await desktopFrom.press("Enter");
 const committedDate=await ev(()=>({from:FL.dsale.from,panelHidden:document.querySelector('.filter-card[data-filter-group="dsale"] .filter-date-panel')?.hidden}));
 ok('desktop date filter commits on Enter and closes the period panel',committedDate.from==="2026-11-01"&&committedDate.panelHidden===true,committedDate);
 await p.setViewportSize({width:390,height:844});await ev(()=>go('sale'));
-await p.locator('#m .filter-date-toggle').click();
+await p.locator('#m .filter-date-toggle:visible').first().click();
 const mobileTo=p.locator('#m input[data-filter-date-field="1"]:visible').nth(1);
 await mobileTo.fill("2026-11-30");
 await mobileTo.evaluate(el=>el.blur());
