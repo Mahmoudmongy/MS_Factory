@@ -32,7 +32,7 @@ function ensureUi() {
   launcher.style.cssText = 'display:flex;justify-content:flex-end;align-items:center;gap:7px;flex-wrap:wrap;padding:5px 12px;background:var(--bg,#f7f8fa)';
   const button = document.createElement('button');
   button.id = 'factory-audit-open'; button.type = 'button'; button.className = 'g';
-  button.textContent = '⟲'; button.setAttribute('aria-label',text('سجل التدقيق والتراجع','Audit log & safe undo'));
+  button.textContent = '⟲'; button.setAttribute('aria-label',text('سجل التدقيق والتراجع','Audit log & safe undo')); button.title=text('سجل التدقيق والتراجع','Audit log & safe undo');
   button.title = text('عرض سجل تغييرات قاعدة البيانات والتراجع الآمن','View database change history and safe undo');
   button.style.cssText = 'white-space:nowrap;min-height:30px;width:30px;min-width:30px;padding:2px;font-size:16px';
   button.addEventListener('click', openPanel);
