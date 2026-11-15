@@ -20,22 +20,7 @@ for (const source of [app, previewUi]) {
   }
 }
 const unresolvedInlineActions = [...inlineActionNames]
-  .filter(name => !['$', 'print'].includes(name))
-  .filter(name => {
-    const signatures = [
-      'function ' + name + '(', 'async function ' + name + '(',
-      'const ' + name + '=', 'const ' + name + ' =',
-      'let ' + name + '=', 'let ' + name + ' =',
-      'var ' + name + '=', 'var ' + name + ' =',
-      name + '=function', name + ' = function',
-      'window.' + name + '=', 'window.' + name + ' ='
-    ];
-    return !signatures.some(signature => app.includes(signature) || previewUi.includes(signature));
-  })
-  .sort();
-assert.deepEqual(unresolvedInlineActions, [], 'every inline UI action must resolve to a real application function');
-console.log('PASS every inline screen action resolves to an implemented application function');
-const parserStart = app.indexOf('function factorySearchMatch(');
+  .filter(name => !['const parserStart = app.indexOf('function factorySearchMatch(');
 const parserEnd = app.indexOf('function factorySearchApply(', parserStart);
 assert(parserStart >= 0 && parserEnd > parserStart, 'advanced search parser must exist');
 const matches = new Function(app.slice(parserStart, parserEnd) + '; return factorySearchMatch;')();
@@ -191,6 +176,19 @@ assert(previewCss.includes(".factory-fin-grid") && previewCss.includes(".factory
 assert(app.includes('vStock=function(){') && app.includes('<th>المخزن الرئيسي</th><th>المخزن الفرعي</th><th>الوحدة</th><th>الكمية</th><th>تكلفة الوحدة</th><th>قيمة المخزون</th>'), "inventory table matches the reference warehouse, quantity and value columns");
 assert(app.includes('onclick="printAllStockLabels()"') && app.includes('onclick="stockScanOpen()"') && app.includes('onclick="stockMovementChooser()"') && app.includes('onclick="showWarehouseBalances('), "inventory barcode, distribution, movement and label actions are connected");
 assert(previewCss.includes(".factory-stock-filter-main") && previewCss.includes(".factory-stock-table-card") && previewCss.includes("@media(max-width:860px){.factory-stock-filter-main"), "inventory filters and table adapt to mobile and dark themes");
+, 'print'].includes(name))
+  .filter(name => {
+    const signatures = [
+      'function ' + name + '(', 'async function ' + name + '(',
+      'const ' + name + '=', 'const ' + name + ' =',
+      'let ' + name + '=', 'let ' + name + ' =',
+      'var ' + name + '=', 'var ' + name + ' =',
+      name + '=function', name + ' = function',
+      'window.' + name + '=', 'window.' + name + ' ='
+    ];
+    return !signatures.some(signature => app.includes(signature) || previewUi.includes(signature));
+  })
+  .sort();
 assert.deepEqual(unresolvedInlineActions, [], 'every inline UI action must resolve to a real application function');
 console.log('PASS every inline screen action resolves to an implemented application function');
 const parserStart = app.indexOf('function factorySearchMatch(');
