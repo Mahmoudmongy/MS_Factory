@@ -1455,7 +1455,7 @@ vBank=function(){
   const label=factoryEsc((a.code?a.code+" — ":"")+accountLabel(a));
   const arrow=kids.length?'<button type="button" class="g account-tree-toggle factory-bank-tree-toggle" title="'+(closed?"إظهار الحسابات الفرعية":"إخفاء الحسابات الفرعية")+'" aria-label="'+(closed?"إظهار":"إخفاء")+' الحسابات الفرعية لـ '+label+'" aria-expanded="'+String(!closed)+'" onclick="toggleAccountTree('+Number(a.id)+')">'+(closed?"▸":"▾")+'</button> ':'';
   const meta=kids.length?(cashChildren(a.id).length+(LANGEN?" subaccounts":" حساب فرعي")):(level===0?(LANGEN?"Main account":"حساب رئيسي مستقل"):(LANGEN?"Subaccount":"حساب فرعي"));
-  const amountLinks=shownBalances.map(([c,value])=>lk(f(value)+" "+(c==="EGP"?(LANGEN?"EGP":"ج.م"):factoryEsc(c)),"drillAcct("+Number(a.id)+")")).join('<span class="factory-bank-currency-separator"> · </span>');
+  const amountLinks=shownBalances.map(([c,value])=>'<b>'+lk(f(value)+" "+(c==="EGP"?(LANGEN?"EGP":"ج.م"):factoryEsc(c)),"drillAcct("+Number(a.id)+")")+'</b>').join('<span class="factory-bank-currency-separator"> · </span>');
   const edit=can("edit")?'<button type="button" class="g factory-bank-edit" title="تعديل اسم الحساب" aria-label="تعديل اسم الحساب" onclick="editAcc('+accountCode+')">✎</button>':"";
   const line='<div class="factory-bank-account-row" style="--bank-depth:'+level+'"><div class="factory-bank-account-name">'+arrow+'<span class="factory-bank-account-title">'+label+'<small>'+meta+'</small></span></div><div class="factory-bank-account-end"><span class="factory-bank-balances">'+(amountLinks||"—")+'</span>'+edit+'</div></div>';
   return '<div class="factory-bank-node">'+line+(kids.length&&!closed?'<div class="factory-bank-children">'+kids.map(ch=>row(ch,level+1)).join("")+'</div>':"")+'</div>';
