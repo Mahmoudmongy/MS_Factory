@@ -852,6 +852,7 @@ function poPrint(id){const o=S.po.find(x=>x.id==id);ppage(`أمر إنتاج ${o
 function stPrint(id){ppage(`كشف حساب ${pn(id)}`,stmtHtml(id),"",pn(id))}
 function repPrint(){const t=(RL.find(r=>r[0]==R.rep)||[])[1]||"تقرير",tb=[...ACT.querySelectorAll("table.l")].map(x=>x.outerHTML.replace('class="l"',"")).join("<br>");ppage(t,pw("rep",t,"",`<div>من ${R.from?dfm(R.from):"البداية"} إلى ${R.to?dfm(R.to):dfm(td())}</div>${tb}`))}
 const ld=src=>new Promise((ok,no)=>{if(document.querySelector(`script[src="${src}"]`))return ok();const s=document.createElement("script");s.src=src;s.onload=ok;s.onerror=()=>no(new Error("load"));document.head.appendChild(s)});
+// PDF export: preserve the full invoice canvas and choose page breaks between table rows.
 async function mkPdf(){
  const el=$("#pr");if(!el)throw new Error("no doc");
  await ld("https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js");
