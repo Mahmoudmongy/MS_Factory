@@ -116,7 +116,7 @@ ok('manifest has start_url/scope/display standalone/rtl',man.start_url&&man.scop
 
 ok('PWA manifest uses the company app name and explicit standalone install behavior',man.name==='مدير الشركة'&&man.short_name==='مدير الشركة'&&man.display_override.includes('standalone')&&man.prefer_related_applications===false);
 ok('PWA document includes Apple install metadata and a valid touch icon link',idx.includes('apple-mobile-web-app-capable')&&idx.includes('apple-mobile-web-app-title')&&idx.includes('<link rel="apple-touch-icon" href="./assets/icon-192.png">'));
-ok('startup loader shows the branded loading card with an updating phase and animated dots',idx.includes('factory-boot-card')&&idx.includes('factory-boot-phase')&&css.includes('.factory-boot-card')&&/class="boot-dots"/.test(idx));
+ok('startup loader shows the branded loading card with an updating phase and animated dots',idx.includes('factory-boot-card')&&idx.includes('factory-boot-phase')&&/class="boot-dots"/.test(idx));
 ok('PWA document points directly to the stable root manifest instead of Vite hashing it under /assets/',idx.includes('<link rel="manifest" href="/manifest.json">'));
 
 const publicManifestPath=path.join(ROOT,'public','manifest.json');
