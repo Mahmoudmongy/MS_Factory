@@ -776,7 +776,7 @@ const templatePreviewCheck=await ev(()=>{const h=$("#tpv").innerHTML;return {tit
   const body=document.createElement("tbody");
   for(let i=1;i<=48;i++){const row=document.createElement("tr");row.style.height="150px";row.innerHTML="<td>صنف اختبار رقم "+i+"</td><td>2</td><td>500.00</td>";body.appendChild(row);}
   table.appendChild(body);doc.appendChild(table);
-  const footer=document.createElement("div");footer.textContent="نهاية الفاتورة - إجمالي الفاتورة والختم";footer.style.height="80px";doc.appendChild(footer);document.body.appendChild(doc);
+  const footer=document.createElement("div");footer.textContent="نهاية الفاتورة - إجمالي الفاتورة والختم";footer.style.height="80px";doc.appendChild(footer);ACT.appendChild(doc);
   window.html2canvas=async node=>{
    const capture=document.createElement("canvas"),r=node.getBoundingClientRect();
    capture.width=Math.ceil(Math.max(node.scrollWidth,node.clientWidth)*2);
