@@ -144,3 +144,8 @@ assert(app.includes("assistantQuickProductionCost") && app.includes("assistantQu
 assert(app.includes("تصدير السجل") && app.includes("FL.timeline={}"), "timeline provides export and clear-filter actions");
 assert(ui.includes("factory-recent-row[role='button']") || ui.includes("factory-recent-row[role=\"button\"]"), "summary recent movements are keyboard accessible");
 assert(app.includes("القيد غير متوازن") && app.includes("if(!post(d,no,$(\"#j0\").value,J.lines,\"je\",id,ts))"), "journal posting fails safely instead of saving an unposted journal");
+
+assert(app.includes("exportPartnerTable") && app.includes("factory-partner-table"), "partner table has a targeted Excel export");
+assert(app.includes("exportEmployeeTable") && app.includes("factory-employee-table"), "employee table has a targeted Excel export");
+assert(app.includes("exportTrialBalance") && app.includes("factory-trial-balance-table"), "trial balance has a targeted Excel export");
+assert(app.includes("vTl = function()") && app.includes("undoGroups") && app.includes("undoView"), "timeline lists immutable reversal entries with a dedicated details action");
