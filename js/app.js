@@ -1457,7 +1457,7 @@ vBank=function(){
   const amountLink=lk(f(amount)+" "+(displayCurrency==="EGP"?(LANGEN?"EGP":"ج.م"):factoryEsc(displayCurrency)),"drillAcct("+Number(a.id)+")");
   const edit=can("edit")?'<button type="button" class="g factory-bank-edit" title="تعديل اسم الحساب" aria-label="تعديل اسم الحساب" onclick="editAcc('+accountCode+')">✎</button>':"";
   const line='<div class="factory-bank-account-row" style="--bank-depth:'+level+'"><div class="factory-bank-account-name">'+arrow+'<span class="factory-bank-account-title">'+label+'<small>'+meta+'</small></span></div><div class="factory-bank-account-end"><span class="factory-bank-balances">'+amountLink+'</span>'+edit+'</div></div>';
-  return '<div class="factory-bank-node">'+line+(kids.length?'<div class="factory-bank-children" '+(closed?'hidden':'')+'>'+kids.map(ch=>row(ch,level+1)).join("")+'</div>':"")+'</div>';
+  return '<div class="factory-bank-node">'+line+(kids.length&&!closed?'<div class="factory-bank-children">'+kids.map(ch=>row(ch,level+1)).join("")+'</div>':"")+'</div>';
  };
  const from=fv(key,"from")||"",to=fv(key,"to")||S.per.to||td();
  const selectedIds=new Set();
