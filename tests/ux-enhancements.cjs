@@ -80,7 +80,7 @@ const appPatchChecks = [
   [app.includes('addL = function') && app.includes('$("#un").value=""') && app.includes('$("#it").selectedIndex=0'), 'invoice add-row clears every field and resets item selection'],
   [app.includes('D.lines[') && app.includes('.price=Math.max(0,+this.value||0)'), 'sales and purchase invoice line prices are editable'],
   [auditTrail.includes('function auditBusinessSummary(row)') && auditTrail.includes('Movement details'), 'audit entries show readable business details with raw before/after snapshots'],
-  [app.includes('TL.q') && app.includes('Search (contains)'), 'timeline has a contains-search beside its date filters'],
+  [app.includes('vTl=function(){') && app.includes('query=fv(key,"q")') && app.includes('المستخدم أو الإجراء أو المرجع أو البيان'), 'timeline has a contains-search beside its date filters'],
   [app.includes('factory-table-count') && app.includes('factory-table-total') && app.includes('Default templates'), 'table counts, amount summaries and renamed column templates are enabled'],
   [app.includes('vBank = function') && app.includes('toggleAccountTree'), 'cash and bank accounts render a collapsible hierarchy'],
   [css.includes('position:sticky') && css.includes('overflow-wrap:anywhere'), 'table headings stay pinned and long text wraps']
@@ -94,7 +94,7 @@ console.log('PASS invoice and voucher posting failures fail closed with safe rol
 const sw = fs.readFileSync(path.join(root, 'sw.js'), 'utf8');
 const swPublic = fs.readFileSync(path.join(root, 'public/sw.js'), 'utf8');
 assert(app.includes('landscape=wide||capture.width/capture.height>1.1') && app.includes('windowWidth:captureWidth') && app.includes('W=landscape?297:210') && app.includes('el.style.boxSizing="border-box"'), 'PDF export captures the full table width and selects landscape A4 for wide documents');
-assert(sw.includes('factory-v40') && swPublic.includes('factory-v40'), 'service-worker cache version changes when the application assets change');
+assert(sw.includes('factory-v41') && swPublic.includes('factory-v41'), 'service-worker cache version changes when the application assets change');
 console.log('PASS adaptive A4 PDF layout and service-worker cache refresh');
 assert(previewUi.includes("function renderReferenceGroup") && previewUi.includes("function renderReferenceSidebar") && previewUi.includes("data-preview-screen-tab"), "the live application must map its actual screen renderers into the preview's grouped menu and functional tabs");
 assert(previewCss.includes(".factory-nav-link") && previewCss.includes(".preview-module-tabs") && previewCss.includes(".factory-reference-screen-body"), "the reference sidebar, tabs and page panels must have dedicated responsive styles");
@@ -153,8 +153,8 @@ assert(app.includes("vTl = function()") && app.includes("undoGroups") && app.inc
 assert(app.includes("timestamp.slice(0,10)") && app.includes("timestamp.slice(11)"), "timeline date and time render as separate columns");
 
 assert(app.includes('statements:()=>vStatements()') && app.includes('["statements",ico("report"),"القوائم المالية"]'), "financial statements screen is available from the app navigation");
-assert(app.includes('function vStatements()') && app.includes('isHtml(from,to)') && app.includes('bsHtml(to)'), "financial statements are calculated from live account ledgers");
-assert(app.includes('function updateStatements()') && app.includes('تاريخ البداية يجب ألا يتجاوز تاريخ النهاية'), "financial statement period validates date order");
+assert(previewUi.includes("function renderFinancialStatements()") && previewUi.includes("SCR.statements=renderFinancialStatements") && previewUi.includes("statementGroup(\'I\'") && previewUi.includes("statementGroup(\'A\'"), "financial statements use live account ledgers for income and balance sheet");
+assert(previewUi.includes("function applyFinancialPeriod()") && previewUi.includes("if(from&&to&&from>to)"), "financial statement period validates date order");
 assert(app.includes('function printStatements()') && app.includes('طباعة القوائم أو حفظها PDF'), "financial statements have a connected print and PDF action");
 assert(css.includes(".factory-statements-grid") && css.includes("@media(max-width:860px){.factory-statements-grid"), "financial statements adapt to mobile and desktop");
 
