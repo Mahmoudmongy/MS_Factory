@@ -507,3 +507,16 @@ button:disabled{opacity:.55;cursor:not-allowed}
 :root[data-theme="dark"] .factory-statements-grid,
 :root[data-theme="dark"] .factory-statement-period{color:var(--tx)}
 @media print{.factory-statements-print{display:block!important}.factory-statements-print .card{break-inside:avoid}}
+
+/* Inventory table follows the reference's warehouse-first seven-column layout. */
+.factory-stock-filter-main,.factory-stock-filter-extra{display:flex;align-items:end;gap:10px;flex-wrap:wrap}
+.factory-stock-filter-main label,.factory-stock-filter-extra label{display:grid;gap:5px;min-width:150px;flex:1;color:var(--mu);font-size:12px}
+.factory-stock-filter-main button{min-height:38px}
+.factory-stock-advanced{margin-top:10px;border-top:1px solid var(--bd);padding-top:9px;color:var(--tx)}
+.factory-stock-advanced summary{cursor:pointer;font-weight:600}
+.factory-stock-filter-extra{padding-top:10px}
+.factory-stock-code{display:block;color:var(--mu);font-size:11px;direction:ltr;text-align:right}
+.factory-stock-table-card{min-width:0}
+.factory-stock-table-card tfoot th{background:var(--pr2);color:var(--tx);padding:9px}
+:root[data-theme="dark"] .factory-stock-code{color:var(--mu)}
+@media(max-width:860px){.factory-stock-filter-main label,.factory-stock-filter-extra label{min-width:100%;flex-basis:100%}.factory-stock-filter-main button{width:100%}}

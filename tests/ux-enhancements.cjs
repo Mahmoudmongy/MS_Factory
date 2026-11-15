@@ -157,3 +157,7 @@ assert(app.includes('function vStatements()') && app.includes('isHtml(from,to)')
 assert(app.includes('function updateStatements()') && app.includes('تاريخ البداية يجب ألا يتجاوز تاريخ النهاية'), "financial statement period validates date order");
 assert(app.includes('function printStatements()') && app.includes('طباعة القوائم أو حفظها PDF'), "financial statements have a connected print and PDF action");
 assert(css.includes(".factory-statements-grid") && css.includes("@media(max-width:860px){.factory-statements-grid"), "financial statements adapt to mobile and desktop");
+
+assert(app.includes('vStock=function(){') && app.includes('<th>المخزن الرئيسي</th><th>المخزن الفرعي</th><th>الوحدة</th><th>الكمية</th><th>تكلفة الوحدة</th><th>قيمة المخزون</th>'), "inventory table matches the reference warehouse, quantity and value columns");
+assert(app.includes('onclick="printAllStockLabels()"') && app.includes('onclick="stockScanOpen()"') && app.includes('onclick="stockMovementChooser()"') && app.includes('onclick="showWarehouseBalances('), "inventory barcode, distribution, movement and label actions are connected");
+assert(css.includes(".factory-stock-filter-main") && css.includes(".factory-stock-table-card") && css.includes("@media(max-width:860px){.factory-stock-filter-main"), "inventory filters and table adapt to mobile and dark themes");
