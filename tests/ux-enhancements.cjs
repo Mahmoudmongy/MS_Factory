@@ -94,10 +94,16 @@ console.log('PASS invoice and voucher posting failures fail closed with safe rol
 const sw = fs.readFileSync(path.join(root, 'sw.js'), 'utf8');
 const swPublic = fs.readFileSync(path.join(root, 'public/sw.js'), 'utf8');
 assert(app.includes('landscape=c.width/c.height>1.1') && app.includes('windowWidth:captureWidth') && app.includes('W=landscape?297:210'), 'PDF export captures the full table width and selects landscape A4 for wide documents');
-assert(sw.includes('factory-v28') && swPublic.includes('factory-v28'), 'service-worker cache version changes when the application assets change');
+assert(sw.includes('factory-v29') && swPublic.includes('factory-v29'), 'service-worker cache version changes when the application assets change');
 console.log('PASS adaptive A4 PDF layout and service-worker cache refresh');
 assert(previewUi.includes("function renderReferenceGroup") && previewUi.includes("function renderReferenceSidebar") && previewUi.includes("data-preview-screen-tab"), "the live application must map its actual screen renderers into the preview's grouped menu and functional tabs");
 assert(previewCss.includes(".factory-nav-link") && previewCss.includes(".preview-module-tabs") && previewCss.includes(".factory-reference-screen-body"), "the reference sidebar, tabs and page panels must have dedicated responsive styles");
 assert(databaseFirst.includes("window.__factoryAuthUser") && databaseFirst.includes("authenticatedUser.id === window.__factoryAuthProfile?.id"), "database startup must reuse the already authenticated user rather than issue a duplicate session read");
 assert(indexHtml.includes("factory-boot-phase") && indexHtml.includes("factory-boot-card") && indexHtml.includes("window.__factorySetBootPhase"), "the boot screen must show authentication and database-loading phases");
 console.log("PASS preview.html screen grouping, icon navigation, responsive panels and startup session reuse");
+assert(previewUi.includes("function summaryOrder(data)") && previewUi.includes("data-summary-move") && previewUi.includes("uiPrefs.summaryOrder=order"), "summary indicators can be reordered and that order is saved");
+assert(previewUi.includes("factory-summary-mini-table") && previewUi.includes("data-open-source"), "latest activity is a drillable table built from current records");
+assert(app.includes("preview-report-grid") && app.includes("التقارير المالية") && app.includes("النقدية والمخزون والإنتاج"), "reports use the four reference groups without replacing live report renderers");
+assert(previewCss.includes("Dark theme contrast") && previewCss.includes("button.g") && previewCss.includes("color:#fff!important"), "secondary action buttons use white high-contrast labels in dark mode");
+assert(databaseFirst.includes("function scheduleCacheSnapshot(rows)") && databaseFirst.includes("__snapshot__") && databaseFirst.includes("setBaselineRow(row, false)"), "startup avoids synchronous per-record cache writes");
+console.log("PASS summary ordering, latest activity, grouped reports, dark button labels and faster startup");

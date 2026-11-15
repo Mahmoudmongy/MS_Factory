@@ -573,7 +573,7 @@ const previewUiRuntime=await ev(()=>{
  const moved=document.querySelector('#m .factory-balance-row')?.textContent.includes('العملاء');
  const oldDocs=S.docs;S.docs=[...(S.docs||[]),{id:'summary-hide-test',t:'sale',date:td(),ts:Date.now(),no:'HIDE-TEST',pid:null,total:123}];render();
  const hide=document.querySelector('#factory-summary-hide');hide?.click();
- const recentAmount=document.querySelector('.factory-summary-recent .factory-recent-row strong.factory-summary-amount');
+ const recentAmount=document.querySelector('.factory-summary-recent [data-open-source] .factory-summary-amount');
  const numbersHidden=getComputedStyle(document.querySelector('#factory-summary-kpis .factory-summary-amount')).visibility==='hidden'&&!!recentAmount&&getComputedStyle(recentAmount).visibility==='hidden';
  hide?.click();render();
  const recentNumbersRestored=!!recentAmount&&getComputedStyle(recentAmount).visibility!=='hidden';
@@ -582,6 +582,10 @@ const previewUiRuntime=await ev(()=>{
  const themeOpened=!document.querySelector('#factory-theme-popover').hidden;
  document.querySelector('#factory-theme-popover [data-factory-accent="blue"]')?.click();
  const blueApplied=getComputedStyle(document.documentElement).getPropertyValue('--pr').trim()==='#315b8a';
+ document.documentElement.setAttribute('data-theme','dark');
+ const darkProbe=document.createElement('button');darkProbe.type='button';darkProbe.className='g';darkProbe.textContent='اختبار وضوح';document.body.appendChild(darkProbe);
+ const darkButtonReadable=getComputedStyle(darkProbe).color==='rgb(255, 255, 255)'&&getComputedStyle(darkProbe).backgroundColor!=='rgba(0, 0, 0, 0)';
+ darkProbe.remove();document.documentElement.removeAttribute('data-theme');
  document.querySelector('#factory-theme-open')?.click();document.querySelector('#factory-theme-popover [data-factory-accent="teal"]')?.click();
  document.querySelector('#mobile-preview-btn')?.click();
  const mobilePreview=document.body.classList.contains('factory-preview-viewport')&&document.querySelector('#mobile-preview-btn').getBoundingClientRect().width===29;
@@ -598,10 +602,16 @@ const previewUiRuntime=await ev(()=>{
  const invalidRejected=!!headingBeforeInvalid&&document.querySelector('#m .factory-fin-heading')?.textContent===headingBeforeInvalid;
  go('home');
  const restore=document.querySelector('[data-summary-place="customers"]');if(restore){restore.value='top';restore.dispatchEvent(new Event('change',{bubbles:true}));}
- return {sidebarMatchesPreview,partnerScreenCombined,supplierTabWorks,voucherScreenCombined,paymentTabWorks,invoiceScreenCombined,purchaseTabWorks,defaultOrder,dateSort,chartCollapsed,chartExpanded,preferenceSaved,moved,numbersHidden,recentNumbersRestored,themeOpened,blueApplied,mobilePreview,statement,autoUpdated,invalidRejected};
+ document.querySelector('#factory-summary-settings-toggle')?.click();
+ const recentTableMatchesPreview=!!document.querySelector('#m .factory-summary-mini-table thead th:nth-child(6)')&&document.querySelector('#m .factory-summary-panels')?.firstElementChild?.classList.contains('factory-summary-recent');
+ const settingsOrderButtons=!!document.querySelector('#m [data-summary-move="sales"][data-summary-direction="-1"]');
+ return {sidebarMatchesPreview,partnerScreenCombined,supplierTabWorks,voucherScreenCombined,paymentTabWorks,invoiceScreenCombined,purchaseTabWorks,defaultOrder,dateSort,chartCollapsed,chartExpanded,preferenceSaved,moved,numbersHidden,recentNumbersRestored,recentTableMatchesPreview,settingsOrderButtons,themeOpened,blueApplied,darkButtonReadable,mobilePreview,statement,autoUpdated,invalidRejected};
 });
 ok('preview UI: summary order, saved layout, hide amounts, theme palette, mobile preview and financial statements are functional',
- previewUiRuntime.sidebarMatchesPreview&&previewUiRuntime.partnerScreenCombined&&previewUiRuntime.supplierTabWorks&&previewUiRuntime.voucherScreenCombined&&previewUiRuntime.paymentTabWorks&&previewUiRuntime.invoiceScreenCombined&&previewUiRuntime.purchaseTabWorks&&previewUiRuntime.defaultOrder&&previewUiRuntime.dateSort&&previewUiRuntime.chartCollapsed&&previewUiRuntime.chartExpanded&&previewUiRuntime.preferenceSaved&&previewUiRuntime.moved&&previewUiRuntime.numbersHidden&&previewUiRuntime.recentNumbersRestored&&previewUiRuntime.themeOpened&&previewUiRuntime.blueApplied&&previewUiRuntime.mobilePreview&&previewUiRuntime.statement&&previewUiRuntime.autoUpdated&&previewUiRuntime.invalidRejected,previewUiRuntime);
+const dbBoot=dbSync.slice(dbSync.indexOf('async function bootstrap()'),dbSync.indexOf('window.__factoryPersistState'));
+ok('startup uses one deferred offline cache snapshot instead of synchronous per-record writes',/function scheduleCacheSnapshot\(rows\)/.test(dbSync)&&/setBaselineRow\(row, false\)/.test(dbSync)&&/__snapshot__/.test(dbSync));
+ok('the app-ready event is dispatched before the realtime connection is awaited',!dbBoot.includes('await connectRealtime();')&&dbBoot.includes('connectRealtime().catch'));
+ previewUiRuntime.sidebarMatchesPreview&&previewUiRuntime.partnerScreenCombined&&previewUiRuntime.supplierTabWorks&&previewUiRuntime.voucherScreenCombined&&previewUiRuntime.paymentTabWorks&&previewUiRuntime.invoiceScreenCombined&&previewUiRuntime.purchaseTabWorks&&previewUiRuntime.defaultOrder&&previewUiRuntime.dateSort&&previewUiRuntime.chartCollapsed&&previewUiRuntime.chartExpanded&&previewUiRuntime.preferenceSaved&&previewUiRuntime.moved&&previewUiRuntime.numbersHidden&&previewUiRuntime.recentNumbersRestored&&previewUiRuntime.recentTableMatchesPreview&&previewUiRuntime.settingsOrderButtons&&previewUiRuntime.themeOpened&&previewUiRuntime.blueApplied&&previewUiRuntime.darkButtonReadable&&previewUiRuntime.mobilePreview&&previewUiRuntime.statement&&previewUiRuntime.autoUpdated&&previewUiRuntime.invalidRejected,previewUiRuntime);
 const tableIconRuntime=await ev(()=>{const wrap=document.createElement('div');wrap.className='factory-table-scroll';wrap.style.width='420px';const table=document.createElement('table');table.className='l';table.innerHTML='<thead><tr><th>التاريخ</th><th>البيان</th></tr></thead><tbody>'+Array.from({length:9},(_,i)=>'<tr><td>2026-11-'+String(i+1).padStart(2,'0')+'</td><td>'+'نص طويل لاختبار التفاف الكلام داخل العمود دون تغيير عرضه '.repeat(3)+'</td></tr>').join('')+'</tbody>';wrap.appendChild(table);ACT.appendChild(wrap);factoryApplyFixedTableLayout(table);const box=document.createElement('div');box.innerHTML='<button>مشاركة ملف PDF</button><a href="#">عرض</a>';ACT.appendChild(box);factoryIconizeActions(box);factoryIconizeActionLinks(box);const result={fixed:table.style.tableLayout==='fixed',cols:table.querySelectorAll('colgroup col').length===2,sticky:getComputedStyle(table.querySelector('th')).position==='sticky',scrollHeight:!!wrap.style.maxHeight,wrapped:table.querySelector('td.factory-very-long-cell')!==null,icons:box.querySelectorAll('svg').length===2,labels:!!box.querySelector('button[aria-label="مشاركة ملف PDF"]')&&!!box.querySelector('a[aria-label="عرض"]')};wrap.remove();box.remove();return result});
 ok('tables keep fixed columns, sticky headers, compact icon actions and wrapped long text',Object.values(tableIconRuntime).every(Boolean),tableIconRuntime);
 
