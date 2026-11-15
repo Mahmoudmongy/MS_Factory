@@ -117,7 +117,23 @@ window.__factoryAuthPromise = (async function bootstrapFactoryApp() {
 })();
 </script>
 <body>
-<div id="factory-boot-screen" role="status" aria-live="polite"><div class="factory-boot-card"><img src="./assets/icon.svg" alt=""><div class="factory-boot-copy"><strong>MS Factory</strong><small id="factory-boot-phase">جارٍ التحقق من حسابك...</small></div><span class="boot-dots" aria-hidden="true"><i></i><i></i><i></i></span></div></div>
+<div id="factory-boot-screen" role="status" aria-live="polite"><div class="factory-boot-card"><img src="./assets/icon.svg" alt="شعار الشركة"><div class="factory-boot-copy"><strong>MS Factory</strong><small id="factory-boot-phase">جاري التحميل</small></div><span class="boot-dots" aria-hidden="true"><i></i><i></i><i></i></span></div></div><script>
+(function(){
+ function applyCachedFactoryBrand(){
+  try{
+   const saved=JSON.parse(localStorage.getItem('factory-branding')||'null');
+   if(!saved)return;
+   const card=document.querySelector('.factory-boot-card');if(!card)return;
+   const name=card.querySelector('.factory-boot-copy strong'),logo=card.querySelector('img'),phase=document.getElementById('factory-boot-phase');
+   if(name&&saved.name)name.textContent=String(saved.name).slice(0,120);
+   if(logo&&saved.logo&&/^data:image\/(?:jpeg|png|webp);base64,/i.test(saved.logo))logo.src=saved.logo;
+   if(phase)phase.textContent='جاري التحميل';
+  }catch(_){}
+ }
+ if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',applyCachedFactoryBrand,{once:true});else applyCachedFactoryBrand();
+})();
+</script>
+
 <div id="app">
   <div id="sb-overlay" onclick="closeSB()"></div>
   <aside id="sb"></aside>
