@@ -557,87 +557,8 @@ function toggleBankTree(id){
  localStorage.setItem(key,closed?"0":"1");
  render();
 }
-function vBank(){
- const k="bank",all=(S.accts||[]).filter(a=>a.cash),ids=new Set(all.map(a=>String(a.id)));
- const query=String(fv(k,"q")||"").trim(),currency=String(fv(k,"cur")||"");
- const from=String(fv(k,"from")||""),to=String(fv(k,"to")||"");
- const children=a=>all.filter(x=>String(x.parentId||"")===String(a.id));
- const hasCurrency=(a,c,seen)=>{
-  seen=seen||new Set();const id=String(a.id);if(seen.has(id))return false;seen.add(id);
-  if(cur_(a)===c)return true;
-  return children(a).some(ch=>hasCurrency(ch,c,seen));
- };
- const ownMatch=a=>!query||ci(a.name,query)||ci(a.code,query)||ci(String(a.id),query);
- const hasMatch=(a,seen)=>{
-  seen=seen||new Set();const id=String(a.id);if(seen.has(id))return false;seen.add(id);
-  return ownMatch(a)||children(a).some(ch=>hasMatch(ch,seen));
- };
- const eligible=a=>(!currency||hasCurrency(a,currency))&&(!query||hasMatch(a));
- const roots=all.filter(a=>!ids.has(String(a.parentId||""))).filter(eligible)
-  .sort((a,b)=>String(a.code||a.name||"").localeCompare(String(b.code||b.name||""),"ar"));
- const treeTotals=(a,seen)=>{
-  seen=seen||new Set();const id=String(a.id),out=new Map();
-  if(seen.has(id))return out;seen.add(id);
-  const cur=cur_(a);out.set(cur,(out.get(cur)||0)+balc(a.id,"",S.per.to));
-  children(a).forEach(ch=>treeTotals(ch,seen).forEach((v,c)=>out.set(c,(out.get(c)||0)+v)));
-  return out;
- };
- const treeEgp=(a,seen)=>{
-  seen=seen||new Set();const id=String(a.id);if(seen.has(id))return 0;seen.add(id);
-  return bal(a.id,"",S.per.to)+children(a).reduce((sum,ch)=>sum+treeEgp(ch,seen),0);
- };
- const balanceHtml=a=>{
-  const amounts=treeTotals(a),shown=[...amounts.entries()].filter(([c])=>!currency||c===currency);
-  if(!shown.length)return '<span class="mu">—</span>';
-  return '<span class="factory-bank-balances">'+shown.map(([c,v])=>'<b dir="ltr">'+f(v)+' '+(c==="EGP"?"ج.م":factoryEsc(c))+'</b>').join('')+'</span>';
- };
- const renderNode=(a,depth)=>{
-  const allKids=children(a),visibleKids=allKids.filter(ch=>(!currency||hasCurrency(ch,currency))&&(!query||ownMatch(a)||hasMatch(ch))),hasKids=visibleKids.length>0;
-  const code=JSON.stringify(String(a.id)).replace(/&/g,"&amp;").replace(/"/g,"&quot;");
-  const label=factoryEsc((a.code?a.code+" — ":"")+accountLabel(a));
-  const saved=localStorage.getItem("factory-bank-collapsed:"+String(a.id));
-  const forcedOpen=!!query&&kids.some(ch=>hasMatch(ch));
-  const closed=hasKids&&!forcedOpen&&(saved===null||saved==="1");
-  const meta=hasKids?(allKids.length+" حساب فرعي"):"حساب رئيسي مستقل";
-  const edit=can("edit")?'<button type="button" class="g factory-bank-edit" title="تعديل اسم الحساب" aria-label="تعديل '+label+'" onclick="editAcc('+code+')">✎</button>':"";
-  const arrow=hasKids?'<button type="button" class="g factory-bank-tree-toggle" title="'+(closed?"إظهار الحسابات الفرعية":"إخفاء الحسابات الفرعية")+'" aria-label="'+(closed?"إظهار":"إخفاء")+' الحسابات الفرعية لـ '+label+'" aria-expanded="'+String(!closed)+'" onclick="toggleBankTree('+code+')">'+(closed?"▸":"▾")+'</button>':'<span class="factory-bank-tree-spacer"></span>';
-  const amount='<button type="button" class="factory-bank-balance-link" title="فتح حركة الحساب" aria-label="فتح حركة حساب '+label+'" onclick="drillAcct('+code+',\'\',\''+String(S.per.to||"").replace(/'/g,"&#39;")+'\')">'+balanceHtml(a)+'</button>';
-  const row='<div class="factory-bank-account-row" style="--bank-depth:'+depth+'"><div class="factory-bank-account-name">'+arrow+'<span class="factory-bank-account-title">'+label+'<small>'+meta+'</small></span></div><div class="factory-bank-account-end">'+amount+edit+'</div></div>';
-  if(!hasKids)return '<div class="factory-bank-node">'+row+'</div>';
-  return '<div class="factory-bank-node">'+row+'<div class="factory-bank-children" '+(closed?'hidden':'')+'>'+visibleKids.map(ch=>renderNode(ch,depth+1)).join("")+'</div></div>';
- };
- const cashIds=new Set(all.map(a=>String(a.id)));
- const dateValue=l=>String(l.d||(l.ts?lday(new Date(l.ts)):"")||"");
- const dateKey=value=>{
-  const raw=String(value||"");if(/^\d{4}-\d{2}-\d{2}/.test(raw))return raw.slice(0,10);
-  const m=/^(\d{1,2})[/-](\d{1,2})[/-](\d{4})$/.exec(raw);
-  return m?m[3]+"-"+String(m[2]).padStart(2,"0")+"-"+String(m[1]).padStart(2,"0"):raw;
- };
- const chronological=(S.L||[]).filter(l=>cashIds.has(String(l.a))&&(!to||dateKey(dateValue(l))<=dateKey(to)))
-  .sort((a,b)=>dateKey(dateValue(a)).localeCompare(dateKey(dateValue(b)))||(Number(a.ts)||0)-(Number(b.ts)||0));
- const running=new Map(),movementRows=[];
- chronological.forEach(l=>{
-  const id=String(l.a),account=ac_(l.a),next=(running.get(id)||0)+(Number(l.dr||0)-Number(l.cr||0))*nat(account);
-  running.set(id,next);
-  const d=dateValue(l),searchText=[d,l.ref,l.desc,an(l.a),l.pid?pn(l.pid):"",l.src].filter(Boolean).join(" ");
-  if(from&&dateKey(d)<dateKey(from))return;
-  if(query&&!(typeof factorySearchMatch==="function"?factorySearchMatch(searchText,query):searchText.toLocaleLowerCase("ar").includes(query.toLocaleLowerCase("ar"))))return;
-  movementRows.push({l,d,account,balance:next});
- });
- movementRows.reverse();
- const totalByCurrency=new Map();
- roots.forEach(root=>treeTotals(root).forEach((value,c)=>{if(!currency||currency===c)totalByCurrency.set(c,(totalByCurrency.get(c)||0)+value);}));
- const totalEgp=roots.reduce((sum,a)=>sum+treeEgp(a),0);
- const movementHtml=movementRows.length?movementRows.map(({l,d,account,balance})=>{
-  const code=JSON.stringify(String(account.id)).replace(/&/g,"&amp;").replace(/"/g,"&quot;");
-  return '<tr><td>'+factoryEsc(dfm(d))+'</td><td dir="ltr">'+factoryEsc(l.ref||"—")+'</td><td>'+factoryEsc(accountLabel(account))+'</td><td>'+factoryEsc(l.desc||"—")+'</td><td class="factory-ledger-number">'+(Number(l.dr||0)>.005?f(l.dr):"—")+'</td><td class="factory-ledger-number">'+(Number(l.cr||0)>.005?f(l.cr):"—")+'</td><td><button type="button" class="g factory-bank-movement-balance" onclick="drillAcct('+code+')">'+f(balance)+' ج.م</button></td></tr>';
- }).join(""):'<tr><td colspan="7" class="mu">لا توجد حركات نقدية مطابقة للفلاتر المحددة.</td></tr>';
- const totalsHtml=totalByCurrency.size?[...totalByCurrency.entries()].map(([c,v])=>'<div class="factory-bank-total-line"><span>'+factoryEsc(c==="EGP"?"الجنيه المصري":c)+'</span><strong dir="ltr">'+f(v)+' '+(c==="EGP"?"ج.م":factoryEsc(c))+'</strong></div>').join(""):'<div class="mu">لا توجد حسابات نقدية مطابقة لخيارات البحث.</div>';
- return ph(N.bank,'<button type="button" class="new" onclick="bForm()">+ حساب نقدي / بنك جديد</button>')+
-  fbar(k,[["q","text","اسم الحساب أو الرقم"],["cur","sel","العملة",["",...S.curs]],["from","date","من تاريخ"],["to","date","إلى تاريخ"]])+
-  '<section class="card factory-bank-main-balances"><div class="factory-panel-head"><b>الأرصدة حسب الحساب الرئيسي</b><span>'+roots.length+' حساب رئيسي</span></div><div class="factory-bank-tree">'+(roots.length?roots.map(a=>renderNode(a,0)).join(""):'<div class="factory-summary-empty">لا توجد حسابات نقدية مسجلة</div>')+'</div><div class="factory-bank-totals">'+totalsHtml+(totalByCurrency.has("EGP")||!currency?'<div class="factory-bank-total-equivalent"><span>إجمالي المعادل بالجنيه المصري</span><strong dir="ltr">'+f(totalEgp)+' ج.م</strong></div>':"")+'</div></section>'+
-  '<section class="card factory-bank-movement-card"><div class="factory-panel-head"><b>حركة الحساب</b><span>الحركات المسجلة على الحسابات النقدية والبنوك</span></div><div class="factory-table-scroll"><table class="l factory-bank-movement-table"><thead><tr><th>التاريخ</th><th>المرجع</th><th>الحساب</th><th>البيان</th><th>مدين</th><th>دائن</th><th>الرصيد</th></tr></thead><tbody>'+movementHtml+'</tbody></table></div></section>';
-}
+function vBank(){const k="bank",l=S.accts.filter(a=>a.cash&&ci(a.name,fv(k,"q"))&&(!fv(k,"cur")||cur_(a)==fv(k,"cur"))).sort((a,b)=>(a.parentId?1:0)-(b.parentId?1:0)||String(a.parentId||a.id).localeCompare(String(b.parentId||b.id))||a.name.localeCompare(b.name,"ar")),tot={};l.forEach(a=>{tot[cur_(a)]=(tot[cur_(a)]||0)+balc(a.id,"",S.per.to)});
+ return ph(N.bank,`<button class="new" onclick="bForm()">+ حساب نقدي / بنك جديد</button>`)+fbar(k,[["q","text","اسم الحساب"],["cur","sel","العملة",["",...S.curs]]])+`<table class="l"><tr><th>الحساب</th><th>العملة</th><th>الرصيد بعملة الحساب</th><th>المعادل بالجنيه (بسعر الصرف المسجّل)</th><th>إجراءات</th></tr>${U(l,a=>`<tr><td>${a.parentId?"　↳ ":""}${accountLabel(a)}</td><td>${cur_(a)}</td><td>${lk(cf(a,balc(a.id,"",S.per.to)),`drillAcct(${a.id},'','${S.per.to}')`)}</td><td>${cur_(a)=="EGP"?"—":f(bal(a.id,"",S.per.to))+" ج.م"}</td><td>${can("edit")?`<button class="g" onclick="editAcc(${a.id})">تعديل الاسم</button>`:""}</td></tr>`)}</table><div class="card"><b>إجمالي كل عملة (لا تُجمع العملات المختلفة معًا)</b>${U(Object.keys(tot),c=>`<div class="row sp"><span>${c}</span><b>${f(tot[c])} ${c=="EGP"?"ج.م":c}</b></div>`)}</div>`}
 function vCoa(){const k="coa";return ph(N.coa,`<button class="new" onclick="accForm()">+ حساب جديد</button>`)+fbar(k,[["q","text","اسم أو كود الحساب"],["t","sel","النوع",[["","الكل"],...Object.keys(TT).map(x=>[x,TT[x]])]],["cur","sel","العملة",["",...S.curs]]])+U(Object.keys(TT).filter(t=>!fv(k,"t")||fv(k,"t")==t),t=>`<table class="l"><tr><th>الكود</th><th>اسم الحساب</th><th>العملة</th><th>الرصيد</th><th>إجراءات</th></tr>${U(S.accts.filter(a=>a.t==t&&(ci(a.name,fv(k,"q"))||ci(a.code,fv(k,"q")))&&(!fv(k,"cur")||cur_(a)==fv(k,"cur"))),a=>`<tr><td>${a.code}</td><td>${accountLabel(a)}${a.cash?" 💵":""}</td><td>${cur_(a)}</td><td>${lk(cf(a,balc(a.id,"IX".includes(t)?S.per.from:"",S.per.to)),`drillAcct(${a.id})`)}</td><td>${can("edit")?`<button class="g" onclick="editAcc(${a.id})">تعديل الاسم</button>`:""}</td></tr>` )}</table>`)}
 function editAcc(id){if(!can("edit"))return;const a=ac_(id);if(!a.id)return;sh(`<h3>تعديل اسم الحساب</h3><div class="card">سيظل كود الحساب ونوعه وعملته كما هي حتى لا تتغير طبيعة الحركات السابقة.</div><input id="an2" value="${a.name}" placeholder="اسم الحساب"><div class="row"><button onclick="saveAccName(${id})">حفظ</button>${bk}</div>`)}
 function saveAccName(id){if(!can("edit"))return;const a=ac_(id),n=$("#an2").value.trim();if(!a.id||!n)return;if(S.accts.some(x=>x.id!=id&&x.name==n)){toast("يوجد حساب بنفس الاسم");return}if(!guard())return;a.name=n;sv();toast("تم تعديل اسم الحساب");cl()}
@@ -1520,26 +1441,53 @@ if(document.body&&!window.__factoryActionObserver){
 function exportActiveTable(selector){const table=(ACT||document).querySelector(selector||"table.l");if(!table){toast("لا يوجد جدول لتصديره");return;}xl(table,[...table.querySelectorAll("tr")].filter(row=>row.querySelector("td")));}
 function exportCashMovements(){const table=(ACT||document).querySelector(".factory-cash-movements table");if(!table){toast("لا يوجد جدول حركة لتصديره");return;}xl(table,[...table.querySelectorAll("tr")].filter(row=>row.querySelector("td")));}
 vBank=function(){
- const key="bank",query=fv(key,"q")||"",movementQuery=fv(key,"mv")||"",currency=fv(key,"cur")||"",accountFilter=String(fv(key,"acct")||"");
+ const key="bank",query=String(fv(key,"q")||"").trim(),movementQuery=String(fv(key,"mv")||"").trim();
+ const currency=String(fv(key,"cur")||""),accountFilter=String(fv(key,"acct")||"");
  const cash=(S.accts||[]).filter(a=>a.cash),cashIds=new Set(cash.map(a=>String(a.id)));
- const children=id=>{const out=[],seen=new Set([String(id)]);const walk=parent=>(S.accts||[]).filter(a=>String(a.parentId||"")===String(parent||"")).forEach(a=>{if(seen.has(String(a.id)))return;seen.add(String(a.id));if(a.cash)out.push(a);else walk(a.id);});walk(id);return out;};
+ const directChildren=id=>cash.filter(a=>String(a.parentId||"")===String(id));
+ const ownMatch=a=>!query||ci(a.name,query)||ci(a.code,query)||ci(accountLabel(a),query);
+ const hasMatch=(a,seen)=>{seen=seen||new Set();const id=String(a.id);if(seen.has(id))return false;seen.add(id);return ownMatch(a)||directChildren(id).some(ch=>hasMatch(ch,seen));};
+ const hasCurrency=(a,c,seen)=>{seen=seen||new Set();const id=String(a.id);if(seen.has(id))return false;seen.add(id);return cur_(a)===c||directChildren(id).some(ch=>hasCurrency(ch,c,seen));};
  const hasCashAncestor=a=>{let parent=a.parentId;const seen=new Set();while(parent!==null&&parent!==undefined&&parent!==""){const p=S.accts.find(x=>String(x.id)===String(parent));if(!p||seen.has(String(p.id)))break;if(p.cash)return true;seen.add(String(p.id));parent=p.parentId;}return false;};
- const matches=a=>ci(a.name,query)||ci(a.code,query)||children(a.id).some(matches);
- const total=(a,seen)=>{seen=seen||new Set();if(seen.has(String(a.id)))return 0;seen.add(String(a.id));return balc(a.id,"",S.per.to)+children(a.id).reduce((n,ch)=>n+total(ch,seen),0);};
- const totals={};cash.forEach(a=>{if(!children(a.id).length)totals[cur_(a)]=(totals[cur_(a)]||0)+balc(a.id,"",S.per.to);});
- const renderRow=(a,depth)=>{const kids=children(a.id),closed=(localStorage.getItem("factory-account-collapsed:"+a.id)||"1")==="1",label=factoryEsc(accountLabel(a));return '<tr><td style="padding-inline-start:'+(10+depth*20)+'px">'+(kids.length?'<button type="button" class="g account-tree-toggle" title="إظهار أو إخفاء الحسابات الفرعية" aria-label="'+(closed?"إظهار":"إخفاء")+' الحسابات الفرعية" aria-expanded="'+String(!closed)+'" onclick="toggleAccountTree('+JSON.stringify(String(a.id))+')">'+(closed?"▸":"▾")+'</button> ':'')+label+'</td><td>'+factoryEsc(cur_(a))+'</td><td>'+lk(cf(a,total(a)),'drillAcct('+Number(a.id)+')')+'</td><td>'+(cur_(a)==="EGP"?"—":f(bal(a.id,"",S.per.to))+" ج.م")+'</td><td>'+(can("edit")?'<button type="button" class="g" title="تعديل الحساب" aria-label="تعديل الحساب" onclick="editAcc('+JSON.stringify(String(a.id))+')">✎</button>':"—")+'</td></tr>'+(closed?"":kids.filter(matches).map(ch=>renderRow(ch,depth+1)).join(""));};
- const roots=cash.filter(a=>!hasCashAncestor(a)&&(!currency||cur_(a)===currency)&&matches(a));
+ const currencyBalances=(a,seen)=>{seen=seen||new Set();const id=String(a.id),out=new Map();if(seen.has(id))return out;seen.add(id);const c=cur_(a);out.set(c,(out.get(c)||0)+balc(a.id,"",S.per.to));directChildren(id).forEach(ch=>currencyBalances(ch,seen).forEach((value,cc)=>out.set(cc,(out.get(cc)||0)+value)));return out;};
+ const totalEgp=(a,seen)=>{seen=seen||new Set();const id=String(a.id);if(seen.has(id))return 0;seen.add(id);return bal(a.id,"",S.per.to)+directChildren(id).reduce((sum,ch)=>sum+totalEgp(ch,seen),0);};
+ const roots=cash.filter(a=>!hasCashAncestor(a)&&(!currency||hasCurrency(a,currency))&&(!query||hasMatch(a)))
+  .sort((a,b)=>String(a.code||a.name||"").localeCompare(String(b.code||b.name||""),"ar"));
+ const visibleTotalByCurrency=new Map();
+ roots.forEach(root=>currencyBalances(root).forEach((value,c)=>{if(!currency||currency===c)visibleTotalByCurrency.set(c,(visibleTotalByCurrency.get(c)||0)+value);}));
+ const visibleTotalEgp=roots.reduce((sum,a)=>sum+totalEgp(a),0);
+ const row=(a,level)=>{
+  const kids=directChildren(a.id).filter(ch=>(!currency||hasCurrency(ch,currency))&&(!query||ownMatch(a)||hasMatch(ch)));
+  const collapseKey="factory-bank-collapsed:"+String(a.id),closed=kids.length>0&&localStorage.getItem(collapseKey)!=="0";
+  const displayCurrency=currency||cur_(a),amount=currencyBalances(a).get(displayCurrency)||0;
+  const accountCode=JSON.stringify(String(a.id));
+  const label=factoryEsc((a.code?a.code+" — ":"")+accountLabel(a));
+  const arrow=kids.length?'<button type="button" class="g account-tree-toggle factory-bank-tree-toggle" title="'+(closed?"إظهار الحسابات الفرعية":"إخفاء الحسابات الفرعية")+'" aria-label="'+(closed?"إظهار":"إخفاء")+' الحسابات الفرعية لـ '+label+'" aria-expanded="'+String(!closed)+'" onclick="toggleBankTree('+accountCode+')">'+(closed?"▸":"▾")+'</button> ':'';
+  const meta=kids.length?(directChildren(a.id).length+" حساب فرعي"):(level===0?"حساب رئيسي مستقل":"حساب فرعي");
+  const amountLink=lk(f(amount)+" "+(displayCurrency==="EGP"?"ج.م":factoryEsc(displayCurrency)),'drillAcct('+Number(a.id)+',\\'\\',\\''+String(S.per.to||"").replace(/'/g,"&#39;")+'\\')');
+  const edit=can("edit")?'<button type="button" class="g factory-bank-edit" title="تعديل اسم الحساب" aria-label="تعديل اسم الحساب" onclick="editAcc('+accountCode+')">✎</button>':"";
+  const line='<div class="factory-bank-account-row" style="--bank-depth:'+level+'"><div class="factory-bank-account-name">'+arrow+'<span class="factory-bank-account-title">'+label+'<small>'+meta+'</small></span></div><div class="factory-bank-account-end"><span class="factory-bank-balances">'+amountLink+'</span>'+edit+'</div></div>';
+  return '<div class="factory-bank-node">'+line+(kids.length?'<div class="factory-bank-children" '+(closed?'hidden':'')+'>'+kids.map(ch=>row(ch,level+1)).join("")+'</div>':"")+'</div>';
+ };
  const from=fv(key,"from")||"",to=fv(key,"to")||S.per.to||td();
+ const selectedIds=new Set();
+ if(accountFilter){const root=cash.find(a=>String(a.id)===accountFilter);if(root){const add=a=>{if(selectedIds.has(String(a.id)))return;selectedIds.add(String(a.id));directChildren(a.id).forEach(add);};add(root);}}
  const beforeDate=from?(()=>{const d=new Date(from+"T12:00:00");d.setDate(d.getDate()-1);return lday(d);})():"";
- const allPeriodRows=(S.L||[]).filter(l=>cashIds.has(String(l.a))&&(!accountFilter||String(l.a)===accountFilter)&&(!from||String(l.d||"")>=from)&&(!to||String(l.d||"")<=to));
- const visibleRows=allPeriodRows.filter(l=>!movementQuery||[l.ref,l.desc,an(l.a),pn(l.pid)].join(" ").toLocaleLowerCase("ar").includes(movementQuery.toLocaleLowerCase("ar")));
+ const allPeriodRows=(S.L||[]).filter(l=>cashIds.has(String(l.a))&&(!accountFilter||selectedIds.has(String(l.a)))&&(!currency||cur_(ac_(l.a))===currency)&&(!from||String(l.d||"")>=from)&&(!to||String(l.d||"")<=to));
+ const matchesMovement=(l)=>{if(!movementQuery)return true;const text=[l.ref,l.desc,an(l.a),pn(l.pid),l.src].filter(Boolean).join(" ");return typeof factorySearchMatch==="function"?factorySearchMatch(text,movementQuery):text.toLocaleLowerCase("ar").includes(movementQuery.toLocaleLowerCase("ar"));};
+ const visibleRows=allPeriodRows.filter(matchesMovement);
  const running=new Map(cash.map(a=>[String(a.id),from?balc(a.id,"",beforeDate):0]));
  const ordered=allPeriodRows.slice().sort((a,b)=>String(a.d||"").localeCompare(String(b.d||""))||(Number(a.ts)||0)-(Number(b.ts)||0)),balances=new Map();
  ordered.forEach(l=>{const a=ac_(l.a),id=String(l.a),foreign=cur_(a)!=="EGP",delta=foreign?(Number(l.fc)||0)*nat(a):(Number(l.dr||0)-Number(l.cr||0))*nat(a),balance=(running.get(id)||0)+delta;running.set(id,balance);balances.set(l,balance);});
- const movementRows=visibleRows.slice().sort((a,b)=>String(b.d||"").localeCompare(String(a.d||""))||(Number(b.ts)||0)-(Number(a.ts)||0)).map(l=>{const a=ac_(l.a),foreign=cur_(a)!=="EGP",fc=Number(l.fc)||0,debit=foreign?(fc>.005?fc:0):(Number(l.dr)||0),credit=foreign?(fc<-.005?Math.abs(fc):0):(Number(l.cr)||0);return '<tr><td>'+factoryEsc(dfm(l.d||(l.ts?lday(new Date(l.ts)):"")))+'</td><td dir="ltr">'+factoryEsc(l.ref||"—")+'</td><td>'+factoryEsc(an(l.a))+'</td><td>'+factoryEsc(l.desc||"—")+'</td><td class="factory-ledger-number">'+(debit>.005?f(debit)+" "+factoryEsc(cur_(a)):"—")+'</td><td class="factory-ledger-number">'+(credit>.005?f(credit)+" "+factoryEsc(cur_(a)):"—")+'</td><td class="factory-ledger-number">'+f(balances.get(l)||0)+" "+factoryEsc(cur_(a))+'</td><td>'+(typeof rb==="function"?rb(l):"")+'</td></tr>';}).join("");
- return ph(N.bank,(can("edit")?'<button type="button" class="new" onclick="bForm()">+ حساب نقدي / بنك جديد</button>':'')+'<button type="button" class="g" onclick="exportCashMovements()">تصدير حركة الحساب</button>')+
-  fbar(key,[["q","text","اسم الحساب أو كوده"],["mv","text","المرجع أو البيان أو الطرف"],["cur","sel","العملة",["",...S.curs]],["acct","sel","الحساب",[["","كل الحسابات"],...cash.filter(a=>!hasCashAncestor(a)).map(a=>[String(a.id),accountLabel(a)+" ("+cur_(a)+")"])]],["from","date","من تاريخ"],["to","date","إلى تاريخ"]])+
-  '<section class="card factory-cash-tree"><div class="factory-panel-head"><b>الأرصدة حسب الحساب الرئيسي</b><span>'+roots.length+' حسابات رئيسية</span></div><div class="factory-table-scroll"><table class="l factory-custom-filtered"><thead><tr><th>الحساب</th><th>العملة</th><th>الرصيد بعملة الحساب</th><th>المعادل بالجنيه</th><th>إجراءات</th></tr></thead><tbody>'+(roots.map(a=>renderRow(a,0)).join("")||'<tr><td colspan="5" class="mu">لا توجد حسابات نقدية مطابقة</td></tr>')+'</tbody></table></div><div class="factory-cash-totals"><b>إجمالي كل عملة (لا تُجمع العملات المختلفة معًا)</b>'+U(Object.keys(totals),c=>'<div class="row sp"><span>'+factoryEsc(c)+'</span><b>'+f(totals[c])+' '+(c==="EGP"?"ج.م":factoryEsc(c))+'</b></div>')+'</div></section>'+
+ const movementRows=visibleRows.slice().sort((a,b)=>String(b.d||"").localeCompare(String(a.d||""))||(Number(b.ts)||0)-(Number(a.ts)||0)).map(l=>{
+  const a=ac_(l.a),foreign=cur_(a)!=="EGP",fc=Number(l.fc)||0,debit=foreign?(fc>.005?fc:0):(Number(l.dr)||0),credit=foreign?(fc<-.005?Math.abs(fc):0):(Number(l.cr)||0);
+  return '<tr><td>'+factoryEsc(dfm(l.d||(l.ts?lday(new Date(l.ts)):"")))+'</td><td dir="ltr">'+factoryEsc(l.ref||"—")+'</td><td>'+factoryEsc(an(l.a))+'</td><td>'+factoryEsc(l.desc||"—")+'</td><td class="factory-ledger-number">'+(debit>.005?f(debit)+" "+factoryEsc(cur_(a)):"—")+'</td><td class="factory-ledger-number">'+(credit>.005?f(credit)+" "+factoryEsc(cur_(a)):"—")+'</td><td class="factory-ledger-number">'+f(balances.get(l)||0)+" "+factoryEsc(cur_(a))+'</td><td>'+(typeof rb==="function"?rb(l):"")+'</td></tr>';
+ }).join("");
+ const totalsHtml=visibleTotalByCurrency.size?[...visibleTotalByCurrency.entries()].map(([c,value])=>'<div class="row sp"><span>'+factoryEsc(c)+'</span><b>'+f(value)+" "+(c==="EGP"?"ج.م":factoryEsc(c))+'</b></div>').join(""):'<div class="mu">لا توجد حسابات نقدية مطابقة</div>';
+ const accountsInFilter=cash.filter(a=>!hasCashAncestor(a));
+ return ph(N.bank,(can("edit")?'<button type="button" class="new" onclick="bForm()">+ حساب نقدي / بنك جديد</button>':"")+'<button type="button" class="g" onclick="exportCashMovements()">تصدير حركة الحساب</button>')+
+  fbar(key,[["q","text","اسم الحساب أو كوده"],["mv","text","المرجع أو البيان أو الطرف"],["cur","sel","العملة",["",...S.curs]],["acct","sel","الحساب",[["","كل الحسابات"],...accountsInFilter.map(a=>[String(a.id),accountLabel(a)+" ("+cur_(a)+")"])]],["from","date","من تاريخ"],["to","date","إلى تاريخ"]])+
+  '<section class="card factory-cash-tree"><div class="factory-panel-head"><b>الأرصدة حسب الحساب الرئيسي</b><span>'+roots.length+' حسابات رئيسية</span></div><div class="factory-bank-tree">'+(roots.map(a=>row(a,0)).join("")||'<div class="mu">لا توجد حسابات نقدية مطابقة</div>')+'</div><div class="factory-cash-totals"><b>إجمالي كل عملة (لا تُجمع العملات المختلفة معًا)</b>'+totalsHtml+(visibleTotalByCurrency.has("EGP")||!currency?'<div class="row sp"><span>إجمالي المعادل بالجنيه المصري</span><b>'+f(visibleTotalEgp)+' ج.م</b></div>':"")+'</div></section>'+
   '<section class="card factory-cash-movements"><div class="factory-panel-head"><b>حركة الحساب</b><span>حسب الفترة والحساب المحددين</span></div><div class="factory-table-scroll"><table class="l factory-custom-filtered"><thead><tr><th>التاريخ</th><th>المرجع</th><th>الحساب</th><th>البيان</th><th>مدين</th><th>دائن</th><th>الرصيد</th><th>التفاصيل</th></tr></thead><tbody>'+(movementRows||'<tr><td colspan="8" class="mu">لا توجد حركات نقدية مطابقة للفترة المحددة</td></tr>')+'</tbody></table></div></section>';
 };
 function factoryCoaChildren(id){return (S.accts||[]).filter(a=>String(a.parentId||"")===String(id));}
