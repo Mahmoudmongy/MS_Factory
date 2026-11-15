@@ -89,7 +89,7 @@ const appPatchChecks = [
   [app.includes('vTl=function(){') && app.includes('query=fv(key,"q")') && app.includes('المستخدم أو الإجراء أو المرجع أو البيان'), 'timeline has a contains-search beside its date filters'],
   [app.includes('factory-table-count') && app.includes('factory-table-total') && app.includes('Default templates'), 'table counts, amount summaries and renamed column templates are enabled'],
   [app.includes('vBank = function') && app.includes('toggleAccountTree'), 'cash and bank accounts retain the account-tree controls'],
-  [activeBank.includes('toggleBankTree(') && activeBank.includes('currencyBalances(') && activeBank.includes('factory-cash-movements') && activeBank.includes('directChildren(a.id)'), 'active cash screen shows collapsible parent totals and the live cash ledger without double-counting nested children'],
+  [activeBank.includes('toggleAccountTree(') && activeBank.includes('currencyBalances(') && activeBank.includes('factory-cash-movements') && activeBank.includes('cashChildren(id)'), 'active cash screen shows collapsible parent totals and the live cash ledger without double-counting nested cash accounts'],
   [pdfRenderer.includes('rowBreaks=') && pdfRenderer.includes('safeBoundary') && pdfRenderer.includes('wide?"277mm":"190mm"') && previewCss.includes('#pr.factory-print-document table{display:table'), 'invoice PDF uses a fitted A4 width and keeps table rows intact at page breaks'],
   [css.includes('position:sticky') && css.includes('overflow-wrap:anywhere'), 'table headings stay pinned and long text wraps']
 ];
