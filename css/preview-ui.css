@@ -492,3 +492,18 @@ button:disabled{opacity:.55;cursor:not-allowed}
 @media(max-width:860px){.factory-trial-totals{align-items:flex-start;flex-direction:column}.factory-production-actions button{flex:1 1 auto}}
 :root[data-theme="dark"] .factory-partner-status.active{color:#86efac}
 :root[data-theme="dark"] .factory-partner-status.inactive{color:#fca5a5}
+
+/* Financial statements: live ledger-derived income statement and balance sheet. */
+.factory-statement-period{align-items:end;gap:12px;flex-wrap:wrap}
+.factory-statement-period>div{display:grid;gap:5px;min-width:160px}
+.factory-statement-period label{font-size:12px;color:var(--mu)}
+.factory-statements-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;align-items:start}
+.factory-statements-grid>.card{min-width:0;overflow:hidden}
+.factory-statements-grid h3{margin:0 0 12px;color:var(--tx);font-size:16px}
+.factory-statements-grid .card{color:var(--tx)}
+.factory-statements-print{display:grid;gap:12px;grid-template-columns:1fr}
+.factory-statements-print .card{break-inside:avoid}
+@media(max-width:860px){.factory-statements-grid{grid-template-columns:minmax(0,1fr)}.factory-statement-period>div{flex:1 1 140px}.factory-statement-period button{width:100%}}
+:root[data-theme="dark"] .factory-statements-grid,
+:root[data-theme="dark"] .factory-statement-period{color:var(--tx)}
+@media print{.factory-statements-print{display:block!important}.factory-statements-print .card{break-inside:avoid}}

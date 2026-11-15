@@ -151,3 +151,9 @@ assert(app.includes("exportTrialBalance") && app.includes("factory-trial-balance
 assert(app.includes("vTl = function()") && app.includes("undoGroups") && app.includes("undoView"), "timeline lists immutable reversal entries with a dedicated details action");
 
 assert(app.includes("timestamp.slice(0,10)") && app.includes("timestamp.slice(11)"), "timeline date and time render as separate columns");
+
+assert(app.includes('statements:()=>vStatements()') && app.includes('["statements",ico("report"),"القوائم المالية"]'), "financial statements screen is available from the app navigation");
+assert(app.includes('function vStatements()') && app.includes('isHtml(from,to)') && app.includes('bsHtml(to)'), "financial statements are calculated from live account ledgers");
+assert(app.includes('function updateStatements()') && app.includes('تاريخ البداية يجب ألا يتجاوز تاريخ النهاية'), "financial statement period validates date order");
+assert(app.includes('function printStatements()') && app.includes('طباعة القوائم أو حفظها PDF'), "financial statements have a connected print and PDF action");
+assert(css.includes(".factory-statements-grid") && css.includes("@media(max-width:860px){.factory-statements-grid"), "financial statements adapt to mobile and desktop");
