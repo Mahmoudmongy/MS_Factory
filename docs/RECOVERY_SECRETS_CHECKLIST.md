@@ -2,6 +2,12 @@
 
 This checklist is deliberately separate from the database archive. Never commit secrets, service-role keys, database passwords, cloud tokens, or the age private identity to GitHub.
 
+## Current project references — verified 2026-11-15
+
+- Active production project: `amtorqmzctshfzaoiovz` (region `eu-west-2`).
+- Isolated QA project: `bpkkzyjfkktkaadhmbdi` (region `eu-west-2`).
+- Keep the former production reference `yvrislcbbhtruwdnuooz` blocked in restore safeguards until its disposition is formally confirmed.
+
 ## Keep offline in an encrypted password manager
 
 - Supabase production project reference, region, project URL and current database connection information.
