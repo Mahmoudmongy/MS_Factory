@@ -149,3 +149,5 @@ assert(app.includes("exportPartnerTable") && app.includes("factory-partner-table
 assert(app.includes("exportEmployeeTable") && app.includes("factory-employee-table"), "employee table has a targeted Excel export");
 assert(app.includes("exportTrialBalance") && app.includes("factory-trial-balance-table"), "trial balance has a targeted Excel export");
 assert(app.includes("vTl = function()") && app.includes("undoGroups") && app.includes("undoView"), "timeline lists immutable reversal entries with a dedicated details action");
+
+assert(app.includes("timestamp.slice(0,10)") && app.includes("timestamp.slice(11)"), "timeline date and time render as separate columns");
