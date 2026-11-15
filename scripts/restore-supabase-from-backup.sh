@@ -9,11 +9,14 @@ umask 077
 : "${RESTORE_SUPABASE_DB_URL:?Set RESTORE_SUPABASE_DB_URL to the QA database connection string}"
 : "${RESTORE_TARGET_PROJECT_REF:?Set RESTORE_TARGET_PROJECT_REF to the target QA project ref}"
 
-PRODUCTION_PROJECT_REF="yvrislcbbhtruwdnuooz"
-if [[ "$RESTORE_TARGET_PROJECT_REF" == "$PRODUCTION_PROJECT_REF" ]]; then
-  echo "ERROR: refusing to restore into the production Supabase project." >&2
-  exit 20
-fi
+# Block both the currently active production project and its legacy predecessor.
+PRODUCTION_PROJECT_REFS=("amtorqmzctshfzaoiovz" "yvrislcbbhtruwdnuooz")
+for production_ref in "${PRODUCTION_PROJECT_REFS[@]}"; do
+  if [[ "$RESTORE_TARGET_PROJECT_REF" == "$production_ref" ]]; then
+    echo "ERROR: refusing to restore into a production Supabase project." >&2
+    exit 20
+  fi
+done
 if [[ ! "$RESTORE_TARGET_PROJECT_REF" =~ ^[a-z0-9]{20}$ ]]; then
   echo "ERROR: target project ref must be a 20-character Supabase project ref." >&2
   exit 21
