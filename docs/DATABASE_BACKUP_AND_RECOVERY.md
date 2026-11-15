@@ -1,5 +1,13 @@
 # MS Factory — Database backup and recovery
 
+## Active Supabase project references — verified 2026-11-15
+
+- Current project named `ms-factory` (production): `amtorqmzctshfzaoiovz`, region `eu-west-2`.
+- Isolated QA project: `bpkkzyjfkktkaadhmbdi`, region `eu-west-2`.
+- Legacy reference `yvrislcbbhtruwdnuooz` is not present in the current Supabase project listing. It remains blocked by the restore guard as a legacy production reference.
+- The Cloudflare deploy workflow must target the current production project. The backup workflow remains on Backblaze B2 and is not enabled for production exports.
+
+
 ## Current implementation status
 
 The encrypted backup workflow now targets the dedicated Backblaze B2 bucket, not Cloudflare R2. It is intentionally inert until the repository variable `BACKUP_ENABLED` is set to `true`. A manual workflow run performs a B2-only preflight by default; it does not export production data unless the explicit run checkbox is selected and the enable variable is true.
