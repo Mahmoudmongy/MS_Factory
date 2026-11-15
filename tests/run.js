@@ -553,9 +553,13 @@ const previewUiRuntime=await ev(()=>{
  if(select){select.value='bottom';select.dispatchEvent(new Event('change',{bubbles:true}));}
  const preferenceSaved=JSON.parse(localStorage.getItem('ms-factory-preview-ui-v1')||'{}').summary?.customers==='bottom';
  const moved=document.querySelector('#m .factory-balance-row')?.textContent.includes('العملاء');
+ const oldDocs=S.docs;S.docs=[...(S.docs||[]),{id:'summary-hide-test',t:'sale',date:td(),ts:Date.now(),no:'HIDE-TEST',pid:null,total:123}];render();
  const hide=document.querySelector('#factory-summary-hide');hide?.click();
- const numbersHidden=getComputedStyle(document.querySelector('#factory-summary-kpis .factory-summary-amount')).visibility==='hidden';
- hide?.click();
+ const recentAmount=document.querySelector('.factory-summary-recent .factory-recent-row strong.factory-summary-amount');
+ const numbersHidden=getComputedStyle(document.querySelector('#factory-summary-kpis .factory-summary-amount')).visibility==='hidden'&&!!recentAmount&&getComputedStyle(recentAmount).visibility==='hidden';
+ hide?.click();render();
+ const recentNumbersRestored=!!recentAmount&&getComputedStyle(recentAmount).visibility!=='hidden';
+ S.docs=oldDocs;render();
  document.querySelector('#factory-theme-open')?.click();
  const themeOpened=!document.querySelector('#factory-theme-popover').hidden;
  document.querySelector('#factory-theme-popover [data-factory-accent="blue"]')?.click();
@@ -576,10 +580,10 @@ const previewUiRuntime=await ev(()=>{
  const invalidRejected=!!headingBeforeInvalid&&document.querySelector('#m .factory-fin-heading')?.textContent===headingBeforeInvalid;
  go('home');
  const restore=document.querySelector('[data-summary-place="customers"]');if(restore){restore.value='top';restore.dispatchEvent(new Event('change',{bubbles:true}));}
- return {defaultOrder,dateSort,chartCollapsed,chartExpanded,preferenceSaved,moved,numbersHidden,themeOpened,blueApplied,mobilePreview,statement,autoUpdated,invalidRejected};
+ return {defaultOrder,dateSort,chartCollapsed,chartExpanded,preferenceSaved,moved,numbersHidden,recentNumbersRestored,themeOpened,blueApplied,mobilePreview,statement,autoUpdated,invalidRejected};
 });
 ok('preview UI: summary order, saved layout, hide amounts, theme palette, mobile preview and financial statements are functional',
- previewUiRuntime.defaultOrder&&previewUiRuntime.dateSort&&previewUiRuntime.chartCollapsed&&previewUiRuntime.chartExpanded&&previewUiRuntime.preferenceSaved&&previewUiRuntime.moved&&previewUiRuntime.numbersHidden&&previewUiRuntime.themeOpened&&previewUiRuntime.blueApplied&&previewUiRuntime.mobilePreview&&previewUiRuntime.statement&&previewUiRuntime.autoUpdated&&previewUiRuntime.invalidRejected,previewUiRuntime);
+ previewUiRuntime.defaultOrder&&previewUiRuntime.dateSort&&previewUiRuntime.chartCollapsed&&previewUiRuntime.chartExpanded&&previewUiRuntime.preferenceSaved&&previewUiRuntime.moved&&previewUiRuntime.numbersHidden&&previewUiRuntime.recentNumbersRestored&&previewUiRuntime.themeOpened&&previewUiRuntime.blueApplied&&previewUiRuntime.mobilePreview&&previewUiRuntime.statement&&previewUiRuntime.autoUpdated&&previewUiRuntime.invalidRejected,previewUiRuntime);
 const tableIconRuntime=await ev(()=>{const wrap=document.createElement('div');wrap.className='factory-table-scroll';wrap.style.width='420px';const table=document.createElement('table');table.className='l';table.innerHTML='<thead><tr><th>التاريخ</th><th>البيان</th></tr></thead><tbody>'+Array.from({length:9},(_,i)=>'<tr><td>2026-11-'+String(i+1).padStart(2,'0')+'</td><td>'+'نص طويل لاختبار التفاف الكلام داخل العمود دون تغيير عرضه '.repeat(3)+'</td></tr>').join('')+'</tbody>';wrap.appendChild(table);ACT.appendChild(wrap);factoryApplyFixedTableLayout(table);const box=document.createElement('div');box.innerHTML='<button>مشاركة ملف PDF</button><a href="#">عرض</a>';ACT.appendChild(box);factoryIconizeActions(box);factoryIconizeActionLinks(box);const result={fixed:table.style.tableLayout==='fixed',cols:table.querySelectorAll('colgroup col').length===2,sticky:getComputedStyle(table.querySelector('th')).position==='sticky',scrollHeight:!!wrap.style.maxHeight,wrapped:table.querySelector('td.factory-very-long-cell')!==null,icons:box.querySelectorAll('svg').length===2,labels:!!box.querySelector('button[aria-label="مشاركة ملف PDF"]')&&!!box.querySelector('a[aria-label="عرض"]')};wrap.remove();box.remove();return result});
 ok('tables keep fixed columns, sticky headers, compact icon actions and wrapped long text',Object.values(tableIconRuntime).every(Boolean),tableIconRuntime);
 
