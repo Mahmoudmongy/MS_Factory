@@ -140,7 +140,90 @@
     const data=metricData(),layout=summaryLayout(data);
     document.querySelectorAll('#m [data-summary-place]').forEach(s=>s.value=layout[s.dataset.summaryPlace]||'hidden');
   }
+  const referenceGroups=[
+    {key:'home',title:'الملخص',ids:['home'],icon:'home'},
+    {key:'bank',title:'الحسابات النقدية والبنوك',ids:['bank'],icon:'bank'},
+    {key:'partners',title:'العملاء والموردون',ids:['cust','supp'],icon:'customer'},
+    {key:'vouchers',title:'المقبوضات والمدفوعات',ids:['rc','py'],icon:'receipt'},
+    {key:'invoices',title:'الفواتير والمرتجعات',ids:['sale','sret','pur','pret'],icon:'sale'},
+    {key:'inventory',title:'الأصناف والمخازن',ids:['stock'],icon:'inventory'},
+    {key:'production',title:'أوامر الإنتاج',ids:['prod'],icon:'production'},
+    {key:'accounts',title:'شجرة الحسابات والميزان',ids:['coa'],icon:'coa'},
+    {key:'reports',title:'التقارير',ids:['rep'],icon:'report'},
+    {key:'statements',title:'القوائم المالية',ids:['statements'],icon:'report'},
+    {key:'journal',title:'قيود اليومية',ids:['je'],icon:'journal'},
+    {key:'employees',title:'الموظفون والصلاحيات',ids:['emp'],icon:'employee'},
+    {key:'assistant',title:'مساعد بيانات الشركة',ids:['ai'],icon:'ai'},
+    {key:'timeline',title:'السجل الزمني',ids:['tl'],icon:'timeline'},
+    {key:'settings',title:'الإعدادات',ids:['set'],icon:'settings'}
+  ];
+  let originalScreens={},referenceTabsInstalled=false;
+  const referenceTabLabels={cust:'العملاء',supp:'الموردون',rc:'سندات القبض',py:'سندات الدفع',sale:'فواتير البيع',sret:'مرتجعات البيع',pur:'فواتير الشراء',pret:'مرتجعات الشراء'};
+  function renderReferenceGroup(group){
+    const permitted=new Set(allowed().map(x=>x[0]));
+    const visibleIds=group.ids.filter(id=>permitted.has(id)&&typeof originalScreens[id]==='function');
+    if(!visibleIds.length)return '<div class="factory-reference-empty">لا توجد شاشات متاحة لهذا الحساب</div>';
+    const active=visibleIds.includes(CUR?.sid)?CUR.sid:visibleIds[0];
+    const template=document.createElement('template');
+    template.innerHTML=originalScreens[active]();
+    const heading=template.content.querySelector('.ph');
+    const actions=heading?.querySelector('.row')?.innerHTML||'';
+    heading?.remove();
+    const tabs=visibleIds.length>1
+      ? '<div class="preview-module-tabs" role="tablist" aria-label="'+esc(group.title)+'">'+visibleIds.map(id=>'<button type="button" role="tab" data-preview-screen-tab="'+id+'" aria-selected="'+String(id===active)+'" class="'+(id===active?'active':'')+'">'+esc(referenceTabLabels[id]||N[id]||id)+'</button>').join('')+'</div>'
+      : '';
+    return ph(group.title,actions)+tabs+'<div class="factory-reference-screen-body">'+template.innerHTML+'</div>';
+  }
+  function installReferenceScreens(){
+    if(referenceTabsInstalled)return;
+    referenceTabsInstalled=true;
+    ['cust','supp','rc','py','sale','sret','pur','pret'].forEach(id=>{originalScreens[id]=SCR[id];});
+    ['cust','supp'].forEach(id=>SCR[id]=()=>renderReferenceGroup(referenceGroups.find(x=>x.key==='partners')));
+    ['rc','py'].forEach(id=>SCR[id]=()=>renderReferenceGroup(referenceGroups.find(x=>x.key==='vouchers')));
+    ['sale','sret','pur','pret'].forEach(id=>SCR[id]=()=>renderReferenceGroup(referenceGroups.find(x=>x.key==='invoices')));
+    const labels={
+      home:'الملخص',bank:'الحسابات النقدية والبنوك',cust:'العملاء والموردون',supp:'العملاء والموردون',
+      rc:'المقبوضات والمدفوعات',py:'المقبوضات والمدفوعات',
+      sale:'الفواتير والمرتجعات',sret:'الفواتير والمرتجعات',pur:'الفواتير والمرتجعات',pret:'الفواتير والمرتجعات',
+      stock:'الأصناف والمخازن',prod:'أوامر الإنتاج',coa:'شجرة الحسابات والميزان',rep:'التقارير',
+      statements:'القوائم المالية',je:'قيود اليومية',emp:'الموظفون والصلاحيات',ai:'مساعد بيانات الشركة',tl:'السجل الزمني',set:'الإعدادات'
+    };
+    Object.assign(N,labels);
+    Object.assign(EN,{'العملاء والموردون':'Customers and suppliers','المقبوضات والمدفوعات':'Receipts and payments','الفواتير والمرتجعات':'Invoices and returns','الأصناف والمخازن':'Items and warehouses','شجرة الحسابات والميزان':'Chart of accounts and trial balance','الموظفون والصلاحيات':'Employees and permissions','مساعد بيانات الشركة':'Company data assistant'});
+  }
+  function renderReferenceSidebar(){
+    const sb=document.getElementById('sb'),scroll=sb?.querySelector('.sb-nav-scroll');
+    if(!scroll)return;
+    const sourceLinks=new Map([...scroll.querySelectorAll('a')].map(a=>[a.getAttribute('onclick')?.match(/'([^']+)'/)?.[1],a]));
+    const permitted=new Set(allowed().map(x=>x[0]));
+    const current=CUR?.kind==='screen'?CUR.sid:tab;
+    const fragment=document.createDocumentFragment();
+    referenceGroups.forEach(group=>{
+      const ids=group.ids.filter(id=>permitted.has(id));
+      if(!ids.length)return;
+      const target=ids.includes(current)?current:ids[0];
+      const source=sourceLinks.get(target)||sourceLinks.get(ids[0]);
+      const link=document.createElement('a');
+      link.href='#';
+      link.className='factory-nav-link'+(group.ids.includes(current)?' on':'');
+      link.setAttribute('data-reference-nav',group.key);
+      link.setAttribute('aria-current',group.ids.includes(current)?'page':'false');
+      const icon=source?.querySelector('svg.nav-ico');
+      if(icon)link.appendChild(icon.cloneNode(true));
+      else{
+        const fallback=document.createElement('span');fallback.className='factory-nav-fallback';fallback.textContent='•';link.appendChild(fallback);
+      }
+      const label=document.createElement('span');label.className='factory-nav-label';label.textContent=group.title;link.appendChild(label);
+      link.addEventListener('click',e=>{e.preventDefault();handleNavClick(e,target);});
+      link.addEventListener('auxclick',e=>{if(e.button===1){e.preventDefault();go(target,0,true);}});
+      link.addEventListener('mousedown',e=>{if(e.button===1)e.preventDefault();});
+      fragment.appendChild(link);
+    });
+    scroll.replaceChildren(fragment);
+    applySidebarMode();
+  }
   function onUiClick(e){
+    const screenTab=e.target.closest('[data-preview-screen-tab]');if(screenTab){const target=screenTab.dataset.previewScreenTab;if(target&&target!==CUR?.sid)go(target,1);return;}
     const finTarget=e.target.closest('[data-fin-account],[data-fin-type],[data-fin-profit]');if(finTarget){e.preventDefault();e.stopPropagation();const from=finTarget.dataset.finFrom||'',to=finTarget.dataset.finTo||'';if(finTarget.dataset.finAccount)openAccountTreeLedger(finTarget.dataset.finAccount,from,to);else{const types=finTarget.dataset.finProfit?['I','X']:[finTarget.dataset.finType],ids=(S.accts||[]).filter(a=>types.includes(a.t)).map(a=>a.id);openFinancialLedger(ids,finTarget.dataset.finProfit?'صافي الربح / الخسارة':({I:'الإيرادات',X:'المصروفات',A:'الأصول',L:'الالتزامات',Q:'حقوق الملكية'}[types[0]]||'الحسابات'),from,to);}return;}
     const summaryTarget=e.target.closest('[data-summary-screen]');if(summaryTarget){const key=summaryTarget.dataset.summaryKey;if(key==='assets')fsState.kind='balance';else if(key==='profit')fsState.kind='income';if(summaryTarget.dataset.summaryScreen==='rep')R.rep='sale';go(summaryTarget.dataset.summaryScreen);return;}
     const recent=e.target.closest('[data-open-source]');if(recent){openRef(recent.dataset.openSource,recent.dataset.openId);return;}
@@ -176,7 +259,7 @@
     CLOUD_SCREEN_PERMISSIONS.statements='reports';
     SCR.statements=renderFinancialStatements;
     const originalNav=nav;
-    nav=function(){originalNav();if(LANGEN)trTree(document.getElementById('sb'));const brand=document.querySelector('#sb .br');if(brand){brand.title=S.name||'MS Factory';brand.setAttribute('aria-label',S.name||'MS Factory');} };
+    nav=function(){originalNav();renderReferenceSidebar();if(LANGEN)trTree(document.getElementById('sb'));const brand=document.querySelector('#sb .br');if(brand){brand.title=S.name||'MS Factory';brand.setAttribute('aria-label',S.name||'MS Factory');} };
   }
   function installHeaderControls(){
     const top=document.getElementById('top');if(!top)return;
@@ -184,7 +267,7 @@
     if(!document.getElementById('factory-theme-open')){const b=document.createElement('button');b.id='factory-theme-open';b.type='button';b.textContent='🎨';b.title='ألوان البرنامج';b.setAttribute('aria-label','اختيار ألوان البرنامج');document.getElementById('thb')?.insertAdjacentElement('beforebegin',b);}
   }
   function boot(){
-    SCR.home=renderHome;addStatementNavigation();extendSettings();installHeaderControls();installThemePopover();
+    SCR.home=renderHome;addStatementNavigation();installReferenceScreens();extendSettings();installHeaderControls();installThemePopover();
     applyAccent(uiPrefs.accent||'teal',uiPrefs.customColor||colors[uiPrefs.accent||'teal']?.color,false);
     const oldApplyPref=applyPref;applyPref=function(){oldApplyPref();applyAccent(uiPrefs.accent||'teal',uiPrefs.customColor||colors[uiPrefs.accent||'teal']?.color,false);};
     const oldTogTheme=togTheme;togTheme=function(){oldTogTheme();};

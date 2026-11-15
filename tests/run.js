@@ -3,7 +3,7 @@
  * Run: npm test   (requires: npm install  -> playwright)                                         */
 const http=require('http'),fs=require('fs'),path=require('path'),vm=require('vm');let pw;try{pw=require('playwright')}catch(e){console.error('playwright is not installed. Run: npm install && npx playwright install chromium');process.exit(2)}
 const ROOT=path.join(__dirname,'..'),IMPORT_FIXTURE=path.join(require('os').tmpdir(),'ms-factory-items.csv'),MIME={'.html':'text/html','.js':'text/javascript','.mjs':'text/javascript','.css':'text/css','.json':'application/json','.png':'image/png','.svg':'image/svg+xml','.md':'text/plain'};
-const server=http.createServer((q,r)=>{let u=decodeURIComponent(q.url.split('?')[0]);if(u.endsWith('/'))u+='index.html';if(u==='/index.html'){let html=fs.readFileSync(path.join(ROOT,'index.html'),'utf8');html=html.replace(/<style>html\{visibility:visible\}#app\{visibility:hidden\}<\/style>/,'');html=html.replace(/<div id="factory-boot-screen"[\s\S]*?<\/div>/,'');html=html.replace(/<script type="module">[\s\S]*?<\/script>/,'');html=html.replace('<script type="module" src="./js/cloud-sync.js"></script>','');html=html.replace('<script type="module" src="./js/database-first.js"></script>','');html=html.replace('<script type="module" src="./js/manager-history.js"></script>','');r.writeHead(200,{'Content-Type':'text/html'});r.end(html);return}const f=path.join(ROOT,u);if(!f.startsWith(ROOT)||!fs.existsSync(f)||fs.statSync(f).isDirectory()){r.writeHead(404);r.end('nf');return}r.writeHead(200,{'Content-Type':MIME[path.extname(f)]||'application/octet-stream'});fs.createReadStream(f).pipe(r)});
+const server=http.createServer((q,r)=>{let u=decodeURIComponent(q.url.split('?')[0]);if(u.endsWith('/'))u+='index.html';if(u==='/index.html'){let html=fs.readFileSync(path.join(ROOT,'index.html'),'utf8');html=html.replace(/<style>html\{visibility:visible\}#app\{visibility:hidden\}<\/style>/,'');html=html.replace(/<div id="factory-boot-screen"[\s\S]*?<\/div>\s*<\/div>/,'');html=html.replace(/<script type="module">[\s\S]*?<\/script>/,'');html=html.replace('<script type="module" src="./js/cloud-sync.js"></script>','');html=html.replace('<script type="module" src="./js/database-first.js"></script>','');html=html.replace('<script type="module" src="./js/manager-history.js"></script>','');r.writeHead(200,{'Content-Type':'text/html'});r.end(html);return}const f=path.join(ROOT,u);if(!f.startsWith(ROOT)||!fs.existsSync(f)||fs.statSync(f).isDirectory()){r.writeHead(404);r.end('nf');return}r.writeHead(200,{'Content-Type':MIME[path.extname(f)]||'application/octet-stream'});fs.createReadStream(f).pipe(r)});
 const R=[];let fails=0;const ok=(n,c,x)=>{R.push(`${c?'PASS':'FAIL'}  ${n}${x!==undefined?'  => '+(typeof x=='object'?JSON.stringify(x):x):''}`);if(!c)fails++};
 (async()=>{
 await new Promise(r=>server.listen(0,r));const BASE='http://localhost:'+server.address().port+'/';
@@ -496,7 +496,7 @@ ok('online startup sync runs even when local cache already has data',/if \(navig
 ok('offline startup never authorizes from a cached profile',!/cachedProfile/.test(idx)&&/offlineError\.code = 'OFFLINE'/.test(idx)&&/location\.replace\('auth\.html'\)/.test(idx));
 ok('reconnect refreshes the profile before using permissions for cloud sync',/myProfile = null; ownerIdCache = null; window\.__factoryAuthProfile = null;/.test(cloud)&&/const freshProfile = await getMyProfile\(\)/.test(cloud));
 
-ok('offline shell precaches the stable production app and first-login password page',/auth\.html/.test(sw)&&/change-password\.html/.test(sw)&&/js\/change-password\.js/.test(sw)&&/js\/app\.js/.test(sw)&&/factory-v27/.test(sw));
+ok('offline shell precaches the stable production app and first-login password page',/auth\.html/.test(sw)&&/change-password\.html/.test(sw)&&/js\/change-password\.js/.test(sw)&&/js\/app\.js/.test(sw)&&/factory-v28/.test(sw));
 ok('mobile and desktop usability includes visible keyboard focus and safe-area spacing',/focus-visible/.test(css)&&/safe-area-inset-bottom/.test(css));
 ok('offline-created detail records are uploaded even when the full snapshot has a preserved conflict',/if \(admin && !snapshotConflict\)/.test(cloud)&&/for \(const \{ key, arr \} of partnerArrays\)/.test(cloud)&&/hasSnapshotConflict/.test(cloud));
 ok('local save writes a durable pending-sync marker before network recovery',/mgr6-sync-pending/.test(app)&&/localStorage\.setItem\("mgr6-sync-pending"/.test(app));
@@ -544,6 +544,24 @@ const sidebarLogout=await p.evaluate(()=>{const b=document.querySelector('#sb .s
 ok('sidebar exit button calls the existing sign-out flow',sidebarLogout.exists&&sidebarLogout.label==='خروج'&&sidebarLogout.calls===1,sidebarLogout);
 const previewUiRuntime=await ev(()=>{
  go('home');
+ const sidebarLabels=[...document.querySelectorAll('#sb .sb-nav-scroll a.factory-nav-link')].map(x=>x.textContent.trim());
+ const sidebarMatchesPreview=sidebarLabels.length===15&&sidebarLabels.includes('العملاء والموردون')&&sidebarLabels.includes('المقبوضات والمدفوعات')&&sidebarLabels.includes('الفواتير والمرتجعات')&&sidebarLabels.includes('القوائم المالية')&&sidebarLabels.includes('الإعدادات');
+ go('cust');
+ const partnerTabs=[...document.querySelectorAll('#m [data-preview-screen-tab]')].map(x=>x.textContent.trim());
+ const partnerScreenCombined=partnerTabs.join('|')==='العملاء|الموردون'&&!!document.querySelector('#m .factory-reference-screen-body table.l');
+ document.querySelector('#m [data-preview-screen-tab="supp"]')?.click();
+ const supplierTabWorks=CUR.sid==='supp'&&!!document.querySelector('#m .factory-reference-screen-body table.l');
+ go('rc');
+ const voucherTabs=[...document.querySelectorAll('#m [data-preview-screen-tab]')].map(x=>x.textContent.trim());
+ const voucherScreenCombined=voucherTabs.join('|')==='سندات القبض|سندات الدفع';
+ document.querySelector('#m [data-preview-screen-tab="py"]')?.click();
+ const paymentTabWorks=CUR.sid==='py';
+ go('sale');
+ const invoiceTabs=[...document.querySelectorAll('#m [data-preview-screen-tab]')].map(x=>x.textContent.trim());
+ const invoiceScreenCombined=invoiceTabs.join('|')==='فواتير البيع|مرتجعات البيع|فواتير الشراء|مرتجعات الشراء';
+ document.querySelector('#m [data-preview-screen-tab="pur"]')?.click();
+ const purchaseTabWorks=CUR.sid==='pur';
+ go('home');
  const top=[...document.querySelectorAll('#m .factory-kpi>span')].map(x=>x.textContent.trim());
  const defaultOrder=top.join('|')==='العملاء|الموردون|النقدية والبنوك|صافي الربح';
  const dateSort=key({dataset:{v:'02/12/2026'},textContent:''})>key({dataset:{v:'15/11/2026'},textContent:''});
@@ -580,10 +598,10 @@ const previewUiRuntime=await ev(()=>{
  const invalidRejected=!!headingBeforeInvalid&&document.querySelector('#m .factory-fin-heading')?.textContent===headingBeforeInvalid;
  go('home');
  const restore=document.querySelector('[data-summary-place="customers"]');if(restore){restore.value='top';restore.dispatchEvent(new Event('change',{bubbles:true}));}
- return {defaultOrder,dateSort,chartCollapsed,chartExpanded,preferenceSaved,moved,numbersHidden,recentNumbersRestored,themeOpened,blueApplied,mobilePreview,statement,autoUpdated,invalidRejected};
+ return {sidebarMatchesPreview,partnerScreenCombined,supplierTabWorks,voucherScreenCombined,paymentTabWorks,invoiceScreenCombined,purchaseTabWorks,defaultOrder,dateSort,chartCollapsed,chartExpanded,preferenceSaved,moved,numbersHidden,recentNumbersRestored,themeOpened,blueApplied,mobilePreview,statement,autoUpdated,invalidRejected};
 });
 ok('preview UI: summary order, saved layout, hide amounts, theme palette, mobile preview and financial statements are functional',
- previewUiRuntime.defaultOrder&&previewUiRuntime.dateSort&&previewUiRuntime.chartCollapsed&&previewUiRuntime.chartExpanded&&previewUiRuntime.preferenceSaved&&previewUiRuntime.moved&&previewUiRuntime.numbersHidden&&previewUiRuntime.recentNumbersRestored&&previewUiRuntime.themeOpened&&previewUiRuntime.blueApplied&&previewUiRuntime.mobilePreview&&previewUiRuntime.statement&&previewUiRuntime.autoUpdated&&previewUiRuntime.invalidRejected,previewUiRuntime);
+ previewUiRuntime.sidebarMatchesPreview&&previewUiRuntime.partnerScreenCombined&&previewUiRuntime.supplierTabWorks&&previewUiRuntime.voucherScreenCombined&&previewUiRuntime.paymentTabWorks&&previewUiRuntime.invoiceScreenCombined&&previewUiRuntime.purchaseTabWorks&&previewUiRuntime.defaultOrder&&previewUiRuntime.dateSort&&previewUiRuntime.chartCollapsed&&previewUiRuntime.chartExpanded&&previewUiRuntime.preferenceSaved&&previewUiRuntime.moved&&previewUiRuntime.numbersHidden&&previewUiRuntime.recentNumbersRestored&&previewUiRuntime.themeOpened&&previewUiRuntime.blueApplied&&previewUiRuntime.mobilePreview&&previewUiRuntime.statement&&previewUiRuntime.autoUpdated&&previewUiRuntime.invalidRejected,previewUiRuntime);
 const tableIconRuntime=await ev(()=>{const wrap=document.createElement('div');wrap.className='factory-table-scroll';wrap.style.width='420px';const table=document.createElement('table');table.className='l';table.innerHTML='<thead><tr><th>التاريخ</th><th>البيان</th></tr></thead><tbody>'+Array.from({length:9},(_,i)=>'<tr><td>2026-11-'+String(i+1).padStart(2,'0')+'</td><td>'+'نص طويل لاختبار التفاف الكلام داخل العمود دون تغيير عرضه '.repeat(3)+'</td></tr>').join('')+'</tbody>';wrap.appendChild(table);ACT.appendChild(wrap);factoryApplyFixedTableLayout(table);const box=document.createElement('div');box.innerHTML='<button>مشاركة ملف PDF</button><a href="#">عرض</a>';ACT.appendChild(box);factoryIconizeActions(box);factoryIconizeActionLinks(box);const result={fixed:table.style.tableLayout==='fixed',cols:table.querySelectorAll('colgroup col').length===2,sticky:getComputedStyle(table.querySelector('th')).position==='sticky',scrollHeight:!!wrap.style.maxHeight,wrapped:table.querySelector('td.factory-very-long-cell')!==null,icons:box.querySelectorAll('svg').length===2,labels:!!box.querySelector('button[aria-label="مشاركة ملف PDF"]')&&!!box.querySelector('a[aria-label="عرض"]')};wrap.remove();box.remove();return result});
 ok('tables keep fixed columns, sticky headers, compact icon actions and wrapped long text',Object.values(tableIconRuntime).every(Boolean),tableIconRuntime);
 

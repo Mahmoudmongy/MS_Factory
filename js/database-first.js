@@ -429,8 +429,14 @@ async function connectRealtime() {
     }).subscribe();
 }
 async function currentSessionUser() {
+  // The page bootstrap already verified this session and its profile before
+  // loading this module. Reuse that authenticated user instead of making a
+  // duplicate Supabase session request on every app startup.
+  const authenticatedUser = window.__factoryAuthUser;
+  if (authenticatedUser?.id && authenticatedUser.id === window.__factoryAuthProfile?.id) return authenticatedUser;
   const { data, error } = await supabase.auth.getSession();
   if (error || !data?.session?.user) throw error || new Error('لا يوجد مستخدم مسجل');
+  window.__factoryAuthUser = data.session.user;
   return data.session.user;
 }
 async function ensureProfile(userId, refresh = false) {
@@ -450,6 +456,8 @@ async function ensureProfile(userId, refresh = false) {
 async function bootstrap() {
   if (window.__factoryAuthPromise) await window.__factoryAuthPromise;
   if (window.__factoryAuthReady !== true || !window.__factoryAuthProfile) throw new Error('لم يكتمل التحقق المباشر من حساب المستخدم.');
+  window.__factoryDatabaseLoadStartedAt = performance.now();
+  window.__factorySetBootPhase?.('تم التحقق من الحساب — جارٍ تحميل سجلات الشركة...');
   if (!supabase || !navigator.onLine || window.__factoryOfflineMode === true) {
     profile = window.__factoryAuthProfile || null;
     if (!profile || window.__factoryOfflineMode !== true) throw new Error('يلزم اتصال مباشر بقاعدة بيانات الإنتاج لتوثيق الحساب.');
@@ -486,6 +494,8 @@ async function bootstrap() {
   storageScope = ownerId;
   resetLocalBusinessState();
   const rows = await retryStartup(() => fetchAllRecords());
+  window.__factoryBootRecordCount = rows.length;
+  window.__factorySetBootPhase?.('تم تحميل '+rows.length.toLocaleString('en-US')+' سجل — جارٍ تجهيز واجهة البرنامج...');
   // Supabase is the only source of business records. An empty database stays empty.
   hydrateFromRows(rows);
   clearLegacyDeviceData();

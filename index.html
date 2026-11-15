@@ -59,6 +59,13 @@ import { supabase } from './js/supabase.js';
 import { retryStartup } from './js/startup-retry.mjs';
 import { scopeFactoryStorage } from './js/account-storage.js';
 window.__factoryAuthReady = false;
+window.__factoryBootStartedAt = performance.now();
+window.__factorySetBootPhase = message => {
+  const node = document.getElementById('factory-boot-phase');
+  if (node) node.textContent = String(message || '');
+  window.__factoryBootPhaseText = String(message || '');
+};
+window.__factorySetBootPhase('جارٍ التحقق من حسابك...');
 window.__factoryAuthPromise = (async function bootstrapFactoryApp() {
   const profileKey = id => 'factory-profile:' + id;
   const showProfile = (profile, user, offline) => {
@@ -70,6 +77,7 @@ window.__factoryAuthPromise = (async function bootstrapFactoryApp() {
     }
     try { scopeFactoryStorage(profile); } catch (error) { console.warn('Account storage scoping skipped:', error); }
     window.__factoryAuthProfile = profile;
+    window.__factoryAuthUser = user;
     window.__factoryAuthEmail = user.email || '';
     window.__factoryOfflineMode = !!offline;
     document.documentElement.style.visibility = 'visible';
@@ -100,6 +108,7 @@ window.__factoryAuthPromise = (async function bootstrapFactoryApp() {
     const user = session.user;
     const profile = await retryStartup(() => fetchProfile(user.id));
     localStorage.setItem(profileKey(user.id), JSON.stringify(profile));
+    window.__factorySetBootPhase('تم التحقق من الحساب — جارٍ تحميل بيانات الشركة...');
     if (showProfile(profile, user, false)) window.__factoryAuthReady = true;
   } catch (error) {
     console.error('Authentication bootstrap failed:', error);
@@ -108,7 +117,7 @@ window.__factoryAuthPromise = (async function bootstrapFactoryApp() {
 })();
 </script>
 <body>
-<div id="factory-boot-screen" role="status" aria-live="polite"><span>جاري التحميل</span><span class="boot-dots" aria-hidden="true"><i></i><i></i><i></i></span></div>
+<div id="factory-boot-screen" role="status" aria-live="polite"><div class="factory-boot-card"><img src="./assets/icon.svg" alt=""><div class="factory-boot-copy"><strong>MS Factory</strong><small id="factory-boot-phase">جارٍ التحقق من حسابك...</small></div><span class="boot-dots" aria-hidden="true"><i></i><i></i><i></i></span></div></div>
 <div id="app">
   <div id="sb-overlay" onclick="closeSB()"></div>
   <aside id="sb"></aside>
@@ -157,7 +166,7 @@ window.__factoryAuthPromise = (async function bootstrapFactoryApp() {
     }catch(e){}
   };
 })();
-window.addEventListener('factory-database-ready',()=>{if(window.__factoryAuthReady!==true||!window.__factoryAuthProfile||window.__factoryOfflineMode===true){document.getElementById('factory-boot-screen')?.remove();window.__showFactoryBootError?.('تعذر التحقق من جلسة الحساب','يلزم التحقق المباشر من الحساب وقاعدة بيانات الإنتاج قبل فتح البرنامج.');return}document.getElementById('app').style.visibility='visible';document.getElementById('factory-boot-screen')?.classList.add('done');setTimeout(()=>document.getElementById('factory-boot-screen')?.remove(),180)});
+window.addEventListener('factory-database-ready',()=>{if(window.__factoryAuthReady!==true||!window.__factoryAuthProfile||window.__factoryOfflineMode===true){document.getElementById('factory-boot-screen')?.remove();window.__showFactoryBootError?.('تعذر التحقق من جلسة الحساب','يلزم التحقق المباشر من الحساب وقاعدة بيانات الإنتاج قبل فتح البرنامج.');return}window.__factoryBootElapsedMs=Math.round(performance.now()-(window.__factoryBootStartedAt||performance.now()));window.__factorySetBootPhase?.('اكتمل تحميل البيانات');document.getElementById('app').style.visibility='visible';document.getElementById('factory-boot-screen')?.classList.add('done');setTimeout(()=>document.getElementById('factory-boot-screen')?.remove(),180)});
 window.addEventListener('factory-db-startup-error',e=>{document.getElementById('factory-boot-screen')?.remove();window.__showFactoryBootError?.('تعذر الاتصال بقاعدة بيانات الإنتاج',e.detail?.message||'تحقق من الاتصال ثم أعد المحاولة')});
 setTimeout(()=>{const s=document.getElementById('factory-boot-screen');if(s&&!window.__factoryDatabaseFirstReady){s.remove();window.__showFactoryBootError?.('تأخر تحميل بيانات الشركة','لم تكتمل قراءة قاعدة البيانات بعد 45 ثانية. تحقق من الاتصال ثم أعد المحاولة.')}},45000);
 if('serviceWorker' in navigator){
