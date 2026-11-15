@@ -142,7 +142,7 @@ assert(app.includes("factory-production-detail") && app.includes("stockScanCamer
 assert(app.includes("اسم الدخول") && app.includes("factory-partner-status"), "employee usernames and partner status fields are visible");
 assert(app.includes("assistantQuickProductionCost") && app.includes("assistantQuickPartnerBalance"), "assistant quick actions cover customer balances and production order costs");
 assert(app.includes("تصدير السجل") && app.includes("FL.timeline={}"), "timeline provides export and clear-filter actions");
-assert(ui.includes("factory-recent-row[role='button']") || ui.includes("factory-recent-row[role=\"button\"]"), "summary recent movements are keyboard accessible");
+assert(previewUi.includes("factory-recent-row[role='button']") || previewUi.includes("factory-recent-row[role=\"button\"]"), "summary recent movements are keyboard accessible");
 assert(app.includes("القيد غير متوازن") && app.includes("if(!post(d,no,$(\"#j0\").value,J.lines,\"je\",id,ts))"), "journal posting fails safely instead of saving an unposted journal");
 
 assert(app.includes("exportPartnerTable") && app.includes("factory-partner-table"), "partner table has a targeted Excel export");
