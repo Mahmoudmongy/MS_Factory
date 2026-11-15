@@ -520,3 +520,46 @@ button:disabled{opacity:.55;cursor:not-allowed}
 .factory-stock-table-card tfoot th{background:var(--pr2);color:var(--tx);padding:9px}
 :root[data-theme="dark"] .factory-stock-code{color:var(--mu)}
 @media(max-width:860px){.factory-stock-filter-main label,.factory-stock-filter-extra label{min-width:100%;flex-basis:100%}.factory-stock-filter-main button{width:100%}}
+
+
+/* Cash and bank account tree: live account hierarchy and linked ledger. */
+.factory-bank-main-balances,.factory-bank-movement-card{margin-bottom:12px}
+.factory-bank-tree{display:grid;gap:0;margin-top:8px}
+.factory-bank-node{min-width:0;border-bottom:1px solid var(--bd)}
+.factory-bank-node:last-child{border-bottom:0}
+.factory-bank-account-row{display:flex;align-items:center;justify-content:space-between;gap:12px;min-height:54px;padding:8px 3px}
+.factory-bank-account-name{display:flex;align-items:center;gap:9px;min-width:0}
+.factory-bank-account-title{display:grid;gap:3px;min-width:0;font-size:14px;font-weight:650;overflow-wrap:anywhere}
+.factory-bank-account-title small{font-size:11px;font-weight:400;color:var(--mu)}
+.factory-bank-tree-toggle{width:30px;min-width:30px;height:30px;min-height:30px;padding:0;font-size:19px;line-height:1}
+.factory-bank-tree-spacer{display:inline-block;width:30px;min-width:30px}
+.factory-bank-account-end{display:flex;align-items:center;justify-content:flex-end;gap:8px;min-width:0}
+.factory-bank-balances{display:flex;align-items:flex-end;flex-direction:column;gap:3px}
+.factory-bank-balances b{font-size:14px;white-space:nowrap;direction:ltr;font-variant-numeric:tabular-nums}
+.factory-bank-balance-link{display:inline-flex;align-items:center;justify-content:flex-end;min-width:0;padding:4px 6px;border:0;border-radius:7px;background:transparent;color:var(--tx);cursor:pointer}
+.factory-bank-balance-link:hover,.factory-bank-movement-balance:hover{background:var(--pr2);color:var(--pr)}
+.factory-bank-edit{width:32px;min-width:32px;height:32px;min-height:32px;padding:3px;font-size:15px}
+.factory-bank-children{margin-inline-start:21px;padding-inline-start:12px;border-inline-start:2px solid var(--pr2)}
+.factory-bank-children[hidden]{display:none!important}
+.factory-bank-children .factory-bank-account-row{min-height:46px}
+.factory-bank-children .factory-bank-account-title{font-size:13px}
+.factory-bank-children .factory-bank-balances b{font-size:13px}
+.factory-bank-totals{display:flex;align-items:stretch;flex-wrap:wrap;gap:8px;margin-top:12px;padding-top:10px;border-top:1px solid var(--bd)}
+.factory-bank-total-line,.factory-bank-total-equivalent{display:flex;align-items:center;justify-content:space-between;gap:12px;min-width:190px;padding:8px 10px;border:1px solid var(--bd);border-radius:9px;background:var(--bg);font-size:12px}
+.factory-bank-total-line strong,.factory-bank-total-equivalent strong{font-size:14px;direction:ltr;font-variant-numeric:tabular-nums;white-space:nowrap}
+.factory-bank-total-equivalent{background:var(--pr2);border-color:color-mix(in srgb,var(--pr) 25%,var(--bd))}
+.factory-bank-movement-card .factory-panel-head{margin-bottom:8px}
+.factory-bank-movement-table{min-width:780px}
+.factory-bank-movement-table td,.factory-bank-movement-table th{vertical-align:middle}
+.factory-bank-movement-table .factory-ledger-number{direction:ltr;white-space:nowrap;font-variant-numeric:tabular-nums}
+.factory-bank-movement-balance{min-height:28px;padding:3px 6px;white-space:nowrap;direction:ltr;font-variant-numeric:tabular-nums}
+@media(max-width:600px){
+ .factory-bank-account-row{align-items:flex-start;gap:5px;padding:9px 1px}
+ .factory-bank-account-end{gap:2px}
+ .factory-bank-balances b{font-size:12px}
+ .factory-bank-edit{width:29px;min-width:29px;height:29px;min-height:29px}
+ .factory-bank-tree-toggle,.factory-bank-tree-spacer{width:27px;min-width:27px}
+ .factory-bank-children{margin-inline-start:12px;padding-inline-start:8px}
+ .factory-bank-totals{display:grid;grid-template-columns:1fr}
+ .factory-bank-total-line,.factory-bank-total-equivalent{min-width:0}
+}
