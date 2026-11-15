@@ -349,3 +349,32 @@ button:disabled{opacity:.55;cursor:not-allowed}
 .preview-report-intro button{min-height:33px;padding:6px 11px;font-size:12px}
 @media(max-width:1000px){.factory-summary-panels{grid-template-columns:1fr}}
 @media(max-width:860px){.factory-summary-settings{grid-template-columns:1fr}.factory-summary-setting-row{grid-template-columns:minmax(0,1fr) minmax(112px,auto) auto}.factory-summary-mini-table{min-width:650px}}
+
+
+/* Consistent high-contrast labels for every action in dark appearance. */
+:root[data-theme="dark"] button,
+:root[data-theme="dark"] input[type="button"],
+:root[data-theme="dark"] input[type="submit"],
+:root[data-theme="dark"] input[type="reset"]{
+  color:#fff!important;
+}
+:root[data-theme="dark"] button *,
+:root[data-theme="dark"] input[type="button"] *,
+:root[data-theme="dark"] input[type="submit"] *,
+:root[data-theme="dark"] input[type="reset"] *{
+  color:inherit!important;
+}
+@media(prefers-color-scheme:dark){
+  :root:not([data-theme="light"]) button,
+  :root:not([data-theme="light"]) input[type="button"],
+  :root:not([data-theme="light"]) input[type="submit"],
+  :root:not([data-theme="light"]) input[type="reset"]{
+    color:#fff!important;
+  }
+  :root:not([data-theme="light"]) button *,
+  :root:not([data-theme="light"]) input[type="button"] *,
+  :root:not([data-theme="light"]) input[type="submit"] *,
+  :root:not([data-theme="light"]) input[type="reset"] *{
+    color:inherit!important;
+  }
+}

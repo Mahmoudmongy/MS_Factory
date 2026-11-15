@@ -105,5 +105,6 @@ assert(previewUi.includes("function summaryOrder(data)") && previewUi.includes("
 assert(previewUi.includes("factory-summary-mini-table") && previewUi.includes("data-open-source"), "latest activity is a drillable table built from current records");
 assert(app.includes("preview-report-grid") && app.includes("التقارير المالية") && app.includes("النقدية والمخزون والإنتاج"), "reports use the four reference groups without replacing live report renderers");
 assert(previewCss.includes("Dark theme contrast") && previewCss.includes("button.g") && previewCss.includes("color:#fff!important"), "secondary action buttons use white high-contrast labels in dark mode");
+assert(previewCss.includes(':root[data-theme="dark"] button') && previewCss.includes(':root:not([data-theme="light"]) button') && previewCss.includes('button *') && previewCss.includes('input[type="submit"]'), 'all primary, secondary, nested-label and form-submit buttons keep white labels in both manual and system dark mode');
 assert(databaseFirst.includes("function scheduleCacheSnapshot(rows)") && databaseFirst.includes("__snapshot__") && databaseFirst.includes("setBaselineRow(row, false)"), "startup avoids synchronous per-record cache writes");
 console.log("PASS summary ordering, latest activity, grouped reports, dark button labels and faster startup");
