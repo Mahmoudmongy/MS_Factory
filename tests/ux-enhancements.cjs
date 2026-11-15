@@ -90,5 +90,5 @@ console.log('PASS invoice and voucher posting failures fail closed with safe rol
 const sw = fs.readFileSync(path.join(root, 'sw.js'), 'utf8');
 const swPublic = fs.readFileSync(path.join(root, 'public/sw.js'), 'utf8');
 assert(app.includes('landscape=c.width/c.height>1.1') && app.includes('windowWidth:captureWidth') && app.includes('W=landscape?297:210'), 'PDF export captures the full table width and selects landscape A4 for wide documents');
-assert(sw.includes('factory-v26') && swPublic.includes('factory-v26'), 'service-worker cache version changes when the application assets change');
+assert(sw.includes('factory-v27') && swPublic.includes('factory-v27'), 'service-worker cache version changes when the application assets change');
 console.log('PASS adaptive A4 PDF layout and service-worker cache refresh');

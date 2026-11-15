@@ -496,7 +496,7 @@ ok('online startup sync runs even when local cache already has data',/if \(navig
 ok('offline startup never authorizes from a cached profile',!/cachedProfile/.test(idx)&&/offlineError\.code = 'OFFLINE'/.test(idx)&&/location\.replace\('auth\.html'\)/.test(idx));
 ok('reconnect refreshes the profile before using permissions for cloud sync',/myProfile = null; ownerIdCache = null; window\.__factoryAuthProfile = null;/.test(cloud)&&/const freshProfile = await getMyProfile\(\)/.test(cloud));
 
-ok('offline shell precaches the stable production app and first-login password page',/auth\.html/.test(sw)&&/change-password\.html/.test(sw)&&/js\/change-password\.js/.test(sw)&&/js\/app\.js/.test(sw)&&/factory-v26/.test(sw));
+ok('offline shell precaches the stable production app and first-login password page',/auth\.html/.test(sw)&&/change-password\.html/.test(sw)&&/js\/change-password\.js/.test(sw)&&/js\/app\.js/.test(sw)&&/factory-v27/.test(sw));
 ok('mobile and desktop usability includes visible keyboard focus and safe-area spacing',/focus-visible/.test(css)&&/safe-area-inset-bottom/.test(css));
 ok('offline-created detail records are uploaded even when the full snapshot has a preserved conflict',/if \(admin && !snapshotConflict\)/.test(cloud)&&/for \(const \{ key, arr \} of partnerArrays\)/.test(cloud)&&/hasSnapshotConflict/.test(cloud));
 ok('local save writes a durable pending-sync marker before network recovery',/mgr6-sync-pending/.test(app)&&/localStorage\.setItem\("mgr6-sync-pending"/.test(app));
@@ -512,7 +512,7 @@ ok('opening an existing screen in a separate tab activates it instead of duplica
 ok('Excel export splits currency labels into a separate adjacent cell and keeps amounts numeric',/function exportCurrencyCell/.test(app)&&/\[h\+" \(قيمة\)","العملة"\]/.test(app));
 ok('legacy Excel importer supports multiple named sheets for customers, suppliers and inventory',/function impSheet\(/.test(app)&&/function templateExcel\(/.test(app)&&/customers:\[/.test(app)&&/suppliers:\[/.test(app)&&/WZ\.sheetNames/.test(app));
 ok('module navigation uses consistent purpose-specific SVG icons',/const APP_ICONS=/.test(app)&&/ico\("customer"\)/.test(app)&&/ico\("inventory"\)/.test(app));
-ok('offline service worker pre-caches Vite module assets discovered from the HTML shell',sw.includes('matchAll')&&sw.includes('modulepreload')&&/factory-v26/.test(sw));
+ok('offline service worker pre-caches Vite module assets discovered from the HTML shell',sw.includes('matchAll')&&sw.includes('modulepreload')&&/factory-v27/.test(sw));
 
 
 ok('invoice sync migration uses optimistic version checks and invoker security',/sync_version/.test(fs.readFileSync(path.join(ROOT,'supabase/migrations/20261107090901_20261107111000_atomic_invoice_sync.sql'),'utf8'))&&/SECURITY INVOKER/.test(fs.readFileSync(path.join(ROOT,'supabase/migrations/20261107090901_20261107111000_atomic_invoice_sync.sql'),'utf8'))&&/40001/.test(fs.readFileSync(path.join(ROOT,'supabase/migrations/20261107090901_20261107111000_atomic_invoice_sync.sql'),'utf8')));
@@ -540,6 +540,37 @@ ok('unlinked-party warning and review controls have complete English translation
 const scr=await ev(()=>allowed().map(t=>t[0]));for(const s of scr){await ev(x=>go(x),s)}ok(`all ${scr.length} screens render without errors`,errs.length==0,errs.slice(0,2));
 const desktopToolbarOrder=await p.evaluate(()=>{const x=s=>document.querySelector(s)?.getBoundingClientRect().x??-1;return {net:x('#net'),logout:x('#logout-btn'),user:x('#who'),theme:x('#thb'),scroll:document.documentElement.scrollWidth}});
 ok('desktop toolbar places exit, user and theme after connection status without overflow',desktopToolbarOrder.net>desktopToolbarOrder.logout&&desktopToolbarOrder.logout>desktopToolbarOrder.user&&desktopToolbarOrder.user>desktopToolbarOrder.theme&&desktopToolbarOrder.scroll<=1281,desktopToolbarOrder);
+const previewUiRuntime=await ev(()=>{
+ go('home');
+ const top=[...document.querySelectorAll('#m .factory-kpi>span')].map(x=>x.textContent.trim());
+ const defaultOrder=top.join('|')==='العملاء|الموردون|النقدية والبنوك|صافي الربح';
+ const dateSort=key({dataset:{v:'02/12/2026'},textContent:''})>key({dataset:{v:'15/11/2026'},textContent:''});
+ const oldAccounts=S.accts;const treeParent={id:9901,code:'9901',name:'حساب رئيسي تجريبي',t:'A',cur:'EGP',parentId:null},treeChild={id:9902,code:'9902',name:'حساب فرعي تجريبي',t:'A',cur:'EGP',parentId:9901};S.accts=[...oldAccounts,treeParent,treeChild];const chartCollapsed=!accountRow(treeParent,0).includes('حساب فرعي تجريبي');toggleAccountTree(9901);const chartExpanded=accountRow(treeParent,0).includes('حساب فرعي تجريبي');localStorage.removeItem('factory-account-collapsed:9901');S.accts=oldAccounts;render();
+ document.querySelector('#factory-summary-settings-toggle')?.click();
+ const select=document.querySelector('[data-summary-place="customers"]');
+ if(select){select.value='bottom';select.dispatchEvent(new Event('change',{bubbles:true}));}
+ const preferenceSaved=JSON.parse(localStorage.getItem('ms-factory-preview-ui-v1')||'{}').summary?.customers==='bottom';
+ const moved=document.querySelector('#m .factory-balance-row')?.textContent.includes('العملاء');
+ const hide=document.querySelector('#factory-summary-hide');hide?.click();
+ const numbersHidden=getComputedStyle(document.querySelector('#factory-summary-kpis .factory-summary-amount')).visibility==='hidden';
+ hide?.click();
+ document.querySelector('#factory-theme-open')?.click();
+ const themeOpened=!document.querySelector('#factory-theme-popover').hidden;
+ document.querySelector('#factory-theme-popover [data-factory-accent="blue"]')?.click();
+ const blueApplied=getComputedStyle(document.documentElement).getPropertyValue('--pr').trim()==='#315b8a';
+ document.querySelector('#factory-theme-open')?.click();document.querySelector('#factory-theme-popover [data-factory-accent="teal"]')?.click();
+ document.querySelector('#mobile-preview-btn')?.click();
+ const mobilePreview=document.body.classList.contains('factory-preview-viewport')&&document.querySelector('#mobile-preview-btn').getBoundingClientRect().width===29;
+ document.querySelector('#mobile-preview-btn')?.click();
+ go('statements');
+ document.querySelector('[data-fs-kind="balance"]')?.click();
+ const statement=document.querySelector('#m .factory-fin-check')&&document.querySelector('#m .factory-fin-group')&&document.querySelector('#m').textContent.includes('قائمة المركز المالي');
+ go('home');
+ const restore=document.querySelector('[data-summary-place="customers"]');if(restore){restore.value='top';restore.dispatchEvent(new Event('change',{bubbles:true}));}
+ return {defaultOrder,dateSort,chartCollapsed,chartExpanded,preferenceSaved,moved,numbersHidden,themeOpened,blueApplied,mobilePreview,statement};
+});
+ok('preview UI: summary order, saved layout, hide amounts, theme palette, mobile preview and financial statements are functional',
+ previewUiRuntime.defaultOrder&&previewUiRuntime.dateSort&&previewUiRuntime.chartCollapsed&&previewUiRuntime.chartExpanded&&previewUiRuntime.preferenceSaved&&previewUiRuntime.moved&&previewUiRuntime.numbersHidden&&previewUiRuntime.themeOpened&&previewUiRuntime.blueApplied&&previewUiRuntime.mobilePreview&&previewUiRuntime.statement,previewUiRuntime);
 const tableIconRuntime=await ev(()=>{const wrap=document.createElement('div');wrap.className='factory-table-scroll';wrap.style.width='420px';const table=document.createElement('table');table.className='l';table.innerHTML='<thead><tr><th>التاريخ</th><th>البيان</th></tr></thead><tbody>'+Array.from({length:9},(_,i)=>'<tr><td>2026-11-'+String(i+1).padStart(2,'0')+'</td><td>'+'نص طويل لاختبار التفاف الكلام داخل العمود دون تغيير عرضه '.repeat(3)+'</td></tr>').join('')+'</tbody>';wrap.appendChild(table);ACT.appendChild(wrap);factoryApplyFixedTableLayout(table);const box=document.createElement('div');box.innerHTML='<button>مشاركة ملف PDF</button><a href="#">عرض</a>';ACT.appendChild(box);factoryIconizeActions(box);factoryIconizeActionLinks(box);const result={fixed:table.style.tableLayout==='fixed',cols:table.querySelectorAll('colgroup col').length===2,sticky:getComputedStyle(table.querySelector('th')).position==='sticky',scrollHeight:!!wrap.style.maxHeight,wrapped:table.querySelector('td.factory-very-long-cell')!==null,icons:box.querySelectorAll('svg').length===2,labels:!!box.querySelector('button[aria-label="مشاركة ملف PDF"]')&&!!box.querySelector('a[aria-label="عرض"]')};wrap.remove();box.remove();return result});
 ok('tables keep fixed columns, sticky headers, compact icon actions and wrapped long text',Object.values(tableIconRuntime).every(Boolean),tableIconRuntime);
 
@@ -639,8 +670,8 @@ await ev(id=>{go('rc');vForm('in');$("#vt").value="o";vpt();$("#lkc").checked=fa
 ok('foreign-currency amount without exchange rate is rejected',await ev(()=>window.__n==0));
 await ev(()=>{$("#vfx").value="50";vAc();$("#la").value=String(ak("sales"));$("#lm").value="500";vLn();saveV()});
 ok('USD voucher: balance 10 USD and 500 EGP equivalent kept separately; ledger balanced',await ev(id=>balc(id,"",td())==10&&bal(id,"",td())==500,usd.id)&&await bal());
-const nestedCashTree=await ev(()=>{const oldAccounts=S.accts,oldLedger=S.L;S.accts=[{id:9801,code:'1000',name:'الخزنة الرئيسية',t:'A',cash:1,cur:'EGP',parentId:null},{id:9802,code:'1001',name:'مجموعة وسيطة',t:'A',cash:0,cur:'EGP',parentId:9801},{id:9803,code:'1002',name:'حساب فرعي نقدي',t:'A',cash:1,cur:'EGP',parentId:9802}];S.L=[{a:9803,d:td(),dr:1750,cr:0}];const html=vBank();S.accts=oldAccounts;S.L=oldLedger;return {root:html.includes('الخزنة الرئيسية'),child:html.includes('حساب فرعي نقدي'),rollup:html.includes('1,750.00')}});
-ok('cash/bank tree includes balances of cash subaccounts through non-cash grouping accounts',nestedCashTree.root&&nestedCashTree.child&&nestedCashTree.rollup,nestedCashTree);
+const nestedCashTree=await ev(()=>{const oldAccounts=S.accts,oldLedger=S.L;S.accts=[{id:9801,code:'1000',name:'الخزنة الرئيسية',t:'A',cash:1,cur:'EGP',parentId:null},{id:9802,code:'1001',name:'مجموعة وسيطة',t:'A',cash:0,cur:'EGP',parentId:9801},{id:9803,code:'1002',name:'حساب فرعي نقدي',t:'A',cash:1,cur:'EGP',parentId:9802}];S.L=[{a:9803,d:td(),dr:1750,cr:0}];const html=vBank(),collapsed=!html.includes('حساب فرعي نقدي');toggleAccountTree(9801);const expanded=vBank(),child=expanded.includes('حساب فرعي نقدي');localStorage.removeItem('factory-account-collapsed:9801');S.accts=oldAccounts;S.L=oldLedger;return {root:html.includes('الخزنة الرئيسية'),collapsed,child,rollup:html.includes('1,750.00')}});
+ok('cash/bank tree starts collapsed and expands nested cash accounts with rolled-up balances',nestedCashTree.root&&nestedCashTree.collapsed&&nestedCashTree.child&&nestedCashTree.rollup,nestedCashTree);
 /* ---------- production ---------- */
 await ev(()=>{go('prod');poForm();$("#pin").value="جاكيت اختبار";$("#pcs").value="أحمر، أسود";$("#pzs").value="M, L";$("#pcn").value="5";applyG();$("#materialWarehouse").value="1";fillProductionMaterialItems();$("#materialItem").value="1";$("#materialQty").value="20";addProductionMaterial();$("#xn").value="تطريز";$("#xm").value="500";addX();savePO()});
 const po=await ev(()=>S.po[0]);ok('production order: 2 colours x 2 sizes x 5 = 20 pieces, finished item pre-created',po&&po.subs.length==4&&po.subs.reduce((a,s)=>a+s.qty,0)==20&&await ev(()=>!!S.items.find(i=>i.name=="جاكيت اختبار")));
@@ -692,8 +723,8 @@ await ev(()=>importGo());ok('import creates only the valid rows with opening sto
 await ev(()=>{tplForm();$("#tk").value="sale";tplFill();$("#t_title").value="فاتورة ضريبية";ACT.querySelector('.t_c[value="unit"]').checked=false;tplPrev()});
 const templatePreviewCheck=await ev(()=>{const h=$("#tpv").innerHTML;return {title:h.includes("فاتورة ضريبية"),unitHidden:!h.includes("<th>الوحدة</th>"),excerpt:h.slice(0,900)}});ok('print-template preview reflects title and hidden column',templatePreviewCheck.title&&templatePreviewCheck.unitHidden,templatePreviewCheck);await ev(()=>closeTab(CUR,1));
 /* ---------- language ---------- */
-await ev(()=>{PRF.lang='en';applyPref()});const left=[];for(const s of ['home','bank','rc','py','cust','supp','sale','sret','pur','pret','stock','prod','coa','je','tl','emp','rep','ai','set']){await ev(x=>go(x),s);await p.waitForTimeout(40);const t=await ev(x=>{const out=[],w=document.createTreeWalker(document.body,NodeFilter.SHOW_TEXT);let n;while(n=w.nextNode()){if(n.parentElement&&n.parentElement.tagName=='SCRIPT')continue;if(/[\u0600-\u06FF]/.test(n.nodeValue)&&n.nodeValue.trim()!='ع')out.push(n.nodeValue.trim())}return out},s);t.forEach(x=>{if(!/محلات|عميل قطاعي|اختبار|استيراد|النسيج|جيرسي|زراير|تيشيرت|جاكيت|بنطلون|قماش|أحمر|أسود|جهة|الخزنة بالدولار|موظف/.test(x))left.push(s+': '+x)})}
-ok('English mode: no untranslated UI text on the 19 main screens',left.length==0,left.slice(0,12));await ev(()=>{PRF.lang='ar';applyPref()});
+await ev(()=>{PRF.lang='en';applyPref()});const left=[];for(const s of ['home','bank','rc','py','cust','supp','sale','sret','pur','pret','stock','prod','coa','je','tl','emp','rep','ai','set','statements']){await ev(x=>go(x),s);await p.waitForTimeout(40);const t=await ev(x=>{const out=[],w=document.createTreeWalker(document.body,NodeFilter.SHOW_TEXT);let n;while(n=w.nextNode()){if(n.parentElement&&n.parentElement.tagName=='SCRIPT')continue;if(/[\u0600-\u06FF]/.test(n.nodeValue)&&n.nodeValue.trim()!='ع')out.push(n.nodeValue.trim())}return out},s);t.forEach(x=>{if(!/محلات|عميل قطاعي|اختبار|استيراد|النسيج|جيرسي|زراير|تيشيرت|جاكيت|بنطلون|قماش|أحمر|أسود|جهة|الخزنة بالدولار|موظف/.test(x))left.push(s+': '+x)})}
+ok('English mode: no untranslated UI text on the 20 main screens',left.length==0,left.slice(0,12));await ev(()=>{PRF.lang='ar';applyPref()});
 ok('no JavaScript errors during the whole desktop session',errs.length==0,errs.slice(0,3));
 const scopeCtx=await browser.newContext({viewport:{width:800,height:600}}),scopePage=await scopeCtx.newPage();await scopePage.goto(BASE);await scopePage.waitForTimeout(150);
 const accountIsolation=await scopePage.evaluate(async()=>{
@@ -726,7 +757,7 @@ ok('middle-click is the only sidebar gesture that opens a new tab',app.includes(
 /* ---------- C. PWA: service worker + offline shell ---------- */
 const c2=await browser.newContext({viewport:{width:1280,height:800}}),q=await c2.newPage(),swConsole=[];q.on('console',m=>swConsole.push(m.type()+': '+m.text()));q.on('pageerror',e=>swConsole.push('pageerror: '+e.message));await q.goto(BASE);const swReg=await q.evaluate(async()=>{try{const reg=await navigator.serviceWorker.register('./sw.js');return {ok:true,scope:reg.scope,installing:reg.installing?.state,waiting:reg.waiting?.state,active:reg.active?.state}}catch(e){return {ok:false,error:e.message}}});const swReady=await q.evaluate(()=>Promise.race([navigator.serviceWorker.ready.then(()=>true),new Promise(resolve=>setTimeout(()=>resolve(false),15000))]));if(!swReady){const diag=await q.evaluate(async()=>{const r=await navigator.serviceWorker.getRegistration();return r?{installing:r.installing?.state,waiting:r.waiting?.state,active:r.active?.state,scope:r.scope}:null});await c2.close();throw new Error('Service Worker did not become ready: '+JSON.stringify({swReg,diag,console:swConsole.slice(-20)}))}await q.reload();await q.waitForTimeout(600);
 const swi=await q.evaluate(async()=>({ctl:!!navigator.serviceWorker.controller,keys:await caches.keys(),cached:(await (await caches.open((await caches.keys())[0])).keys()).map(r=>new URL(r.url).pathname)}));
-ok('service worker installed and controlling the page; single versioned cache',swi.ctl&&swi.keys.length==1&&/^factory-v26$/.test(swi.keys[0]),swi.keys);
+ok('service worker installed and controlling the page; single versioned cache',swi.ctl&&swi.keys.length==1&&/^factory-v27$/.test(swi.keys[0]),swi.keys);
 ok('stable app shell files are precached; linked CSS and scripts are cached on first request',['/index.html','/auth.html','/change-password.html','/js/change-password.js','/','/js/app.js','/css/style.css'].every(f=>swi.cached.includes(f)),swi.cached);
 ok('offline cache does not include authenticated API responses or user records',swi.cached.every(f=>!f.includes('/rest/v1/')&&!f.includes('/auth/v1/')&&!f.includes('/storage/v1/')));
 await q.evaluate(()=>{const s=JSON.parse(localStorage.getItem('mgr6')||'null');localStorage.setItem('mgr6',JSON.stringify(s))});
@@ -735,10 +766,10 @@ ok('app loads and works with the network switched off (from the service-worker c
 const none=await q.evaluate(async()=>{const c=await caches.open('factory-v5');return (await c.keys()).every(r=>new URL(r.url).origin==location.origin&&!r.url.includes('/api/'))});ok('cache holds only same-origin app files (no cross-origin / API / user data)',none);
 await c2.setOffline(false);await c2.close();
 /* ---------- D. mobile ---------- */
-const mc=await browser.newContext({viewport:{width:390,height:800},isMobile:true,hasTouch:true}),m=await mc.newPage(),merr=[];m.on('pageerror',e=>merr.push(e.message));await m.goto(BASE);await m.waitForTimeout(400);
+const mc=await browser.newContext({viewport:{width:390,height:844},isMobile:true,hasTouch:true}),m=await mc.newPage(),merr=[];m.on('pageerror',e=>merr.push(e.message));await m.goto(BASE);await m.waitForTimeout(400);
 const mob=await m.evaluate(()=>({pos:getComputedStyle(document.querySelector('#sb')).position,bg:getComputedStyle(document.querySelector('#bg')).display,over:document.documentElement.scrollWidth<=innerWidth+1}));
-const toolbarRects=await m.evaluate(()=>{const sels=['#bg','#top > .top-nav:nth-child(2)','#top > .top-nav:nth-child(3)','#ttl','#net','#who','#thb','#logout-btn'];const boxes=sels.map(s=>{const e=document.querySelector(s),r=e?.getBoundingClientRect();return {s,visible:!!e&&!!r&&r.width>0&&r.height>0,x:r?.x||0,y:r?.y||0,right:r?.right||0,bottom:r?.bottom||0}}).filter(x=>x.visible);const overlaps=[];for(let i=0;i<boxes.length;i++)for(let j=i+1;j<boxes.length;j++){const a=boxes[i],b=boxes[j];if(Math.min(a.right,b.right)-Math.max(a.x,b.x)>1&&Math.min(a.bottom,b.bottom)-Math.max(a.y,b.y)>1)overlaps.push([a.s,b.s]);}return {boxes,overlaps,scroll:document.documentElement.scrollWidth<=innerWidth+1};});
-ok('mobile toolbar controls have separate visible hit areas without overlap or horizontal overflow',toolbarRects.boxes.length===8&&toolbarRects.overlaps.length===0&&toolbarRects.scroll,toolbarRects);
+const toolbarRects=await m.evaluate(()=>{const sels=['#bg','#ttl','#net','#mobile-preview-btn','#logout-btn','#who','#factory-theme-open','#thb'];const boxes=sels.map(s=>{const e=document.querySelector(s),r=e?.getBoundingClientRect();return {s,visible:!!e&&!!r&&r.width>0&&r.height>0,x:r?.x||0,y:r?.y||0,right:r?.right||0,bottom:r?.bottom||0}}).filter(x=>x.visible);const overlaps=[];for(let i=0;i<boxes.length;i++)for(let j=i+1;j<boxes.length;j++){const a=boxes[i],b=boxes[j];if(Math.min(a.right,b.right)-Math.max(a.x,b.x)>1&&Math.min(a.bottom,b.bottom)-Math.max(a.y,b.y)>1)overlaps.push([a.s,b.s]);}return {boxes,overlaps,scroll:document.documentElement.scrollWidth<=innerWidth+1};});
+ok('mobile toolbar controls have separate visible hit areas without overlap or horizontal overflow',toolbarRects.boxes.length===8&&toolbarRects.overlaps.length===0&&toolbarRects.scroll&&toolbarRects.boxes.find(x=>x.s==='#mobile-preview-btn')?.right-toolbarRects.boxes.find(x=>x.s==='#mobile-preview-btn')?.x>=28,toolbarRects);
 
 ok('mobile: sidebar is a drawer with burger button and the page does not scroll sideways',mob.pos=='fixed'&&mob.bg=='block'&&mob.over,mob);
 await m.click('#bg');await m.waitForTimeout(250);const open=await m.evaluate(()=>({sb:document.querySelector('#sb').classList.contains('open'),ov:getComputedStyle(document.querySelector('#sb-overlay')).display}));
@@ -757,7 +788,7 @@ await m.evaluate(()=>docForm('sale'));const fw=await m.evaluate(()=>document.doc
 ok('mobile: invoice form fits the screen width',fw);
 const mobileScreenIds=await m.evaluate(()=>allowed().map(t=>t[0])),mobileScreenAudit=[];for(const sid of mobileScreenIds){await m.evaluate(x=>go(x),sid);await m.waitForTimeout(25);mobileScreenAudit.push(await m.evaluate(x=>({screen:x,documentWidth:document.documentElement.scrollWidth,viewport:innerWidth,mainWidth:document.querySelector('#m')?.clientWidth,mainScroll:document.querySelector('#m')?.scrollWidth}),sid));}
 const mobileOverflow=mobileScreenAudit.filter(x=>x.documentWidth>x.viewport+1);
-ok(`all ${mobileScreenIds.length} screens render on 390px mobile without page-level horizontal overflow`,mobileScreenIds.length===19&&mobileOverflow.length===0,mobileOverflow);
+ok(`all ${mobileScreenIds.length} screens render on 390px mobile without page-level horizontal overflow`,mobileScreenIds.length===20&&mobileOverflow.length===0,mobileOverflow);
 ok('mobile: no JavaScript errors',merr.length==0,merr.slice(0,2));await mc.close();
 await browser.close();server.close();
 ok('legacy cloud-sync polling is disabled in database-first mode',cloud.includes('if (!window.__factoryDatabaseFirst) {')&&cloud.indexOf('if (!window.__factoryDatabaseFirst) {')<cloud.indexOf('const _origSetItem')&&cloud.includes('setInterval(() => {'));
