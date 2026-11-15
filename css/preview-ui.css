@@ -467,3 +467,11 @@ button:disabled{opacity:.55;cursor:not-allowed}
  :root:not([data-theme="light"]) .factory-reference-status.unpaid,:root:not([data-theme="light"]) .factory-reference-status.unposted{color:#fca5a5!important}
 }
 @media print{#pr.factory-print-document{position:absolute!important;top:0!important;inset-inline:0!important}}
+
+.factory-reference-amount-actions,.factory-reference-status-actions{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.factory-reference-amount-actions small{color:var(--mu);font-size:10px}
+.factory-reference-status-actions .factory-reference-status{flex:none}
+@media(max-width:700px){
+ .factory-reference-amount-actions,.factory-reference-status-actions{gap:4px}
+ .factory-reference-amount-actions .factory-row-action,.factory-reference-status-actions .factory-row-action{width:26px;min-width:26px;height:26px;min-height:26px!important}
+}

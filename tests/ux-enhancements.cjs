@@ -129,7 +129,7 @@ console.log("PASS reference-aligned vouchers/invoices, connected actions, origin
 
 assert(previewUi.includes("function referenceVoucherSearchText(v)") && previewUi.includes("factorySearchMatch(referenceVoucherSearchText(v),query)"), "voucher search filters reference, title, party, account, allocations and related orders");
 assert(previewUi.includes("function referenceInvoiceSearchText(d)") && previewUi.includes("factorySearchMatch(referenceInvoiceSearchText(d),query)"), "invoice search filters reference, party, notes, items, variants and barcodes");
-assert(previewUi.includes("<th>العنوان</th>") && previewUi.includes("الفواتير المسددة") && previewUi.includes("تابع لـ"), "voucher table shows title, settled invoices and related orders");
+assert(previewUi.includes("<th>حساب "+(incoming?"القبض":"الدفع")+"</th>") && previewUi.includes("factory-reference-amount-actions") && previewUi.includes("refVoucherActions(v)"), "voucher table matches six reference columns and keeps row actions in the amount cell");
 assert(previewUi.includes("isReturn?8:9") && previewUi.includes("factory-reference-count"), "returns table includes item count and an aligned empty state");
 assert(previewCss.includes("factory-reference-status.paid") && previewCss.includes("factory-reference-status.partial") && previewCss.includes("factory-reference-status.unpaid") && previewCss.includes("#pr.factory-print-document{position:absolute"), "status colors and A4 print placement are explicitly styled");
 
