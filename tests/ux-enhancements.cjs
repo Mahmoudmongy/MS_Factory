@@ -15,12 +15,16 @@ const permissionMigration = fs.readFileSync(path.join(root, 'supabase/migrations
 new Function(app); // Syntax-check the complete production browser script before testing behavior.
 const inlineActionNames = new Set();
 for (const source of [app, previewUi]) {
-  for (const match of source.matchAll(/onclick\s*=\s*["']([^"']+)["']/g)) {
-    for (const call of match[1].matchAll(/(?:^|[;{}])\s*([A-Za-z_$][\w$]*)\s*\(/g)) inlineActionNames.add(call[1]);
+  for (const match of source.matchAll(/onclick\\s*=\\s*[\"']([^\"']+)[\"']/g)) {
+    for (const call of match[1].matchAll(/(?:^|[;{}])\\s*([A-Za-z_$][\\w$]*)\\s*\\(/g)) inlineActionNames.add(call[1]);
   }
 }
 const unresolvedInlineActions = [...inlineActionNames]
-  .filter(name => !['const parserStart = app.indexOf('function factorySearchMatch(');
+  .filter(name => !['$', 'print'].includes(name))
+  .filter(name => !new RegExp('(?:function\\\\s+' + name + '\\\\s*\\\\(|(?:const|let|var)\\\\s+' + name + '\\\\s*=|(?:window\\\\.)?' + name + '\\\\s*=)').test(app + '\\n' + previewUi))
+  .sort();
+assert.deepEqual(unresolvedInlineActions, [], 'every inline UI action must resolve to a real application function');
+console.log('PASS every inline screen action resolves to an implemented application function');
 const parserEnd = app.indexOf('function factorySearchApply(', parserStart);
 assert(parserStart >= 0 && parserEnd > parserStart, 'advanced search parser must exist');
 const matches = new Function(app.slice(parserStart, parserEnd) + '; return factorySearchMatch;')();
