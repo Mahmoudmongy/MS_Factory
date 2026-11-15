@@ -132,3 +132,6 @@ assert(previewUi.includes("function referenceInvoiceSearchText(d)") && previewUi
 assert(previewUi.includes("<th>العنوان</th>") && previewUi.includes("الفواتير المسددة") && previewUi.includes("تابع لـ"), "voucher table shows title, settled invoices and related orders");
 assert(previewUi.includes("isReturn?8:9") && previewUi.includes("factory-reference-count"), "returns table includes item count and an aligned empty state");
 assert(previewCss.includes("factory-reference-status.paid") && previewCss.includes("factory-reference-status.partial") && previewCss.includes("factory-reference-status.unpaid") && previewCss.includes("#pr.factory-print-document{position:absolute"), "status colors and A4 print placement are explicitly styled");
+
+
+assert(previewUi.includes("referenceSavedSearch(key)") && previewUi.includes("data-factory-search-text") && previewUi.includes("dataset.factorySearchText||row.textContent"), "reference table search keeps item/barcode search data across redraw without polluting exports");

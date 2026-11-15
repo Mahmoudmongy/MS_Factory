@@ -199,6 +199,17 @@
   }
   function refExportButton(){return '<button type="button" class="g factory-reference-export" data-reference-export="1">تصدير Excel</button>';}
   function refFilterRow(key,fields){return '<div class="factory-reference-filter-row">'+fbar(key,fields)+refExportButton()+'</div>';}
+  function referenceSavedSearch(key){
+    try{return sessionStorage.getItem("factory-search:"+((CUR&&CUR.sid)||tab)+":"+key)||"";}catch(_){return "";}
+  }
+  const referenceBaseSearchApply=factorySearchApply;
+  factorySearchApply=function(input){
+    const query=input?.value||"",scope=input?.dataset?.searchScope||"all";
+    try{sessionStorage.setItem("factory-search:"+((CUR&&CUR.sid)||tab)+":"+scope,query);}catch(_){}
+    (ACT||document).querySelectorAll("table.l tr").forEach(row=>{
+      if(row.querySelector("td"))row.style.display=factorySearchMatch(row.dataset.factorySearchText||row.textContent,query)?"":"none";
+    });
+  };
   function referenceVoucherSearchText(v){
     const accountText=voucherAccounts(v).map(x=>an(x.a)+" "+cur_(x.a)).join(" ");
     const invoiceText=Object.keys(v.alloc||{}).map(id=>(S.docs||[]).find(d=>String(d.id)===String(id))?.no||"").join(" ");
@@ -210,7 +221,7 @@
     const incoming=dir==="in",key="v"+dir;
     FL[key]=FL[key]||{};
     const date=row=>refDateKey(refDateValue(row));
-    const query=String(fv(key,"q")||"").trim();
+    const query=referenceSavedSearch(key);
     const rows=(S.vch||[]).filter(v=>
       v.dir===dir&&
       (!query||factorySearchMatch(referenceVoucherSearchText(v),query))&&
@@ -219,18 +230,14 @@
       (!fv(key,"to")||date(v)<=fv(key,"to"))
     ).sort((a,b)=>date(b).localeCompare(date(a))||(Number(b.ts)||0)-(Number(a.ts)||0));
     const accounts=(S.accts||[]).filter(a=>a.cash);
-    const filters=[
-      ["q","text","بحث في المرجع أو الحساب أو الطرف أو البيان"],
-      ["ac","sel",incoming?"حساب القبض":"حساب الدفع",[["","كل الحسابات"],...accounts.map(a=>[String(a.id),an(a.id)+" ("+cur_(a)+")"])]],
-      ["from","date","من تاريخ"],["to","date","إلى تاريخ"]
-    ];
+    const filters=[["q","text","بحث في المرجع أو الحساب أو الطرف أو البيان"],["ac","sel",incoming?"حساب القبض":"حساب الدفع",[["","كل الحسابات"],...accounts.map(a=>[String(a.id),an(a.id)+" ("+cur_(a)+")"])]],["from","date","من تاريخ"],["to","date","إلى تاريخ"]];
     const data=rows.length?rows.map(v=>{
       const accountNames=voucherAccounts(v).map(x=>an(x.a)+(x.fc?" ("+f(x.fc)+" "+(x.cur||cur_(x.a))+")":"")).filter(Boolean).join("، ")||"—";
       const invoiceNos=Object.keys(v.alloc||{}).map(id=>(S.docs||[]).find(d=>String(d.id)===String(id))?.no||"").filter(Boolean).join("، ")||"—";
       const order=(S.po||[]).find(o=>String(o.id)===String(v.link));
       const related=v.link==="sales"?"مبيعات / عام":(order&&order.no)||"—";
-      const party=v.who||pn(v.pid)||"—";
-      return "<tr><td>"+esc(dfm(refDateValue(v)))+"</td><td dir=\"ltr\">"+esc(v.no||"—")+"</td><td>"+esc(v.title||"—")+"</td><td>"+esc(party)+"</td><td>"+esc(v.desc||"—")+"</td><td>"+esc(accountNames)+"</td><td class=\"factory-reference-amount\" dir=\"ltr\">"+f(v.total)+" <small>ج.م</small></td><td>"+esc(invoiceNos)+"</td><td>"+esc(related)+"</td><td>"+refVoucherActions(v)+"</td></tr>";
+      const party=v.who||pn(v.pid)||"—",searchText=referenceVoucherSearchText(v);
+      return "<tr data-factory-search-text=\""+esc(searchText)+"\"><td>"+esc(dfm(refDateValue(v)))+"</td><td dir=\"ltr\">"+esc(v.no||"—")+"</td><td>"+esc(v.title||"—")+"</td><td>"+esc(party)+"</td><td>"+esc(v.desc||"—")+"</td><td>"+esc(accountNames)+"</td><td class=\"factory-reference-amount\" dir=\"ltr\">"+f(v.total)+" <small>ج.م</small></td><td>"+esc(invoiceNos)+"</td><td>"+esc(related)+"</td><td>"+refVoucherActions(v)+"</td></tr>";
     }).join(""):"<tr><td colspan=\"10\" class=\"mu factory-reference-empty-cell\">لا توجد سندات مطابقة في الفترة المحددة</td></tr>";
     const actions=can("edit")?"<button type=\"button\" class=\"new\" onclick=\"vForm(&#39;"+dir+"&#39;)\">＋ "+(incoming?"سند قبض جديد":"سند دفع جديد")+"</button>":"";
     const title=incoming?"سندات القبض":"سندات الدفع";
@@ -263,7 +270,7 @@
     const key="d"+type,isSale=type==="sale"||type==="sret",isReturn=type==="sret"||type==="pret",isPay=type==="sale"||type==="pur";
     FL[key]=FL[key]||{};
     const date=row=>refDateKey(refDateValue(row));
-    const query=String(fv(key,"q")||"").trim();
+    const query=referenceSavedSearch(key);
     const filters=[["q","text","رقم المستند أو العميل / المورد أو الصنف / الكود"],["cat","sel","التبويب",[["all","كل الأنواع"],["mfg","تصنيع"],["sup","مشتريات"]]]];
     if(isPay)filters.push(["st","sel","حالة السداد",[["","كل الحالات"],["مسددة","مسددة"],["مسددة جزئيًا","مسددة جزئيًا"],["غير مسددة","غير مسددة"]]]);
     filters.push(["from","date","من تاريخ"],["to","date","إلى تاريخ"]);
@@ -277,16 +284,16 @@
     ).sort((a,b)=>date(b).localeCompare(date(a))||(Number(b.ts)||0)-(Number(a.ts)||0));
     const title=type==="sale"?"فواتير المبيعات":type==="sret"?"مرتجعات المبيعات":type==="pur"?"فواتير المشتريات":"مرتجعات المشتريات";
     const data=rows.length?rows.map(row=>{
-      const party=pn(row.pid)||row.who||"—",total=Number(row.total)||0,count=(row.lines||[]).length;
+      const party=pn(row.pid)||row.who||"—",total=Number(row.total)||0,count=(row.lines||[]).length,searchText=referenceInvoiceSearchText(row);
       const posted=(S.L||[]).some(l=>l.src==="doc"&&String(l.rid)===String(row.id));
       const status=isReturn?(posted?"مرحّل":(row.manager_read_only?"سجل مستورد":"غير مرحّل")):stOf(row);
       const statusLabel=status==="مسددة جزئيًا"?"جزئي":status;
       const statusClass=status==="مسددة"?"paid":status==="مسددة جزئيًا"?"partial":status==="غير مسددة"?"unpaid":posted?"posted":"unposted";
       if(isReturn){
-        return "<tr><td>"+esc(dfm(refDateValue(row)))+"</td><td dir=\"ltr\">"+esc(row.no||"—")+"</td><td dir=\"ltr\">"+refOriginalInvoiceCell(row)+"</td><td>"+esc(party)+"</td><td class=\"factory-reference-count\">"+count+"</td><td class=\"factory-reference-amount\" dir=\"ltr\">"+f(total)+" <small>ج.م</small></td><td><span class=\"factory-reference-status "+statusClass+"\">"+esc(statusLabel)+"</span></td><td>"+refInvoiceActions(row,type)+"</td></tr>";
+        return "<tr data-factory-search-text=\""+esc(searchText)+"\"><td>"+esc(dfm(refDateValue(row)))+"</td><td dir=\"ltr\">"+esc(row.no||"—")+"</td><td dir=\"ltr\">"+refOriginalInvoiceCell(row)+"</td><td>"+esc(party)+"</td><td class=\"factory-reference-count\">"+count+"</td><td class=\"factory-reference-amount\" dir=\"ltr\">"+f(total)+" <small>ج.م</small></td><td><span class=\"factory-reference-status "+statusClass+"\">"+esc(statusLabel)+"</span></td><td>"+refInvoiceActions(row,type)+"</td></tr>";
       }
       const paid=paidOf(row),remaining=remOf(row);
-      return "<tr><td>"+esc(dfm(refDateValue(row)))+"</td><td dir=\"ltr\">"+esc(row.no||"—")+"</td><td>"+esc(party)+"</td><td class=\"factory-reference-count\">"+count+"</td><td class=\"factory-reference-amount\" dir=\"ltr\">"+f(total)+" <small>ج.م</small></td><td class=\"factory-reference-amount\" dir=\"ltr\">"+(paid>.005?f(paid):"—")+" <small>"+(paid>.005?"ج.م":"")+"</small></td><td class=\"factory-reference-amount\" dir=\"ltr\">"+f(remaining)+" <small>ج.م</small></td><td><span class=\"factory-reference-status "+statusClass+"\">"+esc(statusLabel)+"</span></td><td>"+refInvoiceActions(row,type)+"</td></tr>";
+      return "<tr data-factory-search-text=\""+esc(searchText)+"\"><td>"+esc(dfm(refDateValue(row)))+"</td><td dir=\"ltr\">"+esc(row.no||"—")+"</td><td>"+esc(party)+"</td><td class=\"factory-reference-count\">"+count+"</td><td class=\"factory-reference-amount\" dir=\"ltr\">"+f(total)+" <small>ج.م</small></td><td class=\"factory-reference-amount\" dir=\"ltr\">"+(paid>.005?f(paid):"—")+" <small>"+(paid>.005?"ج.م":"")+"</small></td><td class=\"factory-reference-amount\" dir=\"ltr\">"+f(remaining)+" <small>ج.م</small></td><td><span class=\"factory-reference-status "+statusClass+"\">"+esc(statusLabel)+"</span></td><td>"+refInvoiceActions(row,type)+"</td></tr>";
     }).join(""):"<tr><td colspan=\""+(isReturn?8:9)+"\" class=\"mu factory-reference-empty-cell\">لا توجد مستندات مطابقة في الفترة المحددة</td></tr>";
     const headingAction=can("edit")?"<button type=\"button\" class=\"new\" onclick=\"docForm(&#39;"+type+"&#39;)\">＋ مستند جديد</button>":"";
     const headers=isReturn?
