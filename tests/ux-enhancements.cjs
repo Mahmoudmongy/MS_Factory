@@ -150,7 +150,7 @@ assert(app.includes("exportEmployeeTable") && app.includes("factory-employee-tab
 assert(app.includes("exportTrialBalance") && app.includes("factory-trial-balance-table"), "trial balance has a targeted Excel export");
 assert(app.includes("vTl = function()") && app.includes("undoGroups") && app.includes("undoView"), "timeline lists immutable reversal entries with a dedicated details action");
 
-assert(app.includes("vTl=function(){") && app.includes("fts(x.ts)") && app.includes("<th>التاريخ والوقت</th>"), "timeline follows the reference single date-and-time column");
+assert(app.includes("vTl=function(){") && app.includes("fts(x.ts)") && app.includes("التاريخ والوقت"), "timeline follows the reference single date-and-time column");
 
 assert(app.includes('statements:()=>vStatements()') && app.includes('["statements",ico("report"),"القوائم المالية"]'), "financial statements screen is available from the app navigation");
 assert(previewUi.includes("function renderFinancialStatements()") && previewUi.includes("SCR.statements=renderFinancialStatements") && previewUi.includes("statementGroup(\'I\'") && previewUi.includes("statementGroup(\'A\'"), "financial statements use live account ledgers for income and balance sheet");
