@@ -76,13 +76,21 @@ console.log('PASS employee templates, existing-account permission updates, and d
 assert(!auditTrail.includes("import { supabase } from './supabase.js'") && auditTrail.includes("import('./supabase.js')"), 'audit screen must defer Supabase initialization until opened');
 console.log('PASS audit UI defers Supabase initialization until opened');
 
+const activeBankStart = app.lastIndexOf('vBank=function(){');
+const activeBankEnd = app.indexOf('\nfunction factoryCoaChildren', activeBankStart);
+const activeBank = activeBankStart >= 0 && activeBankEnd > activeBankStart ? app.slice(activeBankStart, activeBankEnd) : '';
+const pdfStart = app.indexOf('async function mkPdf(){');
+const pdfEnd = app.indexOf('\nconst pdfName=', pdfStart);
+const pdfRenderer = pdfStart >= 0 && pdfEnd > pdfStart ? app.slice(pdfStart, pdfEnd) : '';
 const appPatchChecks = [
   [app.includes('addL = function') && app.includes('$("#un").value=""') && app.includes('$("#it").selectedIndex=0'), 'invoice add-row clears every field and resets item selection'],
   [app.includes('D.lines[') && app.includes('.price=Math.max(0,+this.value||0)'), 'sales and purchase invoice line prices are editable'],
   [auditTrail.includes('function auditBusinessSummary(row)') && auditTrail.includes('Movement details'), 'audit entries show readable business details with raw before/after snapshots'],
   [app.includes('vTl=function(){') && app.includes('query=fv(key,"q")') && app.includes('المستخدم أو الإجراء أو المرجع أو البيان'), 'timeline has a contains-search beside its date filters'],
   [app.includes('factory-table-count') && app.includes('factory-table-total') && app.includes('Default templates'), 'table counts, amount summaries and renamed column templates are enabled'],
-  [app.includes('vBank = function') && app.includes('toggleAccountTree'), 'cash and bank accounts render a collapsible hierarchy'],
+  [app.includes('vBank = function') && app.includes('toggleAccountTree'), 'cash and bank accounts retain the account-tree controls'],
+  [activeBank.includes('toggleBankTree(') && activeBank.includes('currencyBalances(') && activeBank.includes('factory-cash-movements') && activeBank.includes('directChildren(a.id)'), 'active cash screen shows collapsible parent totals and the live cash ledger without double-counting nested children'],
+  [pdfRenderer.includes('rowBreaks=') && pdfRenderer.includes('safeBoundary') && pdfRenderer.includes('wide?"277mm":"190mm"') && previewCss.includes('#pr.factory-print-document table{display:table'), 'invoice PDF uses a fitted A4 width and keeps table rows intact at page breaks'],
   [css.includes('position:sticky') && css.includes('overflow-wrap:anywhere'), 'table headings stay pinned and long text wraps']
 ];
 for (const [ok,label] of appPatchChecks) assert(ok,label);
