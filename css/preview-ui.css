@@ -563,3 +563,11 @@ button:disabled{opacity:.55;cursor:not-allowed}
  .factory-bank-totals{display:grid;grid-template-columns:1fr}
  .factory-bank-total-line,.factory-bank-total-equivalent{min-width:0}
 }
+
+
+/* The PDF renderer captures the on-screen document, so apply the same
+   fixed-width, wrapping rules before printing as well as in print media. */
+#pr.factory-print-document{box-sizing:border-box;min-width:0;max-width:100%;overflow:visible}
+#pr.factory-print-document table{display:table;width:100%;max-width:100%;table-layout:fixed;border-collapse:collapse;direction:rtl}
+#pr.factory-print-document th,#pr.factory-print-document td{white-space:normal;overflow-wrap:anywhere;word-break:normal;vertical-align:middle}
+#pr.factory-print-document img{max-width:100%;height:auto;object-fit:contain}
