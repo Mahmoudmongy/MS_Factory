@@ -604,7 +604,7 @@ function vBank(){
   const amount='<button type="button" class="factory-bank-balance-link" title="فتح حركة الحساب" aria-label="فتح حركة حساب '+label+'" onclick="drillAcct('+code+',\'\',\''+String(S.per.to||"").replace(/'/g,"&#39;")+'\')">'+balanceHtml(a)+'</button>';
   const row='<div class="factory-bank-account-row" style="--bank-depth:'+depth+'"><div class="factory-bank-account-name">'+arrow+'<span class="factory-bank-account-title">'+label+'<small>'+meta+'</small></span></div><div class="factory-bank-account-end">'+amount+edit+'</div></div>';
   if(!hasKids)return '<div class="factory-bank-node">'+row+'</div>';
-  return '<div class="factory-bank-node">'+row+'<div class="factory-bank-children" '+(closed?'hidden':'')+'>'+visibleKids.filter(eligible).map(ch=>renderNode(ch,depth+1)).join("")+'</div></div>';
+  return '<div class="factory-bank-node">'+row+'<div class="factory-bank-children" '+(closed?'hidden':'')+'>'+visibleKids.map(ch=>renderNode(ch,depth+1)).join("")+'</div></div>';
  };
  const cashIds=new Set(all.map(a=>String(a.id)));
  const dateValue=l=>String(l.d||(l.ts?lday(new Date(l.ts)):"")||"");
