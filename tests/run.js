@@ -762,7 +762,49 @@ ok('import detects new / duplicate-in-file / invalid / already-existing rows',JS
 await ev(()=>importGo());ok('import creates only the valid rows with opening stock; ledger balanced',await ev(()=>!!S.items.find(i=>i.sku=="IMP001")&&!S.items.find(i=>i.sku=="IMP003")&&!S.items.find(i=>i.sku=="IMP004")&&tq(S.items.find(i=>i.sku=="IMP001"))==30)&&await bal());
 /* ---------- templates ---------- */
 await ev(()=>{tplForm();$("#tk").value="sale";tplFill();$("#t_title").value="فاتورة ضريبية";ACT.querySelector('.t_c[value="unit"]').checked=false;tplPrev()});
-const templatePreviewCheck=await ev(()=>{const h=$("#tpv").innerHTML;return {title:h.includes("فاتورة ضريبية"),unitHidden:!h.includes("<th>الوحدة</th>"),excerpt:h.slice(0,900)}});ok('print-template preview reflects title and hidden column',templatePreviewCheck.title&&templatePreviewCheck.unitHidden,templatePreviewCheck);await ev(()=>closeTab(CUR,1));
+const templatePreviewCheck=await ev(()=>{const h=$("#tpv").innerHTML;return {title:h.includes("فاتورة ضريبية"),unitHidden:!h.includes("<th>الوحدة</th>"),excerpt:h.slice(0,900)}});ok('print-template preview reflects title and hidden column',templatePreviewCheck.title&&templatePreviewCheck.unitHidden,templatePreviewCheck);const pdfPaginationCheck=await ev(async()=>{
+ const previous=document.getElementById("pr"),parent=previous?.parentNode,next=previous?.nextSibling;
+ const oldHtml2Canvas=window.html2canvas,oldJspdf=window.jspdf,addedScripts=[];
+ const scriptUrls=["https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js","https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"];
+ try{
+  previous?.remove();
+  const doc=document.createElement("div");doc.id="pr";doc.className="factory-print-document";doc.dataset.printKind="sale";doc.dir="rtl";
+  doc.style.cssText="box-sizing:border-box;background:#fff;color:#000;width:277mm;max-width:277mm;min-width:0;margin:0;padding:0;overflow:visible";
+  const header=document.createElement("div");header.textContent="فاتورة اختبار كاملة - رأس الفاتورة";header.style.height="70px";doc.appendChild(header);
+  const table=document.createElement("table");table.style.cssText="width:100%;border-collapse:collapse;table-layout:fixed";
+  const head=document.createElement("thead");head.innerHTML="<tr><th>الصنف</th><th>الكمية</th><th>الإجمالي</th></tr>";table.appendChild(head);
+  const body=document.createElement("tbody");
+  for(let i=1;i<=48;i++){const row=document.createElement("tr");row.style.height="150px";row.innerHTML="<td>صنف اختبار رقم "+i+"</td><td>2</td><td>500.00</td>";body.appendChild(row);}
+  table.appendChild(body);doc.appendChild(table);
+  const footer=document.createElement("div");footer.textContent="نهاية الفاتورة - إجمالي الفاتورة والختم";footer.style.height="80px";doc.appendChild(footer);document.body.appendChild(doc);
+  window.html2canvas=async node=>{
+   const capture=document.createElement("canvas"),r=node.getBoundingClientRect();
+   capture.width=Math.ceil(Math.max(node.scrollWidth,node.clientWidth)*2);
+   capture.height=Math.ceil(Math.max(node.scrollHeight,node.clientHeight)*2);
+   capture.getContext("2d").fillRect(0,0,capture.width,capture.height);
+   window.__pdfPaginationCapture={width:capture.width,height:capture.height,rootWidth:r.width,rootTop:r.top};
+   return capture;
+  };
+  class PdfProbe{constructor(){this.images=[];this.pageCount=1;}addPage(){this.pageCount++;}addImage(_data,_kind,_x,_y,width,height){this.images.push({width,height});}}
+  window.jspdf={jsPDF:PdfProbe};
+  for(const url of scriptUrls){if(!document.querySelector('script[src="'+url+'"]')){const script=document.createElement("script");script.src=url;document.head.appendChild(script);addedScripts.push(script);}}
+  const pdf=await mkPdf(),capture=window.__pdfPaginationCapture,W=297;
+  const root=doc.getBoundingClientRect(),rowTops=[...doc.querySelectorAll("tr")].map(row=>Math.round((row.getBoundingClientRect().top-root.top)*(capture.width/root.width))).filter(y=>y>0&&y<capture.height);
+  let covered=0;const boundaries=[];
+  pdf.images.forEach((image,index)=>{covered+=image.height*capture.width/W;if(index<pdf.images.length-1)boundaries.push(covered);});
+  const complete=Math.abs(covered-capture.height)<=2;
+  const rowsIntact=boundaries.every(point=>rowTops.some(rowTop=>Math.abs(rowTop-point)<=2));
+  return {pages:pdf.pageCount,complete,rowsIntact,capturedHeight:capture.height,coveredHeight:Math.round(covered),safeBoundaries:boundaries.length};
+ }finally{
+  document.getElementById("pr")?.remove();
+  if(previous&&parent){if(next&&next.parentNode===parent)parent.insertBefore(previous,next);else parent.appendChild(previous);}
+  if(oldHtml2Canvas===undefined)delete window.html2canvas;else window.html2canvas=oldHtml2Canvas;
+  if(oldJspdf===undefined)delete window.jspdf;else window.jspdf=oldJspdf;
+  addedScripts.forEach(script=>script.remove());delete window.__pdfPaginationCapture;
+ }
+});
+ok('PDF export paginates a long invoice completely and breaks only between table rows',pdfPaginationCheck.pages>=2&&pdfPaginationCheck.complete&&pdfPaginationCheck.rowsIntact,pdfPaginationCheck);
+await ev(()=>closeTab(CUR,1));
 /* ---------- language ---------- */
 await ev(()=>{PRF.lang='en';applyPref()});const left=[];for(const s of ['home','bank','rc','py','cust','supp','sale','sret','pur','pret','stock','prod','coa','je','tl','emp','rep','ai','set','statements']){await ev(x=>go(x),s);await p.waitForTimeout(40);const t=await ev(x=>{const out=[],w=document.createTreeWalker(document.body,NodeFilter.SHOW_TEXT);let n;while(n=w.nextNode()){if(n.parentElement&&n.parentElement.tagName=='SCRIPT')continue;if(/[\u0600-\u06FF]/.test(n.nodeValue)&&n.nodeValue.trim()!='ع')out.push(n.nodeValue.trim())}return out},s);t.forEach(x=>{if(!/محلات|عميل قطاعي|اختبار|استيراد|النسيج|جيرسي|زراير|تيشيرت|جاكيت|بنطلون|قماش|أحمر|أسود|جهة|الخزنة بالدولار|موظف/.test(x))left.push(s+': '+x)})}
 ok('English mode: no untranslated UI text on the 20 main screens',left.length==0,left.slice(0,12));await ev(()=>{PRF.lang='ar';applyPref()});
