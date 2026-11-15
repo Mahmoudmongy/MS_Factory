@@ -592,7 +592,7 @@ function vBank(){
   return '<span class="factory-bank-balances">'+shown.map(([c,v])=>'<b dir="ltr">'+f(v)+' '+(c==="EGP"?"ج.م":factoryEsc(c))+'</b>').join('')+'</span>';
  };
  const renderNode=(a,depth)=>{
-  const kids=children(a).filter(eligible),allKids=children(a),hasKids=allKids.length>0;
+  const allKids=children(a),visibleKids=allKids.filter(ch=>(!currency||hasCurrency(ch,currency))&&(!query||ownMatch(a)||hasMatch(ch))),hasKids=visibleKids.length>0;
   const code=JSON.stringify(String(a.id)).replace(/&/g,"&amp;").replace(/"/g,"&quot;");
   const label=factoryEsc((a.code?a.code+" — ":"")+accountLabel(a));
   const saved=localStorage.getItem("factory-bank-collapsed:"+String(a.id));
@@ -604,7 +604,7 @@ function vBank(){
   const amount='<button type="button" class="factory-bank-balance-link" title="فتح حركة الحساب" aria-label="فتح حركة حساب '+label+'" onclick="drillAcct('+code+',\'\',\''+String(S.per.to||"").replace(/'/g,"&#39;")+'\')">'+balanceHtml(a)+'</button>';
   const row='<div class="factory-bank-account-row" style="--bank-depth:'+depth+'"><div class="factory-bank-account-name">'+arrow+'<span class="factory-bank-account-title">'+label+'<small>'+meta+'</small></span></div><div class="factory-bank-account-end">'+amount+edit+'</div></div>';
   if(!hasKids)return '<div class="factory-bank-node">'+row+'</div>';
-  return '<div class="factory-bank-node">'+row+'<div class="factory-bank-children" '+(closed?'hidden':'')+'>'+kids.map(ch=>renderNode(ch,depth+1)).join("")+'</div></div>';
+  return '<div class="factory-bank-node">'+row+'<div class="factory-bank-children" '+(closed?'hidden':'')+'>'+visibleKids.filter(eligible).map(ch=>renderNode(ch,depth+1)).join("")+'</div></div>';
  };
  const cashIds=new Set(all.map(a=>String(a.id)));
  const dateValue=l=>String(l.d||(l.ts?lday(new Date(l.ts)):"")||"");
@@ -627,7 +627,7 @@ function vBank(){
  movementRows.reverse();
  const totalByCurrency=new Map();
  roots.forEach(root=>treeTotals(root).forEach((value,c)=>{if(!currency||currency===c)totalByCurrency.set(c,(totalByCurrency.get(c)||0)+value);}));
- const totalEgp=all.reduce((sum,a)=>sum+bal(a.id,"",S.per.to),0);
+ const totalEgp=roots.reduce((sum,a)=>sum+treeEgp(a),0);
  const movementHtml=movementRows.length?movementRows.map(({l,d,account,balance})=>{
   const code=JSON.stringify(String(account.id)).replace(/&/g,"&amp;").replace(/"/g,"&quot;");
   return '<tr><td>'+factoryEsc(dfm(d))+'</td><td dir="ltr">'+factoryEsc(l.ref||"—")+'</td><td>'+factoryEsc(accountLabel(account))+'</td><td>'+factoryEsc(l.desc||"—")+'</td><td class="factory-ledger-number">'+(Number(l.dr||0)>.005?f(l.dr):"—")+'</td><td class="factory-ledger-number">'+(Number(l.cr||0)>.005?f(l.cr):"—")+'</td><td><button type="button" class="g factory-bank-movement-balance" onclick="drillAcct('+code+')">'+f(balance)+' ج.م</button></td></tr>';
