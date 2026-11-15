@@ -171,7 +171,7 @@ assert(app.includes('onclick="printAllStockLabels()"') && app.includes('onclick=
 assert(previewCss.includes(".factory-stock-filter-main") && previewCss.includes(".factory-stock-table-card") && previewCss.includes("@media(max-width:860px){.factory-stock-filter-main"), "inventory filters and table adapt to mobile and dark themes");
 
 
-assert(app.includes("factory-universal-table-scroll") && app.includes("position:sticky"), "every rendered data table receives a scroll container with a sticky header");
+assert(app.includes("factory-universal-table-scroll") && previewCss.includes("position:sticky"), "every rendered data table receives a scroll container with a sticky header");
 assert(previewCss.includes(".factory-table-scroll thead th") && previewCss.includes("scroll-behavior:smooth"), "all table screens support sticky headers and smooth touch scrolling");
 assert(previewUi.includes('<table class="l factory-summary-mini-table">') && !previewUi.includes("factory-summary-settings-toggle"), "summary activity table uses the shared table style and its customization control is moved out of the dashboard");
 assert(previewUi.includes("تخصيص الملخص") && previewUi.includes("function extendSettings()"), "summary customization remains available inside settings");
