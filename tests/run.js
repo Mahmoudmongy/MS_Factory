@@ -126,7 +126,7 @@ ok('public PWA icons have valid PNG signatures and declared dimensions',man.icon
 
 ok('mobile header reserves a wider account selector and adapts the icon columns',css.includes('minmax(92px,116px)')&&css.includes('minmax(86px,98px)')&&css.includes('#top #who{width:100%'));
 ok('mobile toolbar uses a two-row named grid with exit, user and theme in the requested order',css.includes('grid-template-areas:"menu back forward title title title" "net logout who who theme theme"')&&css.includes('#top #ttl{grid-area:title')&&css.includes('#top #logout-btn{grid-area:logout'));
-ok('settings is rendered in the scrollable sidebar navigation',app.includes('class="sb-nav-scroll"')&&app.includes('U(items,renderLink)')&&!app.includes('class="sb-footer"')&&css.includes('#sb .sb-nav-scroll{flex:1 1 auto;min-height:0;overflow-y:auto'));
+ok('settings stays in the scrollable sidebar and logout is pinned in the sidebar footer',app.includes('class="sb-nav-scroll"')&&app.includes('U(items,renderLink)')&&app.includes('class="sb-footer"')&&app.includes('class="sb-logout"')&&css.includes('#sb .sb-nav-scroll{flex:1 1 auto;min-height:0;overflow-y:auto'));
 
 ok('mobile settings link remains reachable above the bottom safe area',css.includes('#sb a[onclick*="\'set\'"]{position:sticky')&&css.includes('padding-bottom:calc(76px + env(safe-area-inset-bottom'));
 ok('company name and logo are centered in the mobile navigation drawer',css.includes('#sb .br{text-align:center!important;display:flex!important')&&css.includes('align-items:center;justify-content:center'));
@@ -540,6 +540,8 @@ ok('unlinked-party warning and review controls have complete English translation
 const scr=await ev(()=>allowed().map(t=>t[0]));for(const s of scr){await ev(x=>go(x),s)}ok(`all ${scr.length} screens render without errors`,errs.length==0,errs.slice(0,2));
 const desktopToolbarOrder=await p.evaluate(()=>{const x=s=>document.querySelector(s)?.getBoundingClientRect().x??-1;return {net:x('#net'),logout:x('#logout-btn'),user:x('#who'),theme:x('#thb'),scroll:document.documentElement.scrollWidth}});
 ok('desktop toolbar places exit, user and theme after connection status without overflow',desktopToolbarOrder.net>desktopToolbarOrder.logout&&desktopToolbarOrder.logout>desktopToolbarOrder.user&&desktopToolbarOrder.user>desktopToolbarOrder.theme&&desktopToolbarOrder.scroll<=1281,desktopToolbarOrder);
+const sidebarLogout=await p.evaluate(()=>{const b=document.querySelector('#sb .sb-logout');let calls=0;const original=window.signOutNow;window.signOutNow=()=>{calls++};b?.click();window.signOutNow=original;return {exists:!!b,label:b?.getAttribute('aria-label'),calls};});
+ok('sidebar exit button calls the existing sign-out flow',sidebarLogout.exists&&sidebarLogout.label==='خروج'&&sidebarLogout.calls===1,sidebarLogout);
 const previewUiRuntime=await ev(()=>{
  go('home');
  const top=[...document.querySelectorAll('#m .factory-kpi>span')].map(x=>x.textContent.trim());
@@ -565,12 +567,19 @@ const previewUiRuntime=await ev(()=>{
  go('statements');
  document.querySelector('[data-fs-kind="balance"]')?.click();
  const statement=document.querySelector('#m .factory-fin-check')&&document.querySelector('#m .factory-fin-group')&&document.querySelector('#m').textContent.includes('قائمة المركز المالي');
+ document.querySelector('[data-fs-kind="income"]')?.click();
+ const from=document.querySelector('#factory-fs-from'),to=document.querySelector('#factory-fs-to');
+ from.value='2026-01-01';from.dispatchEvent(new Event('input',{bubbles:true}));from.dispatchEvent(new Event('change',{bubbles:true}));
+ const autoUpdated=document.querySelector('#m .factory-fin-heading')?.textContent.includes('01/01/2026');
+ const headingBeforeInvalid=document.querySelector('#m .factory-fin-heading')?.textContent||'';
+ to.value='2025-12-31';to.dispatchEvent(new Event('input',{bubbles:true}));to.dispatchEvent(new Event('change',{bubbles:true}));
+ const invalidRejected=!!headingBeforeInvalid&&document.querySelector('#m .factory-fin-heading')?.textContent===headingBeforeInvalid;
  go('home');
  const restore=document.querySelector('[data-summary-place="customers"]');if(restore){restore.value='top';restore.dispatchEvent(new Event('change',{bubbles:true}));}
- return {defaultOrder,dateSort,chartCollapsed,chartExpanded,preferenceSaved,moved,numbersHidden,themeOpened,blueApplied,mobilePreview,statement};
+ return {defaultOrder,dateSort,chartCollapsed,chartExpanded,preferenceSaved,moved,numbersHidden,themeOpened,blueApplied,mobilePreview,statement,autoUpdated,invalidRejected};
 });
 ok('preview UI: summary order, saved layout, hide amounts, theme palette, mobile preview and financial statements are functional',
- previewUiRuntime.defaultOrder&&previewUiRuntime.dateSort&&previewUiRuntime.chartCollapsed&&previewUiRuntime.chartExpanded&&previewUiRuntime.preferenceSaved&&previewUiRuntime.moved&&previewUiRuntime.numbersHidden&&previewUiRuntime.themeOpened&&previewUiRuntime.blueApplied&&previewUiRuntime.mobilePreview&&previewUiRuntime.statement,previewUiRuntime);
+ previewUiRuntime.defaultOrder&&previewUiRuntime.dateSort&&previewUiRuntime.chartCollapsed&&previewUiRuntime.chartExpanded&&previewUiRuntime.preferenceSaved&&previewUiRuntime.moved&&previewUiRuntime.numbersHidden&&previewUiRuntime.themeOpened&&previewUiRuntime.blueApplied&&previewUiRuntime.mobilePreview&&previewUiRuntime.statement&&previewUiRuntime.autoUpdated&&previewUiRuntime.invalidRejected,previewUiRuntime);
 const tableIconRuntime=await ev(()=>{const wrap=document.createElement('div');wrap.className='factory-table-scroll';wrap.style.width='420px';const table=document.createElement('table');table.className='l';table.innerHTML='<thead><tr><th>التاريخ</th><th>البيان</th></tr></thead><tbody>'+Array.from({length:9},(_,i)=>'<tr><td>2026-11-'+String(i+1).padStart(2,'0')+'</td><td>'+'نص طويل لاختبار التفاف الكلام داخل العمود دون تغيير عرضه '.repeat(3)+'</td></tr>').join('')+'</tbody>';wrap.appendChild(table);ACT.appendChild(wrap);factoryApplyFixedTableLayout(table);const box=document.createElement('div');box.innerHTML='<button>مشاركة ملف PDF</button><a href="#">عرض</a>';ACT.appendChild(box);factoryIconizeActions(box);factoryIconizeActionLinks(box);const result={fixed:table.style.tableLayout==='fixed',cols:table.querySelectorAll('colgroup col').length===2,sticky:getComputedStyle(table.querySelector('th')).position==='sticky',scrollHeight:!!wrap.style.maxHeight,wrapped:table.querySelector('td.factory-very-long-cell')!==null,icons:box.querySelectorAll('svg').length===2,labels:!!box.querySelector('button[aria-label="مشاركة ملف PDF"]')&&!!box.querySelector('a[aria-label="عرض"]')};wrap.remove();box.remove();return result});
 ok('tables keep fixed columns, sticky headers, compact icon actions and wrapped long text',Object.values(tableIconRuntime).every(Boolean),tableIconRuntime);
 
@@ -768,6 +777,8 @@ await c2.setOffline(false);await c2.close();
 /* ---------- D. mobile ---------- */
 const mc=await browser.newContext({viewport:{width:390,height:844},isMobile:true,hasTouch:true}),m=await mc.newPage(),merr=[];m.on('pageerror',e=>merr.push(e.message));await m.goto(BASE);await m.waitForTimeout(400);
 const mob=await m.evaluate(()=>({pos:getComputedStyle(document.querySelector('#sb')).position,bg:getComputedStyle(document.querySelector('#bg')).display,over:document.documentElement.scrollWidth<=innerWidth+1}));
+const mobileSidebarLogout=await m.evaluate(()=>{const b=document.querySelector('#sb .sb-logout'),r=b?.getBoundingClientRect();return {exists:!!b,width:r?.width||0,height:r?.height||0,visible:!!r&&r.height>0&&r.bottom<=innerHeight+1};});
+ok('mobile sidebar keeps the sign-out action reachable in its footer',mobileSidebarLogout.exists&&mobileSidebarLogout.width>0&&mobileSidebarLogout.height>=40,mobileSidebarLogout);
 const toolbarRects=await m.evaluate(()=>{const sels=['#bg','#ttl','#net','#mobile-preview-btn','#logout-btn','#who','#factory-theme-open','#thb'];const boxes=sels.map(s=>{const e=document.querySelector(s),r=e?.getBoundingClientRect();return {s,visible:!!e&&!!r&&r.width>0&&r.height>0,x:r?.x||0,y:r?.y||0,right:r?.right||0,bottom:r?.bottom||0}}).filter(x=>x.visible);const overlaps=[];for(let i=0;i<boxes.length;i++)for(let j=i+1;j<boxes.length;j++){const a=boxes[i],b=boxes[j];if(Math.min(a.right,b.right)-Math.max(a.x,b.x)>1&&Math.min(a.bottom,b.bottom)-Math.max(a.y,b.y)>1)overlaps.push([a.s,b.s]);}return {boxes,overlaps,scroll:document.documentElement.scrollWidth<=innerWidth+1};});
 ok('mobile toolbar controls have separate visible hit areas without overlap or horizontal overflow',toolbarRects.boxes.length===8&&toolbarRects.overlaps.length===0&&toolbarRects.scroll&&toolbarRects.boxes.find(x=>x.s==='#mobile-preview-btn')?.right-toolbarRects.boxes.find(x=>x.s==='#mobile-preview-btn')?.x>=28,toolbarRects);
 
