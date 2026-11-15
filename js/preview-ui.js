@@ -393,6 +393,7 @@
     if(e.target.closest('[data-fs-apply]')){applyFinancialPeriod();return;}
   }
   document.addEventListener('click',onUiClick);
+  document.addEventListener('keydown',event=>{const row=event.target.closest?.('.factory-recent-row[role="button"]');if(row&&(event.key==='Enter'||event.key===' ')){event.preventDefault();openRef(row.dataset.openSource,row.dataset.openId);}});
   document.addEventListener('input',e=>{
     if(e.target?.id==='factory-fs-from'){const end=document.getElementById('factory-fs-to');if(end)end.min=e.target.value||'';}
     if(e.target?.id==='factory-fs-to'){const start=document.getElementById('factory-fs-from');if(start)start.max=e.target.value||'';}

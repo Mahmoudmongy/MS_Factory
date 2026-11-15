@@ -475,3 +475,20 @@ button:disabled{opacity:.55;cursor:not-allowed}
  .factory-reference-amount-actions,.factory-reference-status-actions{gap:4px}
  .factory-reference-amount-actions .factory-row-action,.factory-reference-status-actions .factory-row-action{width:26px;min-width:26px;height:26px;min-height:26px!important}
 }
+
+.factory-partner-status{display:inline-flex;align-items:center;padding:3px 8px;border:1px solid var(--bd);border-radius:999px;font-size:12px;color:var(--tx);background:var(--card);white-space:nowrap}
+.factory-partner-status.active{color:#15803d;border-color:#86c79c;background:color-mix(in srgb,#16a34a 10%,var(--card))}
+.factory-partner-status.inactive{color:var(--rd);border-color:color-mix(in srgb,var(--rd) 40%,var(--bd));background:color-mix(in srgb,var(--rd) 9%,var(--card))}
+.factory-ledger-number{font-variant-numeric:tabular-nums;white-space:nowrap}
+.factory-cash-tree .factory-cash-totals{padding:10px 12px;border-top:1px solid var(--bd);color:var(--tx)}
+.factory-cash-movements{margin-top:12px}
+.factory-production-detail{margin-top:12px;border-color:color-mix(in srgb,var(--pr) 28%,var(--bd))}
+.factory-production-actions{padding-top:10px}
+.factory-trial-balance{margin-top:14px}
+.factory-trial-totals{display:flex;flex-wrap:wrap;gap:12px;align-items:center;padding-top:10px}
+.factory-coa-section{margin-bottom:12px}
+.factory-coa-section h3{font-size:16px;margin:8px 2px}
+.factory-custom-filtered{max-width:100%}
+@media(max-width:860px){.factory-trial-totals{align-items:flex-start;flex-direction:column}.factory-production-actions button{flex:1 1 auto}}
+:root[data-theme="dark"] .factory-partner-status.active{color:#86efac}
+:root[data-theme="dark"] .factory-partner-status.inactive{color:#fca5a5}
