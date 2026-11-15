@@ -93,6 +93,7 @@ jobs:
       - name: Validate backup and encryption configuration
         env:
           SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+          EXPECTED_PRODUCTION_PROJECT_REF: amtorqmzctshfzaoiovz
           AGE_RECIPIENT: age1pge6k5nwg7pyz0ztp3gzrhp8h5g37dch2km2rr9sw88aqqr25dsstg643r
         run: |
           set -euo pipefail
@@ -103,6 +104,18 @@ jobs:
             fi
           done
           case "$AGE_RECIPIENT" in age1*) ;; *) echo "::error::AGE_RECIPIENT is not a valid age public recipient"; exit 1;; esac
+          python3 - "$SUPABASE_DB_URL" "$EXPECTED_PRODUCTION_PROJECT_REF" <<'PY'
+          import sys
+          from urllib.parse import urlparse, unquote
+          parsed = urlparse(sys.argv[1])
+          expected = sys.argv[2]
+          host = parsed.hostname or ""
+          username = unquote(parsed.username or "")
+          if expected not in host and expected not in username:
+              print("::error::SUPABASE_DB_URL does not identify the current production project; refusing export.")
+              sys.exit(1)
+          print("Database connection target matches the pinned production project reference.")
+          PY
 
       - name: Install backup tools
         run: |
