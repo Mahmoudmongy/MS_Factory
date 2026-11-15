@@ -122,6 +122,6 @@ assert(app.includes('"is-paid"') && app.includes('"is-partial"') && app.includes
 assert(app.includes("عدد الأصناف") && app.includes("الفاتورة الأصلية"), "invoice and return tables must show item count and original invoice");
 assert(app.includes("factory-row-actions") && app.includes('onclick="vPrint(') && app.includes('onclick="inv('), "voucher and invoice actions must be wired");
 assert(app.includes("تعذر تحديد أبعاد المستند للطباعة") && app.includes("allowTaint:false"), "PDF capture must validate and constrain document dimensions");
-assert(css.includes("#pr.factory-print-document table") && css.includes(".factory-status-chip.is-unpaid"), "print layout and status colors must be styled");
+assert(previewCss.includes("#pr.factory-print-document table") && previewCss.includes(".factory-status-chip.is-unpaid"), "print layout and status colors must be styled");
 
 console.log("PASS reference-aligned vouchers/invoices, connected actions, original invoice links and adaptive A4 PDF");
