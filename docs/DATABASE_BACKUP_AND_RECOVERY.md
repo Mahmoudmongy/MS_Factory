@@ -14,6 +14,18 @@ The encrypted backup workflow now targets the dedicated Backblaze B2 bucket, not
 
 No production backup has been uploaded and no restore drill has been completed yet.
 
+## QA restore-target compatibility review — 2026-11-15
+
+The existing QA project is not yet a schema-equivalent restore target for the currently listed production project:
+
+- Production: 32 public tables and 38 recorded migrations.
+- QA: 15 public tables and 37 recorded migrations.
+- QA is missing 17 production tables, including manager ledger, journal, voucher-line, inventory-cost, inter-account-transfer, production-material/expense and invoice-source-line tables.
+- The migration histories also differ by migration names/versions. Do not restore a production archive into this existing QA project until its schema and migration history are reconciled, or a new disposable QA project is prepared from the current production migration set.
+- Current QA business tables are empty, but the project already has a profile/Auth user and applied migrations; it is not a pristine empty database.
+
+No schema changes or restore were performed during this review.
+
 ## Backup design
 
 1. GitHub Actions runs daily at 01:35 UTC. Manual runs can perform a storage preflight without touching Supabase data.
