@@ -1519,6 +1519,15 @@ vStock=function(){
  return ph(N.stock,(can("edit")?'<button type="button" class="g" onclick="recalc()">إعادة احتساب المخزون</button><button type="button" class="g" onclick="woForm()">تسجيل هالك</button><button type="button" class="g" onclick="wForm()">+ مخزن فرعي</button><button type="button" class="new" onclick="itemForm(0)">+ صنف جديد</button>':'')+'<button type="button" class="g" onclick="printAllStockLabels()">طباعة ملصقات الباركود</button><button type="button" class="g" onclick="stockScanOpen()">مسح باركود</button><button type="button" class="g" onclick="stockMovementChooser()">عرض حركة الصنف</button>')+filter+
  '<section class="card factory-stock-table-card"><div class="factory-panel-head"><b>رصيد المخزون</b><span>يظهر المخزن الرئيسي والفرعي الفعليان</span></div><div class="factory-table-scroll"><table class="l factory-custom-filtered"><thead><tr><th>الصنف</th><th>المخزن الرئيسي</th><th>المخزن الفرعي</th><th>الوحدة</th><th>الكمية</th><th>تكلفة الوحدة</th><th>قيمة المخزون</th><th>الإجراءات</th></tr></thead><tbody>'+(rows||'<tr><td colspan="8" class="mu">لا توجد أصناف مطابقة لخيارات البحث</td></tr>')+'</tbody><tfoot><tr><th colspan="6">إجمالي قيمة المخزون</th><th>'+f(items.reduce((sum,item)=>sum+value(item),0))+'</th><th></th></tr></tfoot></table></div></section>';
 };
+Object.assign(EN,{
+ "تسجيل هالك":"Record inventory write-off","+ صنف جديد":"+ New item","بحث في الصنف أو الكود":"Search item or code",
+ "اسم الصنف أو الكود أو الباركود":"Item name, code or barcode","فلاتر إضافية (سعر الشراء والكمية)":"Additional filters (purchase price and quantity)",
+ "سعر الشراء من":"Purchase price from","سعر الشراء إلى":"Purchase price to","الكمية من":"Quantity from","الكمية إلى":"Quantity to",
+ "رصيد المخزون":"Inventory balance","يظهر المخزن الرئيسي والفرعي الفعليان":"Shows actual main and sub-warehouses",
+ "المخزن الرئيسي":"Main warehouse","المخزن الفرعي":"Sub-warehouse","تكلفة الوحدة":"Unit cost","قيمة المخزون":"Inventory value",
+ "إجمالي قيمة المخزون":"Total inventory value","عرض توزيع المخزون":"View stock distribution","عرض حركة الصنف":"View item movements",
+ "تعديل الصنف":"Edit item","إعادة احتساب المخزون":"Recalculate inventory","طباعة ملصقات الباركود":"Print barcode labels","مسح باركود":"Scan barcode"
+});
 function printAllStockLabels(){
  const labelsToPrint=[];
  (S.items||[]).forEach(item=>{const variants=Object.keys(item.st||{});if(!variants.length)variants.push("-");variants.forEach(variant=>{const qty=Number((item.st||{})[variant])||0;labelsToPrint.push({c:codeFor(item.id,variant),t:item.name,s:[item.model,variant!=="-"?variant:"",qf(qty)+" "+(item.unit||"وحدة")].filter(Boolean).join(" · ")});});});
