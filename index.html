@@ -131,6 +131,7 @@ window.__factoryAuthPromise = (async function bootstrapFactoryApp() {
   }catch(_){}
  }
  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',applyCachedFactoryBrand,{once:true});else applyCachedFactoryBrand();
+ window.addEventListener('factory-database-ready',applyCachedFactoryBrand);
 })();
 </script>
 
