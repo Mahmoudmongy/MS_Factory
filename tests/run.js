@@ -89,7 +89,7 @@ const names=[...app.matchAll(/^(?:async )?function ([A-Za-z0-9_$]+)\(/gm)].map(m
 ok('app.js has no duplicate top-level function definitions',dup.length==0,dup);
 ok('customer/supplier names open details and edit stays permission-gated inside details',app.includes('partyView(${p.id})')&&app.includes('pForm(${p.c?1:0},${id})')&&app.includes('can("edit")'));
 ok('customer and supplier screens expose unlinked historical invoices and vouchers for manual review without auto-linking',app.includes('function partnerReferenceExists')&&app.includes('function unlinkedPartyRows')&&app.includes('unlinkedPartyReview()+')&&app.includes('لم يتم ربطها تلقائياً')&&app.includes('فتح لربط الطرف'));
-ok('customer and supplier lists sort balances high-to-low with an alphabetical tie-break',app.includes('.sort((a,b)=>Math.abs(pbal(b.id))-Math.abs(pbal(a.id))||a.name.localeCompare(b.name,"ar"))'));
+ok('customer and supplier lists follow the preview reference alphabetical order',app.includes('.sort((a,b)=>a.name.localeCompare(b.name,"ar"))'));
 ok('partner edit preserves the stable record ID and updates the existing object',app.includes('function saveP(id)')&&app.includes('if(old)Object.assign(old,data)'));
 const stmtStart=app.indexOf('function partnerStatementRows(pid)'),stmtEnd=app.indexOf('function sampleHtml(k)',stmtStart),stmtCode=stmtStart>=0&&stmtEnd>stmtStart?app.slice(stmtStart,stmtEnd):'';
 ok('partner statements combine double-entry ledger lines into readable transaction rows with a running balance',stmtCode.includes('const groups=new Map()')&&stmtCode.includes('<th>نوع الحركة</th>')&&stmtCode.includes('الرصيد النهائي:')&&!stmtCode.includes('<th>مدين</th>')&&!stmtCode.includes('<th>دائن</th>'));
