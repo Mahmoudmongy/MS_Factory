@@ -865,38 +865,33 @@ async function mkPdf(){
  const oldStyle={width:el.style.width,maxWidth:el.style.maxWidth,boxSizing:el.style.boxSizing,overflow:el.style.overflow};
  el.style.width=wide?"277mm":"190mm";el.style.maxWidth=wide?"277mm":"190mm";el.style.boxSizing="border-box";el.style.overflow="visible";
  await new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)));
- let capture;
+ let capture,rootBounds;
  try{
   const captureWidth=Math.ceil(Math.max(el.scrollWidth||0,el.clientWidth||0));
-  if(!captureWidth||!el.getBoundingClientRect().height)throw new Error("تعذر تحديد أبعاد المستند للطباعة");
+  rootBounds=el.getBoundingClientRect();
+  if(!captureWidth||!rootBounds.height)throw new Error("تعذر تحديد أبعاد المستند للطباعة");
   capture=await html2canvas(el,{scale:2,backgroundColor:"#ffffff",width:captureWidth,windowWidth:captureWidth,scrollX:0,scrollY:0,useCORS:true,logging:false,allowTaint:false});
  }finally{el.style.width=oldStyle.width;el.style.maxWidth=oldStyle.maxWidth;el.style.boxSizing=oldStyle.boxSizing;el.style.overflow=oldStyle.overflow;}
- const {jsPDF}=window.jspdf,landscape=wide||capture.width/capture.height>1.1,W=landscape?297:210,H=landscape?210:297,pdf=new jsPDF(landscape?"l":"p","mm","a4"),pageH=Math.floor(capture.width*H/W);
+ const {jsPDF}=window.jspdf,landscape=wide||capture.width/capture.height>1.1,W=landscape?297:210,H=landscape?210:297;
+ const pdf=new jsPDF(landscape?"l":"p","mm","a4"),pageH=Math.floor(capture.width*H/W);
+ const scale=capture.width/Math.max(1,rootBounds.width);
+ const rowBreaks=[...el.querySelectorAll("tr")].map(row=>Math.round((row.getBoundingClientRect().top-rootBounds.top)*scale)).filter(y=>Number.isFinite(y)&&y>0&&y<capture.height).sort((a,b)=>a-b);
  let y=0,first=true;
  while(y<capture.height){
-  const page=document.createElement("canvas");page.width=capture.width;page.height=Math.min(pageH,capture.height-y);
-  page.getContext("2d").drawImage(capture,0,y,capture.width,page.height,0,0,capture.width,page.height);
+  let end=Math.min(y+pageH,capture.height);
+  if(end<capture.height){
+   const safeBoundary=rowBreaks.filter(point=>point>y+160&&point<=end).pop();
+   if(safeBoundary)end=safeBoundary;
+  }
+  if(end<=y)end=Math.min(y+pageH,capture.height);
+  const sliceHeight=end-y,page=document.createElement("canvas");
+  page.width=capture.width;page.height=sliceHeight;
+  page.getContext("2d").drawImage(capture,0,y,capture.width,sliceHeight,0,0,capture.width,sliceHeight);
   if(!first)pdf.addPage();
-  pdf.addImage(page.toDataURL("image/jpeg",.94),"JPEG",0,0,W,page.height*W/capture.width);
-  first=false;y+=pageH;
+  pdf.addImage(page.toDataURL("image/jpeg",.94),"JPEG",0,0,W,sliceHeight*W/capture.width);
+  first=false;y=end;
  }
  return pdf;
-}
-async function sendWaPdf(){
-  try{
-    const pdf=await mkPdf();
-    const blob=pdf.output('blob');
-    const file=new File([blob], pdfName(), {type:'application/pdf'});
-    if(navigator.canShare && navigator.canShare({files:[file]})){
-      await navigator.share({files:[file], title: CUR.title||"فاتورة", text: "فاتورة من "+S.name});
-      toast("تم تجهيز PDF للمشاركة عبر واتساب");
-      return;
-    }
-    const url=URL.createObjectURL(blob);
-    const a=document.createElement('a'); a.href=url; a.download=pdfName(); a.click();
-    setTimeout(()=>URL.revokeObjectURL(url),5000);
-    toast("تم تحميل PDF — لإرسال تلقائي كملف يحتاج WhatsApp Business Cloud API (إعداد سيرفر)");
-  }catch(e){ toast("تعذر إنشاء PDF: "+(e.message||e)); }
 }
 const pdfName=()=>((window.__pdfPartyName||CUR.title||"document").replace(/[^\w\u0600-\u06FF-]+/g,"_")+".pdf");
 async function savePdf(){try{toast("جارٍ إنشاء PDF...");const pdf=await mkPdf();await saveFile(pdfName(),pdf.output("blob"));toast("تم حفظ ملف PDF")}catch(e){toast(e&&e.code=="declined"?"تم إلغاء الحفظ":"تعذر إنشاء PDF (يحتاج اتصالًا بالإنترنت لتحميل مكتبة الرسم)")}}
@@ -1460,7 +1455,7 @@ vBank=function(){
   const kids=directChildren(a.id).filter(ch=>(!currency||hasCurrency(ch,currency))&&(!query||ownMatch(a)||hasMatch(ch)));
   const collapseKey="factory-bank-collapsed:"+String(a.id),closed=kids.length>0&&localStorage.getItem(collapseKey)!=="0";
   const displayCurrency=currency||cur_(a),amount=currencyBalances(a).get(displayCurrency)||0;
-  const accountCode=JSON.stringify(String(a.id));
+  const accountCode=JSON.stringify(String(a.id)).replace(/"/g,"&quot;");
   const label=factoryEsc((a.code?a.code+" — ":"")+accountLabel(a));
   const arrow=kids.length?'<button type="button" class="g account-tree-toggle factory-bank-tree-toggle" title="'+(closed?"إظهار الحسابات الفرعية":"إخفاء الحسابات الفرعية")+'" aria-label="'+(closed?"إظهار":"إخفاء")+' الحسابات الفرعية لـ '+label+'" aria-expanded="'+String(!closed)+'" onclick="toggleBankTree('+accountCode+')">'+(closed?"▸":"▾")+'</button> ':'';
   const meta=kids.length?(directChildren(a.id).length+" حساب فرعي"):(level===0?"حساب رئيسي مستقل":"حساب فرعي");
