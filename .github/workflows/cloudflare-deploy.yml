@@ -56,7 +56,7 @@ jobs:
           set -euo pipefail
           echo "Built files:"
           find dist -maxdepth 4 -type f -printf '%p (%s bytes)\\n' | sort
-          for file in dist/index.html dist/auth.html dist/change-password.html dist/js/app.js dist/sw.js; do
+          for file in dist/index.html dist/auth.html dist/change-password.html dist/js/app.js dist/js/preview-ui.js dist/sw.js; do
             if [[ ! -s "$file" ]]; then
               echo "::error::Required runtime asset is missing or empty: $file"
               exit 1
