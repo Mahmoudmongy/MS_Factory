@@ -10,7 +10,7 @@
 
 ## Current implementation status
 
-The encrypted backup workflow now targets the dedicated Backblaze B2 bucket, not Cloudflare R2. It is intentionally inert until the repository variable `BACKUP_ENABLED` is set to `true`. A manual workflow run performs a B2-only preflight by default; it does not export production data unless the explicit run checkbox is selected and the enable variable is true.
+The encrypted backup workflow now targets the dedicated Backblaze B2 bucket, not Cloudflare R2. It is intentionally inert until both repository variables `BACKUP_ENABLED=true` and `BACKUP_RELEASE_APPROVED=true` are set. The actual export is manual-only and additionally requires the explicit run checkbox; scheduled runs perform preflight only. Keep both variables disabled until the encryption identity and connection target are verified and a QA restore drill is approved.
 
 No production backup has been uploaded and no restore drill has been completed yet.
 
@@ -34,6 +34,7 @@ Repository → Settings → Secrets and variables → Actions.
 - `B2_ENDPOINT`: `https://s3.us-east-005.backblazeb2.com`
 - The public age recipient is pinned in the workflow file; it is not secret.
 - `BACKUP_ENABLED`: keep `false` until all prerequisites and a QA restore drill have passed. Do not enable yet.
+- `BACKUP_RELEASE_APPROVED`: keep unset/`false`; actual production export requires both this gate and a manual checkbox. Do not enable yet.
 
 ### Secrets
 
