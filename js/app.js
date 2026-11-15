@@ -211,9 +211,9 @@ const rdA=()=>({gov:$("#gv").value,city:$("#ct2").value,adr:$("#adr").value.trim
 /* ===== customers / suppliers (merged balances) ===== */
 /* ===== invoices / returns ===== */
 const sel=(v,a)=>U(a,x=>`<option value="${x[0]}" ${v==x[0]?"selected":""}>${x[1]}</option>`);
-function retFrom(id){const d=S.docs.find(x=>x.id==id);docForm(d.t=="sale"?"sret":"pret",{pid:d.pid,cat:d.cat,ref:d.no,who:pn(d.pid),idate:d.date,lines:d.lines.filter(l=>l.iid).map(l=>({...l,max:l.qty,qty:0}))})}
-function editDoc(id){if(!can("edit"))return;const d=S.docs.find(x=>x.id==id);if(!d)return;if(d.manager_read_only){toast("المستندات المستوردة من Manager.io محفوظة كسجل تاريخي ولا يمكن تعديلها");return}docForm(d.t,{edit:id,pid:d.pid,cat:d.cat,date:d.date,warehouseId:d.warehouseId,lines:d.lines.map(l=>({...l})),disc:d.disc,note:d.note,img:d.img,dest:d.dest})}
-function docForm(t,p){p=p||{};D={t,lines:p.lines||[],img:p.img||"",edit:p.edit||0,disc:p.disc||0,warehouseId:+(p.warehouseId||p.wh||0)};const s=t=="sale"||t=="sret",rt=t=="sret"||t=="pret",pur=t=="pur";
+function retFrom(id){const d=S.docs.find(x=>x.id==id);if(!d)return;docForm(d.t=="sale"?"sret":"pret",{pid:d.pid,cat:d.cat,ref:d.no,originalId:d.id,who:pn(d.pid),idate:d.date,lines:d.lines.filter(l=>l.iid).map(l=>({...l,max:l.qty,qty:0}))})}
+function editDoc(id){if(!can("edit"))return;const d=S.docs.find(x=>x.id==id);if(!d)return;if(d.manager_read_only){toast("المستندات المستوردة من Manager.io محفوظة كسجل تاريخي ولا يمكن تعديلها");return}docForm(d.t,{edit:id,pid:d.pid,cat:d.cat,date:d.date,warehouseId:d.warehouseId,ref:d.ref||"",originalId:d.originalId||0,lines:d.lines.map(l=>({...l})),disc:d.disc,note:d.note,img:d.img,dest:d.dest})}
+function docForm(t,p){p=p||{};D={t,lines:p.lines||[],img:p.img||"",edit:p.edit||0,disc:p.disc||0,warehouseId:+(p.warehouseId||p.wh||0),ref:p.ref||"",originalId:p.originalId||0};const s=t=="sale"||t=="sret",rt=t=="sret"||t=="pret",pur=t=="pur";
  sh(`<h3>${TN[t]}${p.edit?" — تعديل":""}</h3>${rt&&p.ref?`<div class="card">مرتجع من الفاتورة <b>${p.ref}</b> — ${p.who||""} — ${dfm(p.idate)}<br><span class="mu">اكتب الكميات المرتجعة فقط، وسيب الباقي فاضي</span></div>`:""}
  <div class="row"><div><label>التاريخ</label><input id="dd" type="date" value="${p.date||td()}"></div><div><label>${s?"العميل":"المورد"}</label><select id="pt">${U(S.partners.filter(x=>s?x.c:x.s),x=>`<option value="${x.id}">${x.name}${x.type=="w"?" — جملة":""}</option>`)}</select></div></div>
  <label>التبويب</label><select id="ct"><option value="mfg">تصنيع</option><option value="sup">مشتريات</option></select>${pur?`<label>تُضاف إلى</label><select id="ds"><option value="wh">مخزن الصنف</option>${U(S.po,o=>`<option value="${o.id}">أمر إنتاج ${o.no}</option>`)}</select>`:""}
@@ -248,7 +248,7 @@ function saveDoc(){if(!CUR||CUR.kind!="page")return;pend();const t=D.t,rt=t=="sr
   else{if(i)stk(dd,i,l.v,-l.qty,-amt,no,pid,id,"doc",warehouseId||i.wh);Ls.push({a:ak("inv"),cr:amt,desc:l.note})}delete l.max});
  if(disc)Ls.push(t=="sale"?{a:ak("sdisc"),dr:disc}:{a:ak("pdisc"),cr:disc});
  Ls.push(t=="sale"?{a:ak("ar"),dr:net,pid}:t=="sret"?{a:ak("ar"),cr:net,pid}:t=="pur"?{a:ak("ap"),cr:net,pid}:{a:ak("ap"),dr:net,pid});
- if(!post(dd,no,TN[t],Ls,"doc",id,ts)){rev(id,"doc");if(old){oldLedger.forEach(x=>S.L.push(x));oldMoves.forEach(m=>{const item=it_(m.iid);if(item){item.st=item.st||{};item.st[m.v]=(Number(item.st[m.v])||0)+Number(m.q||0);item.val=(Number(item.val)||0)+Number(m.val||0)}S.mv.push(m)});S.docs.push(old)}toast("تعذر حفظ الفاتورة لأن القيد المحاسبي غير متوازن. لم يتم اعتماد التعديل.");return}S.docs.push({id,t,no,date:dd,ts,pid,cat,dest:dest=="wh"||!dest?dest:+dest,warehouseId:warehouseId||0,lines,gross:gr,disc,total:net,note:$("#dn").value.trim(),img:D.img});sv();toast("تم حفظ "+TN[t]+" "+no);cl();if(t=="pur"&&!old)docLb(id)}
+ if(!post(dd,no,TN[t],Ls,"doc",id,ts)){rev(id,"doc");if(old){oldLedger.forEach(x=>S.L.push(x));oldMoves.forEach(m=>{const item=it_(m.iid);if(item){item.st=item.st||{};item.st[m.v]=(Number(item.st[m.v])||0)+Number(m.q||0);item.val=(Number(item.val)||0)+Number(m.val||0)}S.mv.push(m)});S.docs.push(old)}toast("تعذر حفظ الفاتورة لأن القيد المحاسبي غير متوازن. لم يتم اعتماد التعديل.");return}S.docs.push({id,t,no,date:dd,ts,pid,cat,dest:dest=="wh"||!dest?dest:+dest,warehouseId:warehouseId||0,ref:D.ref||"",originalId:D.originalId||0,lines,gross:gr,disc,total:net,note:$("#dn").value.trim(),img:D.img});sv();toast("تم حفظ "+TN[t]+" "+no);cl();if(t=="pur"&&!old)docLb(id)}
 /* ===== vouchers ===== */
 function voucherAccounts(v){
  const saved=Array.isArray(v?.ac)?v.ac.filter(a=>a&&typeof a==="object"&&a.a!=null):[];
@@ -766,7 +766,15 @@ function drillItem(id,v){
  const rows=srt(S.mv.filter(m=>m.iid==id&&(!v||m.v==v))).map(m=>{const w=m.wh||i.wh;balances[w]=(balances[w]||0)+(+m.q||0);return '<tr><td>'+(m.ts?fts(m.ts):dfm(m.d))+'</td><td>'+whn(w)+'</td><td>'+(m.ref||'')+'</td><td>'+(m.pid?pn(m.pid):'')+'</td><td>'+m.v+'</td><td><b>'+qf(m.q)+'</b></td><td>'+qf(balances[w])+'</td><td>'+(m.rid?'<button class="g" onclick="openRef(\''+m.src+'\','+m.rid+')">عرض</button>':'')+'</td></tr>'}).join('');
  sh('<div class="ph"><h3>'+i.name+(v?' — '+(v=='-'?'بدون لون/مقاس':v)+' ('+codeLook(id,v)+')':'')+' — حركات وأرصدة المخازن</h3>'+bk+'</div><table class="l"><tr><th>التاريخ / الوقت</th><th>المخزن</th><th>العملية</th><th>الطرف</th><th>لون / مقاس</th><th>الكمية</th><th>رصيد المخزن بعد الحركة</th><th></th></tr>'+rows+'<tr><th colspan="5">إجمالي كل المخازن ('+i.unit+')</th><th colspan="3">'+qf(tq(i))+'</th></tr></table>');
 }
-function pw(k,title,no,body){const t=TPO||S.tpl[k]||TPL0()[k];$g("#pgst").textContent="@media print{@page{size:A4;margin:0}}";return `<div id="pr" style="background:#fff;color:#000;padding:${t.mg}mm;font-size:${t.fs}px"><div style="text-align:${t.al=="c"?"center":"start"};${t.bar?"border-bottom:2px solid #000;":""}padding-bottom:6px;margin-bottom:8px">${t.logo&&S.logo?`<img src="${S.logo}" height="60"><br>`:""}<b style="font-size:1.4em">${t.org||S.name}</b><div style="font-size:1.1em">${t.title||title} ${no||""}</div>${t.head?`<div>${t.head}</div>`:""}</div>${body}${t.foot?`<hr><div>${t.foot}</div>`:""}</div>`}
+function pw(k,title,no,body){
+ const t=TPO||S.tpl[k]||TPL0()[k],wide=k==="sale"||k==="pur",paperWidth=wide?"277mm":"190mm";
+ $g("#pgst").textContent="@media print{@page{size:A4 "+(wide?"landscape":"portrait")+";margin:0}}";
+ return '<div id="pr" class="factory-print-document'+(wide?' factory-print-wide':'')+'" data-print-kind="'+k+'" dir="rtl" style="box-sizing:border-box;background:#fff;color:#000;width:100%;max-width:'+paperWidth+';min-width:0;margin:0 auto;overflow:visible;padding:'+t.mg+'mm;font-size:'+t.fs+'px">'+
+  '<div style="text-align:'+(t.al=="c"?"center":"start")+';'+(t.bar?"border-bottom:2px solid #000;":"")+'padding-bottom:6px;margin-bottom:8px">'+
+  (t.logo&&S.logo?'<img src="'+S.logo+'" height="60"><br>':"")+
+  '<b style="font-size:1.4em">'+(t.org||S.name)+'</b><div style="font-size:1.1em">'+(t.title||title)+' '+(no||"")+'</div>'+
+  (t.head?'<div>'+t.head+'</div>':"")+'</div>'+body+(t.foot?'<hr><div>'+t.foot+'</div>':"")+'</div>';
+}
 function docPrintHtml(d){const k=d.t=="sale"||d.t=="sret"?"sale":"pur",p=S.partners.find(x=>x.id==d.pid)||{},sw=x=>tsh(k,x);return pw(k,TN[d.t],d.no,`<div>${sw("ts")&&d.ts?fts(d.ts):dfm(d.date)}</div><div><b>${p.name||""}</b>${sw("party")?` ${p.phone||""} — ${[p.gov,p.city,p.adr].filter(Boolean).join(" - ")}`:""}</div>${sw("img")&&d.img?`<img src="${d.img}" width="120">`:""}<table><tr><th>الصنف</th><th>لون / مقاس</th>${sw("unit")?"<th>الوحدة</th>":""}<th>الكمية</th><th>السعر</th><th>الإجمالي</th>${sw("note")?"<th>بيان</th>":""}</tr>${U(d.lines,l=>`<tr><td>${l.name}</td><td>${l.v!="-"?l.v:""}</td>${sw("unit")?`<td>${l.unit||""}</td>`:""}<td>${qf(l.qty)}</td><td>${f(l.price)}</td><td>${f(l.qty*l.price)}</td>${sw("note")?`<td>${l.note||""}</td>`:""}</tr>`)}</table>${d.disc?`<div>الخصم: ${f(d.disc)} ج.م</div>`:""}<h3>الإجمالي: ${f(d.total)} ج.م</h3><div>${d.note||""}</div>`)}
 function vchPrintHtml(v){const k=v.dir=="in"?"receipt":"payment",sw=x=>tsh(k,x);return pw(k,v.title,v.no,`<div>${sw("ts")&&v.ts?fts(v.ts):dfm(v.date)}</div><div>${v.dir=="in"?"استلمنا من":"صُرف إلى"}: <b>${v.who||""}</b></div>${sw("acct")?`<div>الحسابات: ${voucherAccounts(v).map(x=>an(x.a)+" "+(x.fc?f(x.fc)+" "+x.cur:f(x.m)+" ج.م")).join("، ")||"تفاصيل الحسابات الأصلية غير متاحة؛ تم الاحتفاظ بالحركات المحاسبية"}</div>`:""}<table><tr><th>البند</th>${sw("desc")?"<th>البيان</th>":""}<th>المبلغ</th>${sw("disc")?"<th>الخصم</th>":""}<th>الصافي</th></tr>${U(voucherLines(v),l=>`<tr><td>${l.a=="p"?"حساب "+(l.lbl||""):an(+l.a)}</td>${sw("desc")?`<td>${l.d||""}</td>`:""}<td>${f(l.m)}</td>${sw("disc")?`<td>${f(l.x)}</td>`:""}<td>${f(l.m-l.x)}</td></tr>`)||'<tr><td colspan="5">تفاصيل البنود الأصلية غير متاحة في بيانات السند المستورد</td></tr>'}</table><h3>الإجمالي: ${f(v.total)} ج.م</h3><div>${v.desc||""}</div>`)}
 function poPrintHtml(o){const sw=x=>tsh("po",x);return pw("po","أمر إنتاج",o.no,`<div>${sw("ts")&&o.ts?fts(o.ts):dfm(o.date)} — ${pnm(o)} — ${o.desc||""}</div>${poTbl(o).replace('class="l"',"")}${sw("mats")?`<h4>الخامات</h4><table>${U(o.mats,m=>`<tr><td>${it_(m.iid).name}</td><td>${qf(m.qty)} ${it_(m.iid).unit}</td>${sw("cost")?`<td>${f(m.cost||0)}</td>`:""}</tr>`)}</table>`:""}${sw("cost")?`<h3>إجمالي التكلفة: ${f(poCost(o))} ج.م</h3>`:""}`)}
@@ -816,7 +824,29 @@ function poPrint(id){const o=S.po.find(x=>x.id==id);ppage(`أمر إنتاج ${o
 function stPrint(id){ppage(`كشف حساب ${pn(id)}`,stmtHtml(id),"",pn(id))}
 function repPrint(){const t=(RL.find(r=>r[0]==R.rep)||[])[1]||"تقرير",tb=[...ACT.querySelectorAll("table.l")].map(x=>x.outerHTML.replace('class="l"',"")).join("<br>");ppage(t,pw("rep",t,"",`<div>من ${R.from?dfm(R.from):"البداية"} إلى ${R.to?dfm(R.to):dfm(td())}</div>${tb}`))}
 const ld=src=>new Promise((ok,no)=>{if(document.querySelector(`script[src="${src}"]`))return ok();const s=document.createElement("script");s.src=src;s.onload=ok;s.onerror=()=>no(new Error("load"));document.head.appendChild(s)});
-async function mkPdf(){const el=$("#pr");if(!el)throw new Error("no doc");await ld("https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js");await ld("https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js");const captureWidth=Math.max(el.scrollWidth||0,el.clientWidth||0),c=await html2canvas(el,{scale:2,backgroundColor:"#fff",width:captureWidth||undefined,windowWidth:captureWidth||undefined,scrollX:0,scrollY:0}),{jsPDF}=window.jspdf,landscape=c.width/c.height>1.1,W=landscape?297:210,H=landscape?210:297,pdf=new jsPDF(landscape?"l":"p","mm","a4"),pageH=Math.floor(c.width*H/W);let y=0,first=1;while(y<c.height){const pc=document.createElement("canvas");pc.width=c.width;pc.height=Math.min(pageH,c.height-y);pc.getContext("2d").drawImage(c,0,y,c.width,pc.height,0,0,c.width,pc.height);if(!first)pdf.addPage();pdf.addImage(pc.toDataURL("image/jpeg",.92),"JPEG",0,0,W,pc.height*W/c.width);first=0;y+=pageH}return pdf}
+async function mkPdf(){
+ const el=$("#pr");if(!el)throw new Error("no doc");
+ await ld("https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js");
+ await ld("https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js");
+ const wide=el.dataset.printKind==="sale"||el.dataset.printKind==="pur";
+ const oldWidth=el.style.width,oldMaxWidth=el.style.maxWidth;
+ el.style.width=wide?"277mm":"190mm";el.style.maxWidth=wide?"277mm":"190mm";
+ let capture;
+ try{
+  const captureWidth=Math.max(el.scrollWidth||0,el.clientWidth||0);
+  capture=await html2canvas(el,{scale:2,backgroundColor:"#fff",width:captureWidth||undefined,windowWidth:captureWidth||undefined,scrollX:0,scrollY:0,useCORS:true,logging:false});
+ }finally{el.style.width=oldWidth;el.style.maxWidth=oldMaxWidth;}
+ const {jsPDF}=window.jspdf,landscape=wide||capture.width/capture.height>1.1,W=landscape?297:210,H=landscape?210:297,pdf=new jsPDF(landscape?"l":"p","mm","a4"),pageH=Math.floor(capture.width*H/W);
+ let y=0,first=true;
+ while(y<capture.height){
+  const page=document.createElement("canvas");page.width=capture.width;page.height=Math.min(pageH,capture.height-y);
+  page.getContext("2d").drawImage(capture,0,y,capture.width,page.height,0,0,capture.width,page.height);
+  if(!first)pdf.addPage();
+  pdf.addImage(page.toDataURL("image/jpeg",.94),"JPEG",0,0,W,page.height*W/capture.width);
+  first=false;y+=pageH;
+ }
+ return pdf;
+}
 async function sendWaPdf(){
   try{
     const pdf=await mkPdf();

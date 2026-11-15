@@ -94,7 +94,7 @@ console.log('PASS invoice and voucher posting failures fail closed with safe rol
 const sw = fs.readFileSync(path.join(root, 'sw.js'), 'utf8');
 const swPublic = fs.readFileSync(path.join(root, 'public/sw.js'), 'utf8');
 assert(app.includes('landscape=c.width/c.height>1.1') && app.includes('windowWidth:captureWidth') && app.includes('W=landscape?297:210'), 'PDF export captures the full table width and selects landscape A4 for wide documents');
-assert(sw.includes('factory-v29') && swPublic.includes('factory-v29'), 'service-worker cache version changes when the application assets change');
+assert(sw.includes('factory-v31') && swPublic.includes('factory-v31'), 'service-worker cache version changes when the application assets change');
 console.log('PASS adaptive A4 PDF layout and service-worker cache refresh');
 assert(previewUi.includes("function renderReferenceGroup") && previewUi.includes("function renderReferenceSidebar") && previewUi.includes("data-preview-screen-tab"), "the live application must map its actual screen renderers into the preview's grouped menu and functional tabs");
 assert(previewCss.includes(".factory-nav-link") && previewCss.includes(".preview-module-tabs") && previewCss.includes(".factory-reference-screen-body"), "the reference sidebar, tabs and page panels must have dedicated responsive styles");
@@ -108,3 +108,12 @@ assert(previewCss.includes("Dark theme contrast") && previewCss.includes("button
 assert(previewCss.includes(':root[data-theme="dark"] button') && previewCss.includes(':root:not([data-theme="light"]) button') && previewCss.includes('button *') && previewCss.includes('input[type="submit"]'), 'all primary, secondary, nested-label and form-submit buttons keep white labels in both manual and system dark mode');
 assert(databaseFirst.includes("function scheduleCacheSnapshot(rows)") && databaseFirst.includes("__snapshot__") && databaseFirst.includes("setBaselineRow(row, false)"), "startup avoids synchronous per-record cache writes");
 console.log("PASS summary ordering, latest activity, grouped reports, dark button labels and faster startup");
+
+
+assert(previewUi.includes("function renderVoucherTable(dir)") && previewUi.includes("function renderInvoiceTable(type)"), "receipts, payments, invoices and returns must use reference-shaped live-data tables");
+assert(previewUi.includes("refVoucherActions") && previewUi.includes("refInvoiceActions") && previewUi.includes("data-reference-export"), "voucher and invoice row actions and Excel export must be wired");
+assert(previewUi.includes("voucherAccounts(v)") && previewUi.includes("paidOf(row)") && previewUi.includes("remOf(row)") && previewUi.includes("refOriginalInvoiceCell"), "tables must display real account, paid, remaining and original-invoice relationships");
+assert(previewCss.includes(".factory-reference-data-table") && previewCss.includes(".factory-row-action") && previewCss.includes(".factory-reference-status"), "reference tables and action icons must have dedicated responsive styling");
+assert(app.includes("originalId:D.originalId||0") && app.includes("originalId:d.id") && app.includes("originalId:p.originalId||0"), "return records must preserve their original invoice ID across creation and editing");
+assert(app.includes("factory-print-document") && app.includes("factory-print-wide") && app.includes("data-print-kind") && app.includes('landscape=wide||capture.width/capture.height>1.1'), "invoice print and PDF output must use responsive paper width and landscape A4 for invoices");
+console.log("PASS reference-aligned vouchers/invoices, connected actions, original invoice links and adaptive A4 PDF");

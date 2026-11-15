@@ -169,6 +169,119 @@
   ];
   let originalScreens={},referenceTabsInstalled=false;
   const referenceTabLabels={cust:'العملاء',supp:'الموردون',rc:'سندات القبض',py:'سندات الدفع',sale:'فواتير البيع',sret:'مرتجعات البيع',pur:'فواتير الشراء',pret:'مرتجعات الشراء'};
+
+  const refActionSvg={
+    view:'<path d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6-10-6-10-6Z"/><circle cx="12" cy="12" r="3"/>',
+    print:'<path d="M6 9V3h12v6M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2M6 14h12v7H6z"/>',
+    edit:'<path d="m4 16-.8 4.8L8 20l11.7-11.7a2.1 2.1 0 0 0-3-3L5 17"/><path d="m14.5 6.5 3 3"/>',
+    delete:'<path d="M3 6h18M8 6V4h8v2m-10 0 1 14h10l1-14M10 10v6m4-6v6"/>',
+    return:'<path d="M9 14 4 9l5-5M4 9h10a6 6 0 0 1 0 12h-2"/>',
+    label:'<path d="M20 13 13 20 3 10V4h6z"/><circle cx="7.5" cy="7.5" r="1"/>'
+  };
+  function refAction(label,handler,icon,danger){
+    return '<button type="button" class="'+(danger?'d':'g')+' factory-row-action" title="'+esc(label)+'" aria-label="'+esc(label)+'" onclick="'+esc(handler)+'"><svg class="factory-row-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">'+(refActionSvg[icon]||refActionSvg.view)+'</svg></button>';
+  }
+  function refActionsWrap(actions){return '<span class="factory-row-actions">'+actions+'</span>';}
+  function refVoucherActions(v){
+    const id=JSON.stringify(String(v.id));
+    let actions=refAction('عرض تفاصيل السند','refView('+id+')','view',false);
+    actions+=refAction('طباعة السند / معاينة PDF','vPrint('+id+')','print',false);
+    if(can('edit'))actions+=refAction('تعديل السند','editV('+id+')','edit',false);
+    if(can('del'))actions+=refAction('تراجع آمن عن السند',"delRef('vch',"+id+")",'delete',true);
+    return refActionsWrap(actions);
+  }
+  function refDateValue(row){return row?.date||row?.d||(row?.ts?lday(new Date(row.ts)):'')||'';}
+  function refDateKey(value){
+    const raw=String(value||'');
+    if(/^\d{4}-\d{2}-\d{2}/.test(raw))return raw.slice(0,10);
+    const m=/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/.exec(raw);
+    return m?m[3]+'-'+String(m[2]).padStart(2,'0')+'-'+String(m[1]).padStart(2,'0'):raw;
+  }
+  function refExportButton(){return '<button type="button" class="g factory-reference-export" data-reference-export="1">تصدير Excel</button>';}
+  function refFilterRow(key,fields){return '<div class="factory-reference-filter-row">'+fbar(key,fields)+refExportButton()+'</div>';}
+  function renderVoucherTable(dir){
+    const incoming=dir==='in',key='v'+dir;
+    FL[key]=FL[key]||{};
+    const date=row=>refDateKey(refDateValue(row));
+    const rows=(S.vch||[]).filter(v=>v.dir===dir&&(!fv(key,'from')||date(v)>=fv(key,'from'))&&(!fv(key,'to')||date(v)<=fv(key,'to'))&&(!fv(key,'ac')||voucherAccounts(v).some(x=>String(x.a)===String(fv(key,'ac')))))
+      .sort((a,b)=>date(b).localeCompare(date(a))||(Number(b.ts)||0)-(Number(a.ts)||0));
+    const accounts=(S.accts||[]).filter(a=>a.cash);
+    const filters=[['q','text','المرجع أو الحساب أو الطرف أو البيان'],['ac','sel',incoming?'حساب القبض':'حساب الدفع',[['','كل الحسابات'],...accounts.map(a=>[String(a.id),an(a.id)+' ('+cur_(a)+')'])]],['from','date','من تاريخ'],['to','date','إلى تاريخ']];
+    const data=rows.length?rows.map(v=>{
+      const accountNames=voucherAccounts(v).map(x=>an(x.a)+(x.fc?' ('+f(x.fc)+' '+(x.cur||cur_(x.a))+')':'')).filter(Boolean).join('، ')||'—';
+      const party=v.who||pn(v.pid)||'—';
+      return '<tr><td>'+esc(dfm(refDateValue(v)))+'</td><td dir="ltr">'+esc(v.no||'—')+'</td><td>'+esc(accountNames)+'</td><td>'+esc(party)+'</td><td>'+esc(v.desc||'—')+'</td><td class="factory-reference-amount" dir="ltr">'+f(v.total)+' <small>ج.م</small></td><td>'+refVoucherActions(v)+'</td></tr>';
+    }).join(''):'<tr><td colspan="7" class="mu factory-reference-empty-cell">لا توجد سندات مسجلة في الفترة المحددة</td></tr>';
+    const actions='<button type="button" class="new" onclick="vForm(&#39;in&#39;)">＋ سند قبض</button><button type="button" class="g" onclick="vForm(&#39;out&#39;)">＋ سند دفع</button>';
+    const title=incoming?'سندات القبض':'سندات الدفع';
+    return ph('المقبوضات والمدفوعات',actions)+refFilterRow(key,filters)+
+      '<section class="card factory-reference-table-card"><div class="factory-reference-table-head"><b>'+title+'</b><span>مرتبة من الأحدث إلى الأقدم</span></div>'+
+      '<div class="factory-table-scroll"><table class="l factory-reference-data-table"><thead><tr><th>التاريخ</th><th>المرجع</th><th>حساب '+(incoming?'القبض':'الدفع')+'</th><th>'+(incoming?'العميل / الدافع':'المورد / المستفيد')+'</th><th>البيان</th><th>المبلغ</th><th>الإجراءات</th></tr></thead><tbody>'+data+'</tbody></table></div></section>';
+  }
+  function refOriginalInvoiceCell(row){
+    const id=row.originalId||row.originalDocId||row.baseDocId||'';
+    const original=(S.docs||[]).find(d=>String(d.id)===String(id));
+    if(original)return '<button type="button" class="g factory-original-invoice" onclick="inv(&quot;'+String(original.id).replace(/&/g,'&amp;').replace(/"/g,'&quot;')+'&quot;)">'+esc(original.no||'عرض الفاتورة')+'</button>';
+    return esc(row.ref||row.originalNo||row.originalInvoiceNo||'—');
+  }
+  function refInvoiceActions(row,type){
+    const id=JSON.stringify(String(row.id));
+    let actions=refAction('عرض الفاتورة / طباعة / PDF','inv('+id+')','view',false);
+    if(type==='sale'||type==='pur'){
+      actions+=refAction(type==='sale'?'إنشاء مرتجع بيع':'إنشاء مرتجع شراء','retFrom('+id+')','return',false);
+      if((row.lines||[]).some(line=>line.iid))actions+=refAction('طباعة ملصقات الباركود','docLb('+id+')','label',false);
+    }
+    if(can('edit'))actions+=refAction('تعديل الفاتورة','editDoc('+id+')','edit',false);
+    if(can('del'))actions+=refAction('تراجع آمن عن الفاتورة',"delRef('doc',"+id+")",'delete',true);
+    return refActionsWrap(actions);
+  }
+  function renderInvoiceTable(type){
+    const key='d'+type,isSale=type==='sale'||type==='sret',isReturn=type==='sret'||type==='pret',isPay=type==='sale'||type==='pur';
+    FL[key]=FL[key]||{};
+    const date=row=>refDateKey(refDateValue(row));
+    const filters=[['q','text','رقم المستند أو العميل / المورد أو الصنف / الكود'],['cat','sel','التبويب',[['all','كل الأنواع'],['mfg','تصنيع'],['sup','مشتريات']]]];
+    if(isPay)filters.push(['st','sel','حالة السداد',[['','كل الحالات'],['مسددة','مسددة'],['مسددة جزئيًا','مسددة جزئيًا'],['غير مسددة','غير مسددة']]]);
+    filters.push(['from','date','من تاريخ'],['to','date','إلى تاريخ']);
+    const rows=(S.docs||[]).filter(d=>d.t===type&&(!fv(key,'cat')||fv(key,'cat')==='all'||d.cat===fv(key,'cat'))&&(!fv(key,'st')||stOf(d)===fv(key,'st'))&&(!fv(key,'from')||date(d)>=fv(key,'from'))&&(!fv(key,'to')||date(d)<=fv(key,'to')))
+      .sort((a,b)=>date(b).localeCompare(date(a))||(Number(b.ts)||0)-(Number(a.ts)||0));
+    const title=type==='sale'?'فواتير المبيعات':type==='sret'?'مرتجعات المبيعات':type==='pur'?'فواتير المشتريات':'مرتجعات المشتريات';
+    const data=rows.length?rows.map(row=>{
+      const party=pn(row.pid)||row.who||'—',total=Number(row.total)||0;
+      const posted=(S.L||[]).some(l=>l.src==='doc'&&String(l.rid)===String(row.id));
+      const status=isReturn?(posted?'مرحّل':'غير مرحّل'):stOf(row);
+      const statusLabel=status==='مسددة جزئيًا'?'جزئي':status;
+      const statusClass=status==='مسددة'?'paid':status==='مسددة جزئيًا'?'partial':status==='غير مسددة'?'unpaid':posted?'posted':'unposted';
+      if(isReturn){
+        return '<tr><td>'+esc(dfm(refDateValue(row)))+'</td><td dir="ltr">'+esc(row.no||'—')+'</td><td dir="ltr">'+refOriginalInvoiceCell(row)+'</td><td>'+esc(party)+'</td><td class="factory-reference-amount" dir="ltr">'+f(total)+' <small>ج.م</small></td><td><span class="factory-reference-status '+statusClass+'">'+esc(statusLabel)+'</span></td><td>'+refInvoiceActions(row,type)+'</td></tr>';
+      }
+      const paid=paidOf(row),remaining=remOf(row);
+      return '<tr><td>'+esc(dfm(refDateValue(row)))+'</td><td dir="ltr">'+esc(row.no||'—')+'</td><td>'+esc(party)+'</td><td class="factory-reference-count">'+(row.lines||[]).length+'</td><td class="factory-reference-amount" dir="ltr">'+f(total)+' <small>ج.م</small></td><td class="factory-reference-amount" dir="ltr">'+(paid>.005?f(paid):'—')+' <small>'+(paid>.005?'ج.م':'')+'</small></td><td class="factory-reference-amount" dir="ltr">'+f(remaining)+' <small>ج.م</small></td><td><span class="factory-reference-status '+statusClass+'">'+esc(statusLabel)+'</span></td><td>'+refInvoiceActions(row,type)+'</td></tr>';
+    }).join(''):'<tr><td colspan="'+(isReturn?7:9)+'" class="mu factory-reference-empty-cell">لا توجد مستندات في الفترة المحددة</td></tr>';
+    const headingAction='<button type="button" class="new" onclick="docForm(&#39;'+type+'&#39;)">＋ مستند جديد</button>';
+    const headers=isReturn?
+      '<th>التاريخ</th><th>المرجع</th><th>الفاتورة الأصلية</th><th>'+(isSale?'العميل':'المورد')+'</th><th>الصافي بعد الخصم</th><th>الحالة</th><th>الإجراءات</th>':
+      '<th>التاريخ</th><th>المرجع</th><th>'+(isSale?'العميل':'المورد')+'</th><th>عدد الأصناف</th><th>الإجمالي</th><th>المدفوع</th><th>المتبقي</th><th>الحالة</th><th>الإجراءات</th>';
+    return ph('الفواتير والمرتجعات',headingAction)+refFilterRow(key,filters)+
+      '<section class="card factory-reference-table-card"><div class="factory-reference-table-head"><b>'+title+'</b><span>'+(isReturn?'مرتبطة بالفاتورة الأصلية':'آخر فاتورة أولاً')+'</span></div>'+
+      '<div class="factory-table-scroll"><table class="l factory-reference-data-table"><thead><tr>'+headers+'</tr></thead><tbody>'+data+'</tbody></table></div></section>';
+  }
+  function installLiveReferenceScreens(){
+    originalScreens.rc=()=>renderVoucherTable('in');
+    originalScreens.py=()=>renderVoucherTable('out');
+    originalScreens.sale=()=>renderInvoiceTable('sale');
+    originalScreens.sret=()=>renderInvoiceTable('sret');
+    originalScreens.pur=()=>renderInvoiceTable('pur');
+    originalScreens.pret=()=>renderInvoiceTable('pret');
+  }
+  document.addEventListener('click',event=>{
+    const button=event.target.closest('[data-reference-export]');
+    if(!button)return;
+    const surface=button.closest('.factory-reference-screen-body');
+    const table=surface?.querySelector('.factory-reference-data-table');
+    if(!table){toast('لا يوجد جدول لتصديره');return;}
+    xl(table,[...table.querySelectorAll('tbody tr')]);
+  });
+
   function renderReferenceGroup(group){
     const permitted=new Set(allowed().map(x=>x[0]));
     const visibleIds=group.ids.filter(id=>permitted.has(id)&&typeof originalScreens[id]==='function');
@@ -278,7 +391,7 @@
     if(!document.getElementById('factory-theme-open')){const b=document.createElement('button');b.id='factory-theme-open';b.type='button';b.textContent='🎨';b.title='ألوان البرنامج';b.setAttribute('aria-label','اختيار ألوان البرنامج');document.getElementById('thb')?.insertAdjacentElement('beforebegin',b);}
   }
   function boot(){
-    SCR.home=renderHome;addStatementNavigation();installReferenceScreens();extendSettings();installHeaderControls();installThemePopover();
+    SCR.home=renderHome;addStatementNavigation();installReferenceScreens();installLiveReferenceScreens();extendSettings();installHeaderControls();installThemePopover();
     applyAccent(uiPrefs.accent||'teal',uiPrefs.customColor||colors[uiPrefs.accent||'teal']?.color,false);
     const oldApplyPref=applyPref;applyPref=function(){oldApplyPref();applyAccent(uiPrefs.accent||'teal',uiPrefs.customColor||colors[uiPrefs.accent||'teal']?.color,false);};
     const oldTogTheme=togTheme;togTheme=function(){oldTogTheme();};
