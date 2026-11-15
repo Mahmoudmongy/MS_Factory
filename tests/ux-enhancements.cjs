@@ -116,4 +116,12 @@ assert(previewUi.includes("voucherAccounts(v)") && previewUi.includes("paidOf(ro
 assert(previewCss.includes(".factory-reference-data-table") && previewCss.includes(".factory-row-action") && previewCss.includes(".factory-reference-status"), "reference tables and action icons must have dedicated responsive styling");
 assert(app.includes("originalId:D.originalId||0") && app.includes("originalId:d.id") && app.includes("originalId:p.originalId||0"), "return records must preserve their original invoice ID across creation and editing");
 assert(app.includes("factory-print-document") && app.includes("factory-print-wide") && app.includes("data-print-kind") && app.includes('landscape=wide||capture.width/capture.height>1.1'), "invoice print and PDF output must use responsive paper width and landscape A4 for invoices");
+
+assert(app.includes("بحث في المرجع أو الحساب أو الطرف أو البيان"), "voucher table must support broad search");
+assert(app.includes("factory-status-chip is-paid") && app.includes("factory-status-chip is-partial") && app.includes("factory-status-chip is-unpaid"), "invoice payment status must be visible");
+assert(app.includes("عدد الأصناف") && app.includes("الفاتورة الأصلية"), "invoice and return tables must show item count and original invoice");
+assert(app.includes("factory-row-actions") && app.includes('onclick="vPrint(') && app.includes('onclick="inv('), "voucher and invoice actions must be wired");
+assert(app.includes("تعذر تحديد أبعاد المستند للطباعة") && app.includes("allowTaint:false"), "PDF capture must validate and constrain document dimensions");
+assert(css.includes("#pr.factory-print-document table") && css.includes(".factory-status-chip.is-unpaid"), "print layout and status colors must be styled");
+
 console.log("PASS reference-aligned vouchers/invoices, connected actions, original invoice links and adaptive A4 PDF");

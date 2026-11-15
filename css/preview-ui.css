@@ -431,3 +431,25 @@ button:disabled{opacity:.55;cursor:not-allowed}
  #pr table{width:100%!important;table-layout:fixed!important}
  #pr th,#pr td{font-size:inherit!important}
 }
+
+/* Clear status colors and responsive action controls for invoices, receipts and payments. */
+.factory-status-chip{display:inline-flex;align-items:center;justify-content:center;padding:3px 8px;border:1px solid var(--bd);border-radius:999px;background:var(--card);color:var(--tx);font-size:12px;white-space:nowrap}
+.factory-status-chip.is-paid{color:#15803d;border-color:#86c79c;background:color-mix(in srgb,#16a34a 11%,var(--card))}
+.factory-status-chip.is-partial{color:#a16207;border-color:#e5c46b;background:color-mix(in srgb,#eab308 12%,var(--card))}
+.factory-status-chip.is-unpaid{color:var(--rd);border-color:color-mix(in srgb,var(--rd) 45%,var(--bd));background:color-mix(in srgb,var(--rd) 9%,var(--card))}
+.factory-row-actions{white-space:nowrap;min-width:118px}
+.factory-row-actions button{min-width:30px;min-height:30px;padding:4px 7px;font-size:14px}
+.factory-table-scroll{max-width:100%;overflow-x:auto;-webkit-overflow-scrolling:touch}
+@media(max-width:860px){.factory-row-actions button{min-width:34px;min-height:34px;padding:5px 8px}.factory-status-chip{font-size:11px}}
+:root[data-theme="dark"] .factory-status-chip{color:var(--tx)}
+:root[data-theme="dark"] .factory-status-chip.is-paid{color:#86efac}
+:root[data-theme="dark"] .factory-status-chip.is-partial{color:#fde68a}
+:root[data-theme="dark"] .factory-status-chip.is-unpaid{color:#fca5a5}
+@media print{
+ html,body{background:#fff!important;color:#000!important}
+ #pr.factory-print-document{display:block!important;visibility:visible!important;width:100%!important;max-width:100%!important;min-width:0!important;margin:0!important;overflow:visible!important;background:#fff!important;color:#000!important}
+ #pr.factory-print-document table{display:table!important;width:100%!important;max-width:100%!important;table-layout:fixed!important;border-collapse:collapse!important;direction:rtl}
+ #pr.factory-print-document th,#pr.factory-print-document td{white-space:normal!important;overflow-wrap:anywhere!important;word-break:normal!important;color:#000!important;border:1px solid #bbb!important;padding:5px 6px!important;font-size:10pt!important}
+ #pr.factory-print-document img{max-width:100%!important;height:auto!important;object-fit:contain}
+ #pr.factory-print-document *{box-sizing:border-box}
+}
