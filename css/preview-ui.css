@@ -316,3 +316,36 @@ button:disabled{opacity:.55;cursor:not-allowed}
   .filter-value-field{flex-basis:100%}
   .factory-reference-screen-body .card{padding:10px}
 }
+
+/* Dark theme contrast for secondary and destructive action buttons. */
+:root[data-theme="dark"] button.g,:root[data-theme="dark"] .tabs button:not(.on),:root[data-theme="dark"] .factory-fin-tabs button:not(.active),:root[data-theme="dark"] .preview-module-tabs button:not(.active),:root[data-theme="dark"] .factory-theme-options button,:root[data-theme="dark"] .factory-theme-inline button,:root[data-theme="dark"] .factory-summary-order button{color:#fff!important;background:color-mix(in srgb,var(--pr) 30%,var(--card))!important;border:1px solid color-mix(in srgb,var(--pr) 55%,var(--bd))!important}
+:root[data-theme="dark"] button.d{color:#fff!important;background:color-mix(in srgb,var(--rd) 42%,var(--card))!important;border:1px solid color-mix(in srgb,var(--rd) 65%,var(--bd))!important}
+@media(prefers-color-scheme:dark){
+ :root:not([data-theme="light"]) button.g,:root:not([data-theme="light"]) .tabs button:not(.on),:root:not([data-theme="light"]) .factory-fin-tabs button:not(.active),:root:not([data-theme="light"]) .preview-module-tabs button:not(.active),:root:not([data-theme="light"]) .factory-theme-options button,:root:not([data-theme="light"]) .factory-theme-inline button,:root:not([data-theme="light"]) .factory-summary-order button{color:#fff!important;background:color-mix(in srgb,var(--pr) 30%,var(--card))!important;border:1px solid color-mix(in srgb,var(--pr) 55%,var(--bd))!important}
+ :root:not([data-theme="light"]) button.d{color:#fff!important;background:color-mix(in srgb,var(--rd) 42%,var(--card))!important;border:1px solid color-mix(in srgb,var(--rd) 65%,var(--bd))!important}
+}
+#sb .sb-nav-scroll>a.factory-nav-link .nav-ico{box-sizing:content-box;width:21px;height:21px;flex:0 0 21px;padding:3px;border-radius:8px;background:#ffffff14}
+.factory-summary-settings{grid-template-columns:repeat(2,minmax(0,1fr));gap:7px}
+.factory-summary-setting-row{display:grid;grid-template-columns:minmax(80px,1fr) minmax(105px,auto) auto;align-items:center;gap:7px;min-width:0;padding:7px 8px;border:1px solid var(--bd);border-radius:9px;background:var(--bg)}
+.factory-summary-setting-name{font-size:13px;min-width:0}
+.factory-summary-setting-row select{width:100%;max-width:150px;min-width:0;margin:0;padding:5px 7px;font-size:12px}
+.factory-summary-order{display:flex;gap:3px}
+.factory-summary-order button{width:27px;min-width:27px;min-height:27px;height:27px;padding:2px;font-size:11px}
+.factory-summary-order button:disabled{opacity:.3}
+.factory-summary-table-scroll{max-width:100%;overflow:auto}
+.factory-summary-mini-table{width:100%;border-collapse:separate;border-spacing:0;table-layout:fixed;background:var(--card)}
+.factory-summary-mini-table th{padding:9px 8px;background:var(--pr2);color:var(--tx);font-size:12px;text-align:right;white-space:nowrap;border-bottom:1px solid var(--bd)}
+.factory-summary-mini-table td{padding:9px 8px;font-size:12px;line-height:1.35;vertical-align:middle;border-bottom:1px solid var(--bd);overflow-wrap:anywhere}
+.factory-summary-mini-table td:nth-child(1){white-space:nowrap}
+.factory-summary-mini-table td:nth-child(3),.factory-summary-mini-table td:nth-child(5){direction:ltr;text-align:left;font-variant-numeric:tabular-nums}
+.factory-summary-mini-table tbody tr[data-open-source]{cursor:pointer}
+.factory-summary-mini-table tbody tr[data-open-source]:hover{background:var(--pr2)}
+.factory-summary-mini-table .factory-summary-amount{font-weight:700}
+.factory-summary-panels{grid-template-columns:1.12fr .88fr;gap:14px}
+.factory-summary-recent .factory-panel-head{padding:13px 15px}
+.factory-summary-recent .factory-summary-table-scroll{border:0;border-radius:0;box-shadow:none}
+.preview-report-intro{display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding:12px 14px;margin:0 0 12px;border:1px solid var(--bd);border-radius:11px;background:var(--card);color:var(--tx)}
+.preview-report-intro span{flex:1 1 260px;color:var(--mu);font-size:13px}
+.preview-report-intro button{min-height:33px;padding:6px 11px;font-size:12px}
+@media(max-width:1000px){.factory-summary-panels{grid-template-columns:1fr}}
+@media(max-width:860px){.factory-summary-settings{grid-template-columns:1fr}.factory-summary-setting-row{grid-template-columns:minmax(0,1fr) minmax(112px,auto) auto}.factory-summary-mini-table{min-width:650px}}
