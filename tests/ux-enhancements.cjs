@@ -191,8 +191,6 @@ assert(previewCss.includes(".factory-fin-grid") && previewCss.includes(".factory
 assert(app.includes('vStock=function(){') && app.includes('<th>المخزن الرئيسي</th><th>المخزن الفرعي</th><th>الوحدة</th><th>الكمية</th><th>تكلفة الوحدة</th><th>قيمة المخزون</th>'), "inventory table matches the reference warehouse, quantity and value columns");
 assert(app.includes('onclick="printAllStockLabels()"') && app.includes('onclick="stockScanOpen()"') && app.includes('onclick="stockMovementChooser()"') && app.includes('onclick="showWarehouseBalances('), "inventory barcode, distribution, movement and label actions are connected");
 assert(previewCss.includes(".factory-stock-filter-main") && previewCss.includes(".factory-stock-table-card") && previewCss.includes("@media(max-width:860px){.factory-stock-filter-main"), "inventory filters and table adapt to mobile and dark themes");
-  .filter(name => !new RegExp('(?:function\\s+' + name + '\\s*\\(|(?:const|let|var)\\s+' + name + '\\s*=|(?:window\\.)?' + name + '\\s*=)').test(app + '\n' + previewUi))
-  .sort();
 assert.deepEqual(unresolvedInlineActions, [], 'every inline UI action must resolve to a real application function');
 console.log('PASS every inline screen action resolves to an implemented application function');
 const parserStart = app.indexOf('function factorySearchMatch(');
