@@ -94,7 +94,7 @@ console.log('PASS invoice and voucher posting failures fail closed with safe rol
 const sw = fs.readFileSync(path.join(root, 'sw.js'), 'utf8');
 const swPublic = fs.readFileSync(path.join(root, 'public/sw.js'), 'utf8');
 assert(app.includes('landscape=wide||capture.width/capture.height>1.1') && app.includes('windowWidth:captureWidth') && app.includes('W=landscape?297:210') && app.includes('el.style.boxSizing="border-box"'), 'PDF export captures the full table width and selects landscape A4 for wide documents');
-assert(sw.includes('factory-v32') && swPublic.includes('factory-v32'), 'service-worker cache version changes when the application assets change');
+assert(sw.includes('factory-v33') && swPublic.includes('factory-v33'), 'service-worker cache version changes when the application assets change');
 console.log('PASS adaptive A4 PDF layout and service-worker cache refresh');
 assert(previewUi.includes("function renderReferenceGroup") && previewUi.includes("function renderReferenceSidebar") && previewUi.includes("data-preview-screen-tab"), "the live application must map its actual screen renderers into the preview's grouped menu and functional tabs");
 assert(previewCss.includes(".factory-nav-link") && previewCss.includes(".preview-module-tabs") && previewCss.includes(".factory-reference-screen-body"), "the reference sidebar, tabs and page panels must have dedicated responsive styles");
@@ -125,3 +125,10 @@ assert(app.includes("تعذر تحديد أبعاد المستند للطباع�
 assert(previewCss.includes("#pr.factory-print-document table") && previewCss.includes(".factory-status-chip.is-unpaid"), "print layout and status colors must be styled");
 
 console.log("PASS reference-aligned vouchers/invoices, connected actions, original invoice links and adaptive A4 PDF");
+
+
+assert(previewUi.includes("function referenceVoucherSearchText(v)") && previewUi.includes("factorySearchMatch(referenceVoucherSearchText(v),query)"), "voucher search filters reference, title, party, account, allocations and related orders");
+assert(previewUi.includes("function referenceInvoiceSearchText(d)") && previewUi.includes("factorySearchMatch(referenceInvoiceSearchText(d),query)"), "invoice search filters reference, party, notes, items, variants and barcodes");
+assert(previewUi.includes("<th>العنوان</th>") && previewUi.includes("الفواتير المسددة") && previewUi.includes("تابع لـ"), "voucher table shows title, settled invoices and related orders");
+assert(previewUi.includes("isReturn?8:9") && previewUi.includes("factory-reference-count"), "returns table includes item count and an aligned empty state");
+assert(previewCss.includes("factory-reference-status.paid") && previewCss.includes("factory-reference-status.partial") && previewCss.includes("factory-reference-status.unpaid") && previewCss.includes("#pr.factory-print-document{position:absolute"), "status colors and A4 print placement are explicitly styled");
