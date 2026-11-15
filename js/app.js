@@ -1248,12 +1248,11 @@ updateColumnChooserLanguage();
       const view=x.source==="undo"?'<button type="button" class="g" title="عرض تفاصيل حركة التراجع" aria-label="عرض تفاصيل حركة التراجع" onclick="undoView('+JSON.stringify(String(x.id))+')">◉</button>':'<button type="button" class="g" title="عرض تفاصيل الحركة" aria-label="عرض تفاصيل الحركة" onclick="openRef('+JSON.stringify(x.source)+','+JSON.stringify(String(x.id))+')">◉</button>';
       const edit=x.source!=="wo"&&x.source!=="undo"&&can("edit")?'<button type="button" class="g" title="تعديل الحركة" aria-label="تعديل الحركة" onclick="editRef('+JSON.stringify(x.source)+','+JSON.stringify(String(x.id))+')">✎</button>':'';
       const reverse=x.source!=="undo"&&can("del")?'<button type="button" class="d" title="تراجع آمن عن الحركة" aria-label="تراجع آمن عن الحركة" onclick="delRef('+JSON.stringify(x.source)+','+JSON.stringify(String(x.id))+')">↶</button>':'';
-      const timestamp=fts(x.ts);
-      return '<tr><td>'+factoryEsc(timestamp.slice(0,10))+'</td><td>'+factoryEsc(timestamp.slice(11))+'</td><td>'+factoryEsc(x.user||"—")+'</td><td>'+factoryEsc(x.type)+'</td><td>'+factoryEsc([x.ref,x.party,x.desc].filter(Boolean).join(" — "))+'</td><td><span class="factory-status-chip '+(posted?"is-paid":"is-unpaid")+'">'+(x.source==="undo"?"تم إنشاء عكس آمن":posted?"مسجلة":"غير مرحّل")+'</span></td><td class="factory-row-actions">'+view+edit+reverse+'</td></tr>';
+      return '<tr><td>'+factoryEsc(fts(x.ts))+'</td><td>'+factoryEsc(x.user||"—")+'</td><td>'+factoryEsc(x.type)+'</td><td>'+factoryEsc([x.ref,x.party,x.desc].filter(Boolean).join(" — "))+'</td><td><span class="factory-status-chip '+(posted?"is-paid":"is-unpaid")+'">'+(x.source==="undo"?"تم إنشاء عكس آمن":posted?"مسجلة":"غير مرحّل")+'</span></td><td class="factory-row-actions">'+view+edit+reverse+'</td></tr>';
     });
     return ph(N.tl,'<button type="button" class="g" onclick="exportActiveTable()">تصدير السجل</button><button type="button" class="g" onclick="FL.timeline={};render()">× مسح الفلاتر</button>')+
       fbar(key,[["q","text","المستخدم أو الإجراء أو المرجع أو البيان"],["from","date","من تاريخ"],["to","date","إلى تاريخ"],["kind","sel","نوع الحركة",[["","الكل"],["doc","الفواتير والمرتجعات"],["vch","السندات"],["po","أوامر الإنتاج"],["je","القيود"],["wo","الهالك"],["undo","التراجع الآمن"]]]])+
-      '<div class="factory-table-scroll"><table class="l factory-custom-filtered"><thead><tr><th>التاريخ</th><th>الوقت</th><th>المستخدم</th><th>الإجراء</th><th>البيان</th><th>النتيجة</th><th>التفاصيل</th></tr></thead><tbody>'+(html||'<tr><td colspan="7" class="mu">لا توجد حركات مطابقة</td></tr>')+'</tbody></table></div>';
+      '<div class="factory-table-scroll"><table class="l factory-custom-filtered"><thead><tr><th>التاريخ والوقت</th><th>المستخدم</th><th>الإجراء</th><th>البيان</th><th>النتيجة</th><th>التفاصيل</th></tr></thead><tbody>'+(html||'<tr><td colspan="6" class="mu">لا توجد حركات مطابقة</td></tr>')+'</tbody></table></div>';
   };
 })();
 
@@ -1583,4 +1582,15 @@ Object.assign(EN,{
  "الوقت":"Time","المستخدم":"User","الإجراء":"Action","النتيجة":"Result",
  "التراجع الآمن":"Safe reversal","تم إنشاء عكس آمن":"Safe reversal created",
  "مسجلة":"Recorded","غير مرحّل":"Not posted","الهالك":"Waste","التفاصيل":"Details"
+});
+
+Object.assign(EN,{
+ "التاريخ والوقت":"Date and time",
+ "والوقت":"and time",
+ "الموظف":"Employee",
+ "الـموظف":"Employee",
+ "قوالب الصلاحيات وتحديد كل الشاشات متاحة داخل نموذج الموظف.":"Permission templates and select-all permissions are available in the employee form.",
+ "أسئلة سريعة":"Quick questions",
+ "غير مرحّلة":"Not posted",
+ "غير مرحّلة.":"Not posted."
 });
