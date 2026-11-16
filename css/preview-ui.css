@@ -716,3 +716,9 @@ button:disabled{opacity:.55;cursor:not-allowed}
  #pr th,#pr td{font-size:10px!important;padding:4px 3px!important}
  #pr tr{break-inside:avoid!important;page-break-inside:avoid!important}
 }
+
+/* Keep the chart-of-accounts hierarchy scrollable without clipping its first or last row. */
+.factory-table-scroll:has(.account-tree-toggle),.factory-universal-table-scroll:has(.account-tree-toggle){max-height:72vh;overflow:auto;overscroll-behavior:contain;scroll-padding-block-start:48px}
+.factory-table-scroll:has(.account-tree-toggle) table,.factory-universal-table-scroll:has(.account-tree-toggle) table{min-width:640px}
+.account-tree-toggle{position:relative;z-index:1;flex:none;margin-inline-end:5px}
+.account-tree-toggle:focus-visible,.factory-recent-row:focus-visible{outline:2px solid var(--pr);outline-offset:2px}
