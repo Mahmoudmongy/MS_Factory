@@ -196,3 +196,8 @@ assert(audit.includes('auditSnapshotHtml(snapshot)') && audit.includes('factory-
 assert(indexHtml.includes('<title>MS Factory</title>') && indexHtml.includes('application-name" content="MS Factory'), 'default application branding must not say مدير الشركة');
 const cloudflareWorkflow = fs.readFileSync(path.join(root, '.github/workflows/cloudflare-deploy.yml'), 'utf8');
 assert(cloudflareWorkflow.includes('ms-factory-pr-107-preview') && cloudflareWorkflow.includes('pull_request.number == 107'), 'PR 107 must deploy to a separate Cloudflare preview worker');
+
+const rootManifest = JSON.parse(fs.readFileSync(path.join(root, 'manifest.json'), 'utf8'));
+const publicManifest = JSON.parse(fs.readFileSync(path.join(root, 'public/manifest.json'), 'utf8'));
+assert(rootManifest.name === 'MS Factory' && rootManifest.short_name === 'MS Factory' && publicManifest.name === 'MS Factory', 'PWA branding must use the company product name instead of مدير الشركة');
+assert(previewCss.includes(':has(.account-tree-toggle)') && previewCss.includes('max-height:72vh'), 'chart of accounts tree must have a bounded independently scrollable viewport');
