@@ -595,18 +595,29 @@ const previewUiRuntime=await ev(()=>{
  document.querySelector('[data-fs-kind="balance"]')?.click();
  const statement=document.querySelector('#m .factory-fin-check')&&document.querySelector('#m .factory-fin-group')&&document.querySelector('#m').textContent.includes('قائمة المركز المالي');
  document.querySelector('[data-fs-kind="income"]')?.click();
- const from=document.querySelector('#factory-fs-from'),to=document.querySelector('#factory-fs-to');
- from.value='2026-01-01';from.dispatchEvent(new Event('input',{bubbles:true}));from.dispatchEvent(new Event('change',{bubbles:true}));
- const autoUpdated=document.querySelector('#m .factory-fin-heading')?.textContent.includes('01/01/2026');
+ const statementDatesLocked=!document.querySelector('#factory-fs-from')&&!document.querySelector('#factory-fs-to')&&!!document.querySelector('#m .factory-fin-period-readonly');
+ go('set');
+ const periodFrom=document.querySelector('#factory-settings-fs-from'),periodTo=document.querySelector('#factory-settings-fs-to');
+ const originalFrom=periodFrom?.value||'',originalTo=periodTo?.value||'';
+ if(periodFrom&&periodTo){periodFrom.value='2026-01-01';periodTo.value='2026-12-31';document.querySelector('#factory-save-fin-period')?.click();}
+ go('statements');
+ const autoUpdated=document.querySelector('#m .factory-fin-heading')?.textContent.includes('01/01/2026')&&statementDatesLocked;
  const headingBeforeInvalid=document.querySelector('#m .factory-fin-heading')?.textContent||'';
- to.value='2025-12-31';to.dispatchEvent(new Event('input',{bubbles:true}));to.dispatchEvent(new Event('change',{bubbles:true}));
+ go('set');
+ const invalidFrom=document.querySelector('#factory-settings-fs-from'),invalidTo=document.querySelector('#factory-settings-fs-to');
+ if(invalidFrom&&invalidTo){invalidFrom.value='2026-12-31';invalidTo.value='2025-12-31';document.querySelector('#factory-save-fin-period')?.click();}
+ go('statements');
  const invalidRejected=!!headingBeforeInvalid&&document.querySelector('#m .factory-fin-heading')?.textContent===headingBeforeInvalid;
  go('set');
- const restore=document.querySelector('#m [data-summary-place="customers"]');if(restore){restore.value='top';restore.dispatchEvent(new Event('change',{bubbles:true}));}
- const settingsOrderButtons=!!document.querySelector('#m [data-summary-move="sales"][data-summary-direction="-1"]');
+ const restoreFrom=document.querySelector('#factory-settings-fs-from'),restoreTo=document.querySelector('#factory-settings-fs-to');
+ if(restoreFrom&&restoreTo){restoreFrom.value=originalFrom;restoreTo.value=originalTo;document.querySelector('#factory-save-fin-period')?.click();}
+ document.querySelector('#factory-summary-customize-open')?.click();
+ const restore=document.querySelector('#factory-summary-customize-panel [data-summary-place="customers"]');if(restore){restore.value='top';restore.dispatchEvent(new Event('change',{bubbles:true}));}
+ const settingsOrderButtons=!!document.querySelector('#factory-summary-customize-panel [data-summary-move="sales"][data-summary-direction="-1"]');
+ document.querySelector('#factory-summary-customize-panel [data-summary-customize-close]')?.click();
  go('home');
  const recentTableMatchesPreview=!!document.querySelector('#m .factory-summary-mini-table thead th:nth-child(6)')&&document.querySelector('#m .factory-summary-panels')?.firstElementChild?.classList.contains('factory-summary-recent');
- return {sidebarMatchesPreview,partnerScreenCombined,supplierTabWorks,voucherScreenCombined,paymentTabWorks,invoiceScreenCombined,purchaseTabWorks,defaultOrder,dateSort,chartCollapsed,chartExpanded,preferenceSaved,moved,numbersHidden,recentNumbersRestored,recentTableMatchesPreview,settingsOrderButtons,themeOpened,blueApplied,darkButtonReadable,mobilePreview,statement,autoUpdated,invalidRejected};
+ return {sidebarMatchesPreview,partnerScreenCombined,supplierTabWorks,voucherScreenCombined,paymentTabWorks,invoiceScreenCombined,purchaseTabWorks,defaultOrder,dateSort,chartCollapsed,chartExpanded,preferenceSaved,moved,numbersHidden,recentNumbersRestored,recentTableMatchesPreview,settingsOrderButtons,themeOpened,blueApplied,darkButtonReadable,mobilePreview,statement,statementDatesLocked,autoUpdated,invalidRejected};
 });
 ok('preview UI: summary order, saved layout, hide amounts, theme palette, mobile preview and financial statements are functional',
  previewUiRuntime.sidebarMatchesPreview&&previewUiRuntime.partnerScreenCombined&&previewUiRuntime.supplierTabWorks&&previewUiRuntime.voucherScreenCombined&&previewUiRuntime.paymentTabWorks&&previewUiRuntime.invoiceScreenCombined&&previewUiRuntime.purchaseTabWorks&&previewUiRuntime.defaultOrder&&previewUiRuntime.dateSort&&previewUiRuntime.chartCollapsed&&previewUiRuntime.chartExpanded&&previewUiRuntime.preferenceSaved&&previewUiRuntime.moved&&previewUiRuntime.numbersHidden&&previewUiRuntime.recentNumbersRestored&&previewUiRuntime.recentTableMatchesPreview&&previewUiRuntime.settingsOrderButtons&&previewUiRuntime.themeOpened&&previewUiRuntime.blueApplied&&previewUiRuntime.darkButtonReadable&&previewUiRuntime.mobilePreview&&previewUiRuntime.statement&&previewUiRuntime.autoUpdated&&previewUiRuntime.invalidRejected,previewUiRuntime);
