@@ -94,9 +94,27 @@ function renderRows() {
   root.innerHTML=`<div class="card" style="overflow:auto"><table class="l" style="min-width:850px;width:100%"><thead><tr><th>${text('التاريخ','Date')}</th><th>${text('العملية','Action')}</th><th>${text('القسم','Section')}</th><th>${text('رقم السجل','Record ID')}</th><th>${text('المنفذ','Actor')}</th><th>${text('التفاصيل','Details')}</th><th>${text('الإجراء','Action')}</th></tr></thead><tbody>${visible.map(row=>{
     const key=row.record_type+'|'+row.record_id,undoSupported=['partners','items','codes','wh','accts','customers','suppliers'].includes(row.record_type),businessReversal=['docs','vch','po','je','wo','L','mv','sret','pret','payroll'].includes(row.record_type),canUndo=undoSupported&&latest.get(key)===row.id&&['INSERT','UPDATE'].includes(row.operation);
     const snapshot={before:row.old_row,after:row.new_row};
-    return `<tr><td>${esc(new Date(row.occurred_at).toLocaleString('en-GB'))}</td><td>${esc(opLabel(row.operation))}</td><td>${esc(typeLabel(row.record_type))}</td><td>${esc(row.record_id)}</td><td>${esc(row.actor_id||'—')}</td><td><details><summary>${text('عرض قبل / بعد','View before / after')}</summary><pre style="white-space:pre-wrap;direction:ltr;text-align:left;max-width:520px;overflow:auto">${esc(JSON.stringify(snapshot,null,2))}</pre></details></td><td>${canUndo?`<button class="g" type="button" data-undo="${Number(row.id)}">${text('تراجع آمن','Safe undo')}</button>`:businessReversal?`<span title="${text('استخدم التراجع من شاشة الحركة','Use the reversal action on the movement screen')}" class="mu">${text('عكس من شاشة الحركة','Reverse from movement screen')}</span>`:'—'}</td></tr>`;
+    return `<tr><td>${esc(new Date(row.occurred_at).toLocaleString('en-GB'))}</td><td>${esc(opLabel(row.operation))}</td><td>${esc(typeLabel(row.record_type))}</td><td>${esc(row.record_id)}</td><td>${esc(row.actor_id||'—')}</td><td><details class="factory-audit-human-details"><summary>${text("عرض قبل / بعد","View before / after")}</summary>${auditSnapshotHtml(snapshot)}</details></td><td>${canUndo?`<button class="g" type="button" data-undo="${Number(row.id)}">${text('تراجع آمن','Safe undo')}</button>`:businessReversal?`<span title="${text('استخدم التراجع من شاشة الحركة','Use the reversal action on the movement screen')}" class="mu">${text('عكس من شاشة الحركة','Reverse from movement screen')}</span>`:'—'}</td></tr>`;
   }).join('')}</tbody></table></div>`;
 }
+
+function auditHumanValue(value){
+ if(value===null||value===undefined||value==="")return "—";
+ if(typeof value==="boolean")return value?text("نعم","Yes"):text("لا","No");
+ if(Array.isArray(value))return value.length?value.map(auditHumanValue).join("، "):"—";
+ if(typeof value==="object")return Object.entries(value).map(([k,v])=>auditFieldLabel(k)+": "+auditHumanValue(v)).join(" · ");
+ if(typeof value==="string"&&/^\d{4}-\d{2}-\d{2}T/.test(value)){const d=new Date(value);if(!Number.isNaN(d.getTime()))return d.toLocaleString(english()?"en-GB":"ar-EG");}
+ return String(value);
+}
+function auditFieldLabel(key){
+ const labels={id:"المعرّف",name:"الاسم",code:"الكود",account_code:"كود الحساب",account_name:"اسم الحساب",amount:"المبلغ",total:"الإجمالي",date:"التاريخ",created_at:"تاريخ الإنشاء",updated_at:"آخر تعديل",phone:"الهاتف",address:"العنوان",notes:"ملاحظات",description:"الوصف",status:"الحالة",quantity:"الكمية",price:"السعر",cost:"التكلفة",type:"النوع",operation:"العملية",record_id:"رقم السجل",actor_id:"المستخدم",factory_id:"الشركة",customer_id:"العميل",supplier_id:"المورد",product_id:"الصنف",invoice_id:"الفاتورة",voucher_id:"السند",warehouse_id:"المخزن",parent_id:"الحساب الرئيسي",is_active:"نشط",email:"البريد الإلكتروني"};
+ return labels[key]||String(key).replace(/_/g," ").replace(/\b\w/g,c=>c.toUpperCase());
+}
+function auditSnapshotHtml(snapshot){
+ const side=(key,title)=>{const value=snapshot?.[key];if(!value||typeof value!=="object")return '<section class="factory-audit-snapshot-side"><h4>'+title+'</h4><p class="mu">لا توجد بيانات</p></section>';const rows=Object.entries(value).map(([field,val])=>'<div class="factory-audit-snapshot-row"><span>'+esc(auditFieldLabel(field))+'</span><strong>'+esc(auditHumanValue(val))+'</strong></div>').join("");return '<section class="factory-audit-snapshot-side"><h4>'+title+'</h4><div class="factory-audit-snapshot-fields">'+(rows||'<p class="mu">لا توجد بيانات</p>')+'</div></section>';};
+ return '<div class="factory-audit-snapshot-grid">'+side("before",text("قبل التعديل","Before change"))+side("after",text("بعد التعديل","After change"))+'</div>';
+}
+
 async function undoClick(event) {
   const button=event.target.closest('[data-undo]'); if(!button)return;
   const id=Number(button.dataset.undo); if(!Number.isSafeInteger(id)||id<=0)return;
@@ -189,3 +207,15 @@ renderRows = function(){
     return '<tr><td>'+esc(new Date(row.occurred_at).toLocaleString("en-GB"))+'</td><td>'+esc(opLabel(row.operation))+'</td><td>'+esc(typeLabel(row.record_type))+'</td><td>'+esc(row.record_id)+'</td><td>'+esc(row.actor_id||"—")+'</td><td><b>'+esc(auditBusinessSummary(row))+'</b><details><summary>'+text("تفاصيل البيانات قبل / بعد","Raw before / after data")+'</summary><pre style="white-space:pre-wrap;direction:ltr;text-align:left;max-width:520px;overflow:auto">'+esc(JSON.stringify(snapshot,null,2))+'</pre></details></td><td>'+(canUndo?'<button class="g" type="button" data-undo="'+Number(row.id)+'">'+text("تراجع آمن","Safe undo")+'</button>':businessReversal?'<span class="mu">'+text("عكس من شاشة الحركة","Reverse from movement screen")+'</span>':"—")+'</td></tr>';
   }).join("")+'</tbody></table></div>';
 };
+
+<style id="factory-audit-human-style">
+.factory-audit-snapshot-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;min-width:min(650px,100%)}
+.factory-audit-snapshot-side{border:1px solid var(--bd);border-radius:9px;padding:9px;background:var(--bg)}
+.factory-audit-snapshot-side h4{margin:0 0 8px;color:var(--tx)}
+.factory-audit-snapshot-fields{display:grid;gap:5px}
+.factory-audit-snapshot-row{display:grid;grid-template-columns:minmax(110px,.8fr) minmax(160px,1.2fr);gap:8px;padding:6px 7px;border-bottom:1px solid var(--bd);align-items:start}
+.factory-audit-snapshot-row span{color:var(--mu)}
+.factory-audit-snapshot-row strong{color:var(--tx);font-weight:600;overflow-wrap:anywhere;direction:auto}
+.factory-audit-human-details{min-width:250px}
+@media(max-width:700px){.factory-audit-snapshot-grid{grid-template-columns:1fr;min-width:0}.factory-audit-snapshot-row{grid-template-columns:1fr}}
+</style>
