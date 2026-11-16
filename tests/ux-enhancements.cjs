@@ -162,7 +162,7 @@ assert(app.includes("vTl=function(){") && app.includes("fts(x.ts)") && app.inclu
 
 assert(app.includes('statements:()=>vStatements()') && app.includes('["statements",ico("report"),"القوائم المالية"]'), "financial statements screen is available from the app navigation");
 assert(previewUi.includes("function renderFinancialStatements()") && previewUi.includes("SCR.statements=renderFinancialStatements") && previewUi.includes("statementGroup(\'I\'") && previewUi.includes("statementGroup(\'A\'"), "financial statements use live account ledgers for income and balance sheet");
-assert(previewUi.includes("function applyFinancialPeriod()") && previewUi.includes("if(from&&to&&from>to)"), "financial statement period validates date order");
+assert(previewUi.includes("function applyFinancialPeriod(from,to)") && previewUi.includes("if(from&&to&&from>to)"), "financial statement period validates date order before saving from Settings");
 assert(app.includes('function printStatements()') && app.includes('طباعة القوائم أو حفظها PDF'), "financial statements have a connected print and PDF action");
 assert(previewCss.includes(".factory-fin-grid") && previewCss.includes(".factory-fin-filters") && previewCss.includes("@media(max-width:860px)"), "financial statements adapt to mobile and desktop");
 
