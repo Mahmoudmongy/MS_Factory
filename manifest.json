@@ -1,6 +1,6 @@
 {
-  "name": "مدير الشركة",
-  "short_name": "مدير الشركة",
+  "name": "MS Factory",
+  "short_name": "MS Factory",
   "start_url": "./index.html",
   "display": "standalone",
   "background_color": "#0f766e",
