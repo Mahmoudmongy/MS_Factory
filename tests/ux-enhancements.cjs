@@ -216,3 +216,5 @@ assert(auth.includes("loginButton.addEventListener('click'") && auth.includes('�
 
 assert(app.includes('supplierShownBalance(b,!isCustomer)-supplierShownBalance(a,!isCustomer)') && !app.slice(app.indexOf('vParty=function'),app.indexOf('vJe=function')).includes('عليه لنا') && !app.slice(app.indexOf('vParty=function'),app.indexOf('vJe=function')).includes('له عندنا'), 'active customer and supplier tables must sort by signed balance and avoid verbal balance labels');
 assert(app.includes('.sort((a,b)=>String(b.date||b.d||"").localeCompare(String(a.date||a.d||""))'), 'journal entry history must be newest first');
+
+assert(app.slice(app.indexOf('function factoryDrillPartner'),app.indexOf('/* Account hierarchy */')).includes('btxt(pbal(id)*sg)'), 'negative partner closing balances retain the red signed-number formatter');
