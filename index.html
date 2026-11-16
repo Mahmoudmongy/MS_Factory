@@ -117,16 +117,18 @@ window.__factoryAuthPromise = (async function bootstrapFactoryApp() {
 })();
 </script>
 <body>
-<div id="factory-boot-screen" role="status" aria-live="polite"><div class="factory-boot-card"><img src="./assets/icon.svg" alt="شعار الشركة"><div class="factory-boot-copy"><strong>MS Factory</strong><small id="factory-boot-phase">جاري التحميل</small></div><span class="boot-dots" aria-hidden="true"><i></i><i></i><i></i></span></div></div><script>
+<div id="factory-boot-screen" role="status" aria-live="polite"><div class="factory-boot-card"><img id="factory-boot-logo" src="./assets/icon.svg" alt="شعار الشركة"><div class="factory-boot-copy"><strong>MS Factory</strong><small id="factory-boot-phase">جاري التحميل</small></div><span class="boot-dots" aria-hidden="true"><i></i><i></i><i></i></span></div></div><script>
 (function(){
  function applyCachedFactoryBrand(){
   try{
-   const saved=JSON.parse(localStorage.getItem('factory-branding')||'null');
-   if(!saved)return;
+   const saved=JSON.parse(localStorage.getItem('factory-branding')||'{}')||{};
+   const legacy=JSON.parse(localStorage.getItem('mgr6')||'{}')||{};
+   const nameValue=saved.name||legacy.name||legacy.company_name||legacy.biz?.name;
+   const logoValue=saved.logo||legacy.logo||legacy.biz?.logo||legacy.company?.logo;
    const card=document.querySelector('.factory-boot-card');if(!card)return;
    const name=card.querySelector('.factory-boot-copy strong'),logo=card.querySelector('img'),phase=document.getElementById('factory-boot-phase');
-   if(name&&saved.name)name.textContent=String(saved.name).slice(0,120);
-   if(logo&&saved.logo&&/^data:image\/(?:jpeg|png|webp);base64,/i.test(saved.logo))logo.src=saved.logo;
+   if(name&&nameValue)name.textContent=String(nameValue).slice(0,120);
+   if(logo&&typeof logoValue==='string'&&/^data:image\/(?:jpeg|png|webp);base64,/i.test(logoValue))logo.src=logoValue;
    if(phase)phase.textContent='جاري التحميل';
   }catch(_){}
  }

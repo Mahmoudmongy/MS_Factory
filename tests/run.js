@@ -10,6 +10,8 @@ await new Promise(r=>server.listen(0,r));const BASE='http://localhost:'+server.a
 const browser=await pw.chromium.launch();
 const recoveryPage=await browser.newPage();
 await recoveryPage.goto(BASE+'auth.html');
+const loginButtonType=await recoveryPage.locator('#auth-login').getAttribute('type');
+ok('login requires an explicit button press after password entry',loginButtonType==='button',loginButtonType);
 const normalRecovery=await recoveryPage.evaluate(async()=>{
   const {createConflictRecovery}=await import('/js/conflict-recovery.js');
   const scope='browser-normal-'+Date.now(), queueKey='ms-factory-db-queue-v1:'+scope, reviewKey='ms-factory-db-conflict-review-v1:'+scope;
@@ -626,8 +628,20 @@ ok('preview UI: summary order, saved layout, hide amounts, theme palette, mobile
 const dbBoot=dbSync.slice(dbSync.indexOf('async function bootstrap()'),dbSync.indexOf('window.__factoryPersistState'));
 ok('startup uses one deferred offline cache snapshot instead of synchronous per-record writes',/function scheduleCacheSnapshot\(rows\)/.test(dbSync)&&/setBaselineRow\(row, false\)/.test(dbSync)&&/__snapshot__/.test(dbSync));
 ok('the app-ready event is dispatched before the realtime connection is awaited',!dbBoot.includes('await connectRealtime();')&&dbBoot.includes('connectRealtime().catch'));
-const tableIconRuntime=await ev(()=>{const wrap=document.createElement('div');wrap.className='factory-table-scroll';wrap.style.width='420px';const table=document.createElement('table');table.className='l';table.innerHTML='<thead><tr><th>التاريخ</th><th>البيان</th></tr></thead><tbody>'+Array.from({length:9},(_,i)=>'<tr><td>2026-11-'+String(i+1).padStart(2,'0')+'</td><td>'+'نص طويل لاختبار التفاف الكلام داخل العمود دون تغيير عرضه '.repeat(3)+'</td></tr>').join('')+'</tbody>';wrap.appendChild(table);ACT.appendChild(wrap);factoryApplyFixedTableLayout(table);const box=document.createElement('div');box.innerHTML='<button>مشاركة ملف PDF</button><a href="#">عرض</a>';ACT.appendChild(box);factoryIconizeActions(box);factoryIconizeActionLinks(box);const result={fixed:table.style.tableLayout==='fixed',cols:table.querySelectorAll('colgroup col').length===2,sticky:getComputedStyle(table.querySelector('th')).position==='sticky',scrollHeight:!!wrap.style.maxHeight,wrapped:table.querySelector('td.factory-very-long-cell')!==null,icons:box.querySelectorAll('svg').length===2,labels:!!box.querySelector('button[aria-label="مشاركة ملف PDF"]')&&!!box.querySelector('a[aria-label="عرض"]')};wrap.remove();box.remove();return result});
-ok('tables keep fixed columns, sticky headers, compact icon actions and wrapped long text',Object.values(tableIconRuntime).every(Boolean),tableIconRuntime);
+const tableIconRuntime=await ev(()=>{
+ const wrap=document.createElement('div');wrap.className='factory-table-scroll';wrap.style.width='420px';
+ const table=document.createElement('table');table.className='l';table.innerHTML='<thead><tr><th>التاريخ</th><th>البيان</th></tr></thead><tbody>'+Array.from({length:9},(_,i)=>'<tr><td>2026-11-'+String(i+1).padStart(2,'0')+'</td><td>'+'نص طويل لاختبار التفاف الكلام داخل العمود دون تغيير عرضه '.repeat(3)+'</td></tr>').join('')+'</tbody>';
+ wrap.appendChild(table);ACT.appendChild(wrap);factoryApplyFixedTableLayout(table);
+ const actionWrap=document.createElement('div');actionWrap.className='factory-table-scroll';actionWrap.style.width='420px';
+ const actionTable=document.createElement('table');actionTable.className='l';actionTable.innerHTML='<thead><tr><th>الاسم</th><th>الإجراءات</th></tr></thead><tbody><tr><td>اختبار</td><td><button>عرض</button><button>تعديل</button><button>حذف</button></td></tr></tbody>';
+ actionWrap.appendChild(actionTable);ACT.appendChild(actionWrap);factoryApplyFixedTableLayout(actionTable);
+ const box=document.createElement('div');box.innerHTML='<button>مشاركة ملف PDF</button><button title="تعديل">✎</button><button class="factory-save-pdf-action" aria-label="حفظ المستند PDF" title="حفظ المستند PDF"><svg viewBox="0 0 24 24"><path d="M3 3h18v18H3z"/></svg><span>حفظ PDF</span></button><a href="#">عرض</a>';ACT.appendChild(box);
+ factoryIconizeActions(box);factoryIconizeActionLinks(box);
+ const pdfTable=document.createElement('table');pdfTable.innerHTML='<thead><tr><th>الكمية</th><th>البيان</th></tr></thead><tbody><tr><td>1250.50</td><td>وصف طويل يجب أن يلتف داخل الخلية</td></tr></tbody>';document.querySelector('#pr').appendChild(pdfTable);factoryPreparePdfTableCells(pdfTable);
+ const result={fixed:table.style.tableLayout==='fixed',cols:table.querySelectorAll('colgroup col').length===2,sticky:getComputedStyle(table.querySelector('th')).position==='sticky',scrollHeight:!!wrap.style.maxHeight,wrapped:table.querySelector('td.factory-very-long-cell')!==null,firstRowVisible:parseFloat(getComputedStyle(table.querySelector('tbody tr:first-child td')).paddingTop)>=12,actionColumn:parseFloat(actionTable.querySelector('colgroup col:last-child')?.style.width||'0')>=116,icons:box.querySelectorAll('svg').length===4,editIcon:!!box.querySelector('button[aria-label="تعديل"] svg'),shareIcon:!!box.querySelector('button[aria-label="مشاركة ملف PDF"] svg'),saveSvgPreserved:!!box.querySelector('.factory-save-pdf-action svg'),linkIcon:!!box.querySelector('a[aria-label="عرض"] svg'),pdfNumber:!!pdfTable.querySelector('td.factory-pdf-number'),pdfTextWrap:!!pdfTable.querySelector('td.factory-pdf-text')};
+ wrap.remove();actionWrap.remove();box.remove();pdfTable.remove();return result;
+});
+ok('tables keep first data row visible, action columns fit, SVG actions remain visible, and PDF numbers do not wrap',Object.values(tableIconRuntime).every(Boolean),tableIconRuntime);
 
 /* Search typing and duplicate screen-tab regression, including a narrow mobile viewport. */
 await ev(()=>go('cust'));
@@ -665,6 +679,10 @@ await mobileTo.fill("2026-11-30");
 await mobileTo.evaluate(el=>el.blur());
 const mobileDateCommit=await ev(()=>({to:FL.dsale.to,panelHidden:document.querySelector('.filter-card[data-filter-group="dsale"] .filter-date-panel')?.hidden,width:document.documentElement.scrollWidth}));
 ok('mobile date filter commits when focus leaves the date group without horizontal overflow',mobileDateCommit.to==="2026-11-30"&&mobileDateCommit.panelHidden===true&&mobileDateCommit.width<=390,mobileDateCommit);
+const settingsGroupRuntime=await ev(()=>{go('set');return {groups:document.querySelectorAll('#m .factory-settings-group').length,iconWidth:getComputedStyle(document.querySelector('#m .factory-settings-group .tile-ico')).width,periodFields:!!document.querySelector('#m #factory-fs-from')||!!document.querySelector('#m #factory-save-fin-period')}});
+ok('settings icons are compact and grouped, with no duplicate financial period',settingsGroupRuntime.groups>=4&&settingsGroupRuntime.iconWidth==='26px'&&!settingsGroupRuntime.periodFields,settingsGroupRuntime);
+const statementsPeriodRuntime=await ev(()=>{go('statements');return {from:!!document.querySelector('#m #factory-fs-from'),to:!!document.querySelector('#m #factory-fs-to'),apply:!!document.querySelector('#m [data-fs-apply]')}});
+ok('financial period is editable on the financial statements screen',statementsPeriodRuntime.from&&statementsPeriodRuntime.to&&statementsPeriodRuntime.apply,statementsPeriodRuntime);
 await p.setViewportSize({width:1280,height:900});await ev(()=>{FL.cust={};go('home')});
 
 /* master data edit: same partner ID, no duplicate row */

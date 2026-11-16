@@ -8,6 +8,7 @@ const previewCss = fs.readFileSync(path.join(root, 'css/preview-ui.css'), 'utf8'
 const previewUi = fs.readFileSync(path.join(root, 'js/preview-ui.js'), 'utf8');
 const databaseFirst = fs.readFileSync(path.join(root, 'js/database-first.js'), 'utf8');
 const indexHtml = fs.readFileSync(path.join(root, 'index.html'), 'utf8');
+const auth = fs.readFileSync(path.join(root, 'js/auth.js'), 'utf8');
 const history = fs.readFileSync(path.join(root, 'js/manager-history.js'), 'utf8');
 const migration = fs.readFileSync(path.join(root, 'supabase/migrations/20261114153611_guard_factory_record_deletes.sql'), 'utf8');
 const safeUndoMigration = fs.readFileSync(path.join(root, 'supabase/migrations/20261114131825_safe_factory_record_undo.sql'), 'utf8');
@@ -183,9 +184,9 @@ const activeCoa = app.slice(activeCoaStart, activeCoaEnd);
 assert(activeCoaStart >= 0 && activeCoaEnd > activeCoaStart && !activeCoa.includes('factoryEsc(a.code||"—")') && !activeCoa.includes('factoryEsc(x.a.code||"—")') && !activeCoa.includes("رقم الحساب"), "chart of accounts and trial balance show account names without account identifiers");
 assert(previewUi.includes("label=esc(accountLabel(a))") && previewUi.includes("'الحساب '+accountLabel(a)"), "financial statement account names and drill-down titles hide account identifiers");
 
-assert(previewUi.includes('ms-factory-financial-period-v1') && previewUi.includes('factory-fin-period-readonly') && previewUi.includes('factory-save-fin-period'), 'financial statement period must be persistent and editable only from Settings');
+assert(previewUi.includes('ms-factory-financial-period-v1') && previewUi.includes('id="factory-fs-from"') && previewUi.includes('id="factory-fs-to"') && previewUi.includes('data-fs-apply'), 'financial statement period must be editable on the statements screen and persistent');
 assert(previewUi.includes('factory-summary-customize-open') && previewUi.includes('factory-summary-customize-panel'), 'summary customization must open as a dedicated settings panel');
-assert(previewUi.includes('factory-settings-fs-from') && previewUi.includes('factory-settings-fs-to'), 'financial period settings must expose start and end dates');
+assert(previewUi.includes('function applyFinancialPeriod(from,to)') && previewUi.includes("document.getElementById('factory-fs-from')") && !previewUi.includes('factory-settings-fs-from'), 'financial period must be applied from statements screen, not Settings');
 assert(previewCss.includes('.factory-summary-table-scroll .factory-summary-mini-table') && previewCss.includes('th:last-child') && previewCss.includes('tbody tr:first-child'), 'summary and general tables must align first rows and last columns');
 assert(previewCss.includes('factory-summary-customize-overlay') && previewCss.includes('factory-fin-period-readonly'), 'settings panel and locked financial period must be styled');
 assert(previewCss.includes('#top #logout-btn{display:none') && previewCss.includes('#top #who{grid-area:who'), 'top logout icon must be removed and username field widened');
@@ -203,3 +204,12 @@ assert(rootManifest.name === 'MS Factory' && rootManifest.short_name === 'MS Fac
 assert(previewCss.includes(':has(.account-tree-toggle)') && previewCss.includes('max-height:72vh'), 'chart of accounts tree must have a bounded independently scrollable viewport');
 
 assert(!app.includes('مدير الشركة') && app.includes('name:"MS Factory"') && app.includes('org:S.name||"MS Factory"'), 'default and fallback document branding must use the company name');
+
+assert(app.includes('function factoryPreparePdfTableCells(root)') && app.includes('factory-pdf-number') && app.includes('factoryPreparePdfTableCells(el)'), 'PDF tables must wrap text while keeping numeric values on one line');
+assert(app.includes('maxActions*34+14') && previewCss.includes('factory-row-actions{display:inline-flex'), 'table action column must reserve enough width for action icons');
+assert(app.includes('supplierShownBalance(b,!c)-supplierShownBalance(a,!c)'), 'customer and supplier lists must sort by signed balance descending');
+assert(app.includes('function factoryDrillPartner') && !app.slice(app.indexOf('function factoryDrillPartner'),app.indexOf('/* Account hierarchy */')).includes('عليه لنا') && !app.slice(app.indexOf('function factoryDrillPartner'),app.indexOf('/* Account hierarchy */')).includes('له علينا'), 'partner movements must show signed amounts without verbal labels');
+assert(history.includes('function detailValue(value,depth=0)') && !history.includes('JSON.stringify(value,null,2)') && history.includes('mh-detail-fields'), 'Manager history details must be human-readable fields, not JSON');
+assert(app.includes('factory-settings-groups') && app.includes('factory-settings-group') && previewCss.includes('factory-settings-group .tile-ico{width:26px'), 'settings icons must be smaller and grouped');
+assert(indexHtml.includes('factory-boot-logo') && indexHtml.includes("localStorage.getItem('mgr6')") && indexHtml.includes('logoValue'), 'loading screen must load the saved company logo');
+assert(auth.includes("loginButton.addEventListener('click'") && auth.includes('اضغط على زر تسجيل الدخول') && !auth.includes("form.addEventListener('submit', async"), 'login must require an explicit button click');

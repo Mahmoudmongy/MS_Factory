@@ -133,7 +133,16 @@ function ensureUi() {
   #manager-history-panel th,#manager-history-panel td{padding:9px 10px;border-bottom:1px solid var(--bd,#ddd);text-align:right;vertical-align:top}
   #manager-history-panel th{position:sticky;top:0;background:var(--card,#fff)}
   #manager-history-panel details summary{cursor:pointer;color:#0f766e;font-weight:700}
-  #manager-history-panel pre{white-space:pre-wrap;word-break:break-word;max-height:360px;overflow:auto;direction:ltr;text-align:left;background:rgba(127,127,127,.08);padding:10px;border-radius:8px}
+  #manager-history-panel .mh-detail summary{cursor:pointer;color:#0f766e;font-weight:700;white-space:nowrap}
+  #manager-history-panel .mh-detail-content{min-width:240px;max-width:min(760px,80vw);max-height:420px;overflow:auto;margin-top:8px;padding:10px;border:1px solid var(--bd,#ddd);border-radius:9px;background:var(--bg,#f7f8fa)}
+  #manager-history-panel .mh-detail-fields{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px;margin:0}
+  #manager-history-panel .mh-detail-fields>div{min-width:0;padding:7px 8px;border-bottom:1px solid var(--bd,#ddd)}
+  #manager-history-panel .mh-detail-fields dt{font-size:11px;opacity:.7;margin-bottom:3px}
+  #manager-history-panel .mh-detail-fields dd{margin:0;overflow-wrap:anywhere;direction:auto}
+  #manager-history-panel .mh-detail-list{display:grid;gap:8px}
+  #manager-history-panel .mh-detail-item{padding:9px;border:1px solid var(--bd,#ddd);border-radius:8px;background:var(--card,#fff)}
+  #manager-history-panel .mh-detail-item>b{display:block;margin-bottom:6px;color:#0f766e}
+  @media(max-width:640px){#manager-history-panel .mh-detail-fields{grid-template-columns:1fr}}
   #manager-history-panel .mh-tag{display:inline-block;border-radius:6px;padding:3px 7px;background:rgba(15,118,110,.12);font-size:12px}
   #manager-history-panel .mh-negative{color:#b91c1c;font-weight:700}
   #manager-history-panel .mh-close{border:0;border-radius:8px;padding:9px 14px;background:#991b1b;color:#fff;cursor:pointer}
@@ -193,7 +202,26 @@ function table(headers,rows) {
   if(!rows.length)return '<div class="mh-muted">لا توجد سجلات في هذا القسم.</div>';
   return `<div style="overflow:auto"><table><thead><tr>${headers.map(h=>'<th>'+esc(h)+'</th>').join('')}</tr></thead><tbody>${rows.join('')}</tbody></table></div>`;
 }
-function detail(value){return `<details><summary>عرض التفاصيل الأصلية</summary><pre>${esc(JSON.stringify(value,null,2))}</pre></details>`}
+const DETAIL_LABELS={id:"المعرّف",external_id:"معرّف المصدر",name:"الاسم",sku:"كود الصنف",model:"الموديل",unit:"الوحدة",phone:"الهاتف",city:"المدينة",governorate:"المحافظة",address:"العنوان",manager_reported_balance:"رصيد المصدر",manager_balance_currency:"عملة الرصيد",manager_balance_status:"حالة الرصيد",account_code:"كود الحساب",account_name:"اسم الحساب",invoice_no:"رقم الفاتورة",invoice_date:"تاريخ الفاتورة",voucher_no:"رقم السند",voucher_date:"تاريخ السند",return_no:"رقم المرتجع",return_date:"تاريخ المرتجع",direction:"الاتجاه",amount:"المبلغ",total:"الإجمالي",quantity:"الكمية",price:"السعر",unit_cost:"تكلفة الوحدة",buy_price:"سعر الشراء",note:"ملاحظات",description:"الوصف",status:"الحالة",created_at:"تاريخ الإنشاء",updated_at:"آخر تحديث",customer_name:"اسم العميل",supplier_name:"اسم المورد",warehouse:"المخزن",manager_location_id:"موقع التخزين",product_id:"الصنف",customer_id:"العميل",supplier_id:"المورد",invoice_id:"الفاتورة",voucher_id:"السند",items:"الأصناف",lines:"البنود",extra_lines:"بنود إضافية",source_lines:"سطور المصدر",invoice:"الفاتورة",return:"المرتجع",voucher:"السند",raw:"البيانات الأصلية"};
+function detailLabel(key){return DETAIL_LABELS[key]||String(key).replace(/_/g," ").replace(/\b\w/g,c=>c.toUpperCase());}
+function detailValue(value,depth=0){
+ if(value===null||value===undefined||value==="")return '<span class="mh-muted">—</span>';
+ if(typeof value==="boolean")return value?"نعم":"لا";
+ if(typeof value==="number")return esc(Number(value).toLocaleString("en-US",{maximumFractionDigits:4}));
+ if(typeof value==="string")return esc(value);
+ if(depth>=4)return '<span class="mh-muted">تفاصيل متداخلة</span>';
+ if(Array.isArray(value)){
+  if(!value.length)return '<span class="mh-muted">لا توجد عناصر</span>';
+  return '<div class="mh-detail-list">'+value.map((item,index)=>'<article class="mh-detail-item"><b>بند '+(index+1)+'</b>'+detailValue(item,depth+1)+'</article>').join('')+'</div>';
+ }
+ if(typeof value==="object"){
+  const entries=Object.entries(value);
+  if(!entries.length)return '<span class="mh-muted">لا توجد تفاصيل</span>';
+  return '<dl class="mh-detail-fields">'+entries.map(([key,val])=>'<div><dt>'+esc(detailLabel(key))+'</dt><dd>'+detailValue(val,depth+1)+'</dd></div>').join('')+'</dl>';
+ }
+ return esc(String(value));
+}
+function detail(value){return '<details class="mh-detail"><summary>عرض التفاصيل</summary><div class="mh-detail-content">'+detailValue(value)+'</div></details>'}
 function filtered(rows,fn) {
   const q=searchText.trim().toLocaleLowerCase();
   return !q?rows:rows.filter(row=>fn(row).toLocaleLowerCase().includes(q));
