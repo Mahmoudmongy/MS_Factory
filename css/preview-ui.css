@@ -693,7 +693,6 @@ button:disabled{opacity:.55;cursor:not-allowed}
 :root[data-theme="dark"] .factory-summary-mini-table th,:root[data-theme="dark"] .factory-summary-mini-table td,
 :root[data-theme="dark"] .factory-settings-action,:root[data-theme="dark"] .factory-summary-customize-window{color:#edf2f7!important}
 :root[data-theme="dark"] .factory-summary-mini-table td{border-color:#3b4a5b!important}
-:root:not([data-theme="light"]) .factory-summary-mini-table th,:root:not([data-theme="light"]) .factory-summary-mini-table td{color:#edf2f7}
 #pr{font-family:Arial,"Noto Sans Arabic",sans-serif!important;font-size:12px!important;line-height:1.35!important;direction:rtl}
 #pr *{max-width:100%;overflow-wrap:anywhere;hyphens:auto}
 #pr table{width:100%!important;max-width:100%!important;table-layout:fixed!important;border-collapse:collapse!important}
