@@ -599,32 +599,28 @@ const previewUiRuntime=await ev(()=>{
  document.querySelector('[data-fs-kind="balance"]')?.click();
  const statement=document.querySelector('#m .factory-fin-check')&&document.querySelector('#m .factory-fin-group')&&document.querySelector('#m').textContent.includes('قائمة المركز المالي');
  document.querySelector('[data-fs-kind="income"]')?.click();
- const statementDatesLocked=!document.querySelector('#factory-fs-from')&&!document.querySelector('#factory-fs-to')&&!!document.querySelector('#m .factory-fin-period-readonly');
- go('set');
- const periodFrom=document.querySelector('#factory-settings-fs-from'),periodTo=document.querySelector('#factory-settings-fs-to');
+ const periodFrom=document.querySelector('#factory-fs-from'),periodTo=document.querySelector('#factory-fs-to');
+ const statementDatesEditable=!!periodFrom&&!!periodTo&&!!document.querySelector('[data-fs-apply]')&&!document.querySelector('#m .factory-fin-period-readonly');
  const originalFrom=periodFrom?.value||'',originalTo=periodTo?.value||'';
- if(periodFrom&&periodTo){periodFrom.value='2026-01-01';periodTo.value='2026-12-31';document.querySelector('#factory-save-fin-period')?.click();}
- go('statements');
- const autoUpdated=document.querySelector('#m .factory-fin-heading')?.textContent.includes('01/01/2026')&&statementDatesLocked;
- const headingBeforeInvalid=document.querySelector('#m .factory-fin-heading')?.textContent||'';
- go('set');
- const invalidFrom=document.querySelector('#factory-settings-fs-from'),invalidTo=document.querySelector('#factory-settings-fs-to');
- if(invalidFrom&&invalidTo){invalidFrom.value='2026-12-31';invalidTo.value='2025-12-31';document.querySelector('#factory-save-fin-period')?.click();}
- go('statements');
+ if(periodFrom&&periodTo){periodFrom.value='2026-01-01';periodTo.value='2026-12-31';periodTo.dispatchEvent(new Event('change',{bubbles:true}));}
+ const headingAfterChange=document.querySelector('#m .factory-fin-heading')?.textContent||'';
+ const autoUpdated=headingAfterChange.includes('01/01/2026')&&headingAfterChange.includes('31/12/2026');
+ const headingBeforeInvalid=headingAfterChange;
+ const invalidFrom=document.querySelector('#factory-fs-from'),invalidTo=document.querySelector('#factory-fs-to');
+ if(invalidFrom&&invalidTo){invalidFrom.value='2026-12-31';invalidTo.value='2025-12-31';invalidTo.dispatchEvent(new Event('change',{bubbles:true}));}
  const invalidRejected=!!headingBeforeInvalid&&document.querySelector('#m .factory-fin-heading')?.textContent===headingBeforeInvalid;
- go('set');
- const restoreFrom=document.querySelector('#factory-settings-fs-from'),restoreTo=document.querySelector('#factory-settings-fs-to');
- if(restoreFrom&&restoreTo){restoreFrom.value=originalFrom;restoreTo.value=originalTo;document.querySelector('#factory-save-fin-period')?.click();}
+ const restoreFrom=document.querySelector('#factory-fs-from'),restoreTo=document.querySelector('#factory-fs-to');
+ if(restoreFrom&&restoreTo){restoreFrom.value=originalFrom;restoreTo.value=originalTo;restoreTo.dispatchEvent(new Event('change',{bubbles:true}));}
  document.querySelector('#factory-summary-customize-open')?.click();
  const restore=document.querySelector('#factory-summary-customize-panel [data-summary-place="customers"]');if(restore){restore.value='top';restore.dispatchEvent(new Event('change',{bubbles:true}));}
  const settingsOrderButtons=!!document.querySelector('#factory-summary-customize-panel [data-summary-move="sales"][data-summary-direction="-1"]');
  document.querySelector('#factory-summary-customize-panel [data-summary-customize-close]')?.click();
  go('home');
  const recentTableMatchesPreview=!!document.querySelector('#m .factory-summary-mini-table thead th:nth-child(6)')&&document.querySelector('#m .factory-summary-panels')?.firstElementChild?.classList.contains('factory-summary-recent');
- return {sidebarMatchesPreview,partnerScreenCombined,supplierTabWorks,voucherScreenCombined,paymentTabWorks,invoiceScreenCombined,purchaseTabWorks,defaultOrder,dateSort,chartCollapsed,chartExpanded,preferenceSaved,moved,numbersHidden,recentNumbersRestored,recentTableMatchesPreview,settingsOrderButtons,themeOpened,blueApplied,darkButtonReadable,mobilePreview,statement,statementDatesLocked,autoUpdated,invalidRejected};
+ return {sidebarMatchesPreview,partnerScreenCombined,supplierTabWorks,voucherScreenCombined,paymentTabWorks,invoiceScreenCombined,purchaseTabWorks,defaultOrder,dateSort,chartCollapsed,chartExpanded,preferenceSaved,moved,numbersHidden,recentNumbersRestored,recentTableMatchesPreview,settingsOrderButtons,themeOpened,blueApplied,darkButtonReadable,mobilePreview,statement,statementDatesEditable,autoUpdated,invalidRejected};
 });
 ok('preview UI: summary order, saved layout, hide amounts, theme palette, mobile preview and financial statements are functional',
- previewUiRuntime.sidebarMatchesPreview&&previewUiRuntime.partnerScreenCombined&&previewUiRuntime.supplierTabWorks&&previewUiRuntime.voucherScreenCombined&&previewUiRuntime.paymentTabWorks&&previewUiRuntime.invoiceScreenCombined&&previewUiRuntime.purchaseTabWorks&&previewUiRuntime.defaultOrder&&previewUiRuntime.dateSort&&previewUiRuntime.chartCollapsed&&previewUiRuntime.chartExpanded&&previewUiRuntime.preferenceSaved&&previewUiRuntime.moved&&previewUiRuntime.numbersHidden&&previewUiRuntime.recentNumbersRestored&&previewUiRuntime.recentTableMatchesPreview&&previewUiRuntime.settingsOrderButtons&&previewUiRuntime.themeOpened&&previewUiRuntime.blueApplied&&previewUiRuntime.darkButtonReadable&&previewUiRuntime.mobilePreview&&previewUiRuntime.statement&&previewUiRuntime.autoUpdated&&previewUiRuntime.invalidRejected,previewUiRuntime);
+ previewUiRuntime.sidebarMatchesPreview&&previewUiRuntime.partnerScreenCombined&&previewUiRuntime.supplierTabWorks&&previewUiRuntime.voucherScreenCombined&&previewUiRuntime.paymentTabWorks&&previewUiRuntime.invoiceScreenCombined&&previewUiRuntime.purchaseTabWorks&&previewUiRuntime.defaultOrder&&previewUiRuntime.dateSort&&previewUiRuntime.chartCollapsed&&previewUiRuntime.chartExpanded&&previewUiRuntime.preferenceSaved&&previewUiRuntime.moved&&previewUiRuntime.numbersHidden&&previewUiRuntime.recentNumbersRestored&&previewUiRuntime.recentTableMatchesPreview&&previewUiRuntime.settingsOrderButtons&&previewUiRuntime.themeOpened&&previewUiRuntime.blueApplied&&previewUiRuntime.darkButtonReadable&&previewUiRuntime.mobilePreview&&previewUiRuntime.statement&&previewUiRuntime.statementDatesEditable&&previewUiRuntime.autoUpdated&&previewUiRuntime.invalidRejected,previewUiRuntime);
 const dbBoot=dbSync.slice(dbSync.indexOf('async function bootstrap()'),dbSync.indexOf('window.__factoryPersistState'));
 ok('startup uses one deferred offline cache snapshot instead of synchronous per-record writes',/function scheduleCacheSnapshot\(rows\)/.test(dbSync)&&/setBaselineRow\(row, false\)/.test(dbSync)&&/__snapshot__/.test(dbSync));
 ok('the app-ready event is dispatched before the realtime connection is awaited',!dbBoot.includes('await connectRealtime();')&&dbBoot.includes('connectRealtime().catch'));

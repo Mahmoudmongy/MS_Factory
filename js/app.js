@@ -854,7 +854,8 @@ function repPrint(){const t=(RL.find(r=>r[0]==R.rep)||[])[1]||"تقرير",tb=[.
 const ld=src=>new Promise((ok,no)=>{if(document.querySelector(`script[src="${src}"]`))return ok();const s=document.createElement("script");s.src=src;s.onload=ok;s.onerror=()=>no(new Error("load"));document.head.appendChild(s)});
 // Keep text readable while numeric cells remain on a single line in exported PDFs.
 function factoryPreparePdfTableCells(root){
- root.querySelectorAll("table").forEach(table=>{
+ const tables=root.matches?.("table")?[root]:[...root.querySelectorAll("table")];
+ tables.forEach(table=>{
   const header=[...table.querySelectorAll("tr")].find(row=>row.querySelector("th"));
   const headers=header?[...header.children].map(cell=>(cell.textContent||"").trim()):[];
   table.querySelectorAll("tr").forEach(row=>{
@@ -1582,21 +1583,24 @@ async function stockScanCamera(){
 function stockMovementChooser(){sh('<h3>عرض حركة صنف</h3><label>اختر الصنف</label><select id="stock-movement-item">'+U(S.items||[],item=>'<option value="'+factoryEsc(item.id)+'">'+factoryEsc(item.name+' — '+(item.sku||''))+'</option>')+'</select><div class="row"><button type="button" onclick="openStockMovement()">عرض الحركة</button>'+bk+'</div>');}
 function openStockMovement(){const id=Number($("#stock-movement-item")?.value);if(!id){toast("اختر صنفًا أولًا");return;}drillItem(id);}
 vSet=function(){
- const tiles=[["coa","شجرة الحسابات","go('coa')"],["company","بيانات الشركة","bizForm()"],["print","قوالب الطباعة","tplForm()"],["import","استيراد من Excel","impForm()"],["margin","هامش الربح المقترح","pctForm()"],["warehouse","مخازن فرعية","wForm()"],["period","الفترات والقوائم المالية","go('statements')"],["colors","ألوان البرنامج","document.getElementById('factory-theme-open')?.click()"],["customize","تخصيص التبويبات","cust()"],["employee","الموظفون والصلاحيات","go('emp')"],["language","اللغة: عربي / English","togLang()"]];
- if(canInstall()&&!isStandalone())tiles.push(["install","تثبيت التطبيق","promptInstall()"]);
- return ph(N.set)+'<div class="tiles">'+U(tiles,t=>'<button type="button" class="tile" onclick="'+t[2]+'"><span class="tile-ico">'+ico(t[0])+'</span><span>'+t[1]+'</span></button>')+'</div>';
+ const groups=[
+  {title:"إعدادات الشركة",items:[["company","بيانات الشركة","bizForm()"],["language","اللغة: عربي / English","togLang()"]]},
+  {title:"إدارة الحسابات والموارد",items:[["coa","شجرة الحسابات","go('coa')"],["warehouse","مخازن فرعية","wForm()"],["employee","الموظفون والصلاحيات","go('emp')"],["customize","تخصيص التبويبات","cust()"]]},
+  {title:"الأدوات والمظهر",items:[["print","قوالب الطباعة","tplForm()"],["import","استيراد من Excel","impForm()"],["margin","هامش الربح المقترح","pctForm()"],["colors","ألوان البرنامج","openTheme()"]]}
+ ];
+ if(canInstall()&&!isStandalone())groups[2].items.push(["install","تثبيت التطبيق","promptInstall()"]);
+ const tile=t=>'<button type="button" class="tile" onclick="'+t[2]+'"><span class="tile-ico">'+ico(t[0])+'</span><span>'+t[1]+'</span></button>';
+ return ph(N.set)+'<div class="factory-settings-groups">'+groups.map(group=>'<section class="factory-settings-group"><h3>'+group.title+'</h3><div class="tiles">'+U(group.items,tile)+'</div></section>').join('')+'</div>';
 };
-
-
 vParty=function(isCustomer){
  const key=isCustomer?"cust":"supp",query=fv(key,"q"),balanceFilter=fv(key,"b");
- const people=(S.partners||[]).filter(p=>(isCustomer?p.c:p.s)&&(!query||ci(p.name,query)||ci(partyPhone(p),query)||ci(p.gov,query)||ci(p.city,query))&&(!balanceFilter||(balanceFilter==="lo"?pbal(p.id)>.005:balanceFilter==="er"?pbal(p.id)<-.005:Math.abs(pbal(p.id))<=.005)));
- people.sort((a,b)=>String(a.name||"").localeCompare(String(b.name||""),"ar"));
+ const people=(S.partners||[]).filter(p=>(isCustomer?p.c:p.s)&&(!query||ci(p.name,query)||ci(partyPhone(p),query)||ci(p.gov,query)||ci(p.city,query))&&(!balanceFilter||(balanceFilter==="lo"?supplierShownBalance(p.id,!isCustomer)>.005:balanceFilter==="er"?supplierShownBalance(p.id,!isCustomer)<-.005:Math.abs(supplierShownBalance(p.id,!isCustomer))<=.005)));
+ people.sort((a,b)=>supplierShownBalance(b.id,!isCustomer)-supplierShownBalance(a.id,!isCustomer)||String(a.name||"").localeCompare(String(b.name||""),"ar"));
  const rows=U(people,p=>{
   const status=p.active===false||p.is_active===false||p.status==="inactive"?"موقوف":p.active===true||p.is_active===true||p.status==="active"?"نشط":"—";
-  return '<tr><td>'+factoryEsc(p.name||"—")+'</td><td dir="ltr">'+factoryEsc(partyPhone(p)||"—")+'</td><td>'+(p.type==="w"?"جملة":"قطاعي")+'</td><td>'+lk(btxt(pbal(p.id)),'drillPartner('+Number(p.id)+')')+'</td><td><span class="factory-partner-status '+(status==="نشط"?"active":status==="موقوف"?"inactive":"")+'">'+status+'</span></td><td class="factory-row-actions"><button type="button" class="g" title="عرض البيانات وكشف الحساب" aria-label="عرض البيانات وكشف الحساب" onclick="partyView('+Number(p.id)+')">عرض</button>'+(can("edit")?'<button type="button" class="g" title="تعديل البيانات" aria-label="تعديل البيانات" onclick="pForm('+(isCustomer?1:0)+','+Number(p.id)+')">✎</button>':'')+'</td></tr>';
+  return '<tr><td>'+factoryEsc(p.name||"—")+'</td><td dir="ltr">'+factoryEsc(partyPhone(p)||"—")+'</td><td>'+(p.type==="w"?"جملة":"قطاعي")+'</td><td>'+lk(btxt(supplierShownBalance(p.id,!isCustomer)),'drillPartner('+Number(p.id)+')')+'</td><td><span class="factory-partner-status '+(status==="نشط"?"active":status==="موقوف"?"inactive":"")+'">'+status+'</span></td><td class="factory-row-actions"><button type="button" class="g" title="عرض البيانات وكشف الحساب" aria-label="عرض البيانات وكشف الحساب" onclick="partyView('+Number(p.id)+')">عرض</button>'+(can("edit")?'<button type="button" class="g" title="تعديل البيانات" aria-label="تعديل البيانات" onclick="pForm('+(isCustomer?1:0)+','+Number(p.id)+')">✎</button>':'')+'</td></tr>';
  });
- return ph(isCustomer?"العملاء":"الموردون",(can("edit")?'<button type="button" class="new" onclick="pForm('+(isCustomer?1:0)+')">+ '+(isCustomer?"عميل جديد":"مورد جديد")+'</button>':'')+'<button type="button" class="g" onclick="exportPartnerTable()">تصدير Excel</button>')+fbar(key,[["q","text","الاسم / الموبايل / المحافظة / المدينة"],["b","sel","الرصيد",[["","الكل"],["lo","عليه لنا (مستحق للشركة)"],["er","له عندنا (مستحق للطرف)"],["z","متزن"]]]])+unlinkedPartyReview()+'<div class="factory-table-scroll"><table id="factory-partner-table" class="l factory-custom-filtered"><thead><tr><th>الاسم</th><th>الموبايل</th><th>نوع التعامل</th><th>الرصيد</th><th>الحالة</th><th>الإجراءات</th></tr></thead><tbody>'+(rows||'<tr><td colspan="6" class="mu">لا توجد بيانات مطابقة</td></tr>')+'</tbody></table></div>';
+ return ph(isCustomer?"العملاء":"الموردون",(can("edit")?'<button type="button" class="new" onclick="pForm('+(isCustomer?1:0)+')">+ '+(isCustomer?"عميل جديد":"مورد جديد")+'</button>':'')+'<button type="button" class="g" onclick="exportPartnerTable()">تصدير Excel</button>')+fbar(key,[["q","text","الاسم / الموبايل / المحافظة / المدينة"],["b","sel","الرصيد",[["","الكل"],["lo","مستحق للشركة"],["er","مستحق للطرف"],["z","متزن"]]]])+unlinkedPartyReview()+'<div class="factory-table-scroll"><table id="factory-partner-table" class="l factory-custom-filtered"><thead><tr><th>الاسم</th><th>الموبايل</th><th>نوع التعامل</th><th>الرصيد</th><th>الحالة</th><th>الإجراءات</th></tr></thead><tbody>'+(rows||'<tr><td colspan="6" class="mu">لا توجد بيانات مطابقة</td></tr>')+'</tbody></table></div>';
 };
 vJe=function(){
  const key="je",query=fv(key,"q"),from=fv(key,"from"),to=fv(key,"to");
