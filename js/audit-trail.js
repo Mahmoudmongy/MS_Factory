@@ -204,18 +204,8 @@ renderRows = function(){
   visible.map(row=>{
     const key=row.record_type+"|"+row.record_id,undoSupported=["partners","items","codes","wh","accts","customers","suppliers"].includes(row.record_type),businessReversal=["docs","vch","po","je","wo","L","mv","sret","pret","payroll"].includes(row.record_type),canUndo=undoSupported&&latest.get(key)===row.id&&["INSERT","UPDATE"].includes(row.operation);
     const snapshot={before:row.old_row,after:row.new_row};
-    return '<tr><td>'+esc(new Date(row.occurred_at).toLocaleString("en-GB"))+'</td><td>'+esc(opLabel(row.operation))+'</td><td>'+esc(typeLabel(row.record_type))+'</td><td>'+esc(row.record_id)+'</td><td>'+esc(row.actor_id||"—")+'</td><td><b>'+esc(auditBusinessSummary(row))+'</b><details><summary>'+text("تفاصيل البيانات قبل / بعد","Raw before / after data")+'</summary><pre style="white-space:pre-wrap;direction:ltr;text-align:left;max-width:520px;overflow:auto">'+esc(JSON.stringify(snapshot,null,2))+'</pre></details></td><td>'+(canUndo?'<button class="g" type="button" data-undo="'+Number(row.id)+'">'+text("تراجع آمن","Safe undo")+'</button>':businessReversal?'<span class="mu">'+text("عكس من شاشة الحركة","Reverse from movement screen")+'</span>':"—")+'</td></tr>';
+    return '<tr><td>'+esc(new Date(row.occurred_at).toLocaleString("en-GB"))+'</td><td>'+esc(opLabel(row.operation))+'</td><td>'+esc(typeLabel(row.record_type))+'</td><td>'+esc(row.record_id)+'</td><td>'+esc(row.actor_id||"—")+'</td><td><b>'+esc(auditBusinessSummary(row))+'</b><details class="factory-audit-human-details"><summary>'+text("تفاصيل البيانات قبل / بعد","Before / after details")+'</summary>'+auditSnapshotHtml(snapshot)+'</details></td><td>'+(canUndo?'<button class="g" type="button" data-undo="'+Number(row.id)+'">'+text("تراجع آمن","Safe undo")+'</button>':businessReversal?'<span class="mu">'+text("عكس من شاشة الحركة","Reverse from movement screen")+'</span>':"—")+'</td></tr>';
   }).join("")+'</tbody></table></div>';
 };
 
-<style id="factory-audit-human-style">
-.factory-audit-snapshot-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;min-width:min(650px,100%)}
-.factory-audit-snapshot-side{border:1px solid var(--bd);border-radius:9px;padding:9px;background:var(--bg)}
-.factory-audit-snapshot-side h4{margin:0 0 8px;color:var(--tx)}
-.factory-audit-snapshot-fields{display:grid;gap:5px}
-.factory-audit-snapshot-row{display:grid;grid-template-columns:minmax(110px,.8fr) minmax(160px,1.2fr);gap:8px;padding:6px 7px;border-bottom:1px solid var(--bd);align-items:start}
-.factory-audit-snapshot-row span{color:var(--mu)}
-.factory-audit-snapshot-row strong{color:var(--tx);font-weight:600;overflow-wrap:anywhere;direction:auto}
-.factory-audit-human-details{min-width:250px}
-@media(max-width:700px){.factory-audit-snapshot-grid{grid-template-columns:1fr;min-width:0}.factory-audit-snapshot-row{grid-template-columns:1fr}}
-</style>
+
