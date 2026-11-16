@@ -208,7 +208,11 @@ function detailValue(value,depth=0){
  if(value===null||value===undefined||value==="")return '<span class="mh-muted">—</span>';
  if(typeof value==="boolean")return value?"نعم":"لا";
  if(typeof value==="number")return esc(Number(value).toLocaleString("en-US",{maximumFractionDigits:4}));
- if(typeof value==="string")return esc(value);
+ if(typeof value==="string"){
+  const candidate=value.trim();
+  if((candidate.startsWith("{")||candidate.startsWith("["))&&candidate.length<100000){try{return detailValue(JSON.parse(candidate),depth+1);}catch(_){}}
+  return esc(value);
+ }
  if(depth>=4)return '<span class="mh-muted">تفاصيل متداخلة</span>';
  if(Array.isArray(value)){
   if(!value.length)return '<span class="mh-muted">لا توجد عناصر</span>';
