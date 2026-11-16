@@ -131,21 +131,24 @@
     const roots=rootsOf(type),sum=roots.reduce((n,a)=>n+accountTotal(a,from,to),0);
     return '<section class="factory-fin-group"><header><b>'+title+'</b><button type="button" class="factory-fin-amount" data-fin-type="'+type+'" data-fin-from="'+esc(from||'')+'" data-fin-to="'+esc(to||'')+'" aria-label="فتح حركات '+title+'">'+money(sum)+' ج.م</button></header>'+(roots.length?roots.map(a=>statementNode(a,from,to)).join(''):'<p class="mu">لا توجد حسابات مسجلة في هذا القسم.</p>')+'</section>';
   }
-  let fsState={from:S.per?.from||td().slice(0,8)+'01',to:S.per?.to||td(),kind:'income'};
+  let savedFinPeriod={};try{savedFinPeriod=JSON.parse(localStorage.getItem('ms-factory-financial-period-v1')||'{}')||{};}catch(_){}
+  let fsState={from:savedFinPeriod.from||S.per?.from||td().slice(0,8)+'01',to:savedFinPeriod.to||S.per?.to||td(),kind:savedFinPeriod.kind||'income'};
   function renderFinancialStatements(){
     const from=fsState.from||'',to=fsState.to||td(),income=totalType('I',from,to),expenses=totalType('X',from,to),profit=income-expenses;
     const assets=totalType('A','',to),liabilities=totalType('L','',to),equityAccounts=totalType('Q','',to),retained=totalType('I','',to)-totalType('X','',to),equity=equityAccounts+retained,delta=assets-liabilities-equity;
     return ph('القوائم المالية','<button class="g" type="button" onclick="go(\'rep\');R.rep=\'tb\';render()">ميزان المراجعة</button>')+
-      '<div class="factory-fin-filters"><label>من تاريخ (قائمة الدخل)<input id="factory-fs-from" type="date" value="'+esc(from)+'" max="'+esc(to)+'"></label><label>إلى تاريخ<input id="factory-fs-to" type="date" value="'+esc(to)+'" min="'+esc(from)+'"></label><span class="factory-auto-period-note" role="status">يتم تحديث العرض تلقائيًا بعد اختيار التاريخ</span></div>'+
+      '<div class="factory-fin-filters"><div class="factory-fin-period-readonly"><span>الفترة المعتمدة من الإعدادات</span><strong>من '+dfm(from)+' إلى '+dfm(to)+'</strong><small>تغيير الفترة متاح من شاشة الإعدادات فقط</small></div></div>'+
       '<div class="factory-fin-tabs"><button type="button" data-fs-kind="income" class="'+(fsState.kind==='income'?'active':'')+'">قائمة الدخل</button><button type="button" data-fs-kind="balance" class="'+(fsState.kind==='balance'?'active':'')+'">قائمة المركز المالي</button></div>'+
       (fsState.kind==='income'?'<div class="factory-fin-heading"><h3>قائمة الدخل</h3><span>من '+dfm(from)+' إلى '+dfm(to)+'</span></div><div class="factory-fin-grid">'+statementGroup('I','الإيرادات',from,to)+statementGroup('X','المصروفات',from,to)+'</div><div class="factory-fin-result"><span>صافي الربح / الخسارة</span><button type="button" class="factory-fin-amount" data-fin-profit="1" data-fin-from="'+esc(from)+'" data-fin-to="'+esc(to)+'">'+money(profit)+' ج.م</button></div>':
       '<div class="factory-fin-heading"><h3>قائمة المركز المالي</h3><span>كما في '+dfm(to)+'</span></div><div class="factory-fin-grid">'+statementGroup('A','الأصول','',to)+statementGroup('L','الالتزامات','',to)+statementGroup('Q','حقوق الملكية','',to)+'</div><div class="factory-fin-equity-note"><span>نتيجة الأعمال المتراكمة حتى التاريخ المحدد</span><b>'+money(retained)+' ج.م</b></div><div class="factory-fin-result"><span>إجمالي الالتزامات وحقوق الملكية شامل نتيجة الأعمال</span><strong>'+money(liabilities+equity)+' ج.م</strong></div><div class="factory-fin-check '+(Math.abs(delta)<.02?'balanced':'unbalanced')+'"><span>فرق التوازن (الأصول − الالتزامات وحقوق الملكية)</span><b>'+money(delta)+' ج.م</b></div>');
   }
   function setFinancialKind(kind){fsState.kind=kind;render();}
-  function applyFinancialPeriod(){
-    const from=document.getElementById('factory-fs-from')?.value||'',to=document.getElementById('factory-fs-to')?.value||'';
-    if(from&&to&&from>to){toast('تاريخ البداية يجب ألا يتجاوز تاريخ النهاية');document.getElementById('factory-fs-from')?.focus();return;}
-    fsState.from=from;fsState.to=to;render();
+  function applyFinancialPeriod(from,to){
+    from=String(from||'');to=String(to||'');
+    if(from&&to&&from>to){toast('تاريخ البداية يجب ألا يتجاوز تاريخ النهاية');return false;}
+    fsState.from=from;fsState.to=to;
+    try{localStorage.setItem('ms-factory-financial-period-v1',JSON.stringify({from,to,kind:fsState.kind||'income'}));}catch(_){}
+    return true;
   }
   function refreshSummarySettings(){
     const data=metricData(),layout=summaryLayout(data);
@@ -382,7 +385,7 @@
   }
   function onUiClick(e){
     const screenTab=e.target.closest('[data-preview-screen-tab]');if(screenTab){const target=screenTab.dataset.previewScreenTab;if(target&&target!==CUR?.sid)go(target,1);return;}
-    const summaryMove=e.target.closest('[data-summary-move]');if(summaryMove){const order=summaryOrder(metricData()),index=order.indexOf(summaryMove.dataset.summaryMove),next=index+Number(summaryMove.dataset.summaryDirection||0);if(index>=0&&next>=0&&next<order.length){[order[index],order[next]]=[order[next],order[index]];uiPrefs.summaryOrder=order;saveUiPrefs();render();}return;}
+    const summaryMove=e.target.closest('[data-summary-move]');if(summaryMove){const order=summaryOrder(metricData()),index=order.indexOf(summaryMove.dataset.summaryMove),next=index+Number(summaryMove.dataset.summaryDirection||0);if(index>=0&&next>=0&&next<order.length){[order[index],order[next]]=[order[next],order[index]];uiPrefs.summaryOrder=order;saveUiPrefs();render();const panel=document.getElementById('factory-summary-customize-panel');if(panel&&!panel.hidden){panel.querySelector('.factory-summary-settings').outerHTML=summarySettingsHtml(metricData(),summaryLayout(metricData()));}}return;}
     const finTarget=e.target.closest('[data-fin-account],[data-fin-type],[data-fin-profit]');if(finTarget){e.preventDefault();e.stopPropagation();const from=finTarget.dataset.finFrom||'',to=finTarget.dataset.finTo||'';if(finTarget.dataset.finAccount)openAccountTreeLedger(finTarget.dataset.finAccount,from,to);else{const types=finTarget.dataset.finProfit?['I','X']:[finTarget.dataset.finType],ids=(S.accts||[]).filter(a=>types.includes(a.t)).map(a=>a.id);openFinancialLedger(ids,finTarget.dataset.finProfit?'صافي الربح / الخسارة':({I:'الإيرادات',X:'المصروفات',A:'الأصول',L:'الالتزامات',Q:'حقوق الملكية'}[types[0]]||'الحسابات'),from,to);}return;}
     const summaryTarget=e.target.closest('[data-summary-screen]');if(summaryTarget){const key=summaryTarget.dataset.summaryKey;if(key==='assets')fsState.kind='balance';else if(key==='profit')fsState.kind='income';if(summaryTarget.dataset.summaryScreen==='rep')R.rep='sale';go(summaryTarget.dataset.summaryScreen);return;}
     const recent=e.target.closest('[data-open-source]');if(recent){openRef(recent.dataset.openSource,recent.dataset.openId);return;}
@@ -396,11 +399,11 @@
     if(e.target?.id==='factory-fs-from'){const end=document.getElementById('factory-fs-to');if(end)end.min=e.target.value||'';}
     if(e.target?.id==='factory-fs-to'){const start=document.getElementById('factory-fs-from');if(start)start.max=e.target.value||'';}
   });
-  document.addEventListener('change',e=>{
-    if(e.target?.id!=='factory-fs-from'&&e.target?.id!=='factory-fs-to')return;
-    const from=document.getElementById('factory-fs-from')?.value||'',to=document.getElementById('factory-fs-to')?.value||'';
-    if(from&&to&&from>to){toast('تاريخ البداية يجب ألا يتجاوز تاريخ النهاية');return;}
-    applyFinancialPeriod();
+  document.addEventListener('click',e=>{
+    const open=e.target.closest('#factory-summary-customize-open');
+    if(open){let panel=document.getElementById('factory-summary-customize-panel');if(!panel){panel=document.createElement('div');panel.id='factory-summary-customize-panel';panel.className='factory-summary-customize-overlay';panel.hidden=true;panel.setAttribute('role','dialog');panel.setAttribute('aria-modal','true');panel.setAttribute('aria-label','تخصيص الملخص');panel.innerHTML='<section class="factory-summary-customize-window"><header><h3>تخصيص الملخص</h3><button type="button" class="g" data-summary-customize-close aria-label="إغلاق">×</button></header>'+summarySettingsHtml(metricData(),summaryLayout(metricData()))+'<p class="mu">اختر البطاقات وترتيبها ومكان ظهورها. تُحفظ التفضيلات لهذا المستخدم على هذا الجهاز.</p></section>';document.body.appendChild(panel);}panel.hidden=false;return;}
+    if(e.target.closest('[data-summary-customize-close]')||e.target.id==='factory-summary-customize-panel'){const panel=document.getElementById('factory-summary-customize-panel');if(panel)panel.hidden=true;return;}
+    if(e.target.closest('#factory-save-fin-period')){const from=document.getElementById('factory-settings-fs-from')?.value||'',to=document.getElementById('factory-settings-fs-to')?.value||'';if(!from||!to){toast('حدد تاريخ بداية ونهاية الفترة');return;}if(!applyFinancialPeriod(from,to))return;try{localStorage.setItem('ms-factory-financial-period-v1',JSON.stringify({from,to,kind:fsState.kind||'income'}));}catch(_){}toast('تم حفظ فترة القوائم المالية');render();return;}
   });
   document.addEventListener('change',e=>{
     const s=e.target.closest('[data-summary-place]');if(s){uiPrefs.summary=uiPrefs.summary||{};uiPrefs.summary[s.dataset.summaryPlace]=s.value;saveUiPrefs();render();return;}
@@ -409,7 +412,8 @@
   function extendSettings(){
     const original=SCR.set;
     SCR.set=()=>original()+
-      '<section class="card factory-settings-extra"><div class="factory-panel-head"><b>تخصيص الملخص</b><span>تفضيلات العرض لهذا المستخدم على هذا الجهاز</span></div>'+summarySettingsHtml(metricData(),summaryLayout(metricData()))+'<p class="mu">يمكنك اختيار البطاقات العلوية والأرصدة المهمة أو إخفاء أي مؤشر. هذه الاختيارات لا تغيّر البيانات المحاسبية.</p></section>'+
+      '<section class="card factory-settings-extra factory-settings-shortcut"><button type="button" id="factory-summary-customize-open" class="factory-settings-action"><span class="factory-settings-action-icon" aria-hidden="true">☷</span><span><b>تخصيص الملخص</b><small>اختيار البطاقات وترتيبها ومكان ظهورها</small></span><span class="factory-settings-action-arrow">›</span></button></section>'+
+      '<section class="card factory-settings-extra"><div class="factory-panel-head"><b>فترة القوائم المالية</b><span>لا تتغير القوائم إلا بعد حفظ الفترة من هنا</span></div><div class="factory-fin-period-settings"><label>من تاريخ<input id="factory-settings-fs-from" type="date" value="'+esc(fsState.from)+'"></label><label>إلى تاريخ<input id="factory-settings-fs-to" type="date" value="'+esc(fsState.to)+'"></label><button type="button" class="g" id="factory-save-fin-period">حفظ الفترة</button></div></section>'+
       '<section class="card factory-settings-extra"><div class="factory-panel-head"><b>ألوان البرنامج</b><button class="g" type="button" id="factory-open-theme-inline">تغيير الألوان</button></div><div class="factory-theme-inline">'+Object.entries(colors).map(([key,c])=>'<button type="button" data-factory-accent="'+key+'" aria-pressed="false"><i style="--swatch:'+c.color+'"></i>'+c.label+'</button>').join('')+'</div></section>';
   }
   function addStatementNavigation(){
@@ -418,7 +422,7 @@
     CLOUD_SCREEN_PERMISSIONS.statements='reports';
     SCR.statements=renderFinancialStatements;
     const originalNav=nav;
-    nav=function(){originalNav();renderReferenceSidebar();if(LANGEN)trTree(document.getElementById('sb'));const brand=document.querySelector('#sb .br');if(brand){brand.title=S.name||'MS Factory';brand.setAttribute('aria-label',S.name||'MS Factory');} };
+    nav=function(){originalNav();renderReferenceSidebar();if(LANGEN)trTree(document.getElementById('sb'));const brand=document.querySelector('#sb .br');if(brand){brand.title=S.name||'MS Factory';brand.setAttribute('aria-label',S.name||'MS Factory');}const company=String(S.name||'MS Factory');document.title=company;document.querySelectorAll('meta[name="application-name"],meta[name="apple-mobile-web-app-title"]').forEach(m=>m.setAttribute('content',company)); };
   }
   function installHeaderControls(){
     const top=document.getElementById('top');if(!top)return;
