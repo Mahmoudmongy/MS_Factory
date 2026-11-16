@@ -201,3 +201,5 @@ const rootManifest = JSON.parse(fs.readFileSync(path.join(root, 'manifest.json')
 const publicManifest = JSON.parse(fs.readFileSync(path.join(root, 'public/manifest.json'), 'utf8'));
 assert(rootManifest.name === 'MS Factory' && rootManifest.short_name === 'MS Factory' && publicManifest.name === 'MS Factory', 'PWA branding must use the company product name instead of مدير الشركة');
 assert(previewCss.includes(':has(.account-tree-toggle)') && previewCss.includes('max-height:72vh'), 'chart of accounts tree must have a bounded independently scrollable viewport');
+
+assert(!app.includes('مدير الشركة') && app.includes('name:"MS Factory"') && app.includes('org:S.name||"MS Factory"'), 'default and fallback document branding must use the company name');
