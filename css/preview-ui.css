@@ -724,3 +724,15 @@ button:disabled{opacity:.55;cursor:not-allowed}
 .account-tree-toggle:focus-visible,.factory-recent-row:focus-visible{outline:2px solid var(--pr);outline-offset:2px}
 
 .factory-settings-action-icon svg{width:19px;height:19px;display:block}
+
+
+.factory-audit-snapshot-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;min-width:min(650px,100%)}
+.factory-audit-snapshot-side{border:1px solid var(--bd);border-radius:9px;padding:9px;background:var(--bg)}
+.factory-audit-snapshot-side h4{margin:0 0 8px;color:var(--tx)}
+.factory-audit-snapshot-fields{display:grid;gap:5px}
+.factory-audit-snapshot-row{display:grid;grid-template-columns:minmax(110px,.8fr) minmax(160px,1.2fr);gap:8px;padding:6px 7px;border-bottom:1px solid var(--bd);align-items:start}
+.factory-audit-snapshot-row span{color:var(--mu)}
+.factory-audit-snapshot-row strong{color:var(--tx);font-weight:600;overflow-wrap:anywhere;direction:auto}
+.factory-audit-human-details{min-width:250px}
+@media(max-width:700px){.factory-audit-snapshot-grid{grid-template-columns:1fr;min-width:0}.factory-audit-snapshot-row{grid-template-columns:1fr}}
+
