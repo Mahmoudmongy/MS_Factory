@@ -182,3 +182,17 @@ const activeCoaEnd = app.indexOf("let factoryProductionSelection", activeCoaStar
 const activeCoa = app.slice(activeCoaStart, activeCoaEnd);
 assert(activeCoaStart >= 0 && activeCoaEnd > activeCoaStart && !activeCoa.includes('factoryEsc(a.code||"—")') && !activeCoa.includes('factoryEsc(x.a.code||"—")') && !activeCoa.includes("رقم الحساب"), "chart of accounts and trial balance show account names without account identifiers");
 assert(previewUi.includes("label=esc(accountLabel(a))") && previewUi.includes("'الحساب '+accountLabel(a)"), "financial statement account names and drill-down titles hide account identifiers");
+
+assert(previewUi.includes('ms-factory-financial-period-v1') && previewUi.includes('factory-fin-period-readonly') && previewUi.includes('factory-save-fin-period'), 'financial statement period must be persistent and editable only from Settings');
+assert(previewUi.includes('factory-summary-customize-open') && previewUi.includes('factory-summary-customize-panel'), 'summary customization must open as a dedicated settings panel');
+assert(previewUi.includes('factory-settings-fs-from') && previewUi.includes('factory-settings-fs-to'), 'financial period settings must expose start and end dates');
+assert(previewCss.includes('.factory-summary-table-scroll .factory-summary-mini-table') && previewCss.includes('th:last-child') && previewCss.includes('tbody tr:first-child'), 'summary and general tables must align first rows and last columns');
+assert(previewCss.includes('factory-summary-customize-overlay') && previewCss.includes('factory-fin-period-readonly'), 'settings panel and locked financial period must be styled');
+assert(previewCss.includes('#top #logout-btn{display:none') && previewCss.includes('#top #who{grid-area:who'), 'top logout icon must be removed and username field widened');
+assert(previewCss.includes('#pr th,#pr td') && previewCss.includes('word-break:break-word'), 'PDF long text must wrap within page width');
+assert(app.includes('factory-save-pdf-action') && app.includes('factory-action-icon') && app.includes('data-factory-iconized="1"'), 'PDF save and share actions must have visible stable icons');
+const audit = fs.readFileSync(path.join(root, 'js/audit-trail.js'), 'utf8');
+assert(audit.includes('auditSnapshotHtml(snapshot)') && audit.includes('factory-audit-snapshot-grid') && !audit.includes('JSON.stringify(snapshot,null,2)'), 'audit details must render as readable before/after fields rather than raw JSON');
+assert(indexHtml.includes('<title>MS Factory</title>') && indexHtml.includes('application-name" content="MS Factory'), 'default application branding must not say مدير الشركة');
+const cloudflareWorkflow = fs.readFileSync(path.join(root, '.github/workflows/cloudflare-deploy.yml'), 'utf8');
+assert(cloudflareWorkflow.includes('ms-factory-pr-107-preview') && cloudflareWorkflow.includes('pull_request.number == 107'), 'PR 107 must deploy to a separate Cloudflare preview worker');
