@@ -114,7 +114,7 @@ const man=JSON.parse(fs.readFileSync(path.join(ROOT,'manifest.json'),'utf8'));
 for(const ic of man.icons){const f=path.join(ROOT,ic.src),b=fs.existsSync(f)?fs.readFileSync(f):Buffer.alloc(0),w=b.length>24&&b.readUInt32BE(16),h=b.length>24&&b.readUInt32BE(20);ok(`manifest icon ${ic.src} exists and is a PNG of ${ic.sizes}`,b.slice(1,4).toString()=='PNG'&&`${w}x${h}`==ic.sizes,`${w}x${h}`)}
 ok('manifest has start_url/scope/display standalone/rtl',man.start_url&&man.scope&&man.display=='standalone'&&man.dir=='rtl');
 
-ok('PWA manifest uses the company app name and explicit standalone install behavior',man.name==='مدير الشركة'&&man.short_name==='مدير الشركة'&&man.display_override.includes('standalone')&&man.prefer_related_applications===false);
+ok('PWA manifest uses the company app name and explicit standalone install behavior',man.name==='MS Factory'&&man.short_name==='MS Factory'&&man.display_override.includes('standalone')&&man.prefer_related_applications===false);
 ok('PWA document includes Apple install metadata and a valid touch icon link',idx.includes('apple-mobile-web-app-capable')&&idx.includes('apple-mobile-web-app-title')&&idx.includes('<link rel="apple-touch-icon" href="./assets/icon-192.png">'));
 ok('startup loader shows the branded loading card with an updating phase and animated dots',idx.includes('factory-boot-card')&&idx.includes('factory-boot-phase')&&/class="boot-dots"/.test(idx));
 ok('PWA document points directly to the stable root manifest instead of Vite hashing it under /assets/',idx.includes('<link rel="manifest" href="/manifest.json">'));
@@ -538,8 +538,8 @@ const unlinkedPartyEnglish=await ev(()=>({summary:trs('مراجعة الحركا
 ok('unlinked-party warning and review controls have complete English translations',unlinkedPartyEnglish.summary.includes('Review historical transactions without a linked party')&&unlinkedPartyEnglish.warning.includes('no automatic linking was performed')&&unlinkedPartyEnglish.party==='Recorded party'&&unlinkedPartyEnglish.total==='Total unlinked transactions'&&unlinkedPartyEnglish.action==='Open to link party',unlinkedPartyEnglish);
 
 const scr=await ev(()=>allowed().map(t=>t[0]));for(const s of scr){await ev(x=>go(x),s)}ok(`all ${scr.length} screens render without errors`,errs.length==0,errs.slice(0,2));
-const desktopToolbarOrder=await p.evaluate(()=>{const x=s=>document.querySelector(s)?.getBoundingClientRect().x??-1;return {net:x('#net'),logout:x('#logout-btn'),user:x('#who'),theme:x('#thb'),scroll:document.documentElement.scrollWidth}});
-ok('desktop toolbar places exit, user and theme after connection status without overflow',desktopToolbarOrder.net>desktopToolbarOrder.logout&&desktopToolbarOrder.logout>desktopToolbarOrder.user&&desktopToolbarOrder.user>desktopToolbarOrder.theme&&desktopToolbarOrder.scroll<=1281,desktopToolbarOrder);
+const desktopToolbarOrder=await p.evaluate(()=>{const x=s=>document.querySelector(s)?.getBoundingClientRect().x??-1,r=document.querySelector('#who')?.getBoundingClientRect();return {net:x('#net'),logout:document.querySelector('#logout-btn')?.getBoundingClientRect().width??-1,user:x('#who'),userWidth:r?.width??0,theme:x('#thb'),scroll:document.documentElement.scrollWidth}});
+ok('desktop toolbar hides the top exit icon and expands the user selector after connection status without overflow',desktopToolbarOrder.logout===0&&desktopToolbarOrder.net>desktopToolbarOrder.user&&desktopToolbarOrder.user>desktopToolbarOrder.theme&&desktopToolbarOrder.userWidth>=120&&desktopToolbarOrder.scroll<=1281,desktopToolbarOrder);
 const sidebarLogout=await p.evaluate(()=>{const b=document.querySelector('#sb .sb-logout');let calls=0;const original=window.signOutNow;window.signOutNow=()=>{calls++};b?.click();window.signOutNow=original;return {exists:!!b,label:b?.getAttribute('aria-label'),calls};});
 ok('sidebar exit button calls the existing sign-out flow',sidebarLogout.exists&&sidebarLogout.label==='خروج'&&sidebarLogout.calls===1,sidebarLogout);
 const previewUiRuntime=await ev(()=>{
@@ -567,9 +567,11 @@ const previewUiRuntime=await ev(()=>{
  const dateSort=key({dataset:{v:'02/12/2026'},textContent:''})>key({dataset:{v:'15/11/2026'},textContent:''});
  const oldAccounts=S.accts;const treeParent={id:9901,code:'9901',name:'حساب رئيسي تجريبي',t:'A',cur:'EGP',parentId:null},treeChild={id:9902,code:'9902',name:'حساب فرعي تجريبي',t:'A',cur:'EGP',parentId:9901};S.accts=[...oldAccounts,treeParent,treeChild];const chartCollapsed=!accountRow(treeParent,0).includes('حساب فرعي تجريبي');toggleAccountTree(9901);const chartExpanded=accountRow(treeParent,0).includes('حساب فرعي تجريبي');localStorage.removeItem('factory-account-collapsed:9901');S.accts=oldAccounts;render();
  go('set');
- const select=document.querySelector('#m [data-summary-place="customers"]');
+ document.querySelector('#factory-summary-customize-open')?.click();
+ const select=document.querySelector('#factory-summary-customize-panel [data-summary-place="customers"]');
  if(select){select.value='bottom';select.dispatchEvent(new Event('change',{bubbles:true}));}
  const preferenceSaved=JSON.parse(localStorage.getItem('ms-factory-preview-ui-v1')||'{}').summary?.customers==='bottom';
+ document.querySelector('#factory-summary-customize-panel [data-summary-customize-close]')?.click();
  go('home');
  const moved=document.querySelector('#m .factory-balance-row')?.textContent.includes('العملاء');
  const oldDocs=S.docs;S.docs=[...(S.docs||[]),{id:'summary-hide-test',t:'sale',date:td(),ts:Date.now(),no:'HIDE-TEST',pid:null,total:123}];render();
@@ -866,7 +868,7 @@ const mob=await m.evaluate(()=>({pos:getComputedStyle(document.querySelector('#s
 const mobileSidebarLogout=await m.evaluate(()=>{const b=document.querySelector('#sb .sb-logout'),r=b?.getBoundingClientRect();return {exists:!!b,width:r?.width||0,height:r?.height||0,visible:!!r&&r.height>0&&r.bottom<=innerHeight+1};});
 ok('mobile sidebar keeps the sign-out action reachable in its footer',mobileSidebarLogout.exists&&mobileSidebarLogout.width>0&&mobileSidebarLogout.height>=40,mobileSidebarLogout);
 const toolbarRects=await m.evaluate(()=>{const sels=['#bg','#ttl','#net','#mobile-preview-btn','#logout-btn','#who','#factory-theme-open','#thb'];const boxes=sels.map(s=>{const e=document.querySelector(s),r=e?.getBoundingClientRect();return {s,visible:!!e&&!!r&&r.width>0&&r.height>0,x:r?.x||0,y:r?.y||0,right:r?.right||0,bottom:r?.bottom||0}}).filter(x=>x.visible);const overlaps=[];for(let i=0;i<boxes.length;i++)for(let j=i+1;j<boxes.length;j++){const a=boxes[i],b=boxes[j];if(Math.min(a.right,b.right)-Math.max(a.x,b.x)>1&&Math.min(a.bottom,b.bottom)-Math.max(a.y,b.y)>1)overlaps.push([a.s,b.s]);}return {boxes,overlaps,scroll:document.documentElement.scrollWidth<=innerWidth+1};});
-ok('mobile toolbar controls have separate visible hit areas without overlap or horizontal overflow, with logout removed and username expanded',toolbarRects.boxes.length===7&&!toolbarRects.boxes.some(x=>x.s==='#logout-btn')&&toolbarRects.overlaps.length===0&&toolbarRects.scroll&&toolbarRects.boxes.find(x=>x.s==='#who')?.right-toolbarRects.boxes.find(x=>x.s==='#who')?.right-toolbarRects.boxes.find(x=>x.s==='#who')?.x>=100&&toolbarRects.boxes.find(x=>x.s==='#mobile-preview-btn')?.right-toolbarRects.boxes.find(x=>x.s==='#mobile-preview-btn')?.x>=28,toolbarRects);
+ok('mobile toolbar controls have separate visible hit areas without overlap or horizontal overflow, with logout removed and username expanded',toolbarRects.boxes.length===7&&!toolbarRects.boxes.some(x=>x.s==='#logout-btn')&&toolbarRects.overlaps.length===0&&toolbarRects.scroll&&!!toolbarRects.boxes.find(x=>x.s==='#who')&&(toolbarRects.boxes.find(x=>x.s==='#who').right-toolbarRects.boxes.find(x=>x.s==='#who').x)>=100&&(toolbarRects.boxes.find(x=>x.s==='#mobile-preview-btn').right-toolbarRects.boxes.find(x=>x.s==='#mobile-preview-btn').x)>=28,toolbarRects);
 
 ok('mobile: sidebar is a drawer with burger button and the page does not scroll sideways',mob.pos=='fixed'&&mob.bg=='block'&&mob.over,mob);
 await m.click('#bg');await m.waitForTimeout(250);const open=await m.evaluate(()=>({sb:document.querySelector('#sb').classList.contains('open'),ov:getComputedStyle(document.querySelector('#sb-overlay')).display}));
