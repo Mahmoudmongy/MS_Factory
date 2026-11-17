@@ -43,6 +43,12 @@ assert(app.includes('function updateColumnChooserLanguage') && app.includes('Cho
 assert(history.includes("top.insertAdjacentElement('afterend',launcher)") && history.includes('factory-audit-launcher') && history.includes('factory-history-icon') && history.includes('moveConflictExport') && history.includes("notice.style.display=notice.hidden?'none':'flex'"), 'Manager.io and audit history icons share a compact toolbar below the header');
 assert(css.includes('.factory-table-scroll') && css.includes('overflow-wrap:anywhere') && css.includes('.factory-search-options') && css.includes('table-layout:fixed!important') && css.includes('.factory-very-long-cell'), 'tables use fixed column widths and shrink/wrap long text');
 assert(app.includes('factoryApplyFixedTableLayout') && app.includes('factoryIconizeActions'), 'tables receive stable measured columns and action buttons become icons');
+const iconizerStart=app.indexOf('const factoryActionSvg=');
+const iconizerEnd=app.indexOf('function factoryOrderRowActions',iconizerStart);
+assert(iconizerStart>=0&&iconizerEnd>iconizerStart,'action icon map and iconizer must exist');
+const iconizer=app.slice(iconizerStart,iconizerEnd);
+assert(iconizer.includes("kind='save'")&&iconizer.includes("button.classList.add('g','factory-save-action')")&&iconizer.includes("button.innerHTML=factoryActionSvg[kind]"),'save buttons must receive the visible SVG save icon instead of returning as an empty textless button');
+assert(iconizer.includes("share:'<svg")&&iconizer.includes("edit:'<svg"),'share and edit actions must retain their SVG icon definitions');
 assert(app.includes('const hasCashAncestor') && app.includes('if(a.cash)out.push(a);else walk(a.id)'), 'cash balances roll up through non-cash grouping levels');
 assert(app.includes('async function factorySaveAccName') && app.includes('async function factorySaveWh') && app.includes('const saved=await sv()') && app.includes('a.name=previous.name') && app.includes('w.name=previous.name') && app.includes('return Promise.resolve(false)'), 'master-data edits await cloud persistence and restore original values on failure');
 assert(app.includes('function factoryIconizeActionLinks') && app.includes('factoryIconizeActionLinks(document)') && app.includes('__factoryActionObserver') && css.includes('.factory-icon-action-link'), 'view/edit/share links become compact accessible icons');
