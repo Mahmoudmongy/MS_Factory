@@ -1373,7 +1373,7 @@ const factoryUpdateTableSummary = function(table){
   }else if(kind==="vouchers"){
     const index=meta.headers.findIndex(header=>/(المبلغ|amount)/i.test(header.textContent||""));if(index>=0)addTotal((meta.headers[index].textContent||"").trim(),index,visible,"ج.م");
   }else if(kind==="partners"){
-    const index=meta.headers.findIndex(header=>/(الرصيد|balance)/i.test(header.textContent||""));if(index>=0)addTotal("صافي الرصيد الظاهر",index,visible,"ج.م");
+    const index=meta.headers.findIndex(header=>/(الرصيد|balance)/i.test(header.textContent||""));if(index>=0)addTotal("صافي الرصيد الظاهر (الموجب مستحق للشركة والسالب مستحق للطرف)",index,visible,"ج.م");
   }else if(kind==="stock"){
     const index=meta.headers.findIndex(header=>/(قيمة المخزون|inventory value)/i.test(header.textContent||""));if(index>=0)addTotal("قيمة المخزون",index,visible,"ج.م");
   }else{
