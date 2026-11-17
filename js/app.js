@@ -1624,9 +1624,9 @@ function factoryIconizeActions(root){
   if(button.closest('.factory-table-tools,.preview-report-intro')||button.classList.contains('new'))return;
   const textLabel=(button.textContent||'').replace(/\s+/g,' ').trim().replace(/^[^\p{L}\p{N}]+/u,'').trim();
   const label=textLabel||button.getAttribute('aria-label')||button.title||'';if(!label)return;
-  if(/^(?:حفظ|Save)(?:\s|$)/i.test(label)){button.classList.add('g','factory-save-action');return;}
   let kind='';
-  if(/^(?:حذف|Delete)(?:\s|$)/i.test(label))kind='delete';
+  if(/^(?:حفظ|Save)(?:\\s|$)/i.test(label))kind='save';
+  else   if(/^(?:حذف|Delete)(?:\s|$)/i.test(label))kind='delete';
   else if(/تراجع|undo|إلغاء الترحيل/i.test(label))kind='undo';
   else if(/^(?:تعديل|تحرير|Edit)(?:\s|$)/i.test(label))kind='edit';
   else if(/^(?:طباعة|Print)(?:\s|$)/i.test(label))kind='print';
@@ -1634,6 +1634,7 @@ function factoryIconizeActions(root){
   else if(/^(?:مشاركة|Share)(?:\s|$)/i.test(label))kind='share';
   else if(/مرتجع|return/i.test(label))kind='return';
   if(!kind)return;button.dataset.factoryActionKind=kind;
+  if(kind==='save')button.classList.add('g','factory-save-action');
   if(button.querySelector('svg')||!factoryActionSvg[kind])return;
   button.dataset.factoryIconized='1';button.title=button.title||label;button.setAttribute('aria-label',button.getAttribute('aria-label')||button.title);button.classList.add('factory-icon-action');button.innerHTML=factoryActionSvg[kind];
  });
