@@ -921,7 +921,8 @@ const xssProbe=await ev(()=>{
   closeTab(CUR,1);docForm('sale');
   result.invoiceSafe=!ACT.querySelector('#pt img')&&[...ACT.querySelectorAll('#pt option')].some(o=>o.textContent===payload);
   showInfo({id:1,name:payload,wh:1,model:payload,unit:payload,sku:payload},payload,1);
-  result.infoSafe=!ACT.querySelector('#info img[src="x"]')&&ACT.querySelector('#info')?.textContent.includes(payload);\n  closeTab(CUR,1);vForm('in');V.ac=[{a:1,m:1}];V.ln=[{a:1,d:payload,m:1,x:0}];drawV();result.voucherSafe=!ACT.querySelector('#vs img[src="x"]')&&!ACT.querySelector('#vs').innerHTML.includes('<img');
+  result.infoSafe=!ACT.querySelector('#info img[src="x"]')&&ACT.querySelector('#info')?.textContent.includes(payload);
+  closeTab(CUR,1);vForm('in');V.ac=[{a:1,m:1}];V.ln=[{a:1,d:payload,m:1,x:0}];drawV();result.voucherSafe=!ACT.querySelector('#vs img[src="x"]')&&!ACT.querySelector('#vs').innerHTML.includes('<img');
   result.handler=window.__factoryXss===0;
  }finally{
   if(CUR)closeTab(CUR,1);
