@@ -42,17 +42,17 @@
 .factory-kpi strong{display:block;max-width:100%;font-size:21px;line-height:1.25;direction:ltr;font-variant-numeric:tabular-nums;overflow-wrap:anywhere}
 .factory-kpi strong small{font-size:12px;color:var(--mu);font-weight:400}
 .factory-kpi-note{color:var(--mu);font-size:11px;line-height:1.4}
-.factory-kpi:hover,.factory-balance-row:hover,.factory-recent-row:hover{border-color:var(--pr);transform:translateY(-1px)}
+.factory-kpi:hover,.factory-balance-row:hover{border-color:var(--pr);transform:translateY(-1px)}
 .factory-summary-panels{display:grid;grid-template-columns:1.05fr .95fr;gap:12px;align-items:start}
 .factory-summary-balances,.factory-summary-recent{min-width:0;margin:0}
 .factory-panel-head{padding-bottom:10px;margin-bottom:4px;border-bottom:1px solid var(--bd)}
 .factory-panel-head b{font-size:15px}
 .factory-panel-head span{font-size:11px;color:var(--mu)}
-.factory-balance-row,.factory-recent-row{display:flex;align-items:center;justify-content:space-between;gap:10px;width:100%;min-height:48px;padding:8px 2px;border:0;border-bottom:1px solid var(--bd);border-radius:0;background:transparent;color:var(--tx);text-align:right}
-.factory-balance-row:last-child,.factory-recent-row:last-child{border-bottom:0}
-.factory-balance-row>span,.factory-recent-row>span{min-width:0;font-size:13px;font-weight:600}
-.factory-balance-row small,.factory-recent-row small{display:block;margin-top:3px;color:var(--mu);font-size:11px;font-weight:400}
-.factory-balance-row strong,.factory-recent-row strong{font-size:13px;white-space:nowrap;direction:ltr;font-variant-numeric:tabular-nums}
+.factory-balance-row{display:flex;align-items:center;justify-content:space-between;gap:10px;width:100%;min-height:48px;padding:8px 2px;border:0;border-bottom:1px solid var(--bd);border-radius:0;background:transparent;color:var(--tx);text-align:right}
+.factory-balance-row:last-child{border-bottom:0}
+.factory-balance-row>span{min-width:0;font-size:13px;font-weight:600}
+.factory-balance-row small{display:block;margin-top:3px;color:var(--mu);font-size:11px;font-weight:400}
+.factory-balance-row strong{font-size:13px;white-space:nowrap;direction:ltr;font-variant-numeric:tabular-nums}
 .factory-recent-list{display:grid}
 .factory-summary-empty{padding:25px 10px;color:var(--mu);text-align:center;font-size:13px}
 .factory-hide-numbers .factory-summary-amount{visibility:hidden}
@@ -256,7 +256,7 @@ table.l tbody tr:hover{background:color-mix(in srgb,var(--pr2) 42%,var(--card))}
 .factory-kpi{min-height:116px;padding:15px 16px;border-radius:12px}
 .factory-kpi>span{font-size:13px}
 .factory-kpi strong{font-size:20px}
-.factory-recent-row strong,.factory-balance-row strong{font-size:13px;font-weight:700}
+.factory-balance-row strong{font-size:13px;font-weight:700}
 .preview-chip,.factory-chip{display:inline-flex;align-items:center;gap:5px;padding:4px 9px;border-radius:99px;background:var(--pr2);color:var(--pr);font-size:12px;font-weight:700;white-space:nowrap}
 .preview-chip.gray,.factory-chip.gray{background:color-mix(in srgb,var(--bd) 40%,var(--card));color:var(--mu)}
 .preview-positive{color:#087a5b}.preview-negative{color:#b42318}
@@ -334,15 +334,6 @@ button:disabled{opacity:.55;cursor:not-allowed}
 .factory-summary-order{display:flex;gap:3px}
 .factory-summary-order button{width:27px;min-width:27px;min-height:27px;height:27px;padding:2px;font-size:11px}
 .factory-summary-order button:disabled{opacity:.3}
-.factory-summary-table-scroll{max-width:100%;overflow:auto}
-.factory-summary-mini-table{width:100%;border-collapse:separate;border-spacing:0;table-layout:fixed;background:var(--card)}
-.factory-summary-mini-table th{padding:9px 8px;background:var(--pr2);color:var(--tx);font-size:12px;text-align:right;white-space:nowrap;border-bottom:1px solid var(--bd)}
-.factory-summary-mini-table td{padding:9px 8px;font-size:12px;line-height:1.35;vertical-align:middle;border-bottom:1px solid var(--bd);overflow-wrap:anywhere}
-.factory-summary-mini-table td:nth-child(1){white-space:nowrap}
-.factory-summary-mini-table td:nth-child(3),.factory-summary-mini-table td:nth-child(5){direction:ltr;text-align:left;font-variant-numeric:tabular-nums}
-.factory-summary-mini-table tbody tr[data-open-source]{cursor:pointer}
-.factory-summary-mini-table tbody tr[data-open-source]:hover{background:var(--pr2)}
-.factory-summary-mini-table .factory-summary-amount{font-weight:700}
 .factory-summary-panels{grid-template-columns:1.12fr .88fr;gap:14px}
 .factory-summary-recent .factory-panel-head{padding:13px 15px}
 .factory-summary-recent .factory-summary-table-scroll{border:0;border-radius:0;box-shadow:none}
@@ -350,7 +341,7 @@ button:disabled{opacity:.55;cursor:not-allowed}
 .preview-report-intro span{flex:1 1 260px;color:var(--mu);font-size:13px}
 .preview-report-intro button{min-height:33px;padding:6px 11px;font-size:12px}
 @media(max-width:1000px){.factory-summary-panels{grid-template-columns:1fr}}
-@media(max-width:860px){.factory-summary-settings{grid-template-columns:1fr}.factory-summary-setting-row{grid-template-columns:minmax(0,1fr) minmax(112px,auto) auto}.factory-summary-mini-table{min-width:0}}
+@media(max-width:860px){.factory-summary-settings{grid-template-columns:1fr}.factory-summary-setting-row{grid-template-columns:minmax(0,1fr) minmax(112px,auto) auto}}
 
 
 /* Consistent high-contrast labels for every action in dark appearance. */
@@ -632,9 +623,6 @@ body.factory-preview-viewport .factory-settings-group .tile>span:last-child{min-
 .factory-universal-table-scroll th:last-child,.factory-universal-table-scroll td:last-child{padding-inline-end:12px}
 .factory-table-scroll tr>*:first-child,.factory-universal-table-scroll tr>*:first-child{border-inline-start:1px solid var(--bd)}
 .factory-table-scroll tr>*:last-child,.factory-universal-table-scroll tr>*:last-child{border-inline-end:1px solid var(--bd)}
-.factory-summary-mini-table{width:100%;min-width:0}
-.factory-summary-mini-table thead th{position:sticky;top:0;z-index:5}
-.factory-summary-mini-table th,.factory-summary-mini-table td{padding:9px 10px;vertical-align:middle}
 .factory-share-pdf-action{display:inline-flex;align-items:center;gap:7px;white-space:nowrap}
 .factory-action-icon{width:18px;height:18px;flex:0 0 18px}
 .factory-print-document{box-sizing:border-box;max-width:100%;background:#fff;color:#111;line-height:1.55}
@@ -646,7 +634,7 @@ body.factory-preview-viewport .factory-settings-group .tile>span:last-child{min-
 .factory-print-document tr{break-inside:avoid;page-break-inside:avoid}
 .factory-print-document img{max-width:100%;height:auto;object-fit:contain}
 .factory-print-document h3{margin:12px 0;font-size:18px}
-@media(max-width:700px){.factory-table-scroll,.factory-universal-table-scroll{max-height:58vh;padding-inline:6px}.factory-summary-mini-table{min-width:0}}
+@media(max-width:700px){.factory-table-scroll,.factory-universal-table-scroll{max-height:58vh;padding-inline:6px}}
 @media print{
  .factory-print-document{width:100%!important;max-width:100%!important;min-width:0!important;padding:8mm!important}
  .factory-print-document table{width:100%!important;max-width:100%!important;table-layout:fixed!important}
@@ -679,22 +667,6 @@ body.factory-preview-viewport .factory-settings-group .tile>span:last-child{min-
 .factory-universal-table-scroll table.l tbody tr:first-child td{border-top:1px solid var(--bd)}
 .factory-table-scroll table.l tbody tr:last-child td,
 .factory-universal-table-scroll table.l tbody tr:last-child td{border-bottom:1px solid var(--bd)}
-.factory-summary-table-scroll{max-height:460px;padding:8px 10px 12px}
-.factory-summary-table-scroll .factory-summary-mini-table{
-  width:100%;min-width:0;table-layout:fixed;border-collapse:separate;border-spacing:0;
-}
-.factory-summary-mini-table th,.factory-summary-mini-table td{
-  box-sizing:border-box;white-space:normal;overflow-wrap:anywhere;word-break:normal;
-  line-height:1.45;padding:10px 9px;vertical-align:middle;
-}
-.factory-summary-mini-table th:nth-child(1),.factory-summary-mini-table td:nth-child(1){width:12%}
-.factory-summary-mini-table th:nth-child(2),.factory-summary-mini-table td:nth-child(2){width:15%}
-.factory-summary-mini-table th:nth-child(3),.factory-summary-mini-table td:nth-child(3){width:13%}
-.factory-summary-mini-table th:nth-child(4),.factory-summary-mini-table td:nth-child(4){width:21%}
-.factory-summary-mini-table th:nth-child(5),.factory-summary-mini-table td:nth-child(5){width:20%}
-.factory-summary-mini-table th:nth-child(6),.factory-summary-mini-table td:nth-child(6){width:19%}
-.factory-summary-mini-table tbody tr{cursor:pointer}
-.factory-summary-mini-table tbody tr:hover{background:color-mix(in srgb,var(--pr) 8%,var(--card))}
 .factory-summary-empty{padding:18px!important;text-align:center;color:var(--mu)}
 .factory-summary-customize-overlay[hidden]{display:none!important}
 .factory-summary-customize-overlay{position:fixed;inset:0;z-index:100900;display:grid;place-items:center;padding:14px;background:#07111dcc}
@@ -727,9 +699,7 @@ body.factory-preview-viewport .factory-settings-group .tile>span:last-child{min-
 .tiles .tile-ico,.tile-ico{width:30px!important;height:30px!important;min-width:30px!important;min-height:30px!important;font-size:17px!important;display:inline-grid;place-items:center;padding:4px!important}
 .tiles .tile{min-height:64px!important;gap:8px!important;padding:9px!important}
 :root[data-theme="dark"]{--tx:#edf2f7;--mu:#bdc8d4;--bg:#111923;--card:#1a2633;--bd:#3b4a5b;--pr2:#243444}
-:root[data-theme="dark"] .factory-summary-mini-table th,:root[data-theme="dark"] .factory-summary-mini-table td,
 :root[data-theme="dark"] .factory-settings-action,:root[data-theme="dark"] .factory-summary-customize-window{color:#edf2f7!important}
-:root[data-theme="dark"] .factory-summary-mini-table td{border-color:#3b4a5b!important}
 #pr{font-family:Arial,"Noto Sans Arabic",sans-serif!important;font-size:12px!important;line-height:1.35!important;direction:rtl}
 #pr *{max-width:100%;overflow-wrap:anywhere;hyphens:auto}
 #pr table{width:100%!important;max-width:100%!important;table-layout:fixed!important;border-collapse:collapse!important}
@@ -741,7 +711,6 @@ body.factory-preview-viewport .factory-settings-group .tile>span:last-child{min-
 .factory-action-icon{display:inline-block!important;width:18px!important;height:18px!important;min-width:18px!important;flex:none!important;stroke:currentColor}
 @media(max-width:700px){
  .factory-table-scroll,.factory-universal-table-scroll{padding-inline:8px;max-height:62vh}
- .factory-summary-table-scroll{max-height:54vh}
  .factory-fin-period-settings{display:grid;grid-template-columns:1fr 1fr}
  .factory-fin-period-settings button{grid-column:1/-1}
  #top{grid-template-columns:34px 30px 30px minmax(0,1fr) 32px 32px minmax(105px,1fr) 32px 32px!important;gap:3px!important;padding-inline:5px!important}
@@ -757,7 +726,7 @@ body.factory-preview-viewport .factory-settings-group .tile>span:last-child{min-
 .factory-table-scroll:has(.account-tree-toggle),.factory-universal-table-scroll:has(.account-tree-toggle){max-height:72vh;overflow:auto;overscroll-behavior:contain;scroll-padding-block-start:48px}
 .factory-table-scroll:has(.account-tree-toggle) table,.factory-universal-table-scroll:has(.account-tree-toggle) table{min-width:640px}
 .account-tree-toggle{position:relative;z-index:1;flex:none;margin-inline-end:5px}
-.account-tree-toggle:focus-visible,.factory-recent-row:focus-visible{outline:2px solid var(--pr);outline-offset:2px}
+.account-tree-toggle:focus-visible,.factory-summary-recent-row:focus-visible{outline:2px solid var(--pr);outline-offset:2px}
 
 /* Keep search and export together while avoiding sticky overlays on the first row. */
 .factory-table-scroll .factory-table-count,.factory-universal-table-scroll .factory-table-count{position:static!important;top:auto!important;z-index:auto!important}
@@ -840,42 +809,42 @@ body.factory-preview-viewport .factory-settings-group .tile>span:last-child{min-
 @media(max-width:380px){.factory-fin-filters{grid-template-columns:minmax(0,1fr)!important}}
 
 
-/* Dashboard recent-activity table: keep the shared table behavior without
-   allowing the generic inline-width fitter to collapse its six columns. */
+
+/* Dashboard recent-activity table: semantic table rows and one authoritative six-column layout. */
 .factory-summary-table-scroll{
-  display:block;box-sizing:border-box;width:100%;max-width:100%;
-  overflow-x:auto;overflow-y:auto;overscroll-behavior-inline:contain;
+  display:block;box-sizing:border-box;width:100%!important;max-width:100%!important;
+  max-height:min(460px,55vh);padding:8px 10px 12px;
+  overflow-x:auto!important;overflow-y:auto!important;overscroll-behavior-inline:contain;
   -webkit-overflow-scrolling:touch;
 }
 .factory-summary-table-scroll>.factory-summary-mini-table{
-  display:table!important;width:100%!important;min-width:0!important;
-  max-width:none!important;table-layout:fixed!important;margin:0;
+  display:table!important;box-sizing:border-box;width:100%!important;min-width:0!important;
+  max-width:100%!important;table-layout:fixed!important;border-collapse:separate;border-spacing:0;margin:0!important;
 }
 .factory-summary-mini-table th,.factory-summary-mini-table td{
-  box-sizing:border-box;min-width:0;white-space:normal;
-  overflow-wrap:anywhere;word-break:normal;vertical-align:middle;
+  box-sizing:border-box;min-width:0!important;padding:8px 6px;vertical-align:middle;
+  line-height:1.35;white-space:normal;overflow-wrap:break-word;word-break:normal;
 }
-.factory-summary-mini-table th:nth-child(1),.factory-summary-mini-table td:nth-child(1){width:12%}
-.factory-summary-mini-table th:nth-child(2),.factory-summary-mini-table td:nth-child(2){width:15%}
-.factory-summary-mini-table th:nth-child(3),.factory-summary-mini-table td:nth-child(3){width:13%}
-.factory-summary-mini-table th:nth-child(4),.factory-summary-mini-table td:nth-child(4){width:21%}
-.factory-summary-mini-table th:nth-child(5),.factory-summary-mini-table td:nth-child(5){width:20%}
-.factory-summary-mini-table th:nth-child(6),.factory-summary-mini-table td:nth-child(6){width:19%}
-.factory-summary-mini-table td:nth-child(1),
-.factory-summary-mini-table td:nth-child(3),
-.factory-summary-mini-table td:nth-child(5){font-variant-numeric:tabular-nums}
-.factory-summary-mini-table td:nth-child(3),
-.factory-summary-mini-table td:nth-child(5){direction:ltr;text-align:left}
+.factory-summary-mini-table th{background:var(--pr2);color:var(--tx);font-size:12px;font-weight:700;text-align:right;border-bottom:1px solid var(--bd)}
+.factory-summary-mini-table td{font-size:12px;border-bottom:1px solid var(--bd);color:var(--tx)}
+.factory-summary-mini-table th:nth-child(1),.factory-summary-mini-table td:nth-child(1){width:12%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-variant-numeric:tabular-nums}
+.factory-summary-mini-table th:nth-child(2),.factory-summary-mini-table td:nth-child(2){width:15%;overflow-wrap:break-word}
+.factory-summary-mini-table th:nth-child(3),.factory-summary-mini-table td:nth-child(3){width:13%;direction:ltr;text-align:left;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-variant-numeric:tabular-nums}
+.factory-summary-mini-table th:nth-child(4),.factory-summary-mini-table td:nth-child(4){width:21%;overflow-wrap:break-word}
+.factory-summary-mini-table th:nth-child(5),.factory-summary-mini-table td:nth-child(5){width:20%;direction:ltr;text-align:left;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-variant-numeric:tabular-nums}
+.factory-summary-mini-table th:nth-child(6),.factory-summary-mini-table td:nth-child(6){width:19%;white-space:normal}
+.factory-summary-mini-table tbody tr.factory-summary-recent-row{display:table-row!important;min-height:0;height:auto;cursor:pointer;transition:background-color .15s ease}
+.factory-summary-mini-table tbody tr.factory-summary-recent-row:hover{background:color-mix(in srgb,var(--pr) 8%,var(--card))}
+.factory-summary-mini-table tbody tr.factory-summary-recent-row:focus-visible{outline:2px solid var(--pr);outline-offset:-2px;background:var(--pr2)}
+.factory-summary-mini-table .factory-chip{display:inline-flex;align-items:center;justify-content:center;max-width:100%;padding:3px 7px;border-radius:99px;background:var(--pr2);color:var(--pr);font-size:11px;font-weight:700;line-height:1.35;text-align:center;white-space:normal;overflow-wrap:break-word}
+.factory-summary-mini-table .factory-chip.gray{background:color-mix(in srgb,var(--bd) 40%,var(--card));color:var(--mu)}
+.factory-summary-mini-table .factory-summary-amount{font-weight:700}
+.factory-summary-mini-table .factory-summary-empty{padding:18px!important;text-align:center;color:var(--mu)}
+:root[data-theme="dark"] .factory-summary-mini-table th,:root[data-theme="dark"] .factory-summary-mini-table td{color:#edf2f7!important;border-color:#3b4a5b!important}
+@media(max-width:700px){
+  .factory-summary-table-scroll{max-height:55vh;padding:6px 5px 8px}
+  .factory-summary-mini-table th,.factory-summary-mini-table td{padding:7px 4px;font-size:10.5px;line-height:1.3}
+  .factory-summary-mini-table .factory-chip{font-size:10px;padding:2px 4px}
+}
 
-
-/* Dashboard summary table: fit the actual dashboard card and viewport. */
-.factory-summary-table-scroll{box-sizing:border-box;width:100%!important;max-width:100%!important;max-height:min(460px,55vh);overflow-x:auto!important;overflow-y:auto!important;padding:8px 10px 12px}
-.factory-summary-table-scroll>.factory-summary-mini-table{display:table!important;box-sizing:border-box;width:100%!important;min-width:0!important;max-width:100%!important;table-layout:fixed!important;margin:0!important}
-.factory-summary-mini-table th,.factory-summary-mini-table td{box-sizing:border-box;min-width:0!important;max-width:none;white-space:normal!important;overflow-wrap:anywhere;word-break:normal;padding:8px 6px;line-height:1.35}
-.factory-summary-mini-table th:nth-child(1),.factory-summary-mini-table td:nth-child(1){width:12%;white-space:normal!important}
-.factory-summary-mini-table th:nth-child(2),.factory-summary-mini-table td:nth-child(2){width:15%}
-.factory-summary-mini-table th:nth-child(3),.factory-summary-mini-table td:nth-child(3){width:13%}
-.factory-summary-mini-table th:nth-child(4),.factory-summary-mini-table td:nth-child(4){width:21%}
-.factory-summary-mini-table th:nth-child(5),.factory-summary-mini-table td:nth-child(5){width:20%}
-.factory-summary-mini-table th:nth-child(6),.factory-summary-mini-table td:nth-child(6){width:19%}
-@media(max-width:700px){.factory-summary-table-scroll{max-height:55vh;padding:6px 5px 8px}.factory-summary-mini-table th,.factory-summary-mini-table td{padding:7px 4px;font-size:10.5px;line-height:1.3}}
+@media(max-width:480px){.factory-summary-table-scroll>.factory-summary-mini-table{min-width:560px!important}}

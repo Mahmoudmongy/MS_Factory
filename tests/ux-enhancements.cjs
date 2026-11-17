@@ -154,7 +154,7 @@ assert(app.includes("factory-production-detail") && app.includes("stockScanCamer
 assert(app.includes("Login username") && app.includes("factory-partner-status"), "employee usernames and partner status fields are visible");
 assert(app.includes("assistantQuickProductionCost") && app.includes("assistantQuickPartnerBalance"), "assistant quick actions cover customer balances and production order costs");
 assert(app.includes("Export timeline") && app.includes("FL.timeline={}"), "timeline provides export and clear-filter actions");
-assert(previewUi.includes("factory-recent-row[role='button']") || previewUi.includes("factory-recent-row[role=\"button\"]"), "summary recent movements are keyboard accessible");
+assert(previewUi.includes('factory-summary-recent-row') && previewUi.includes('data-open-source') && previewUi.includes('data-open-id') && previewUi.includes('tabindex=\"0\"'), 'summary recent movements use semantic table rows with keyboard-accessible record references');
 assert(app.includes("Math.abs(jt") && app.includes("if(!post(d,no,"), "journal posting fails safely instead of saving an unposted journal");
 
 assert(app.includes("exportPartnerTable") && app.includes("factory-partner-table"), "partner table has a targeted Excel export");
@@ -190,9 +190,9 @@ assert(previewUi.includes("label=esc(accountLabel(a))") && previewUi.includes("'
 assert(previewUi.includes('ms-factory-financial-period-v1') && previewUi.includes('id="factory-fs-from"') && previewUi.includes('id="factory-fs-to"') && previewUi.includes('data-fs-apply'), 'financial statement period must be editable on the statements screen and persistent');
 assert(previewUi.includes('factory-summary-customize-open') && previewUi.includes('factory-summary-customize-panel'), 'summary customization must open as a dedicated settings panel');
 assert(previewUi.includes('function applyFinancialPeriod(from,to)') && previewUi.includes("document.getElementById('factory-fs-from')") && !previewUi.includes('factory-settings-fs-from'), 'financial period must be applied from statements screen, not Settings');
-assert(previewCss.includes('.factory-summary-table-scroll .factory-summary-mini-table') && previewCss.includes('th:last-child') && previewCss.includes('tbody tr:first-child'), 'summary and general tables must align first rows and last columns');
-assert(app.includes("table?.classList?.contains('factory-summary-mini-table')") && app.includes("table.querySelector('colgroup')?.remove()"), 'dashboard summary table must bypass the generic inline column-width fitter');
-assert(previewCss.includes('width:100%!important;min-width:0!important;max-width:100%!important') && previewCss.includes('.factory-summary-mini-table td:nth-child(6)') && previewCss.includes('width:12%') && previewCss.includes('width:19%'), 'dashboard summary table must fit its dashboard card using responsive six-column proportions without a fixed minimum width');
+assert(previewCss.includes('.factory-summary-table-scroll>.factory-summary-mini-table') && previewCss.includes('.factory-summary-mini-table th:nth-child(6)') && previewCss.includes('.factory-table-scroll table.l tbody tr:first-child td'), 'summary columns and general table first rows must use their explicit aligned layout');
+assert(app.includes("if(table?.classList?.contains('factory-summary-mini-table'))return;"), 'dashboard summary table must be excluded before the generic column-width fitter');
+assert(previewCss.includes('width:100%!important') && previewCss.includes('min-width:0!important') && previewCss.includes('max-width:100%!important') && previewCss.includes('.factory-summary-mini-table td:nth-child(6)') && previewCss.includes('width:12%') && previewCss.includes('width:19%'), 'dashboard summary table must fit its dashboard card using responsive six-column proportions without a fixed minimum width');
 
 assert(previewCss.includes('factory-summary-customize-overlay') && previewCss.includes('factory-fin-period-readonly'), 'settings panel and locked financial period must be styled');
 assert(previewCss.includes('#top #logout-btn{display:none') && previewCss.includes('#top #who{grid-area:who'), 'top logout icon must be removed and username field widened');

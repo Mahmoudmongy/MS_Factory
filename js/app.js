@@ -1388,17 +1388,10 @@ function factoryIconizeActions(root){
   });
 }
 function factoryApplyFixedTableLayout(table){
-  // The dashboard activity table has its own responsive sizing rules.
-  // Do not let the generic content-based column fitter inject fixed inline widths.
-  if(table?.classList?.contains('factory-summary-mini-table')){
-    table.querySelector('colgroup')?.remove();
-    ['width','min-width','max-width'].forEach(property=>table.style.removeProperty(property));
-    table.style.display='table';
-    table.style.tableLayout='fixed';
-    const wrapper=table.closest('.factory-summary-table-scroll');
-    if(wrapper){wrapper.style.width='100%';wrapper.style.maxWidth='100%';wrapper.style.overflowX='auto';}
-    return;
-  }
+  // The dashboard summary table owns its six-column layout entirely in CSS.
+  // Skip it before the generic fitter can add column groups or inline widths.
+  if(table?.classList?.contains('factory-summary-mini-table'))return;
+
   const header=table.querySelector('thead tr')||[...table.querySelectorAll('tr')].find(row=>row.querySelector('th'));
   if(!header)return;
   const headers=[];[...header.children].forEach(cell=>{for(let i=0;i<Math.max(1,cell.colSpan||1);i++)headers.push(cell)});const rows=[...table.querySelectorAll('tr')].filter(row=>row!==header&&row.querySelector('td')&&!row.querySelector('[colspan]'));
