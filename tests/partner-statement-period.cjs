@@ -85,11 +85,11 @@ assert.match(pdf.body, /115\.00/);
 assert.match(pdf.body, /إجمالي المستحق من الطرف: 40\.00 ج\.م/);
 assert.match(pdf.body, /إجمالي المستحق للطرف: 25\.00 ج\.م/);
 assert.match(pdf.body, /الرصيد الختامي/);
-const periodUiSource = extract('function factoryPartnerStatementKey(', '\\nfunction factoryDrillPartner(');
+const periodUiSource = extract('function factoryPartnerStatementKey(', '\nfunction factoryDrillPartner(');
 const stored = new Map();
 const statementCalls = [], uiMessages = [];
 const fields = { '#partner-statement-from': { value: '2026-02-01' }, '#partner-statement-to': { value: '2026-03-31' } };
-const periodUi = vm.runInNewContext(periodUiSource + '\\n({ factoryPartnerStatementKey, factoryPartnerStatementSaved, rememberPartnerStatementPeriod, applyPartnerStatementPeriod, clearPartnerStatementPeriod })', {
+const periodUi = vm.runInNewContext(periodUiSource + '\n({ factoryPartnerStatementKey, factoryPartnerStatementSaved, rememberPartnerStatementPeriod, applyPartnerStatementPeriod, clearPartnerStatementPeriod })', {
   sessionStorage: { getItem: key => stored.has(key) ? stored.get(key) : null, setItem: (key, value) => stored.set(key, value), removeItem: key => stored.delete(key) },
   $: selector => fields[selector] || null,
   partnerStatementValidPeriod: valid,
@@ -111,11 +111,11 @@ assert.equal(stored.has('factory-partner-statement-period:7'), false);
 assert.deepEqual(statementCalls.pop(), [7, '', '']);
 
 (async () => {
-  const shareSource = extract('async function sharePdf(){', '\\n/* ---- Excel / CSV import wizard ---- */');
+  const shareSource = extract('async function sharePdf(){', '\n/* ---- Excel / CSV import wizard ---- */');
   const makeFile = class { constructor(parts, name, options) { this.parts = parts; this.name = name; this.type = options.type; } };
   const pdfStub = { output: type => ({ type, bytes: 'synthetic-pdf' }) };
   const shareCalls = [], downloads = [], messages = [];
-  const nativeShare = vm.runInNewContext(shareSource + '\\nsharePdf', {
+  const nativeShare = vm.runInNewContext(shareSource + '\nsharePdf', {
     toast: message => messages.push(message),
     mkPdf: async () => pdfStub,
     File: makeFile,
@@ -129,7 +129,7 @@ assert.deepEqual(statementCalls.pop(), [7, '', '']);
   assert.equal(shareCalls[0].files[0].type, 'application/pdf');
   assert.equal(Object.prototype.hasOwnProperty.call(shareCalls[0], 'recipients'), false, 'sharing must not select or message a recipient automatically');
 
-  const fallbackShare = vm.runInNewContext(shareSource + '\\nsharePdf', {
+  const fallbackShare = vm.runInNewContext(shareSource + '\nsharePdf', {
     toast: message => messages.push(message),
     mkPdf: async () => pdfStub,
     File: makeFile,
