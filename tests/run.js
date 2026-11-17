@@ -897,6 +897,30 @@ const accountIsolation=await scopePage.evaluate(async()=>{
 });
 ok('account-scoped storage keeps employee state and sync metadata separate while migrating the legacy cache to the admin',accountIsolation.employeeStartedEmpty&&accountIsolation.adminMigratedLegacy&&accountIsolation.employeeState==="employee-state"&&accountIsolation.employeePref==="en"&&accountIsolation.employeeVersion==="4"&&accountIsolation.adminVersion===null&&accountIsolation.legacyRemoved,accountIsolation);
 await scopeCtx.close();
+/* ---------- document reference numbers never collide after a deletion (regression) ---------- */
+ok('reference-number helper derives the next number from the highest existing number',await ev(()=>nextSeqNo("SA-",["SA-0001","SA-0003"])==="SA-0004"&&nextSeqNo("RC-",[])==="RC-0001"&&nextSeqNo("JE-",["JE-0009","JE-0002"])==="JE-0010"));
+const refNoRuntime=await ev(()=>{
+ const snap={docs:S.docs.slice(),L:S.L.slice(),mv:S.mv.slice(),items:S.items.map(i=>({id:i.id,st:JSON.parse(JSON.stringify(i.st||{})),val:i.val}))};
+ const mk=()=>{go('sale');docForm('sale');$("#pt").value="1";$("#it").value="3";unitSet();$("#q").value="1";$("#pc").value="250";D.disc=0;SAVING=0;saveDoc()};
+ mk();mk();mk();
+ const victim=S.docs.filter(d=>d.t==='sale').sort((a,b)=>a.ts-b.ts)[0];
+ delGo('doc',victim.id);
+ mk();
+ const nos=S.docs.filter(d=>d.t==='sale').map(d=>d.no);
+ S.docs=snap.docs;S.L=snap.L;S.mv=snap.mv;
+ snap.items.forEach(si=>{const it=S.items.find(i=>i.id===si.id);if(it){it.st=si.st;it.val=si.val}});
+ return {nos,unique:new Set(nos).size===nos.length};
+});
+ok('deleting an invoice then adding another never reuses an existing reference number',refNoRuntime.unique,refNoRuntime);
+const refNoVoucher=await ev(()=>{
+ const snap={vch:S.vch.slice(),L:S.L.slice()};
+ const mk=()=>{go('rc');vForm('in');$("#vt").value='o';vpt();$("#vo").value='جهة';$("#lkc").checked=false;lkTog();$("#va").value=String(S.accts.find(a=>a.code==='1001').id);$("#vm").value="100";vAc();$("#la").value=String(ak('sales'));$("#lm").value="100";vLn();SAVING=0;saveV()};
+ mk();mk();const victim=S.vch.filter(v=>v.dir==='in')[0];delGo('vch',victim.id);mk();
+ const nos=S.vch.filter(v=>v.dir==='in').map(v=>v.no);
+ S.vch=snap.vch;S.L=snap.L;
+ return {nos,unique:new Set(nos).size===nos.length};
+});
+ok('deleting a voucher then adding another never reuses an existing reference number',refNoVoucher.unique,refNoVoucher);
 await ctx.close();
 ok('employee permissions include a one-click select-all toggle',app.includes('toggleAllEmployeePermissions(this)')&&app.includes('function toggleAllEmployeePermissions'));
 ok('custom date ranges are hidden until the user presses the period button',app.includes('filter-date-toggle')&&app.includes('toggleFilterDates')&&app.includes('FL[key]._dateOpen=open')&&css.includes('.filter-card .filter-date-field{display:none!important}'));
