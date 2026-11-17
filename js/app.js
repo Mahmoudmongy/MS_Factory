@@ -1339,11 +1339,11 @@ updateColumnChooserLanguage();
 /* Uniform record counts and amount totals for every rendered data table. */
 const factoryUpdateTableSummary = function(table){
   const meta=table&&table.__factorySummaryMeta;if(!meta)return;
-  const visible=meta.rows.filter(row=>row.style.display!=="none"&&row.querySelector("td")&&!row.querySelector("[colspan]")&&!/لا توجد حركات|لا توجد بيانات|لا توجد أصناف|لا توجد قيود|لا توجد مستندات|لا توجد سندات/.test(row.textContent||""));
+  const visible=meta.rows.filter(row=>row.style.display!=="none"&&!row.hidden&&row.querySelector("td")&&!row.querySelector("[colspan]")&&!/لا توجد حركات|لا توجد بيانات|لا توجد أصناف|لا توجد قيود|لا توجد مستندات|لا توجد سندات/.test(row.textContent||""));
   meta.count.textContent=(LANGEN?"Records: ":"عدد البيانات: ")+visible.length.toLocaleString("en-US");
   const kind=table.dataset.summaryKind||"",sums=[];
-  const currencySuffix=/(ج\\.?\\s*م|EGP|USD|EUR|SAR|AED|GBP|دولار|ريال|جنيه(?:\\s*مصري)?)/i;
-  const amountPattern=/-?\\d[\\d,٬]*(?:\\.\\d+)?/;
+  const currencySuffix=/(ج\.?\s*م|EGP|USD|EUR|SAR|AED|GBP|دولار|ريال|جنيه(?:\s*مصري)?)/i;
+  const amountPattern=/-?\d[\d,٬]*(?:\.\d+)?/;
   const currencyIndex=meta.headers.findIndex(header=>/(العملة|currency)/i.test(header.textContent||""));
   const addTotal=(label,index,sourceRows=visible,defaultCurrency="")=>{
     const totals=new Map();
@@ -1352,7 +1352,7 @@ const factoryUpdateTableSummary = function(table){
       const raw=String(cell.textContent||"").trim().replace(/[٬،]/g,"").replace(/,/g,"").replace(/[−–]/g,"-");
       const match=raw.match(amountPattern);if(!match)return;
       const currencyCell=currencyIndex>=0?row.children[currencyIndex]:null;
-      const suffix=raw.match(new RegExp(currencySuffix.source+"\\\\s*$","i"));
+      const suffix=raw.match(new RegExp(currencySuffix.source+"\\s*$","i"));
       const currency=String(row.dataset.summaryCurrency||currencyCell?.textContent||suffix?.[0]?.trim()||defaultCurrency||"").trim();
       totals.set(currency,(totals.get(currency)||0)+Number(match[0].replace(/,/g,"")));
     });
@@ -1380,7 +1380,7 @@ const factoryUpdateTableSummary = function(table){
     meta.headers.forEach((header,index)=>{
       const heading=(header.textContent||"").trim();
       if(!/(المبلغ|الإجمالي|الصافي|التكلفة|مدين|دائن|amount|total|net|cost|debit|credit)/i.test(heading))return;
-      if(/تكلفة الوحدة|unit cost/i.test(heading))return;
+      if(/تكلفة الوحدة|unit cost|الرصيد الجاري|running balance/i.test(heading))return;
       addTotal(heading,index,visible);
     });
   }
