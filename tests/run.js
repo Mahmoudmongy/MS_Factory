@@ -884,10 +884,14 @@ for(const language of ['ar','en']){
    await p.waitForTimeout(40);
    const layout=await ev(()=>{const main=document.querySelector('#m'),rect=e=>{const r=e?.getBoundingClientRect();return r?{x:Math.round(r.x),right:Math.round(r.right),width:Math.round(r.width),scroll:e.scrollWidth,client:e.clientWidth}:null},els=[...document.querySelectorAll('body *')].map(e=>({tag:e.tagName,id:e.id,cls:typeof e.className==='string'?e.className.slice(0,90):'',...rect(e)})).filter(x=>x.width&&x.right>innerWidth+1).sort((a,b)=>b.right-a.right).slice(0,8);return{viewport:innerWidth,document:document.documentElement.scrollWidth,body:document.body.scrollWidth,mainClient:main?.clientWidth||0,mainScroll:main?.scrollWidth||0,app:rect(document.querySelector('#app')),sidebar:rect(document.querySelector('#sb')),content:rect(document.querySelector('#cn')),top:rect(document.querySelector('#top')),offenders:els}});
    if(layout.document>width+1||layout.body>width+1||layout.mainScroll>layout.mainClient+1)responsiveIssues.push({language,width,screen,...layout});
-   if(language==='ar'&&(width===390||width===1202)){
+   if(language==='ar'&&(width===390||width===1280)){
     const screenshotDir=path.join(ROOT,'test-results','screens',String(width));
     fs.mkdirSync(screenshotDir,{recursive:true});
     await p.screenshot({path:path.join(screenshotDir,screen+'.png'),fullPage:true,animations:'disabled'});
+   }
+   if(language==='ar'&&width===390&&screen==='home'){
+    const mobileNav=await p.evaluate(()=>{const sb=document.querySelector('#sb'),controls=sb?.querySelector('.sb-controls'),brand=sb?.querySelector(':scope > .br'),logo=brand?.querySelector('img'),nav=sb?.querySelector('.sb-nav-scroll');return{controls:getComputedStyle(controls).display,brandDisplay:getComputedStyle(brand).display,brandDirection:getComputedStyle(brand).flexDirection,logoWidth:logo?.getBoundingClientRect().width||0,navColumns:getComputedStyle(nav).gridTemplateColumns.split(' ').length,navPosition:getComputedStyle(sb).position};});
+    ok('Mobile sidebar matches preview: no redundant toggle, horizontal brand with 42px logo, two-column navigation and sticky placement',mobileNav.controls==='none'&&mobileNav.brandDisplay==='flex'&&mobileNav.brandDirection==='row'&&Math.abs(mobileNav.logoWidth-42)<=1&&mobileNav.navColumns===2&&mobileNav.navPosition==='sticky',mobileNav);
    }
    if(language==='en'){
     const untranslated=await ev(()=>{const out=[],walker=document.createTreeWalker(document.body,NodeFilter.SHOW_TEXT);let node;while(node=walker.nextNode()){if(node.parentElement&&node.parentElement.tagName==='SCRIPT')continue;if(/[\u0600-\u06FF]/.test(node.nodeValue)&&node.nodeValue.trim()!=='ع')out.push(node.nodeValue.trim())}return out});
