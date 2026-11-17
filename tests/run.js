@@ -762,10 +762,10 @@ const missingAccountVoucherRuntime=await ev(()=>{
  S.vch=[imported];
  S.L=[...oldLedger,{d:td(),ts:Date.now(),ref:imported.no,desc:"حركة نقدية مستوردة",a:1,dr:100,cr:0,pid:0,src:"vch",rid:imported.id,fc:0}];
  const listHtml=vVch("in"),derived=voucherAccounts(imported),printHtml=vchPrintHtml(imported);
- const result={visible:listHtml.includes("RC-IMPORTED"),accountRecovered:derived.length===1&&derived[0].a===1,accountShown:listHtml.includes("الخزنة (EGP)"),printSafe:printHtml.includes("الخزنة")};
+ const result={visible:listHtml.includes("RC-IMPORTED"),accountRecovered:derived.length===1&&derived[0].a===1,accountShown:listHtml.includes("الخزنة (EGP)"),printSafe:printHtml.includes("الخزنة"),actionCellMarkup:listHtml.includes('<td><span class="factory-row-actions"><button')&&!listHtml.includes('<td class="factory-row-actions"><button')};
  S.vch=oldVch;S.L=oldLedger;go("home");return result;
 });
-ok('historical imported receipt with empty account details opens safely and recovers its cash account from the ledger',missingAccountVoucherRuntime.visible&&missingAccountVoucherRuntime.accountRecovered&&missingAccountVoucherRuntime.accountShown&&missingAccountVoucherRuntime.printSafe,missingAccountVoucherRuntime);
+ok('historical imported receipt with empty account details opens safely and recovers its cash account from the ledger',missingAccountVoucherRuntime.visible&&missingAccountVoucherRuntime.accountRecovered&&missingAccountVoucherRuntime.accountShown&&missingAccountVoucherRuntime.printSafe&&missingAccountVoucherRuntime.actionCellMarkup,missingAccountVoucherRuntime);
 
 /* ---------- currency ---------- */
 await ev(()=>{go('bank');bForm();$("#bn").value="الخزنة بالدولار";$("#bcu").value="USD";saveAcc(1)});const usd=await ev(()=>S.accts.find(a=>a.name=="الخزنة بالدولار"));
