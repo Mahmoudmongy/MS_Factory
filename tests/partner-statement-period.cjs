@@ -17,7 +17,7 @@ const statementApi = vm.runInNewContext(
   { Math, Number, String, Date, RangeError }
 );
 const pdfLabel = vm.runInNewContext(
-  extract('function partnerStatementPdfPartyLabel(', '\\nfunction partnerStatementValidPeriod(') + '\\npartnerStatementPdfPartyLabel',
+  extract('function partnerStatementPdfPartyLabel(', '\nfunction partnerStatementValidPeriod(') + '\npartnerStatementPdfPartyLabel',
   { pn: id => id === 7 ? 'عميل الاختبار' : 'مورد الاختبار' }
 );
 assert.equal(pdfLabel(7, '2026-02-01', '2026-03-31'), 'كشف_حساب_عميل الاختبار_2026-02-01_2026-03-31');
