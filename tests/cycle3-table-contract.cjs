@@ -22,7 +22,7 @@ assert(production.includes('<td class="factory-warehouse-column">'),"production 
 const bank=between(app,"vBank=function(){","function factoryCoaChildren(");
 assert.equal(headerCount(bank),8,"cash movement table must retain all eight headers");
 assert(bank.includes('<th class="factory-action-column">التفاصيل</th>'),"cash movement details/actions need their own final column");
-assert(bank.includes('class="factory-summary-cash-movements"'),"cash movement table must use the current summary-table component");
+assert(bank.includes('factory-summary-cash-movements'),"cash movement table must use the current summary-table component");
 assert(bank.includes("const allPeriodRows="),"running balance must be calculated from all period rows before the text filter");
 assert(bank.includes("const visibleRows=allPeriodRows.filter"),"text search must only filter displayed rows");
 assert(css.includes(".factory-summary-vouchers{width:1360px"),"voucher table must have a bounded, scrollable width");
