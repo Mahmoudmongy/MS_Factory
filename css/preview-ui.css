@@ -917,3 +917,7 @@ table.l thead th.factory-col-name:first-child{z-index:5;background:var(--pr2)}
 .factory-table-scroll table.l.factory-summary-mini-table th:nth-child(5),.factory-table-scroll table.l.factory-summary-mini-table td:nth-child(5),
 .factory-table-scroll table.l.factory-summary-mini-table th:nth-child(6),.factory-table-scroll table.l.factory-summary-mini-table td:nth-child(6){white-space:nowrap!important;overflow-wrap:normal!important;word-break:keep-all!important;hyphens:none!important}
 .factory-table-scroll table.l.factory-summary-mini-table .factory-chip{white-space:nowrap!important;overflow-wrap:normal!important;word-break:keep-all!important}
+
+/* Keep the primary sticky header cell above both the header row and scrolling body. */
+.factory-table-scroll table.l th.factory-col-sticky{position:sticky;inset-inline-start:0;z-index:12!important;background:var(--pr2)!important;box-shadow:2px 0 0 var(--bd),0 1px 0 var(--bd)}
+.factory-table-scroll table.l td.factory-col-sticky{position:sticky;inset-inline-start:0;z-index:4!important;background:var(--card)!important;box-shadow:2px 0 0 var(--bd)}
