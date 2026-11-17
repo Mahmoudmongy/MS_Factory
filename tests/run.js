@@ -882,7 +882,7 @@ for(const language of ['ar','en']){
   for(const screen of responsiveScreens){
    await ev(x=>go(x),screen);
    await p.waitForTimeout(40);
-   const layout=await ev(()=>{const main=document.querySelector('#m');return{viewport:innerWidth,document:document.documentElement.scrollWidth,body:document.body.scrollWidth,mainClient:main?.clientWidth||0,mainScroll:main?.scrollWidth||0}});
+   const layout=await ev(()=>{const main=document.querySelector('#m'),rect=e=>{const r=e?.getBoundingClientRect();return r?{x:Math.round(r.x),right:Math.round(r.right),width:Math.round(r.width),scroll:e.scrollWidth,client:e.clientWidth}:null},els=[...document.querySelectorAll('body *')].map(e=>({tag:e.tagName,id:e.id,cls:typeof e.className==='string'?e.className.slice(0,90):'',...rect(e)})).filter(x=>x.width&&x.right>innerWidth+1).sort((a,b)=>b.right-a.right).slice(0,8);return{viewport:innerWidth,document:document.documentElement.scrollWidth,body:document.body.scrollWidth,mainClient:main?.clientWidth||0,mainScroll:main?.scrollWidth||0,app:rect(document.querySelector('#app')),sidebar:rect(document.querySelector('#sb')),content:rect(document.querySelector('#cn')),top:rect(document.querySelector('#top')),offenders:els}});
    if(layout.document>width+1||layout.body>width+1||layout.mainScroll>layout.mainClient+1)responsiveIssues.push({language,width,screen,...layout});
    if(language==='en'){
     const untranslated=await ev(()=>{const out=[],walker=document.createTreeWalker(document.body,NodeFilter.SHOW_TEXT);let node;while(node=walker.nextNode()){if(node.parentElement&&node.parentElement.tagName==='SCRIPT')continue;if(/[\u0600-\u06FF]/.test(node.nodeValue)&&node.nodeValue.trim()!=='ع')out.push(node.nodeValue.trim())}return out});
