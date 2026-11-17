@@ -937,6 +937,43 @@ const xssProbe=await ev(()=>{
  return result;
 });
 ok('User-controlled factory, partner, address, invoice and item text is rendered as text rather than executable HTML',Object.values(xssProbe).every(Boolean),xssProbe);
+const screenXssProbe=await ev(async()=>{
+ const keys=['name','logo','partners','items','emp','wh','accts','docs','vch','po','L','mv','geo','tpl','codes'];
+ const saved={};keys.forEach(k=>saved[k]=S[k]);
+ const payload='<img src="xss-probe" onerror="window.__factoryXss=1">';
+ const id=987654320,whId=id+10,acctId=id+20,itemId=id+30;
+ const partner={...(S.partners[0]||{}),id,name:payload,phone:payload,gov:payload,city:payload,adr:payload,c:1,s:1,type:'r'};
+ const warehouse={...(S.wh[0]||{}),id:whId,name:payload,parentId:0};
+ const account={...(S.accts[0]||{}),id:acctId,name:payload,code:'XSS-1',t:'X',cash:true,cur:'EGP'};
+ const item={...(S.items[0]||{}),id:itemId,cloudId:String(itemId),name:payload,sku:payload,model:payload,unit:payload,wh:whId,buy:1,retail:2,wholesale:1,img:'',st:{[payload]:1},val:1};
+ const employee={...(S.emp[0]||{}),id:id+40,name:payload,username:payload,perm:['items','edit']};
+ const doc={...(S.docs[0]||{}),id:id+50,no:payload,t:'sale',pid:id,date:td(),ts:Date.now(),lines:[{name:payload,v:payload,unit:payload,qty:1,price:1,note:payload}],disc:0,total:1,note:payload,img:''};
+ const voucher={...(S.vch[0]||{}),id:id+60,no:payload,dir:'in',pid:id,who:payload,desc:payload,date:td(),ts:Date.now(),ac:[{a:acctId,m:1}],ln:[{a:'p',lbl:payload,d:payload,m:1,x:0}],total:1,title:payload};
+ const order={...(S.po[0]||{}),id:id+70,no:payload,pid:id,desc:payload,iname:payload,wh:whId,subs:[{v:payload,qty:1}],mats:[{iid:itemId,qty:1,wh:whId,cost:1}],x:[{a:acctId,note:payload,amt:1}],st:0,rec:[],matCost:1,wc:0};
+ const ledger={...(S.L[0]||{}),id:id+80,d:td(),date:td(),ref:payload,desc:payload,dr:1,cr:0,a:acctId,src:'je',rid:id+80,pid:id,ts:Date.now()};
+ const movement={...(S.mv[0]||{}),id:id+90,iid:itemId,d:td(),q:1,v:payload,ref:payload,src:'je',wh:whId,c:1};
+ const originalTpl=S.tpl||{};
+ try{
+  window.__factoryXss=0;
+  S.name=payload;S.logo='';S.partners=[...(saved.partners||[]),partner];S.wh=[...(saved.wh||[]),warehouse];S.accts=[...(saved.accts||[]),account];S.items=[...(saved.items||[]),item];S.emp=[...(saved.emp||[]),employee];S.docs=[...(saved.docs||[]),doc];S.vch=[...(saved.vch||[]),voucher];S.po=[...(saved.po||[]),order];S.L=[...(saved.L||[]),ledger];S.mv=[...(saved.mv||[]),movement];S.geo={...(saved.geo||{}),[payload]:[payload]};S.codes=[...(saved.codes||[]),{iid:itemId,code:payload,v:payload}];S.tpl={...originalTpl,sale:{...(originalTpl.sale||{}),org:payload,title:payload,head:payload,foot:payload}};
+  nav();
+  const failures=[];
+  for(const screen of ['home','bank','rc','py','cust','supp','sale','sret','pur','pret','stock','prod','coa','je','tl','emp','rep','ai','set','statements']){
+   TB.slice().forEach(tab=>closeTab(tab,1));go(screen);
+   await new Promise(resolve=>setTimeout(resolve,0));
+   const injected=document.querySelector('img[src="xss-probe"]');
+   if(injected)failures.push({screen,element:injected.outerHTML});
+  }
+  await new Promise(resolve=>setTimeout(resolve,0));
+  return {failures,handler:window.__factoryXss===0};
+ }finally{
+  TB.slice().forEach(tab=>closeTab(tab,1));
+  keys.forEach(k=>{S[k]=saved[k]});
+  nav();go('home');
+ }
+});
+ok('Stored HTML-injection payload stays inert across all 20 main screens',screenXssProbe.failures.length===0&&screenXssProbe.handler,screenXssProbe);
+
 await ev(()=>{PRF.lang='ar';applyPref()});
 ok('no JavaScript errors during the whole desktop session',errs.length==0,errs.slice(0,3));
 const scopeCtx=await browser.newContext({viewport:{width:800,height:600}}),scopePage=await scopeCtx.newPage();await scopePage.goto(BASE);await scopePage.waitForTimeout(150);
