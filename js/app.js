@@ -835,6 +835,7 @@ function partnerStatementRows(pid){
  }).sort((a,b)=>String(b.d).localeCompare(String(a.d))||b.ts-a.ts||String(b.ref).localeCompare(String(a.ref),"ar"));
 }
 function partnerStatementSign(pid){const p=S.partners.find(x=>String(x.id)===String(pid));return p&&p.s&&(tab==="supp"||!p.c)?-1:1;}
+function partnerStatementPdfPartyLabel(id,from="",to=""){const range=[from||"البداية",to||"آخر_حركة"];return "كشف_حساب_"+pn(id)+"_"+range.join("_");}
 function partnerStatementValidPeriod(from,to){
  const validDate=value=>{if(!value)return true;if(!/^\d{4}-\d{2}-\d{2}$/.test(value))return false;const [year,month,day]=value.split("-").map(Number),date=new Date(Date.UTC(year,month-1,day));return date.getUTCFullYear()===year&&date.getUTCMonth()===month-1&&date.getUTCDate()===day;};
  return validDate(from)&&validDate(to)&&(!from||!to||from<=to);
@@ -872,8 +873,8 @@ function ppage(title,html,extra,partyName){window.__pdfPartyName=partyName||"";s
 function inv(id){const d=S.docs.find(x=>x.id==id);ppage(`${TN[d.t]} ${d.no}`,docPrintHtml(d),"",pn(d.pid))}
 function vPrint(id){const v=S.vch.find(x=>x.id==id);ppage(`${v.title} ${v.no}`,vchPrintHtml(v),"",v.who||pn(v.pid))}
 function poPrint(id){const o=S.po.find(x=>x.id==id);ppage(`أمر إنتاج ${o.no}`,poPrintHtml(o))}
-function stPrint(id,from="",to=""){if(!partnerStatementValidPeriod(from,to)){toast("تعذر إنشاء الكشف: راجع فترة التاريخ المحددة");return;}ppage("كشف حساب "+pn(id),stmtHtml(id,from,to),"",pn(id));}
-async function stShare(id,from="",to=""){if(!partnerStatementValidPeriod(from,to)){toast("تعذر إنشاء الكشف: راجع فترة التاريخ المحددة");return;}ppage("كشف حساب "+pn(id),stmtHtml(id,from,to),"",pn(id));await sharePdf();}
+function stPrint(id,from="",to=""){if(!partnerStatementValidPeriod(from,to)){toast("تعذر إنشاء الكشف: راجع فترة التاريخ المحددة");return;}ppage("كشف حساب "+pn(id),stmtHtml(id,from,to),"",partnerStatementPdfPartyLabel(id,from,to));}
+async function stShare(id,from="",to=""){if(!partnerStatementValidPeriod(from,to)){toast("تعذر إنشاء الكشف: راجع فترة التاريخ المحددة");return;}ppage("كشف حساب "+pn(id),stmtHtml(id,from,to),"",partnerStatementPdfPartyLabel(id,from,to));await sharePdf();}
 function repPrint(){const t=(RL.find(r=>r[0]==R.rep)||[])[1]||"تقرير",tb=[...ACT.querySelectorAll("table.l")].map(x=>x.outerHTML.replace('class="l"',"")).join("<br>");ppage(t,pw("rep",t,"",`<div>من ${R.from?dfm(R.from):"البداية"} إلى ${R.to?dfm(R.to):dfm(td())}</div>${tb}`))}
 const ld=src=>new Promise((ok,no)=>{if(document.querySelector(`script[src="${src}"]`))return ok();const s=document.createElement("script");s.src=src;s.onload=ok;s.onerror=()=>no(new Error("load"));document.head.appendChild(s)});
 // Keep text readable while numeric cells remain on a single line in exported PDFs.
@@ -1125,7 +1126,7 @@ function factoryDrillPartner(id,from,to){
   const delta=row.statementDelta,movement=delta<-.005?'<span class="neg">-'+f(-delta)+'</span>':delta>.005?f(delta):"—";
   return '<tr><td>'+dfm(row.d||(row.ts?lday(new Date(row.ts)):""))+'</td><td>'+factoryEsc(row.type)+'</td><td>'+factoryEsc(row.ref)+'</td><td>'+factoryEsc(row.detail)+'</td><td>'+movement+'</td><td style="'+(row.runningBalance<-.005?"color:#c0392b;":"")+'">'+f(row.runningBalance)+'</td><td>'+rb(row)+'</td></tr>';
  }).join("");
- const periodText=from||to?"الفترة المحددة: "+(from?dfm(from):"البداية")+" إلى "+(to?dfm(to):"اليوم"):"كامل الفترة";
+ const periodText=from||to?"الفترة المحددة: "+(from?dfm(from):"البداية")+" إلى "+(to?dfm(to):"آخر حركة"):"كامل الفترة";
  const header='<div class="ph"><h3>كشف حساب '+factoryEsc(pn(id))+'</h3><div class="row"><button type="button" class="g" onclick="stPrint('+Number(id)+','+JSON.stringify(from)+','+JSON.stringify(to)+')">🖨️ طباعة / PDF</button><button type="button" class="g" onclick="stShare('+Number(id)+','+JSON.stringify(from)+','+JSON.stringify(to)+')">مشاركة PDF</button>'+bk+'</div></div>';
  const filters='<section class="card factory-partner-statement-filters"><div class="factory-fin-filters"><label>من تاريخ<input id="partner-statement-from" type="date" value="'+factoryEsc(from)+'" max="'+factoryEsc(to)+'"></label><label>إلى تاريخ<input id="partner-statement-to" type="date" value="'+factoryEsc(to)+'" min="'+factoryEsc(from)+'"></label><button type="button" onclick="applyPartnerStatementPeriod('+Number(id)+')">تطبيق الفترة</button><button type="button" class="g" onclick="clearPartnerStatementPeriod('+Number(id)+')">مسح الفترة</button></div><span class="mu">'+factoryEsc(periodText)+'</span></section>';
  const summary='<section class="card factory-partner-statement-summary"><div><span>عدد الحركات</span><b>'+statement.rows.length+'</b></div><div><span>رصيد بداية الفترة</span><b class="'+(statement.opening<-.005?"neg":"")+'">'+f(statement.opening)+' ج.م</b><small>'+signLabel(statement.opening)+'</small></div><div><span>إجمالي المستحق من الطرف</span><b>'+f(statement.dueFromParty)+' ج.م</b></div><div><span>إجمالي المستحق للطرف</span><b>'+f(statement.dueToParty)+' ج.م</b></div><div><span>صافي حركة الفترة</span><b>'+f(statement.movementTotal)+' ج.م</b></div><div><span>الرصيد الختامي</span><b class="'+(statement.closing<-.005?"neg":"")+'">'+f(statement.closing)+' ج.م</b><small>'+signLabel(statement.closing)+'</small></div></section>';
@@ -1339,7 +1340,7 @@ updateColumnChooserLanguage();
 /* Uniform record counts and amount totals for every rendered data table. */
 const factoryUpdateTableSummary = function(table){
   const meta=table&&table.__factorySummaryMeta;if(!meta)return;
-  const visible=meta.rows.filter(row=>row.style.display!=="none"&&!row.hidden&&row.querySelector("td")&&!row.querySelector("[colspan]")&&!/لا توجد حركات|لا توجد بيانات|لا توجد أصناف|لا توجد قيود|لا توجد مستندات|لا توجد سندات/.test(row.textContent||""));
+  const visible=meta.rows.filter(row=>row.style.display!=="none"&&!row.hidden&&!row.classList?.contains("factory-statement-opening")&&row.querySelector("td")&&!row.querySelector("[colspan]")&&!/لا توجد حركات|لا توجد بيانات|لا توجد أصناف|لا توجد قيود|لا توجد مستندات|لا توجد سندات/.test(row.textContent||""));
   meta.count.textContent=(LANGEN?"Records: ":"عدد البيانات: ")+visible.length.toLocaleString("en-US");
   const kind=table.dataset.summaryKind||"",sums=[];
   const currencySuffix=/(ج\.?\s*م|EGP|USD|EUR|SAR|AED|GBP|دولار|ريال|جنيه(?:\s*مصري)?)/i;
