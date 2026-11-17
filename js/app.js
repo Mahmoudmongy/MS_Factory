@@ -1336,13 +1336,29 @@ const factoryUpdateTableSummary = function(table){
   const meta=table&&table.__factorySummaryMeta;if(!meta)return;
   const visible=meta.rows.filter(r=>r.style.display!=="none"&&r.querySelector("td")&&!r.querySelector("[colspan]")&&!/الإجمالي|المجموع|لا توجد حركات|لا توجد بيانات/.test(r.textContent));
   meta.count.textContent=(LANGEN?"Records: ":"عدد البيانات: ")+visible.length.toLocaleString("en-US");
-  const sums=[];
+  const sums=[],cashMovements=!!(table.closest&&table.closest(".factory-cash-movements"));
+  const currencyIndex=meta.headers.findIndex(h=>/(العملة|currency)/i.test(h.textContent||""));
+  const currencySuffix=/(ج\.?\s*م|EGP|USD|EUR|SAR|AED|GBP|دولار|ريال|جنيه(?:\s*مصري)?)/i;
+  const amountPattern=/-?\d+(?:\.\d+)?/;
   if(![...table.querySelectorAll("tr")].some(r=>/الإجمالي|المجموع/.test(r.textContent))){
     meta.headers.forEach((h,i)=>{
-      if(!/(المبلغ|الإجمالي|التكلفة|مدين|دائن|الرصيد|balance|amount|total|debit|credit)/i.test(h.textContent))return;
-      let sum=0,found=false;
-      visible.forEach(r=>{const cell=r.children[i];if(!cell)return;const raw=cell.textContent.replace(/,/g,"").replace(/[−–]/g,"-"),m=raw.match(/-?\d+(?:\.\d+)?/);if(m){sum+=Number(m[0]);found=true}});
-      if(found)sums.push((LANGEN?"Total ":"إجمالي ")+h.textContent.trim()+": "+f(sum));
+      const heading=(h.textContent||"").trim();
+      if(!/(المبلغ|الإجمالي|التكلفة|مدين|دائن|الرصيد|balance|amount|total|debit|credit)/i.test(heading))return;
+      if(cashMovements&&!/(الرصيد|balance)/i.test(heading))return;
+      const totals=new Map();
+      visible.forEach(r=>{
+        const cell=r.children[i];if(!cell)return;
+        const normalized=String(cell.textContent||"").trim().replace(/[٬،]/g,"").replace(/,/g,"").replace(/[−–]/g,"-");
+        const match=normalized.match(amountPattern);if(!match)return;
+        const currencyCell=currencyIndex>=0?r.children[currencyIndex]:null;
+        const suffix=normalized.match(new RegExp(currencySuffix.source+"\\s*$","i"));
+        const currency=String(currencyCell?.textContent||"").trim()||(suffix?suffix[0].trim():"");
+        totals.set(currency,(totals.get(currency)||0)+Number(match[0]));
+      });
+      if(totals.size){
+        const parts=[...totals.entries()].sort((a,b)=>a[0].localeCompare(b[0],"en")).map(([currency,value])=>f(value)+(currency?" "+currency:""));
+        sums.push((LANGEN?"Total ":"إجمالي ")+heading+": "+parts.join(" | "));
+      }
     });
   }
   meta.total.textContent=sums.join("  |  ");
