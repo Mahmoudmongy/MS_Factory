@@ -16,6 +16,11 @@ const copyLegacyAppScript = {
     const destination = resolve(root, 'dist/js/app.js');
     mkdirSync(dirname(destination), { recursive: true });
     copyFileSync(source, destination);
+
+    // This is also a classic script and must remain available at its HTML URL.
+    const previewSource = resolve(root, 'js/preview-ui.js');
+    const previewDestination = resolve(root, 'dist/js/preview-ui.js');
+    copyFileSync(previewSource, previewDestination);
   },
 };
 

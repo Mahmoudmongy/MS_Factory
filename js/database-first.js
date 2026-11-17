@@ -15,8 +15,21 @@ const getLastSyncAt = () => localStorage.getItem(scopedKey(LAST_SYNC_KEY)) || ''
 const setLastSyncAt = value => { try { localStorage.setItem(scopedKey(LAST_SYNC_KEY), value); } catch (_) {} };
 const cachePrefix = () => CACHE_PREFIX + storageScope + ':';
 const cacheKey = (type,id) => cachePrefix() + encodeURIComponent(type) + ':' + encodeURIComponent(id);
+const cacheSnapshotKey = () => cachePrefix() + '__snapshot__';
 function cacheRow(row) { try { localStorage.setItem(cacheKey(row.record_type,row.record_id), JSON.stringify(row)); } catch (e) { console.warn('Local offline cache write failed',e); } }
-function loadCachedRows() { const rows=[]; const prefix=cachePrefix(); for(let i=0;i<localStorage.length;i++){const key=localStorage.key(i);if(!key||!key.startsWith(prefix))continue;try{const row=JSON.parse(localStorage.getItem(key)||'null');if(row&&row.record_type&&row.record_id)rows.push(row)}catch(_){}} return rows; }
+function loadCachedRows() {
+  const prefix=cachePrefix(),snapshotKey=cacheSnapshotKey(),merged=new Map();
+  try { const snapshot=JSON.parse(localStorage.getItem(snapshotKey)||'[]'); if(Array.isArray(snapshot))for(const row of snapshot)if(row&&row.record_type&&row.record_id)merged.set(mapKey(row.record_type,row.record_id),row); }
+  catch(e) { console.warn('Offline cache snapshot could not be read',e); }
+  // Per-record rows are realtime/offline updates and override the last full snapshot.
+  for(let i=0;i<localStorage.length;i++){const key=localStorage.key(i);if(!key||!key.startsWith(prefix)||key===snapshotKey)continue;try{const row=JSON.parse(localStorage.getItem(key)||'null');if(row&&row.record_type&&row.record_id)merged.set(mapKey(row.record_type,row.record_id),row)}catch(_){}}
+  return [...merged.values()];
+}
+function scheduleCacheSnapshot(rows) {
+  const scope=storageScope,snapshotKey=cacheSnapshotKey(),snapshotRows=Array.isArray(rows)?rows.slice():[];
+  const save=()=>{if(scope!==storageScope)return;try{localStorage.setItem(snapshotKey,JSON.stringify(snapshotRows));persistBaseline();window.__factoryCacheSnapshotReady={scope,count:snapshotRows.length,storedAt:Date.now()};}catch(error){console.warn('Background offline cache snapshot skipped:',error);}};
+  if(typeof window.requestIdleCallback==='function')window.requestIdleCallback(save,{timeout:1400});else setTimeout(save,0);
+}
 const PAGE_SIZE = 1000;
 let ownerId = null;
 let actorId = null;
@@ -164,12 +177,12 @@ function snapshotBaseline(state) {
   for (const [key,item] of current) baseline.set(key,{...item,version:0,deleted_at:null});
   persistBaseline();
 }
-function setBaselineRow(row) {
+function setBaselineRow(row, cache = true) {
   baseline.set(mapKey(row.record_type, row.record_id), {
     type: row.record_type, id: row.record_id, payload: clone(row.payload),
     version: Number(row.version || 1), deleted_at: row.deleted_at || null
   });
-  cacheRow(row);
+  if(cache)cacheRow(row);
 }
 async function fetchPagedRecords(buildQuery) {
   const all = [];
@@ -208,7 +221,7 @@ function hydrateFromRows(rows) {
   const grouped = {};
   const metaRow = rows.find(r => r.record_type === '__meta' && r.record_id === 'main' && !r.deleted_at);
   for (const row of rows) {
-    setBaselineRow(row);
+    setBaselineRow(row, false);
     if (row.record_type === '__meta') continue;
     const target = (grouped[row.record_type] ||= []);
     if (!row.deleted_at) {
@@ -242,7 +255,6 @@ function hydrateFromRows(rows) {
     });
   }
   if (!baseline.has(mapKey('__meta','main'))) baseline.set(mapKey('__meta','main'), { type:'__meta', id:'main', payload:meta, version:0, deleted_at:null });
-  persistBaseline();
 }
 function makeOperations(state) {
   const { arrays, meta } = splitState(state);
@@ -429,8 +441,14 @@ async function connectRealtime() {
     }).subscribe();
 }
 async function currentSessionUser() {
+  // The page bootstrap already verified this session and its profile before
+  // loading this module. Reuse that authenticated user instead of making a
+  // duplicate Supabase session request on every app startup.
+  const authenticatedUser = window.__factoryAuthUser;
+  if (authenticatedUser?.id && authenticatedUser.id === window.__factoryAuthProfile?.id) return authenticatedUser;
   const { data, error } = await supabase.auth.getSession();
   if (error || !data?.session?.user) throw error || new Error('لا يوجد مستخدم مسجل');
+  window.__factoryAuthUser = data.session.user;
   return data.session.user;
 }
 async function ensureProfile(userId, refresh = false) {
@@ -450,6 +468,8 @@ async function ensureProfile(userId, refresh = false) {
 async function bootstrap() {
   if (window.__factoryAuthPromise) await window.__factoryAuthPromise;
   if (window.__factoryAuthReady !== true || !window.__factoryAuthProfile) throw new Error('لم يكتمل التحقق المباشر من حساب المستخدم.');
+  window.__factoryDatabaseLoadStartedAt = performance.now();
+  window.__factorySetBootPhase?.('تم التحقق من الحساب — جارٍ تحميل سجلات الشركة...');
   if (!supabase || !navigator.onLine || window.__factoryOfflineMode === true) {
     profile = window.__factoryAuthProfile || null;
     if (!profile || window.__factoryOfflineMode !== true) throw new Error('يلزم اتصال مباشر بقاعدة بيانات الإنتاج لتوثيق الحساب.');
@@ -477,6 +497,7 @@ async function bootstrap() {
     window.__factoryDatabaseFirstReady = true;
     if (!conflictWriteLock) window.__factoryDatabaseFirstFailed = false;
     window.dispatchEvent(new CustomEvent('factory-database-ready'));
+    if(cachedRows.length)scheduleCacheSnapshot(cachedRows);
     return;
   }
   const user = await retryStartup(() => currentSessionUser());
@@ -484,11 +505,17 @@ async function bootstrap() {
   await retryStartup(() => ensureProfile(actorId, false));
   ownerId = profile.created_by || profile.id;
   storageScope = ownerId;
-  resetLocalBusinessState();
-  const rows = await retryStartup(() => fetchAllRecords());
-  // Supabase is the only source of business records. An empty database stays empty.
-  hydrateFromRows(rows);
   clearLegacyDeviceData();
+  resetLocalBusinessState();
+  const fetchStartedAt=performance.now();
+  const rows = await retryStartup(() => fetchAllRecords());
+  const fetchedAt=performance.now();
+  window.__factoryBootRecordCount = rows.length;
+  window.__factorySetBootPhase?.('تم تحميل '+rows.length.toLocaleString('en-US')+' سجل — جارٍ تجهيز واجهة البرنامج...');
+  // Supabase is the only source of business records. An empty database stays empty.
+  const hydrateStartedAt=performance.now();
+  hydrateFromRows(rows);
+  window.__factoryStartupMetrics={records:rows.length,fetchMs:Math.round(fetchedAt-fetchStartedAt),hydrateMs:Math.round(performance.now()-hydrateStartedAt)};
   try { archiveLegacyQueues(); } catch (archiveError) { conflictWriteLock = true; window.__factoryDatabaseFirstFailed = true; console.error('Legacy operations remain local and are blocked from replay:', archiveError); }
   setLastSyncAt(new Date().toISOString());
   stateReady = true;
@@ -503,14 +530,16 @@ async function bootstrap() {
       ? 'توجد عمليات محفوظة للمراجعة بعد تعارض سابق. لم نعد إرسالها تلقائيًا.'
       : 'توجد عمليات غير مؤكدة من جلسة سابقة. لم نعد إرسالها تلقائيًا؛ صدّرها للمراجعة قبل المتابعة.';
     document.dispatchEvent(new CustomEvent('factory-db-conflict',{detail:{message}}));
-    await connectRealtime();
     window.dispatchEvent(new CustomEvent('factory-database-ready'));
+    scheduleCacheSnapshot(rows);
+    connectRealtime().catch(error=>console.warn('Realtime connection continues after first paint:',error));
     return;
   }
   window.__factoryDatabaseFirstFailed = false;
   await flushQueue();
-  await connectRealtime();
   window.dispatchEvent(new CustomEvent('factory-database-ready'));
+  scheduleCacheSnapshot(rows);
+  connectRealtime().catch(error=>console.warn('Realtime connection continues after first paint:',error));
 }
 window.__factoryPersistState = persistState;
 window.__factoryDatabaseSyncNow = async () => { await flushQueue(); await persistState(getState()); };
@@ -532,6 +561,7 @@ async function reconnectDatabase() {
   } else {
     const initialRows = await retryStartup(() => fetchAllRecords());
     hydrateFromRows(initialRows);
+    scheduleCacheSnapshot(initialRows);
     setLastSyncAt(new Date().toISOString());
   }
   for (const op of getQueue()) applyOperationToState(op);

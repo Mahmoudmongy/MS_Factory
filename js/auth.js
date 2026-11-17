@@ -63,7 +63,12 @@ if (!supabase) {
 } else {
   if(status) status.textContent = 'جاهز لتسجيل الدخول';
 
-  form.addEventListener('submit', async (e) => {
+  const loginButton = $('auth-login');
+  form.addEventListener('submit', (e) => {
+    e.preventDefault();
+    say('اضغط على زر تسجيل الدخول لإكمال الدخول.', false);
+  });
+  loginButton.addEventListener('click', async (e) => {
     e.preventDefault();
     const { email, password } = credentials();
     if (!email || !password) return say('أدخل اسم المستخدم أو البريد الإلكتروني وكلمة المرور');
@@ -73,8 +78,7 @@ if (!supabase) {
     const storageKey = 'sb-' + projectRef + '-auth-token';
     try { if (remember) sessionStorage.removeItem(storageKey); else localStorage.removeItem(storageKey); } catch (_) {}
     say('جارٍ تسجيل الدخول...', false);
-    const button = $('auth-login');
-    button.disabled = true;
+    loginButton.disabled = true;
     try {
       const result = await Promise.race([
         supabase.auth.signInWithPassword({ email, password }),
@@ -93,7 +97,7 @@ if (!supabase) {
       console.warn('Login request failed:', error);
       say(error?.message?.includes('انتهت مهلة الاتصال') ? error.message : 'تعذر الاتصال بخدمة تسجيل الدخول. تحقق من الإنترنت وحاول مرة أخرى.');
     } finally {
-      button.disabled = false;
+      loginButton.disabled = false;
     }
   });
 
