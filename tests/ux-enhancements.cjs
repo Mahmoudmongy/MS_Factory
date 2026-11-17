@@ -106,7 +106,7 @@ console.log('PASS invoice and voucher posting failures fail closed with safe rol
 const sw = fs.readFileSync(path.join(root, 'sw.js'), 'utf8');
 const swPublic = fs.readFileSync(path.join(root, 'public/sw.js'), 'utf8');
 assert(app.includes('landscape=wide||capture.width/capture.height>1.1') && app.includes('windowWidth:captureWidth') && app.includes('W=landscape?297:210') && app.includes('el.style.boxSizing="border-box"'), 'PDF export captures the full table width and selects landscape A4 for wide documents');
-assert(sw.includes('factory-v45') && swPublic.includes('factory-v45'), 'service-worker cache version changes when the application assets change');
+assert(sw.includes('factory-v46') && swPublic.includes('factory-v46'), 'service-worker cache version changes when the application assets change');
 console.log('PASS adaptive A4 PDF layout and service-worker cache refresh');
 assert(previewUi.includes("function renderReferenceGroup") && previewUi.includes("function renderReferenceSidebar") && previewUi.includes("data-preview-screen-tab"), "the live application must map its actual screen renderers into the preview's grouped menu and functional tabs");
 assert(previewCss.includes(".factory-nav-link") && previewCss.includes(".preview-module-tabs") && previewCss.includes(".factory-reference-screen-body"), "the reference sidebar, tabs and page panels must have dedicated responsive styles");
@@ -223,7 +223,11 @@ assert(auth.includes("loginButton.addEventListener('click'") && auth.includes('�
 assert(app.includes('supplierShownBalance(b,!isCustomer)-supplierShownBalance(a,!isCustomer)') && !app.slice(app.indexOf('vParty=function'),app.indexOf('vJe=function')).includes('عليه لنا') && !app.slice(app.indexOf('vParty=function'),app.indexOf('vJe=function')).includes('له عندنا'), 'active customer and supplier tables must sort by signed balance and avoid verbal balance labels');
 assert(app.includes('.sort((a,b)=>String(b.date||b.d||"").localeCompare(String(a.date||a.d||""))'), 'journal entry history must be newest first');
 
-assert(app.slice(app.indexOf('function factoryDrillPartner'),app.indexOf('/* Account hierarchy */')).includes('btxt(pbal(id)*sg)'), 'negative partner closing balances retain the red signed-number formatter');
+assert(app.slice(app.indexOf('function factoryDrillPartner'),app.indexOf('/* Account hierarchy */')).includes('(statement.closing<-.005?"neg":"")') && app.includes('function partnerStatementPeriod('), 'negative partner closing balances retain red formatting in period-aware statements');
+assert(app.includes('partner-statement-from')&&app.includes('partner-statement-to')&&app.includes('stShare(')&&app.includes('dueFromParty')&&app.includes('dueToParty'), 'partner statements support date filters, separate movement totals and PDF sharing');
+assert(!app.includes('<small class="factory-stock-code" dir="ltr">')&&app.includes('const search=[item.name,item.sku,item.model,item.barcode'), 'inventory list hides SKU beside the item name without removing it from search');
+assert(previewCss.includes('table.l th.factory-col-name:first-child')&&previewCss.includes('position:sticky;inset-inline-start:0'), 'primary name columns remain pinned during horizontal table scrolling');
+
 
 const managerDateStart=history.indexOf('const date = value => {');
 const managerDateEnd=history.indexOf('\nconst shortId',managerDateStart);

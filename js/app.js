@@ -834,16 +834,22 @@ function partnerStatementRows(pid){
   return {...row,type,detail,delta:row.cr-row.dr};
  }).sort((a,b)=>String(b.d).localeCompare(String(a.d))||b.ts-a.ts||String(b.ref).localeCompare(String(a.ref),"ar"));
 }
-function stmtHtml(pid){
- const rows=partnerStatementRows(pid);
- const finalBalance=rows.reduce((total,row)=>total+row.delta,0);
- let balance=finalBalance;
- return pw("stmt","كشف حساب",pn(pid),`<table><tr><th>التاريخ</th><th>نوع الحركة</th><th>رقم المستند</th><th>البيان</th><th>قيمة الحركة</th><th>الرصيد</th></tr>${U(rows,row=>{
-  const runningBalance=balance;
-  balance-=row.delta;
-  const movement=row.delta<-.005?"مستحق للطرف "+f(-row.delta):row.delta>.005?"مستحق من الطرف "+f(row.delta):"—";
-  return `<tr><td>${dfm(row.d||(row.ts?lday(new Date(row.ts)):""))}</td><td>${row.type}</td><td>${row.ref}</td><td>${row.detail}</td><td>${movement}</td><td style="${runningBalance<-.005?"color:#c0392b;":""}">${f(runningBalance)}</td></tr>`;
- })}</table><h3>الرصيد النهائي: ${f(finalBalance)} ج.م ${finalBalance<-.005?"(مستحق للطرف)":finalBalance>.005?"(مستحق من الطرف)":""}</h3>`);
+function partnerStatementSign(pid){const p=S.partners.find(x=>String(x.id)===String(pid));return p&&p.s&&(tab==="supp"||!p.c)?-1:1;}
+function partnerStatementPeriod(rows,from,to,sign=1){
+ const dateOf=row=>String(row.d||(row.ts?lday(new Date(row.ts)):"")).slice(0,10);
+ const ordered=(rows||[]).map(row=>({...row,_statementDate:dateOf(row)})).sort((a,b)=>a._statementDate.localeCompare(b._statementDate)||Number(a.ts||0)-Number(b.ts||0)||String(a.ref||"").localeCompare(String(b.ref||""),"ar"));
+ const before=from?ordered.filter(row=>row._statementDate&&row._statementDate<from):[];
+ const selected=ordered.filter(row=>{if(!from&&!to)return true;if(!row._statementDate)return false;return (!from||row._statementDate>=from)&&(!to||row._statementDate<=to);});
+ const opening=before.reduce((sum,row)=>sum+(Number(row.delta)||0)*sign,0);let running=opening;
+ const movements=selected.map(row=>{const delta=(Number(row.delta)||0)*sign;running+=delta;return {...row,statementDelta:delta,runningBalance:running};});
+ const movementTotal=movements.reduce((sum,row)=>sum+row.statementDelta,0),dueFromParty=movements.reduce((sum,row)=>sum+Math.max(0,row.statementDelta),0),dueToParty=movements.reduce((sum,row)=>sum+Math.max(0,-row.statementDelta),0);return {opening,rows:movements,movementTotal,dueFromParty,dueToParty,closing:running};
+}
+function stmtHtml(pid,from="",to=""){
+ const statement=partnerStatementPeriod(partnerStatementRows(pid),from,to,partnerStatementSign(pid));
+ const periodLabel=from||to?"من "+(from?dfm(from):"البداية")+" إلى "+(to?dfm(to):"اليوم"):"كامل الفترة";
+ const body=statement.rows.map(row=>{const delta=row.statementDelta,movement=delta<-.005?"مستحق للطرف "+f(-delta):delta>.005?"مستحق من الطرف "+f(delta):"—";return "<tr><td>"+dfm(row.d||(row.ts?lday(new Date(row.ts)):""))+"</td><td>"+factoryEsc(row.type)+"</td><td>"+factoryEsc(row.ref)+"</td><td>"+factoryEsc(row.detail)+"</td><td>"+movement+"</td><td style=\""+(row.runningBalance<-.005?"color:#c0392b;":"")+"\">"+f(row.runningBalance)+"</td></tr>";}).join("");
+ const openingLabel=statement.opening<-.005?"(مستحق للطرف)":statement.opening>.005?"(مستحق من الطرف)":"";const closingLabel=statement.closing<-.005?"(مستحق للطرف)":statement.closing>.005?"(مستحق من الطرف)":"";
+ return pw("stmt","كشف حساب",pn(pid),"<div>الفترة: "+periodLabel+"</div><table><thead><tr><th>التاريخ</th><th>نوع الحركة</th><th>رقم المستند</th><th>البيان</th><th>قيمة الحركة</th><th>الرصيد</th></tr></thead><tbody><tr><td colspan=\"5\"><b>رصيد بداية الفترة "+openingLabel+"</b></td><td><b style=\""+(statement.opening<-.005?"color:#c0392b;":"")+"\">"+f(statement.opening)+"</b></td></tr>"+(body||"<tr><td colspan=\"6\">لا توجد حركات في الفترة المحددة</td></tr>")+"</tbody></table><div>إجمالي المستحق من الطرف: "+f(statement.dueFromParty)+" ج.م — إجمالي المستحق للطرف: "+f(statement.dueToParty)+" ج.م — صافي حركة الفترة: "+f(statement.movementTotal)+" ج.م</div><h3>الرصيد الختامي: <span style=\""+(statement.closing<-.005?"color:#c0392b;":"")+"\">"+f(statement.closing)+"</span> ج.م "+closingLabel+"</h3>");
 }
 function sampleHtml(k){if(k=="sale"||k=="pur"){const d=[...S.docs].reverse().find(x=>k=="sale"?(x.t=="sale"||x.t=="sret"):(x.t=="pur"||x.t=="pret"))||{t:k,no:(k=="sale"?"SA":"PU")+"-0001",date:td(),ts:Date.now(),pid:(S.partners[1]||S.partners[0]||{id:0}).id,lines:[{name:"تيشيرت قطن",v:"أبيض / M",unit:"قطعة",qty:2,price:250,note:"مثال"}],disc:0,total:500,note:"ملاحظات",img:""};return docPrintHtml(d)}
  if(k=="receipt"||k=="payment"){const v=[...S.vch].reverse().find(x=>x.dir==(k=="receipt"?"in":"out"))||{no:"RC-0001",date:td(),ts:Date.now(),dir:k=="receipt"?"in":"out",title:TK[k],who:"محلات الأمل",desc:"دفعة تحت الحساب",ac:[{a:1,m:1000}],ln:[{a:"p",d:"سداد",m:1000,x:0,lbl:"حساب الطرف"}],total:1000};return vchPrintHtml(v)}
@@ -861,7 +867,8 @@ function ppage(title,html,extra,partyName){window.__pdfPartyName=partyName||"";s
 function inv(id){const d=S.docs.find(x=>x.id==id);ppage(`${TN[d.t]} ${d.no}`,docPrintHtml(d),"",pn(d.pid))}
 function vPrint(id){const v=S.vch.find(x=>x.id==id);ppage(`${v.title} ${v.no}`,vchPrintHtml(v),"",v.who||pn(v.pid))}
 function poPrint(id){const o=S.po.find(x=>x.id==id);ppage(`أمر إنتاج ${o.no}`,poPrintHtml(o))}
-function stPrint(id){ppage(`كشف حساب ${pn(id)}`,stmtHtml(id),"",pn(id))}
+function stPrint(id,from="",to=""){ppage("كشف حساب "+pn(id),stmtHtml(id,from,to),"",pn(id));}
+function stShare(id,from="",to=""){ppage("كشف حساب "+pn(id),stmtHtml(id,from,to),"",pn(id));sharePdf();}
 function repPrint(){const t=(RL.find(r=>r[0]==R.rep)||[])[1]||"تقرير",tb=[...ACT.querySelectorAll("table.l")].map(x=>x.outerHTML.replace('class="l"',"")).join("<br>");ppage(t,pw("rep",t,"",`<div>من ${R.from?dfm(R.from):"البداية"} إلى ${R.to?dfm(R.to):dfm(td())}</div>${tb}`))}
 const ld=src=>new Promise((ok,no)=>{if(document.querySelector(`script[src="${src}"]`))return ok();const s=document.createElement("script");s.src=src;s.onload=ok;s.onerror=()=>no(new Error("load"));document.head.appendChild(s)});
 // Keep text readable while numeric cells remain on a single line in exported PDFs.
@@ -927,7 +934,7 @@ async function mkPdf(){
 }
 const pdfName=()=>((window.__pdfPartyName||CUR.title||"document").replace(/[^\w\u0600-\u06FF-]+/g,"_")+".pdf");
 async function savePdf(){try{toast("جارٍ إنشاء PDF...");const pdf=await mkPdf();await saveFile(pdfName(),pdf.output("blob"));toast("تم حفظ ملف PDF")}catch(e){toast(e&&e.code=="declined"?"تم إلغاء الحفظ":"تعذر إنشاء PDF (يحتاج اتصالًا بالإنترنت لتحميل مكتبة الرسم)")}}
-async function sharePdf(){try{toast("جارٍ إنشاء PDF...");const pdf=await mkPdf(),file=new File([pdf.output("blob")],pdfName(),{type:"application/pdf"});if(navigator.canShare&&navigator.canShare({files:[file]})){await navigator.share({files:[file],title:pdfName()});toast("تمت المشاركة")}else toast("هذا المتصفح لا يدعم مشاركة الملفات — احفظ PDF ثم أرسله من واتساب")}catch(e){toast(e&&e.name=="AbortError"?"تم إلغاء المشاركة":"تعذرت المشاركة في هذا المتصفح")}}
+async function sharePdf(){try{toast("جارٍ إنشاء PDF...");const pdf=await mkPdf(),blob=pdf.output("blob"),file=new File([blob],pdfName(),{type:"application/pdf"});if(typeof navigator.share==="function"&&(!navigator.canShare||navigator.canShare({files:[file]}))){await navigator.share({files:[file],title:pdfName()});toast("تمت المشاركة")}else{await saveFile(pdfName(),blob);toast("تم تنزيل ملف PDF؛ يمكنك طباعته أو مشاركته من جهازك")}}catch(e){toast(e&&e.name=="AbortError"?"تم إلغاء المشاركة":"تعذرت المشاركة أو تنزيل ملف PDF")}}
 /* ---- Excel / CSV import wizard ---- */
 const IMPF={
  items:[["name","اسم الصنف",1,["اسم","صنف","name","item","description","بيان"]],["sku","الكود / الباركود",0,["كود","رمز","باركود","code","sku","barcode"]],["type","النوع (المخزن الفرعي)",0,["نوع","مخزن","type","category"]],["unit","الوحدة",0,["وحدة","unit","uom"]],["model","الموديل",0,["موديل","model"]],["buy","سعر الشراء",0,["شراء","تكلفة","cost","buy","purchase"],1],["retail","سعر القطاعي",0,["قطاعي","بيع","retail","price","sell"],1],["wholesale","سعر الجملة",0,["جملة","wholesale"],1],["qty","الكمية الافتتاحية",0,["كمية","رصيد","qty","quantity","stock"],1],["color","اللون",0,["لون","color"]],["size","المقاس",0,["مقاس","size"]]],
@@ -1099,7 +1106,27 @@ function factoryVParty(c){
 }
 vParty=factoryVParty;
 
-function factoryDrillPartner(id){const p=S.partners.find(x=>x.id==id),sg=(p&&p.s&&(tab==="supp"||!p.c))?-1:1,rows=partnerStatementRows(id);let balance=rows.reduce((total,row)=>total+row.delta*sg,0);sh('<div class="ph"><h3>كشف حساب '+factoryEsc(pn(id))+'</h3><div class="row"><button class="g" onclick="stPrint('+id+')">🖨️ طباعة</button>'+bk+'</div></div><table class="l"><tr><th>التاريخ</th><th>نوع الحركة</th><th>رقم المستند</th><th>البيان</th><th>قيمة الحركة</th><th>الرصيد</th><th></th></tr>'+U(rows,row=>{const delta=row.delta*sg,runningBalance=balance;balance-=delta;return '<tr><td>'+dfm(row.d||(row.ts?lday(new Date(row.ts)):""))+'</td><td>'+factoryEsc(row.type)+'</td><td>'+factoryEsc(row.ref)+'</td><td>'+factoryEsc(row.detail)+'</td><td>'+(delta<-.005?'<span class="neg">-'+f(-delta)+'</span>':delta>.005?f(delta):"—")+'</td><td style="'+(runningBalance<-.005?"color:#c0392b;":"")+'">'+f(runningBalance)+'</td><td>'+rb(row)+'</td></tr>'})+'</table><b>الرصيد النهائي: '+btxt(pbal(id)*sg)+'</b>');}
+function factoryPartnerStatementKey(id){return "factory-partner-statement-period:"+String(id);}
+function factoryPartnerStatementSaved(id){try{return JSON.parse(sessionStorage.getItem(factoryPartnerStatementKey(id))||"{}")||{};}catch(_){return {};}}
+function rememberPartnerStatementPeriod(id){const from=$("#partner-statement-from")?.value||"",to=$("#partner-statement-to")?.value||"";if(from&&to&&from>to){toast("تاريخ البداية يجب ألا يتجاوز تاريخ النهاية");return false;}try{sessionStorage.setItem(factoryPartnerStatementKey(id),JSON.stringify({from,to}));}catch(_){}return true;}
+function applyPartnerStatementPeriod(id){if(!rememberPartnerStatementPeriod(id))return;const saved=factoryPartnerStatementSaved(id);factoryDrillPartner(id,saved.from||"",saved.to||"");}
+function clearPartnerStatementPeriod(id){try{sessionStorage.removeItem(factoryPartnerStatementKey(id));}catch(_){}factoryDrillPartner(id,"","");}
+function factoryDrillPartner(id,from,to){
+ const p=S.partners.find(x=>String(x.id)===String(id));if(!p)return;
+ const saved=factoryPartnerStatementSaved(id);from=from===undefined?(saved.from||""):String(from||"");to=to===undefined?(saved.to||""):String(to||"");
+ const statement=partnerStatementPeriod(partnerStatementRows(id),from,to,partnerStatementSign(id));
+ const signLabel=value=>value<-.005?"مستحق للطرف":value>.005?"مستحق من الطرف":"";
+ const body=statement.rows.map(row=>{
+  const delta=row.statementDelta,movement=delta<-.005?'<span class="neg">-'+f(-delta)+'</span>':delta>.005?f(delta):"—";
+  return '<tr><td>'+dfm(row.d||(row.ts?lday(new Date(row.ts)):""))+'</td><td>'+factoryEsc(row.type)+'</td><td>'+factoryEsc(row.ref)+'</td><td>'+factoryEsc(row.detail)+'</td><td>'+movement+'</td><td style="'+(row.runningBalance<-.005?"color:#c0392b;":"")+'">'+f(row.runningBalance)+'</td><td>'+rb(row)+'</td></tr>';
+ }).join("");
+ const periodText=from||to?"الفترة المحددة: "+(from?dfm(from):"البداية")+" إلى "+(to?dfm(to):"اليوم"):"كامل الفترة";
+ const header='<div class="ph"><h3>كشف حساب '+factoryEsc(pn(id))+'</h3><div class="row"><button type="button" class="g" onclick="stPrint('+Number(id)+','+JSON.stringify(from)+','+JSON.stringify(to)+')">🖨️ طباعة / PDF</button><button type="button" class="g" onclick="stShare('+Number(id)+','+JSON.stringify(from)+','+JSON.stringify(to)+')">مشاركة PDF</button>'+bk+'</div></div>';
+ const filters='<section class="card factory-partner-statement-filters"><div class="factory-fin-filters"><label>من تاريخ<input id="partner-statement-from" type="date" value="'+factoryEsc(from)+'" max="'+factoryEsc(to)+'" onchange="rememberPartnerStatementPeriod('+Number(id)+')"></label><label>إلى تاريخ<input id="partner-statement-to" type="date" value="'+factoryEsc(to)+'" min="'+factoryEsc(from)+'" onchange="rememberPartnerStatementPeriod('+Number(id)+')"></label><button type="button" onclick="applyPartnerStatementPeriod('+Number(id)+')">تطبيق الفترة</button><button type="button" class="g" onclick="clearPartnerStatementPeriod('+Number(id)+')">مسح الفترة</button></div><span class="mu">'+factoryEsc(periodText)+'</span></section>';
+ const summary='<section class="card factory-partner-statement-summary"><div><span>عدد الحركات</span><b>'+statement.rows.length+'</b></div><div><span>رصيد بداية الفترة</span><b class="'+(statement.opening<-.005?"neg":"")+'">'+f(statement.opening)+' ج.م</b><small>'+signLabel(statement.opening)+'</small></div><div><span>إجمالي المستحق من الطرف</span><b>'+f(statement.dueFromParty)+' ج.م</b></div><div><span>إجمالي المستحق للطرف</span><b>'+f(statement.dueToParty)+' ج.م</b></div><div><span>صافي حركة الفترة</span><b>'+f(statement.movementTotal)+' ج.م</b></div><div><span>الرصيد الختامي</span><b class="'+(statement.closing<-.005?"neg":"")+'">'+f(statement.closing)+' ج.م</b><small>'+signLabel(statement.closing)+'</small></div></section>';
+ const table='<div class="factory-table-scroll"><table class="l"><thead><tr><th>التاريخ</th><th>نوع الحركة</th><th>رقم المستند</th><th>البيان</th><th>قيمة الحركة</th><th>الرصيد الجاري</th><th>الإجراءات</th></tr></thead><tbody><tr class="factory-statement-opening"><td colspan="5"><b>رصيد بداية الفترة</b></td><td colspan="2"><b>'+f(statement.opening)+'</b></td></tr>'+(body||'<tr><td colspan="7" class="mu">لا توجد حركات في الفترة المحددة</td></tr>')+'</tbody><tfoot><tr><th colspan="5">الرصيد الختامي</th><th colspan="2">'+f(statement.closing)+'</th></tr></tfoot></table></div>';
+ sh(header+filters+summary+table);
+}
 drillPartner=factoryDrillPartner;
 
 /* Account hierarchy */
@@ -1571,7 +1598,7 @@ vStock=function(){
  const rows=items.map(item=>{
   const qty=quantity(item),amount=value(item),location=locations(item),unitCost=qty>.0001?amount/qty:av(item);
   const search=[item.name,item.sku,item.model,item.barcode,...(S.codes||[]).filter(code=>String(code.iid)===String(item.id)).map(code=>code.code),location.main,location.sub].filter(Boolean).join(" ");
-  return '<tr data-factory-search-text="'+factoryEsc(search)+'"><td>'+factoryEsc(item.name||"—")+'<small class="factory-stock-code" dir="ltr">'+factoryEsc(item.sku||"")+'</small></td><td>'+factoryEsc(location.main)+'</td><td>'+factoryEsc(location.sub)+'</td><td>'+factoryEsc(item.unit||"—")+'</td><td class="factory-ledger-number">'+qf(qty)+'</td><td class="factory-ledger-number">'+f(unitCost)+'</td><td class="factory-ledger-number">'+f(amount)+'</td><td class="factory-row-actions"><button type="button" class="g" title="عرض توزيع المخزون" aria-label="عرض توزيع المخزون" onclick="showWarehouseBalances('+Number(item.id)+')">◉</button><button type="button" class="g" title="عرض حركة الصنف" aria-label="عرض حركة الصنف" onclick="drillItem('+Number(item.id)+')">↗</button>'+(can("edit")?'<button type="button" class="g" title="تعديل الصنف" aria-label="تعديل الصنف" onclick="itemForm('+Number(item.id)+')">✎</button>':'')+'</td></tr>';
+  return '<tr data-factory-search-text="'+factoryEsc(search)+'"><td>'+factoryEsc(item.name||"—")+'</td><td>'+factoryEsc(location.main)+'</td><td>'+factoryEsc(location.sub)+'</td><td>'+factoryEsc(item.unit||"—")+'</td><td class="factory-ledger-number">'+qf(qty)+'</td><td class="factory-ledger-number">'+f(unitCost)+'</td><td class="factory-ledger-number">'+f(amount)+'</td><td class="factory-row-actions"><button type="button" class="g" title="عرض توزيع المخزون" aria-label="عرض توزيع المخزون" onclick="showWarehouseBalances('+Number(item.id)+')">◉</button><button type="button" class="g" title="عرض حركة الصنف" aria-label="عرض حركة الصنف" onclick="drillItem('+Number(item.id)+')">↗</button>'+(can("edit")?'<button type="button" class="g" title="تعديل الصنف" aria-label="تعديل الصنف" onclick="itemForm('+Number(item.id)+')">✎</button>':'')+'</td></tr>';
  }).join("");
  const filter='<div class="card factory-stock-filter"><div class="factory-stock-filter-main"><label>بحث في الصنف أو الكود<input type="search" value="'+factoryEsc(x.nm||"")+'" placeholder="اسم الصنف أو الكود أو الباركود" onchange="SF.nm=this.value;render()"></label><label>المخزن<select onchange="SF.wh=this.value;render()"><option value="">كل المخازن</option>'+U(S.wh||[],warehouse=>'<option value="'+Number(warehouse.id)+'" '+(String(x.wh)===String(warehouse.id)?"selected":"")+'>'+factoryEsc(whPath(warehouse.id))+'</option>')+'</select></label><button type="button" class="g" onclick="resetStockFilters()">× مسح</button></div><details class="factory-stock-advanced"><summary>فلاتر إضافية (سعر الشراء والكمية)</summary><div class="factory-stock-filter-extra"><label>سعر الشراء من<input type="number" value="'+factoryEsc(x.b1)+'" onchange="SF.b1=this.value;render()"></label><label>سعر الشراء إلى<input type="number" value="'+factoryEsc(x.b2)+'" onchange="SF.b2=this.value;render()"></label><label>الكمية من<input type="number" value="'+factoryEsc(x.q1)+'" onchange="SF.q1=this.value;render()"></label><label>الكمية إلى<input type="number" value="'+factoryEsc(x.q2)+'" onchange="SF.q2=this.value;render()"></label></div></details></div>';
  return ph(N.stock,(can("edit")?'<button type="button" class="g" onclick="recalc()">إعادة احتساب المخزون</button><button type="button" class="g" onclick="woForm()">تسجيل هالك</button><button type="button" class="g" onclick="wForm()">+ مخزن فرعي</button><button type="button" class="new" onclick="itemForm(0)">+ صنف جديد</button>':'')+'<button type="button" class="g" onclick="printAllStockLabels()">طباعة ملصقات الباركود</button><button type="button" class="g" onclick="stockScanOpen()">مسح باركود</button><button type="button" class="g" onclick="stockMovementChooser()">عرض حركة الصنف</button>')+filter+
