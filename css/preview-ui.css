@@ -628,7 +628,7 @@ body.factory-preview-viewport .factory-settings-group .tile>span:last-child{min-
 .factory-table-scroll tr>*:first-child,.factory-universal-table-scroll tr>*:first-child{border-inline-start:1px solid var(--bd)}
 .factory-table-scroll tr>*:last-child,.factory-universal-table-scroll tr>*:last-child{border-inline-end:1px solid var(--bd)}
 .factory-share-pdf-action{display:inline-flex;align-items:center;gap:7px;white-space:nowrap}
-.factory-action-icon{width:18px;height:18px;flex:0 0 18px}
+.factory-action-icon{display:inline-flex;align-items:center;justify-content:center;width:18px;height:18px;flex:0 0 18px}.factory-action-icon svg{display:block;width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}.factory-save-action{display:inline-flex;align-items:center;gap:6px}
 .factory-print-document{box-sizing:border-box;max-width:100%;background:#fff;color:#111;line-height:1.55}
 .factory-print-document table{width:100%;max-width:100%;border-collapse:collapse;table-layout:fixed;direction:rtl;margin:12px 0}
 .factory-print-document thead{display:table-header-group}

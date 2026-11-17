@@ -12,6 +12,21 @@ const recoveryPage=await browser.newPage();
 await recoveryPage.goto(BASE+'auth.html');
 const loginButtonType=await recoveryPage.locator('#auth-login').getAttribute('type');
 ok('login requires an explicit button press after password entry',loginButtonType==='button',loginButtonType);
+
+const authMarkup=fs.readFileSync(path.join(ROOT,'auth.html'),'utf8');
+const authInlineCss=(authMarkup.match(/<style>([\s\S]*?)<\/style>/i)||[])[1]||'';
+const authBody=(authMarkup.match(/<body>([\s\S]*?)<\/body>/i)||[])[1]||'';
+const authGlobalCss=fs.readFileSync(path.join(ROOT,'css/style.css'),'utf8');
+const authLayoutPage=await browser.newPage({viewport:{width:768,height:900}}),authLayoutResults=[];
+for(const width of [320,390,768,860,861,1202]){
+  await authLayoutPage.setViewportSize({width,height:900});
+  // Vite emits the extracted CSS stylesheet after auth.html's inline style block.
+  await authLayoutPage.setContent('<!doctype html><html lang="ar" dir="rtl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><style>'+authInlineCss+'</style><style>'+authGlobalCss+'</style></head><body>'+authBody.replace(/<script[\s\S]*?<\/script>/gi,'')+'</body></html>');
+  authLayoutResults.push(await authLayoutPage.evaluate(()=>{const card=document.querySelector('.auth-card');if(!card)return{width:innerWidth,missing:true};const r=card.getBoundingClientRect();return{width:innerWidth,documentWidth:document.documentElement.scrollWidth,cardWidth:r.width,cardLeft:r.left,cardRight:r.right,controls:[...document.querySelectorAll('#auth-email,#auth-password,#auth-login')].map(e=>{const b=e.getBoundingClientRect();return{left:b.left,right:b.right,top:b.top,bottom:b.bottom}})}}));
+}
+const authLayoutPass=authLayoutResults.every(x=>!x.missing&&x.cardWidth<=380.5&&x.cardLeft>=-0.5&&x.cardRight<=x.width+0.5&&x.documentWidth<=x.width&&x.controls.length===3&&x.controls.every(c=>c.left>=x.cardLeft-1&&c.right<=x.cardRight+1));
+ok('login card stays within its intended 380px maximum after Vite CSS extraction at 320/390/768/860/861/1202px',authLayoutPass,authLayoutResults);
+await authLayoutPage.close();
 const normalRecovery=await recoveryPage.evaluate(async()=>{
   const {createConflictRecovery}=await import('/js/conflict-recovery.js');
   const scope='browser-normal-'+Date.now(), queueKey='ms-factory-db-queue-v1:'+scope, reviewKey='ms-factory-db-conflict-review-v1:'+scope;
@@ -644,7 +659,7 @@ const tableIconRuntime=await ev(()=>{
  factoryIconizeActions(box);factoryIconizeActionLinks(box);
  const pdfTable=document.createElement('table');pdfTable.innerHTML='<thead><tr><th>الكمية</th><th>البيان</th></tr></thead><tbody><tr><td>1250.50</td><td>وصف طويل يجب أن يلتف داخل الخلية</td></tr></tbody>';document.querySelector('#pr').appendChild(pdfTable);factoryPreparePdfTableCells(pdfTable);
  const saveButton=[...box.querySelectorAll('button')].find(button=>button.textContent.includes('حفظ البيانات'));
- const result={fixed:table.style.tableLayout==='fixed',cols:table.querySelectorAll('colgroup col').length===2,sticky:getComputedStyle(table.querySelector('th')).position==='sticky',scrollHeight:!!wrap.style.maxHeight,wrapped:table.querySelector('td.factory-very-long-cell')!==null,firstRowVisible:parseFloat(getComputedStyle(table.querySelector('tbody tr:first-child td')).paddingTop)>=12,actionColumn:parseFloat(actionTable.querySelector('colgroup col:last-child')?.style.width||'0')>=116,actionHeaderNoWrap:getComputedStyle(actionTable.querySelector('th:last-child')).whiteSpace==='nowrap',icons:box.querySelectorAll('svg').length===4,editIcon:!!box.querySelector('button[aria-label="تعديل"] svg'),shareIcon:!!box.querySelector('button[aria-label="مشاركة ملف PDF"] svg'),saveLabelPreserved:!!saveButton&&saveButton.textContent.includes('حفظ البيانات')&&saveButton.classList.contains('g')&&saveButton.classList.contains('factory-save-action')&&!saveButton.classList.contains('factory-icon-action'),saveSvgPreserved:!!box.querySelector('.factory-save-pdf-action svg'),linkIcon:!!box.querySelector('a[aria-label="عرض"] svg'),pdfNumber:!!pdfTable.querySelector('td.factory-pdf-number'),pdfTextWrap:!!pdfTable.querySelector('td.factory-pdf-text')};
+ const result={fixed:table.style.tableLayout==='fixed',cols:table.querySelectorAll('colgroup col').length===2,sticky:getComputedStyle(table.querySelector('th')).position==='sticky',scrollHeight:!!wrap.style.maxHeight,wrapped:table.querySelector('td.factory-very-long-cell')!==null,firstRowVisible:parseFloat(getComputedStyle(table.querySelector('tbody tr:first-child td')).paddingTop)>=12,actionColumn:parseFloat(actionTable.querySelector('colgroup col:last-child')?.style.width||'0')>=116,actionHeaderNoWrap:getComputedStyle(actionTable.querySelector('th:last-child')).whiteSpace==='nowrap',icons:box.querySelectorAll('button svg').length===4,editIcon:!!box.querySelector('button[aria-label="تعديل"] svg'),shareIcon:!!box.querySelector('button[aria-label="مشاركة ملف PDF"] svg'),saveLabelPreserved:!!saveButton&&saveButton.textContent.includes('حفظ البيانات')&&saveButton.classList.contains('g')&&saveButton.classList.contains('factory-save-action')&&!saveButton.classList.contains('factory-icon-action'),saveSvgPreserved:!!box.querySelector('.factory-save-pdf-action svg'),linkIcon:!!box.querySelector('a[aria-label="عرض"] svg'),pdfNumber:!!pdfTable.querySelector('td.factory-pdf-number'),pdfTextWrap:!!pdfTable.querySelector('td.factory-pdf-text')};
  wrap.remove();actionWrap.remove();box.remove();pdfTable.remove();return result;
 });
 ok('tables keep first data row visible, action columns fit without wrapping, save labels remain visible, and PDF numbers do not wrap',Object.values(tableIconRuntime).every(Boolean),tableIconRuntime);

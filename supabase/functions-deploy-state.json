@@ -1,9 +1,13 @@
 {
   "projectId": "72723658",
   "functions": {
-    "create-employee": {
+    "change-initial-password": {
       "hasChanged": false,
-      "hash": "64267a6e792915da18ed4b9837c150243643053947712f942e5662fc5e5adde0"
+      "hash": "0d9b841426aaa029327ad2e7f402d47674baf5f9df7fd8aa257265b5b733c26e"
+    },
+    "create-employee-account": {
+      "hasChanged": false,
+      "hash": "38b07ba50e100f21120abb47d1b7b3edb51b7fb7d886d8c1a1cb7963d372937f"
     }
   }
 }

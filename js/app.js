@@ -1625,7 +1625,7 @@ function factoryIconizeActions(root){
   const textLabel=(button.textContent||'').replace(/\s+/g,' ').trim().replace(/^[^\p{L}\p{N}]+/u,'').trim();
   const label=textLabel||button.getAttribute('aria-label')||button.title||'';if(!label)return;
   let kind='';
-  if(/^(?:حفظ|Save)(?:\\s|$)/i.test(label))kind='save';
+  if(/^(?:حفظ|Save)(?:\s|$)/i.test(label))kind='save';
   else   if(/^(?:حذف|Delete)(?:\s|$)/i.test(label))kind='delete';
   else if(/تراجع|undo|إلغاء الترحيل/i.test(label))kind='undo';
   else if(/^(?:تعديل|تحرير|Edit)(?:\s|$)/i.test(label))kind='edit';
@@ -1634,7 +1634,12 @@ function factoryIconizeActions(root){
   else if(/^(?:مشاركة|Share)(?:\s|$)/i.test(label))kind='share';
   else if(/مرتجع|return/i.test(label))kind='return';
   if(!kind)return;button.dataset.factoryActionKind=kind;
-  if(kind==='save')button.classList.add('g','factory-save-action');
+  if(kind==='save'){
+   button.classList.add('g','factory-save-action');
+   button.title=button.title||label;button.setAttribute('aria-label',button.getAttribute('aria-label')||button.title);
+   if(!button.querySelector('svg')&&factoryActionSvg.save){const icon=document.createElement('span');icon.className='factory-action-icon';icon.innerHTML=factoryActionSvg.save;button.insertBefore(icon,button.firstChild);}
+   button.dataset.factoryIconized='1';return;
+  }
   if(button.querySelector('svg')||!factoryActionSvg[kind])return;
   button.dataset.factoryIconized='1';button.title=button.title||label;button.setAttribute('aria-label',button.getAttribute('aria-label')||button.title);button.classList.add('factory-icon-action');button.innerHTML=factoryActionSvg[kind];
  });
