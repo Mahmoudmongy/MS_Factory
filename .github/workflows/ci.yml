@@ -28,6 +28,6 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: pr107-table-layout-screenshots
+          name: pr108-responsive-visual-review
           path: test-results/table-layout-*.png
           if-no-files-found: warn
