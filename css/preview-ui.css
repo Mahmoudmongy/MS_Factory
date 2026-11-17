@@ -1002,3 +1002,70 @@ html[dir="ltr"] .factory-universal-table-scroll table.l td.factory-col-sticky{ri
 .factory-cash-movements .factory-summary-cash-movements th.factory-action-column,.factory-cash-movements .factory-summary-cash-movements td.factory-action-column{width:120px;min-width:120px;white-space:nowrap}
 .factory-cash-movements .factory-summary-cash-movements thead th{position:sticky;top:0!important;z-index:5;background:var(--pr2,var(--card))}
 @media(max-width:700px){.factory-summary-vouchers th.factory-action-column,.factory-summary-vouchers td:last-child{width:204px;min-width:204px;max-width:204px}.factory-summary-vouchers td:last-child .factory-row-actions{min-width:180px}.factory-summary-vouchers td:last-child .factory-row-actions button{flex-basis:34px;width:34px;min-width:34px;height:34px;min-height:34px}.factory-cash-movements .factory-table-scroll{max-height:58vh}}
+
+
+/* PR108: mobile navigation follows the supplied preview reference */
+@media (max-width: 860px) {
+  body #app {
+    display: block !important;
+    min-height: 100vh;
+  }
+
+  body #app #sb {
+    display: block !important;
+    position: relative !important;
+    inset: auto !important;
+    inset-inline-start: auto !important;
+    inset-inline-end: auto !important;
+    transform: none !important;
+    transition: none !important;
+    visibility: visible !important;
+    width: 100% !important;
+    max-width: none !important;
+    min-width: 0 !important;
+    height: auto !important;
+    max-height: none !important;
+    overflow: visible !important;
+    padding: 8px 0 10px !important;
+    box-shadow: none !important;
+    z-index: 2 !important;
+  }
+
+  body #app #sb .br {
+    position: relative !important;
+    top: auto !important;
+    padding: 12px 14px !important;
+    margin: 0 8px 8px !important;
+  }
+
+  body #app #sb .sb-nav-scroll {
+    display: grid !important;
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    gap: 4px !important;
+    overflow: visible !important;
+    min-height: 0 !important;
+    padding: 0 8px !important;
+  }
+
+  body #app #sb .sb-nav-scroll > a.factory-nav-link {
+    display: flex !important;
+    min-width: 0 !important;
+    min-height: 44px !important;
+    padding: 7px 9px !important;
+    border: 1px solid rgba(255, 255, 255, .12) !important;
+    border-radius: 4px !important;
+    font-size: 13px !important;
+    white-space: normal !important;
+  }
+
+  body #app #sb .sb-footer,
+  #top button#bg,
+  body #sb-overlay {
+    display: none !important;
+  }
+
+  body #cn {
+    width: 100% !important;
+    min-width: 0 !important;
+  }
+}
