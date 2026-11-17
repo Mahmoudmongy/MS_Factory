@@ -924,3 +924,6 @@ table.l thead th.factory-col-name:first-child{z-index:5;background:var(--pr2)}
 
 /* Let the inner table viewport own scrolling; an outer card overflow would break sticky headers. */
 .card:has(.factory-table-scroll),.card:has(.factory-universal-table-scroll){overflow:visible!important}
+
+/* The table itself must not become the sticky ancestor; its scroll wrapper owns both axes. */
+.factory-table-scroll table.l{overflow:visible!important}
