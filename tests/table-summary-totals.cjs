@@ -83,14 +83,14 @@ update(journal);
 assert.match(journal.__factorySummaryMeta.total.textContent,/إجمالي المدين: 125\.00/);
 assert.match(journal.__factorySummaryMeta.total.textContent,/إجمالي الدائن: 125\.00/);
 
+const searchRows=[row(['keep this']),row(['hide this'])],searchTable={__refreshed:0};
 const searchFn=vm.runInNewContext(
   extract('function factorySearchApply(input){','\nfunction factoryFbar(')+'\nfactorySearchApply',
-  {CUR:null,tab:'test',sessionStorage:{setItem(){}},ACT:null,
+  {CUR:null,tab:'test',sessionStorage:{setItem(){}},ACT:null,searchRows,searchTable,
     factorySearchMatch:(text,query)=>String(text).includes(query),
     factoryUpdateTableSummary:table=>{table.__refreshed=(table.__refreshed||0)+1;},
     document:{querySelectorAll(selector){return selector==='table.l tr'?searchRows:selector==='table.l'?[searchTable]:[];}}}
 );
-const searchRows=[row(['keep this']),row(['hide this'])],searchTable={__refreshed:0};
 searchFn({value:'keep',dataset:{searchScope:'test'}});
 assert.equal(searchRows[0].style.display,'');
 assert.equal(searchRows[1].style.display,'none');
