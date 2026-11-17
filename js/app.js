@@ -1456,8 +1456,9 @@ function factoryOrderRowActions(root){
  const rank={delete:0,undo:0,edit:1,print:2,view:3,share:4,return:5};
  root.querySelectorAll('.factory-row-actions').forEach(group=>{
   const actions=[...group.children].filter(node=>node.matches('button,a'));
-  actions.sort((a,b)=>(rank[a.dataset.factoryActionKind||'']??6)-(rank[b.dataset.factoryActionKind||'']??6));
-  actions.forEach(node=>group.appendChild(node));group.style.direction='ltr';
+  const ordered=[...actions].sort((a,b)=>(rank[a.dataset.factoryActionKind||'']??6)-(rank[b.dataset.factoryActionKind||'']??6));
+  if(actions.some((node,index)=>node!==ordered[index]))ordered.forEach(node=>group.appendChild(node));
+  if(group.style.direction!=='ltr')group.style.direction='ltr';
  });
 }
 function factoryApplyFixedTableLayout(table){

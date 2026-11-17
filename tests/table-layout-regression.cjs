@@ -1,5 +1,6 @@
 ﻿const fs=require('node:fs');const path=require('node:path');const assert=require('node:assert/strict');const {chromium}=require('playwright');
 const root=path.join(__dirname,'..');const style=fs.readFileSync(path.join(root,'css/style.css'),'utf8');const preview=fs.readFileSync(path.join(root,'css/preview-ui.css'),'utf8');const app=fs.readFileSync(path.join(root,'js/app.js'),'utf8');
+assert(app.includes('if(actions.some((node,index)=>node!==ordered[index]))'), 'action ordering must be idempotent under the document mutation observer');
 assert(app.includes('function factoryOrderRowActions(root)')&&app.includes('rank={delete:0,undo:0,edit:1,print:2,view:3'), 'row actions must be ordered left-to-right as delete/undo, edit, print, view');
 assert(preview.includes('.factory-table-scroll table.l tr:first-child th'), 'header stickiness must also cover legacy tables without an explicit thead');
 const start=app.indexOf('function factoryApplyFixedTableLayout(table){');const end=app.indexOf('\nconst factoryEnhBeforeFixedLayout=enh;',start);assert(start>=0&&end>start,'real generic table fitter must exist');const fitter=app.slice(start,end);
