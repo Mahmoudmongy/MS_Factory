@@ -872,8 +872,29 @@ const templatePreviewCheck=await ev(()=>{const h=$("#tpv").innerHTML;return {tit
 // Real-library PDF regression runs independently in tests/pdf-regression.cjs.
 await ev(()=>closeTab(CUR,1));
 /* ---------- language ---------- */
-await ev(()=>{PRF.lang='en';applyPref()});const left=[];for(const s of ['home','bank','rc','py','cust','supp','sale','sret','pur','pret','stock','prod','coa','je','tl','emp','rep','ai','set','statements']){await ev(x=>go(x),s);await p.waitForTimeout(40);const t=await ev(x=>{const out=[],w=document.createTreeWalker(document.body,NodeFilter.SHOW_TEXT);let n;while(n=w.nextNode()){if(n.parentElement&&n.parentElement.tagName=='SCRIPT')continue;if(/[\u0600-\u06FF]/.test(n.nodeValue)&&n.nodeValue.trim()!='ع')out.push(n.nodeValue.trim())}return out},s);t.forEach(x=>{if(!/محلات|عميل قطاعي|اختبار|استيراد|النسيج|جيرسي|زراير|تيشيرت|جاكيت|بنطلون|قماش|أحمر|أسود|جهة|الخزنة بالدولار|موظف/.test(x))left.push(s+': '+x)})}
-ok('English mode: no untranslated UI text on the 20 main screens',left.length==0,left.slice(0,12));await ev(()=>{PRF.lang='ar';applyPref()});
+const responsiveScreens=['home','bank','rc','py','cust','supp','sale','sret','pur','pret','stock','prod','coa','je','tl','emp','rep','ai','set','statements'];
+const responsiveWidths=[320,360,390,520,699,768,1024,1280,1440,1920];
+const left=[],responsiveIssues=[];
+for(const language of ['ar','en']){
+ await ev(lang=>{PRF.lang=lang;applyPref()},language);
+ for(const width of responsiveWidths){
+  await p.setViewportSize({width,height:900});
+  for(const screen of responsiveScreens){
+   await ev(x=>go(x),screen);
+   await p.waitForTimeout(40);
+   const layout=await ev(()=>{const main=document.querySelector('#m');return{viewport:innerWidth,document:document.documentElement.scrollWidth,body:document.body.scrollWidth,mainClient:main?.clientWidth||0,mainScroll:main?.scrollWidth||0}});
+   if(layout.document>width+1||layout.body>width+1||layout.mainScroll>layout.mainClient+1)responsiveIssues.push({language,width,screen,...layout});
+   if(language==='en'){
+    const untranslated=await ev(()=>{const out=[],walker=document.createTreeWalker(document.body,NodeFilter.SHOW_TEXT);let node;while(node=walker.nextNode()){if(node.parentElement&&node.parentElement.tagName==='SCRIPT')continue;if(/[\u0600-\u06FF]/.test(node.nodeValue)&&node.nodeValue.trim()!=='ع')out.push(node.nodeValue.trim())}return out});
+    untranslated.forEach(value=>{if(!/محلات|عميل قطاعي|اختبار|استيراد|النسيج|جيرسي|زراير|تيشيرت|جاكيت|بنطلون|قماش|أحمر|أسود|جهة|الخزنة بالدولار|موظف/.test(value))left.push(screen+' @ '+width+': '+value)});
+   }
+  }
+ }
+}
+await p.setViewportSize({width:1280,height:900});
+ok('Responsive matrix: all 20 main screens render in Arabic and English at 10 widths without page or main-content overflow',responsiveIssues.length===0,responsiveIssues.slice(0,20));
+ok('English mode: no untranslated UI text on the 20 main screens across 10 widths',left.length===0,left.slice(0,12));
+await ev(()=>{PRF.lang='ar';applyPref()});
 ok('no JavaScript errors during the whole desktop session',errs.length==0,errs.slice(0,3));
 const scopeCtx=await browser.newContext({viewport:{width:800,height:600}}),scopePage=await scopeCtx.newPage();await scopePage.goto(BASE);await scopePage.waitForTimeout(150);
 const accountIsolation=await scopePage.evaluate(async()=>{
