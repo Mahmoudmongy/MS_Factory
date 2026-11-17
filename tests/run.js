@@ -721,7 +721,6 @@ await ev(({id,purchase,cash})=>{go('py');vForm('out');$("#vt").value="s";vpt();$
 const supplierFull=await ev(({id,purchase,cash,cashBefore,partyBefore})=>{const d=S.docs.find(x=>String(x.id)===String(purchase));return{paid:paidOf(d),remaining:remOf(d),party:pbal(id),partyBefore,cash:bal(cash,"",td()),cashBefore,balanced:bal()}},{id:supplierId,purchase:supplierPurchaseId,cash:cashId,cashBefore:cashBeforeSupplier,partyBefore:partyBeforeSupplier});
 ok('full supplier settlement closes the invoice and leaves no supplier balance or duplicate cash movement',supplierFull.paid===1000&&supplierFull.remaining===0&&Math.abs(supplierFull.party-supplierFull.partyBefore)<.01&&supplierFull.cash===supplierFull.cashBefore-1000&&Math.abs(supplierFull.balanced)<.01,supplierFull);
 await ev(()=>{TB.filter(t=>t.kind==="page").forEach(t=>closeTab(t,1));});
-await ev(()=>closeTab(CUR,1));
 /* sale */
 await ev(()=>{go('sale');docForm('sale');$("#pt").value="1";$("#it").value="3";unitSet();$("#q").value="2";D.disc=10;saveDoc()});
 const sale=await ev(()=>S.docs.find(d=>d.t=="sale"));ok('sale: total = 2 x retail 250 - discount 10 = 490',sale&&sale.total==490&&sale.gross==500&&sale.disc==10,sale&&[sale.gross,sale.disc,sale.total]);
