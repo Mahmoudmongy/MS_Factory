@@ -350,7 +350,7 @@ button:disabled{opacity:.55;cursor:not-allowed}
 .preview-report-intro span{flex:1 1 260px;color:var(--mu);font-size:13px}
 .preview-report-intro button{min-height:33px;padding:6px 11px;font-size:12px}
 @media(max-width:1000px){.factory-summary-panels{grid-template-columns:1fr}}
-@media(max-width:860px){.factory-summary-settings{grid-template-columns:1fr}.factory-summary-setting-row{grid-template-columns:minmax(0,1fr) minmax(112px,auto) auto}.factory-summary-mini-table{min-width:650px}}
+@media(max-width:860px){.factory-summary-settings{grid-template-columns:1fr}.factory-summary-setting-row{grid-template-columns:minmax(0,1fr) minmax(112px,auto) auto}.factory-summary-mini-table{min-width:0}}
 
 
 /* Consistent high-contrast labels for every action in dark appearance. */
@@ -632,7 +632,7 @@ body.factory-preview-viewport .factory-settings-group .tile>span:last-child{min-
 .factory-universal-table-scroll th:last-child,.factory-universal-table-scroll td:last-child{padding-inline-end:12px}
 .factory-table-scroll tr>*:first-child,.factory-universal-table-scroll tr>*:first-child{border-inline-start:1px solid var(--bd)}
 .factory-table-scroll tr>*:last-child,.factory-universal-table-scroll tr>*:last-child{border-inline-end:1px solid var(--bd)}
-.factory-summary-mini-table{width:100%;min-width:760px}
+.factory-summary-mini-table{width:100%;min-width:0}
 .factory-summary-mini-table thead th{position:sticky;top:0;z-index:5}
 .factory-summary-mini-table th,.factory-summary-mini-table td{padding:9px 10px;vertical-align:middle}
 .factory-share-pdf-action{display:inline-flex;align-items:center;gap:7px;white-space:nowrap}
@@ -646,7 +646,7 @@ body.factory-preview-viewport .factory-settings-group .tile>span:last-child{min-
 .factory-print-document tr{break-inside:avoid;page-break-inside:avoid}
 .factory-print-document img{max-width:100%;height:auto;object-fit:contain}
 .factory-print-document h3{margin:12px 0;font-size:18px}
-@media(max-width:700px){.factory-table-scroll,.factory-universal-table-scroll{max-height:58vh;padding-inline:6px}.factory-summary-mini-table{min-width:700px}}
+@media(max-width:700px){.factory-table-scroll,.factory-universal-table-scroll{max-height:58vh;padding-inline:6px}.factory-summary-mini-table{min-width:0}}
 @media print{
  .factory-print-document{width:100%!important;max-width:100%!important;min-width:0!important;padding:8mm!important}
  .factory-print-document table{width:100%!important;max-width:100%!important;table-layout:fixed!important}
@@ -681,18 +681,18 @@ body.factory-preview-viewport .factory-settings-group .tile>span:last-child{min-
 .factory-universal-table-scroll table.l tbody tr:last-child td{border-bottom:1px solid var(--bd)}
 .factory-summary-table-scroll{max-height:460px;padding:8px 10px 12px}
 .factory-summary-table-scroll .factory-summary-mini-table{
-  width:100%;min-width:850px;table-layout:fixed;border-collapse:separate;border-spacing:0;
+  width:100%;min-width:0;table-layout:fixed;border-collapse:separate;border-spacing:0;
 }
 .factory-summary-mini-table th,.factory-summary-mini-table td{
   box-sizing:border-box;white-space:normal;overflow-wrap:anywhere;word-break:normal;
   line-height:1.45;padding:10px 9px;vertical-align:middle;
 }
-.factory-summary-mini-table th:nth-child(1),.factory-summary-mini-table td:nth-child(1){width:112px}
-.factory-summary-mini-table th:nth-child(2),.factory-summary-mini-table td:nth-child(2){width:135px}
-.factory-summary-mini-table th:nth-child(3),.factory-summary-mini-table td:nth-child(3){width:145px}
-.factory-summary-mini-table th:nth-child(4),.factory-summary-mini-table td:nth-child(4){width:190px}
-.factory-summary-mini-table th:nth-child(5),.factory-summary-mini-table td:nth-child(5){width:145px}
-.factory-summary-mini-table th:nth-child(6),.factory-summary-mini-table td:nth-child(6){width:115px}
+.factory-summary-mini-table th:nth-child(1),.factory-summary-mini-table td:nth-child(1){width:12%}
+.factory-summary-mini-table th:nth-child(2),.factory-summary-mini-table td:nth-child(2){width:15%}
+.factory-summary-mini-table th:nth-child(3),.factory-summary-mini-table td:nth-child(3){width:13%}
+.factory-summary-mini-table th:nth-child(4),.factory-summary-mini-table td:nth-child(4){width:21%}
+.factory-summary-mini-table th:nth-child(5),.factory-summary-mini-table td:nth-child(5){width:20%}
+.factory-summary-mini-table th:nth-child(6),.factory-summary-mini-table td:nth-child(6){width:19%}
 .factory-summary-mini-table tbody tr{cursor:pointer}
 .factory-summary-mini-table tbody tr:hover{background:color-mix(in srgb,var(--pr) 8%,var(--card))}
 .factory-summary-empty{padding:18px!important;text-align:center;color:var(--mu)}
@@ -848,21 +848,34 @@ body.factory-preview-viewport .factory-settings-group .tile>span:last-child{min-
   -webkit-overflow-scrolling:touch;
 }
 .factory-summary-table-scroll>.factory-summary-mini-table{
-  display:table!important;width:100%!important;min-width:850px!important;
+  display:table!important;width:100%!important;min-width:0!important;
   max-width:none!important;table-layout:fixed!important;margin:0;
 }
 .factory-summary-mini-table th,.factory-summary-mini-table td{
   box-sizing:border-box;min-width:0;white-space:normal;
   overflow-wrap:anywhere;word-break:normal;vertical-align:middle;
 }
-.factory-summary-mini-table th:nth-child(1),.factory-summary-mini-table td:nth-child(1){width:112px}
-.factory-summary-mini-table th:nth-child(2),.factory-summary-mini-table td:nth-child(2){width:150px}
-.factory-summary-mini-table th:nth-child(3),.factory-summary-mini-table td:nth-child(3){width:112px}
-.factory-summary-mini-table th:nth-child(4),.factory-summary-mini-table td:nth-child(4){width:180px}
-.factory-summary-mini-table th:nth-child(5),.factory-summary-mini-table td:nth-child(5){width:160px}
-.factory-summary-mini-table th:nth-child(6),.factory-summary-mini-table td:nth-child(6){width:120px}
+.factory-summary-mini-table th:nth-child(1),.factory-summary-mini-table td:nth-child(1){width:12%}
+.factory-summary-mini-table th:nth-child(2),.factory-summary-mini-table td:nth-child(2){width:15%}
+.factory-summary-mini-table th:nth-child(3),.factory-summary-mini-table td:nth-child(3){width:13%}
+.factory-summary-mini-table th:nth-child(4),.factory-summary-mini-table td:nth-child(4){width:21%}
+.factory-summary-mini-table th:nth-child(5),.factory-summary-mini-table td:nth-child(5){width:20%}
+.factory-summary-mini-table th:nth-child(6),.factory-summary-mini-table td:nth-child(6){width:19%}
 .factory-summary-mini-table td:nth-child(1),
 .factory-summary-mini-table td:nth-child(3),
 .factory-summary-mini-table td:nth-child(5){font-variant-numeric:tabular-nums}
 .factory-summary-mini-table td:nth-child(3),
 .factory-summary-mini-table td:nth-child(5){direction:ltr;text-align:left}
+
+
+/* Dashboard summary table: fit the actual dashboard card and viewport. */
+.factory-summary-table-scroll{box-sizing:border-box;width:100%!important;max-width:100%!important;max-height:min(460px,55vh);overflow-x:auto!important;overflow-y:auto!important;padding:8px 10px 12px}
+.factory-summary-table-scroll>.factory-summary-mini-table{display:table!important;box-sizing:border-box;width:100%!important;min-width:0!important;max-width:100%!important;table-layout:fixed!important;margin:0!important}
+.factory-summary-mini-table th,.factory-summary-mini-table td{box-sizing:border-box;min-width:0!important;max-width:none;white-space:normal!important;overflow-wrap:anywhere;word-break:normal;padding:8px 6px;line-height:1.35}
+.factory-summary-mini-table th:nth-child(1),.factory-summary-mini-table td:nth-child(1){width:12%;white-space:normal!important}
+.factory-summary-mini-table th:nth-child(2),.factory-summary-mini-table td:nth-child(2){width:15%}
+.factory-summary-mini-table th:nth-child(3),.factory-summary-mini-table td:nth-child(3){width:13%}
+.factory-summary-mini-table th:nth-child(4),.factory-summary-mini-table td:nth-child(4){width:21%}
+.factory-summary-mini-table th:nth-child(5),.factory-summary-mini-table td:nth-child(5){width:20%}
+.factory-summary-mini-table th:nth-child(6),.factory-summary-mini-table td:nth-child(6){width:19%}
+@media(max-width:700px){.factory-summary-table-scroll{max-height:55vh;padding:6px 5px 8px}.factory-summary-mini-table th,.factory-summary-mini-table td{padding:7px 4px;font-size:10.5px;line-height:1.3}}
