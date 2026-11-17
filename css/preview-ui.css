@@ -1029,6 +1029,33 @@ html[dir="ltr"] .factory-universal-table-scroll table.l td.factory-col-sticky{ri
   }
 }
 
+/* Match the reference sidebar brand row and logo treatment. */
+#sb>.br{
+  display:flex!important;
+  flex-direction:row!important;
+  align-items:center!important;
+  justify-content:flex-start!important;
+  gap:10px!important;
+  padding:14px 15px 18px!important;
+  margin:0 0 8px!important;
+  text-align:start!important;
+  line-height:1.25!important;
+  border-bottom:1px solid rgba(255,255,255,.1);
+}
+#sb>.br img{
+  display:block!important;
+  width:42px!important;
+  height:42px!important;
+  max-width:42px!important;
+  max-height:42px!important;
+  flex:0 0 42px!important;
+  object-fit:contain!important;
+  padding:4px!important;
+  margin:0!important;
+  border-radius:12px!important;
+  background:#e4f3f1!important;
+}
+#sb>.br .sb-brand-name{display:block;min-width:0;line-height:1.25}
 /* PR108: match preview.html responsive sidebar: sticky header and two-column navigation. */
 @media (max-width: 860px) {
   body #app {
@@ -1052,6 +1079,7 @@ html[dir="ltr"] .factory-universal-table-scroll table.l td.factory-col-sticky{ri
     overflow: visible !important;
     z-index: 20 !important;
   }
+  body #app #sb > .sb-controls { display: none !important; }
   body #app #sb .br {
     position: relative !important;
     top: auto !important;
