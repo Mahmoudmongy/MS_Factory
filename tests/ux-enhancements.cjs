@@ -90,7 +90,7 @@ const appPatchChecks = [
   [auditTrail.includes('function auditBusinessSummary(row)') && auditTrail.includes('Movement details'), 'audit entries show readable business details with raw before/after snapshots'],
   [app.includes('vTl=function(){') && app.includes('query=fv(key,"q")') && app.includes('fbar(key,[["q","text"') && app.includes('.includes(query.toLocaleLowerCase("ar"))'), 'timeline has a contains-search beside its date filters'],
   [app.includes('factory-table-count') && app.includes('factory-table-total') && app.includes('Default templates'), 'table counts, amount summaries and renamed column templates are enabled'],
-  [app.includes('factory-table-summary') && app.includes('balance|amount|total|debit|credit') && previewCss.includes('.factory-table-summary .factory-table-total'), 'filtered row counts and account balances share one compact summary bar'],
+  [app.includes('factory-table-summary') && app.includes('amount|total|net|cost|debit|credit') && previewCss.includes('.factory-table-summary .factory-table-total'), 'filtered row counts and account balances share one compact summary bar'],
   [previewCss.includes(':root[data-theme="dark"] .lk') && previewCss.includes('color-mix(in srgb,var(--pr) 82%,#10202a)'), 'linked balances keep readable contrast in light and dark themes'],
   [app.includes('vBank = function') && app.includes('toggleAccountTree'), 'cash and bank accounts retain the account-tree controls'],
   [activeBank.includes('toggleAccountTree(') && activeBank.includes('currencyBalances(') && activeBank.includes('factory-cash-movements') && activeBank.includes('cashChildren(id)'), 'active cash screen shows collapsible parent totals and the live cash ledger without double-counting nested cash accounts'],
