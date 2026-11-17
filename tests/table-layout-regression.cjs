@@ -4,8 +4,9 @@ assert(app.includes('if(actions.some((node,index)=>node!==ordered[index]))'), 'a
 assert(app.includes('function factoryOrderRowActions(root)')&&app.includes('rank={delete:0,undo:0,edit:1,print:2,view:3'), 'row actions must be ordered left-to-right as delete/undo, edit, print, view');
 assert(preview.includes('.factory-table-scroll table.l>tbody>tr:first-child th'), 'header stickiness must also cover legacy tables without an explicit thead');
 const start=app.indexOf('function factoryApplyFixedTableLayout(table){');const end=app.indexOf('\nconst factoryEnhBeforeFixedLayout=enh;',start);assert(start>=0&&end>start,'real generic table fitter must exist');const fitter=app.slice(start,end);
+assert(fitter.indexOf("if(/المخزن الفرعي|sub[ -]?warehouse/i.test(normalized))")<fitter.indexOf("if(/\\u0627\\u0633\\u0645|"), 'sub-warehouse classification must run before the generic warehouse/name classifier');
 assert(app.includes("return Math.min(260,Math.max(204,maxActions*36+24));"), 'voucher action column width must match the fixed column grid');
-assert(app.includes("factory-col-subwarehouse")&&app.includes("return 140;"), 'sub-warehouse column must have a bounded semantic width');\nassert(fitter.indexOf("if(/المخزن الفرعي|sub[ -]?warehouse/i.test(normalized))")<fitter.indexOf("if(/\\\\u0627\\\\u0633\\\\u0645|"), 'sub-warehouse classification must run before the generic warehouse/name classifier');
+assert(app.includes("factory-col-subwarehouse")&&app.includes("return 140;"), 'sub-warehouse column must have a bounded semantic width');
 assert(app.includes('Number(o.st)!==0')&&app.includes('Number(o.st)!==1'), 'production start and receipt transitions must reject duplicate posting');
 assert(app.includes('if(!post(d,o.no,"بدء أمر إنتاج"')&&app.includes('if(!post(d,o.no,"تسليم أمر إنتاج للمخزن"')&&app.includes('if(!post(d,ref,"هالك مخزن "'), 'production ledger posting must succeed before inventory quantities mutate');
 assert(preview.includes('.factory-summary-vouchers td.factory-col-actions{min-width:204px;width:204px')&&preview.includes('padding:5px 7px'), 'voucher rows and actions must use the compact aligned layout');
