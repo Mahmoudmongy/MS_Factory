@@ -904,6 +904,32 @@ for(const language of ['ar','en']){
 await p.setViewportSize({width:1280,height:900});
 ok('Responsive matrix: all 20 main screens render in Arabic and English at 10 widths without page or main-content overflow',responsiveIssues.length===0,responsiveIssues.slice(0,20));
 ok('English mode: no untranslated UI text on the 20 main screens across 10 widths',left.length===0,left.slice(0,12));
+const xssProbe=await ev(()=>{
+ const saved={name:S.name,logo:S.logo,partners:S.partners,geo:S.geo};
+ const payload='<img src=x onerror="window.__factoryXss=1">';
+ const id=987654321;
+ const partner={id,name:payload,phone:payload,gov:payload,city:payload,adr:payload,c:1,s:0,type:'r'};
+ let result={navSafe:false,partySafe:false,formSafe:false,geoSafe:false,invoiceSafe:false,infoSafe:false,handler:false};
+ try{
+  window.__factoryXss=0;
+  S.name=payload;S.logo='';S.partners=[...S.partners,partner];S.geo={...S.geo,[payload]:[payload]};
+  nav();result.navSafe=!document.querySelector('#sb .sb-brand-name img');
+  partyView(id);result.partySafe=!CUR.el.querySelector('img[src="x"]')&&CUR.el.querySelector('h3')?.textContent===payload;
+  closeTab(CUR,1);pForm(1,id);
+  result.formSafe=!ACT.querySelector('img[src="x"]')&&ACT.querySelector('#b1')?.value===payload&&ACT.querySelector('#adr')?.value===payload;
+  result.geoSafe=[...ACT.querySelectorAll('#gv option')].some(o=>o.textContent===payload)&&[...ACT.querySelectorAll('#ct2 option')].some(o=>o.textContent===payload);
+  closeTab(CUR,1);docForm('sale');
+  result.invoiceSafe=!ACT.querySelector('#pt img')&&[...ACT.querySelectorAll('#pt option')].some(o=>o.textContent===payload);
+  showInfo({id:1,name:payload,wh:1,model:payload,unit:payload,sku:payload},payload,1);
+  result.infoSafe=!ACT.querySelector('#info img[src="x"]')&&ACT.querySelector('#info')?.textContent.includes(payload);
+  result.handler=window.__factoryXss===0;
+ }finally{
+  if(CUR)closeTab(CUR,1);
+  S.name=saved.name;S.logo=saved.logo;S.partners=saved.partners;S.geo=saved.geo;nav();
+ }
+ return result;
+});
+ok('User-controlled factory, partner, address, invoice and item text is rendered as text rather than executable HTML',Object.values(xssProbe).every(Boolean),xssProbe);
 await ev(()=>{PRF.lang='ar';applyPref()});
 ok('no JavaScript errors during the whole desktop session',errs.length==0,errs.slice(0,3));
 const scopeCtx=await browser.newContext({viewport:{width:800,height:600}}),scopePage=await scopeCtx.newPage();await scopePage.goto(BASE);await scopePage.waitForTimeout(150);
