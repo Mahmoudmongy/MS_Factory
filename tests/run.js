@@ -909,7 +909,7 @@ const xssProbe=await ev(()=>{
  const payload='<img src=x onerror="window.__factoryXss=1">';
  const id=987654321;
  const partner={id,name:payload,phone:payload,gov:payload,city:payload,adr:payload,c:1,s:0,type:'r'};
- let result={navSafe:false,employeeSafe:false,partySafe:false,formSafe:false,geoSafe:false,invoiceSafe:false,infoSafe:false,voucherSafe:false,handler:false};
+ let result={navSafe:false,employeeSafe:false,partySafe:false,formSafe:false,geoSafe:false,invoiceSafe:false,infoSafe:false,voucherSafe:false,printDocSafe:false,printVoucherSafe:false,printProductionSafe:false,handler:false};
  try{
   window.__factoryXss=0;
   S.name=payload;S.logo='';S.partners=[...S.partners,partner];S.geo={...S.geo,[payload]:[payload]};S.emp=[...S.emp,{id:id+1,name:payload,username:'xss-probe',perm:[]}];
@@ -923,6 +923,12 @@ const xssProbe=await ev(()=>{
   showInfo({id:1,name:payload,wh:1,model:payload,unit:payload,sku:payload},payload,1);
   result.infoSafe=!ACT.querySelector('#info img[src="x"]')&&ACT.querySelector('#info')?.textContent.includes(payload);
   closeTab(CUR,1);vForm('in');V.ac=[{a:1,m:1}];V.ln=[{a:1,d:payload,m:1,x:0}];drawV();result.voucherSafe=!ACT.querySelector('#vs img[src="x"]')&&!ACT.querySelector('#vs').innerHTML.includes('<img');
+  const printedDoc=docPrintHtml({id:id+2,t:'sale',no:payload,pid:id,date:td(),lines:[{name:payload,v:payload,unit:payload,qty:1,price:1,note:payload}],disc:0,total:1,note:payload,img:''});
+  result.printDocSafe=!printedDoc.includes(payload)&&printedDoc.includes('&lt;img');
+  const printedVoucher=vchPrintHtml({id:id+3,dir:'in',title:payload,no:payload,who:payload,desc:payload,date:td(),ac:[{a:1,m:1}],ln:[{a:'p',lbl:payload,d:payload,m:1,x:0}],total:1});
+  result.printVoucherSafe=!printedVoucher.includes(payload)&&printedVoucher.includes('&lt;img');
+  const printedProduction=poPrintHtml({id:id+4,no:payload,pid:id,date:td(),desc:payload,iname:payload,wh:1,subs:[{v:payload,qty:1}],mats:[],x:[],st:0,rec:[],matCost:0,wc:0});
+  result.printProductionSafe=!printedProduction.includes(payload)&&printedProduction.includes('&lt;img');
   result.handler=window.__factoryXss===0;
  }finally{
   if(CUR)closeTab(CUR,1);
