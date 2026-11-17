@@ -12,7 +12,7 @@ assert.equal(coa.split("<th>").length-1,4,"chart-of-accounts section must expose
 const vouchers=between(app,"function vVch(dir){","function vForm(dir,p)");
 assert.equal(vouchers.split("<th").length-1,10,"voucher table must retain all ten headers");
 assert(vouchers.includes('<th class="factory-action-column">'),"voucher actions need their own final header cell");
-assert(vouchers.includes('<td class="factory-action-column"><span class="factory-row-actions">'),"voucher actions need their own final data cell");
+assert(vouchers.includes('<td><span class="factory-row-actions">'),"voucher actions must remain inside a real final table cell");
 const iconOrder=["◉","▣","✎","⌫"].map(icon=>vouchers.indexOf(icon));
 assert(iconOrder.every((index,i)=>index>=0&&(i===0||index>iconOrder[i-1])),"approved voucher action icon order must remain unchanged");
 assert(vouchers.includes("factory-voucher-description"),"long voucher descriptions need a bounded display wrapper with full text in title");
@@ -25,8 +25,8 @@ assert(bank.includes('<th class="factory-action-column">التفاصيل</th>'),
 assert(bank.includes('class="factory-summary-cash-movements"'),"cash movement table must use the current summary-table component");
 assert(bank.includes("const allPeriodRows="),"running balance must be calculated from all period rows before the text filter");
 assert(bank.includes("const visibleRows=allPeriodRows.filter"),"text search must only filter displayed rows");
-assert(css.includes(".factory-summary-vouchers{width:1260px"),"voucher table must have a bounded, scrollable width");
-assert(css.includes(".factory-summary-vouchers th.factory-action-column,.factory-summary-vouchers td.factory-action-column{width:158px"),"voucher action column must reserve space for its full icon group");
+assert(css.includes(".factory-summary-vouchers{width:1360px"),"voucher table must have a bounded, scrollable width");
+assert(css.includes(".factory-summary-vouchers th.factory-action-column,.factory-summary-vouchers td:last-child{width:204px"),"voucher action column must reserve the established width for its full icon group");
 assert(css.includes(".factory-production-detail table .factory-warehouse-column{width:132px"),"warehouse detail column must have a bounded width");
 assert(css.includes(".factory-cash-movements .factory-table-scroll{width:100%;max-width:100%;min-width:0;max-height:62vh"),"cash movements must scroll inside their own frame");
 assert(css.includes(".factory-cash-movements .factory-summary-cash-movements{width:1120px"),"cash movement table must use the current fixed column contract");
