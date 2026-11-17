@@ -191,6 +191,9 @@ assert(previewUi.includes('ms-factory-financial-period-v1') && previewUi.include
 assert(previewUi.includes('factory-summary-customize-open') && previewUi.includes('factory-summary-customize-panel'), 'summary customization must open as a dedicated settings panel');
 assert(previewUi.includes('function applyFinancialPeriod(from,to)') && previewUi.includes("document.getElementById('factory-fs-from')") && !previewUi.includes('factory-settings-fs-from'), 'financial period must be applied from statements screen, not Settings');
 assert(previewCss.includes('.factory-summary-table-scroll .factory-summary-mini-table') && previewCss.includes('th:last-child') && previewCss.includes('tbody tr:first-child'), 'summary and general tables must align first rows and last columns');
+assert(app.includes("table?.classList?.contains('factory-summary-mini-table')") && app.includes("table.querySelector('colgroup')?.remove()"), 'dashboard summary table must bypass the generic inline column-width fitter');
+assert(previewCss.includes('width:100%!important;min-width:850px!important') && previewCss.includes('.factory-summary-mini-table td:nth-child(6)'), 'dashboard summary table must retain a readable six-column width and horizontal scrolling');
+
 assert(previewCss.includes('factory-summary-customize-overlay') && previewCss.includes('factory-fin-period-readonly'), 'settings panel and locked financial period must be styled');
 assert(previewCss.includes('#top #logout-btn{display:none') && previewCss.includes('#top #who{grid-area:who'), 'top logout icon must be removed and username field widened');
 assert(previewCss.includes('#pr th,#pr td') && previewCss.includes('word-break:break-word'), 'PDF long text must wrap within page width');

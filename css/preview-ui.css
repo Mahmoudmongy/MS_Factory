@@ -838,3 +838,31 @@ body.factory-preview-viewport .factory-settings-group .tile>span:last-child{min-
  .factory-fin-filters button,.factory-fin-filters .factory-auto-period-note{grid-column:1/-1;width:100%;min-width:0;box-sizing:border-box}
 }
 @media(max-width:380px){.factory-fin-filters{grid-template-columns:minmax(0,1fr)!important}}
+
+
+/* Dashboard recent-activity table: keep the shared table behavior without
+   allowing the generic inline-width fitter to collapse its six columns. */
+.factory-summary-table-scroll{
+  display:block;box-sizing:border-box;width:100%;max-width:100%;
+  overflow-x:auto;overflow-y:auto;overscroll-behavior-inline:contain;
+  -webkit-overflow-scrolling:touch;
+}
+.factory-summary-table-scroll>.factory-summary-mini-table{
+  display:table!important;width:100%!important;min-width:850px!important;
+  max-width:none!important;table-layout:fixed!important;margin:0;
+}
+.factory-summary-mini-table th,.factory-summary-mini-table td{
+  box-sizing:border-box;min-width:0;white-space:normal;
+  overflow-wrap:anywhere;word-break:normal;vertical-align:middle;
+}
+.factory-summary-mini-table th:nth-child(1),.factory-summary-mini-table td:nth-child(1){width:112px}
+.factory-summary-mini-table th:nth-child(2),.factory-summary-mini-table td:nth-child(2){width:150px}
+.factory-summary-mini-table th:nth-child(3),.factory-summary-mini-table td:nth-child(3){width:112px}
+.factory-summary-mini-table th:nth-child(4),.factory-summary-mini-table td:nth-child(4){width:180px}
+.factory-summary-mini-table th:nth-child(5),.factory-summary-mini-table td:nth-child(5){width:160px}
+.factory-summary-mini-table th:nth-child(6),.factory-summary-mini-table td:nth-child(6){width:120px}
+.factory-summary-mini-table td:nth-child(1),
+.factory-summary-mini-table td:nth-child(3),
+.factory-summary-mini-table td:nth-child(5){font-variant-numeric:tabular-nums}
+.factory-summary-mini-table td:nth-child(3),
+.factory-summary-mini-table td:nth-child(5){direction:ltr;text-align:left}
