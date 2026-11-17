@@ -969,7 +969,7 @@ html[dir="ltr"] .factory-universal-table-scroll table.l td.factory-col-sticky{ri
 
 
 /* PR107 batch 3: precise column contracts for vouchers, warehouse detail, cash ledger and account tree. */
-.factory-summary-vouchers{width:1260px!important;min-width:1260px!important;max-width:none!important;table-layout:fixed!important}
+.factory-summary-vouchers{width:1360px!important;min-width:1360px!important;max-width:none!important;table-layout:fixed!important}
 .factory-summary-vouchers th,.factory-summary-vouchers td{box-sizing:border-box;padding:5px 7px!important;line-height:1.3!important;vertical-align:middle}
 .factory-summary-vouchers th:nth-child(1),.factory-summary-vouchers td:nth-child(1){width:92px;min-width:92px}
 .factory-summary-vouchers th:nth-child(2),.factory-summary-vouchers td:nth-child(2){width:112px;min-width:112px}
@@ -980,9 +980,9 @@ html[dir="ltr"] .factory-universal-table-scroll table.l td.factory-col-sticky{ri
 .factory-summary-vouchers th:nth-child(7),.factory-summary-vouchers td:nth-child(7){width:105px;min-width:105px;white-space:nowrap}
 .factory-summary-vouchers th:nth-child(8),.factory-summary-vouchers td:nth-child(8){width:145px;min-width:145px}
 .factory-summary-vouchers th:nth-child(9),.factory-summary-vouchers td:nth-child(9){width:105px;min-width:105px}
-.factory-summary-vouchers th.factory-action-column,.factory-summary-vouchers td.factory-action-column{width:158px;min-width:158px;max-width:158px;white-space:nowrap!important;overflow:visible!important}
-.factory-summary-vouchers td.factory-action-column .factory-row-actions{display:inline-flex;align-items:center;justify-content:flex-start;gap:4px;flex-wrap:nowrap;min-width:144px;white-space:nowrap;overflow:visible}
-.factory-summary-vouchers td.factory-action-column .factory-row-actions button{box-sizing:border-box;flex:0 0 30px;width:30px;min-width:30px;height:30px;min-height:30px;padding:3px 4px;line-height:1}
+.factory-summary-vouchers th.factory-action-column,.factory-summary-vouchers td:last-child{width:204px;min-width:204px;max-width:204px;white-space:nowrap!important;overflow:visible!important}
+.factory-summary-vouchers td:last-child .factory-row-actions{display:inline-flex;align-items:center;justify-content:flex-start;gap:4px;flex-wrap:nowrap;min-width:180px;white-space:nowrap;overflow:visible}
+.factory-summary-vouchers td:last-child .factory-row-actions button{box-sizing:border-box;flex:0 0 30px;width:30px;min-width:30px;height:30px;min-height:30px;padding:3px 4px;line-height:1}
 .factory-voucher-description{display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;overflow:hidden;overflow-wrap:anywhere;white-space:normal;line-height:1.3;max-height:2.6em}
 .factory-production-detail table .factory-warehouse-column{width:132px;min-width:132px;max-width:150px;white-space:normal!important;overflow-wrap:anywhere!important;word-break:normal!important}
 .factory-production-detail table th:nth-child(2),.factory-production-detail table td:nth-child(2){width:235px;min-width:235px}
@@ -1001,4 +1001,4 @@ html[dir="ltr"] .factory-universal-table-scroll table.l td.factory-col-sticky{ri
 .factory-cash-movements .factory-summary-cash-movements th:nth-child(5),.factory-cash-movements .factory-summary-cash-movements td:nth-child(5),.factory-cash-movements .factory-summary-cash-movements th:nth-child(6),.factory-cash-movements .factory-summary-cash-movements td:nth-child(6),.factory-cash-movements .factory-summary-cash-movements th:nth-child(7),.factory-cash-movements .factory-summary-cash-movements td:nth-child(7){width:135px;min-width:135px;white-space:nowrap;font-variant-numeric:tabular-nums}
 .factory-cash-movements .factory-summary-cash-movements th.factory-action-column,.factory-cash-movements .factory-summary-cash-movements td.factory-action-column{width:120px;min-width:120px;white-space:nowrap}
 .factory-cash-movements .factory-summary-cash-movements thead th{position:sticky;top:0!important;z-index:5;background:var(--pr2,var(--card))}
-@media(max-width:700px){.factory-summary-vouchers th.factory-action-column,.factory-summary-vouchers td.factory-action-column{width:172px;min-width:172px;max-width:172px}.factory-summary-vouchers td.factory-action-column .factory-row-actions{min-width:158px}.factory-summary-vouchers td.factory-action-column .factory-row-actions button{flex-basis:34px;width:34px;min-width:34px;height:34px;min-height:34px}.factory-cash-movements .factory-table-scroll{max-height:58vh}}
+@media(max-width:700px){.factory-summary-vouchers th.factory-action-column,.factory-summary-vouchers td:last-child{width:204px;min-width:204px;max-width:204px}.factory-summary-vouchers td:last-child .factory-row-actions{min-width:180px}.factory-summary-vouchers td:last-child .factory-row-actions button{flex-basis:34px;width:34px;min-width:34px;height:34px;min-height:34px}.factory-cash-movements .factory-table-scroll{max-height:58vh}}
