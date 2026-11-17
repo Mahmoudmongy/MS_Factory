@@ -1492,7 +1492,7 @@ function factoryApplyFixedTableLayout(table){
     if(/\u0648\u062d\u062f\u0629|unit/i.test(normalized)){mark('unit');return 78;}
     if(/\u062d\u0627\u0644\u0629|status/i.test(normalized)){mark('status');return 148;}
     if(/\u0643\u0648\u062f|\u0628\u0627\u0631\u0643\u0648\u062f|\u0645\u0631\u062c\u0639|\u0631\u0642\u0645|\u0645\u0633\u0644\u0633\u0644|\u0641\u0627\u062a\u0648\u0631\u0629|code|barcode|reference|serial|invoice\s*(no|number|#)/i.test(normalized)){mark('code');return 132;}
-    if(/المخزن الفرعي|sub[ -]?warehouse/i.test(normalized)){cell.classList.add('factory-col-subwarehouse');rows.forEach(row=>row.children[index]?.classList.add('factory-col-subwarehouse'));return 140;}
+    if(/المخزن الفرعي|sub[ -]?warehouse/i.test(normalized)){cell.classList.add('factory-col-subwarehouse');rows.forEach(row=>row.children[index]?.classList.add('factory-col-subwarehouse'));return 128;}
     if(/\u0627\u0633\u0645|\u062d\u0633\u0627\u0628|\u0635\u0646\u0641|\u0637\u0631\u0641|\u0639\u0645\u064a\u0644|\u0645\u0648\u0631\u062f|\u0645\u062e\u0632\u0646|\u0645\u0648\u0638\u0641|\u0639\u0627\u0645\u0644|name|account|item|party|customer|supplier|warehouse|employee/i.test(normalized)){mark('name');flexIndexes.add(index);return Math.min(210,Math.max(148,74+Math.max(name.length,sample)*2.5));}
     if(/\u0628\u064a\u0627\u0646|\u0648\u0635\u0641|\u062a\u0641\u0627\u0635\u064a\u0644|\u0645\u0644\u0627\u062d\u0638\u0627\u062a|\u0639\u0646\u0648\u0627\u0646|description|details|note|address/i.test(normalized)){mark('meta');flexIndexes.add(index);return Math.min(230,Math.max(164,82+sample*2.2));}
     mark('text');flexIndexes.add(index);return Math.min(150,Math.max(104,70+Math.max(name.length,sample)*2));
