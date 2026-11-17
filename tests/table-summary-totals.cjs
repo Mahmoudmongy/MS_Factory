@@ -10,7 +10,7 @@ const update=vm.runInNewContext(
   {LANGEN:false,f:n=>Number(n).toFixed(2),Map,Number,String,RegExp}
 );
 function row(values,options={}){
-  return {style:{display:options.display||''},hidden:false,dataset:options.dataset||{},textContent:values.join(' '),
+  return {style:{display:options.display||''},hidden:false,dataset:options.dataset||{},classList:{contains:name=>name===(options.className||'')},textContent:values.join(' '),
     children:values.map(textContent=>({textContent})),
     querySelector(selector){if(selector==='td')return {};if(selector==='[colspan]')return options.colspan?{}:null;return null;}};
 }
@@ -54,6 +54,13 @@ update(stock);
 assert.match(stock.__factorySummaryMeta.total.textContent,/قيمة المخزون: 450\.00 ج\.م/);
 assert.doesNotMatch(stock.__factorySummaryMeta.total.textContent,/تكلفة الوحدة|الكمية/);
 
+const statementTable=table(h(['التاريخ','قيمة الحركة','الرصيد الجاري']),[
+  row(['رصيد بداية الفترة','100.00 ج.م','100.00 ج.م'],{className:'factory-statement-opening'}),
+  row(['2026-02-01','25.00 ج.م','125.00 ج.م']),
+  row(['2026-02-02','-10.00 ج.م','115.00 ج.م'])
+]);
+update(statementTable);
+assert.equal(statementTable.__factorySummaryMeta.count.textContent,'عدد البيانات: 2','opening balance is not a movement row');
 const mixedCurrency=table(h(['العملة','المبلغ']),[row(['EGP','100.00']),row(['USD','200.00'])]);
 update(mixedCurrency);
 assert.match(mixedCurrency.__factorySummaryMeta.total.textContent,/100\.00 EGP/);
