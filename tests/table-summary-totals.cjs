@@ -45,7 +45,7 @@ assert.match(vouchers.__factorySummaryMeta.total.textContent,/إجمالي ال�
 
 const partners=table(h(['الاسم','الرصيد']),[row(['عميل موجب','150.00 ج.م']),row(['عميل سالب','-50.00 ج.م'])],'partners');
 update(partners);
-assert.match(partners.__factorySummaryMeta.total.textContent,/صافي الرصيد الظاهر: 100\.00 ج\.م/);
+assert.match(partners.__factorySummaryMeta.total.textContent,/صافي الرصيد الظاهر \(الموجب مستحق للشركة والسالب مستحق للطرف\): 100\.00 ج\.م/);
 
 const stock=table(h(['الصنف','تكلفة الوحدة','الكمية','قيمة المخزون']),[
   row(['قميص','25.00','10','250.00']),row(['بنطلون','50.00','4','200.00'])
