@@ -27,7 +27,7 @@ assert(bank.includes("const allPeriodRows="),"running balance must be calculated
 assert(bank.includes("const visibleRows=allPeriodRows.filter"),"text search must only filter displayed rows");
 assert(css.includes(".factory-summary-vouchers{width:1360px"),"voucher table must have a bounded, scrollable width");
 assert(css.includes(".factory-summary-vouchers th.factory-action-column,.factory-summary-vouchers td:last-child{width:204px"),"voucher action column must reserve the established width for its full icon group");
-assert(css.includes(".factory-production-detail table .factory-warehouse-column{width:132px"),"warehouse detail column must have a bounded width");
+assert(css.includes(".factory-production-detail table .factory-warehouse-column{width:128px"),"warehouse detail column must have a bounded width");\nassert(app.includes("return 128;"),"semantic sub-warehouse width must be bounded in the generic table fitter");
 assert(css.includes(".factory-cash-movements .factory-table-scroll{width:100%;max-width:100%;min-width:0;max-height:62vh"),"cash movements must scroll inside their own frame");
 assert(css.includes(".factory-cash-movements .factory-summary-cash-movements{width:1120px"),"cash movement table must use the current fixed column contract");
 assert(css.includes(".factory-account-name-cell"),"account tree name/code column must be explicitly styled");
