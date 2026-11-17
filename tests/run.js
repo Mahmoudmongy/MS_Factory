@@ -905,15 +905,15 @@ await p.setViewportSize({width:1280,height:900});
 ok('Responsive matrix: all 20 main screens render in Arabic and English at 10 widths without page or main-content overflow',responsiveIssues.length===0,responsiveIssues.slice(0,20));
 ok('English mode: no untranslated UI text on the 20 main screens across 10 widths',left.length===0,left.slice(0,12));
 const xssProbe=await ev(()=>{
- const saved={name:S.name,logo:S.logo,partners:S.partners,geo:S.geo};
+ const saved={name:S.name,logo:S.logo,partners:S.partners,geo:S.geo,emp:S.emp};
  const payload='<img src=x onerror="window.__factoryXss=1">';
  const id=987654321;
  const partner={id,name:payload,phone:payload,gov:payload,city:payload,adr:payload,c:1,s:0,type:'r'};
- let result={navSafe:false,partySafe:false,formSafe:false,geoSafe:false,invoiceSafe:false,infoSafe:false,handler:false};
+ let result={navSafe:false,employeeSafe:false,partySafe:false,formSafe:false,geoSafe:false,invoiceSafe:false,infoSafe:false,voucherSafe:false,handler:false};
  try{
   window.__factoryXss=0;
-  S.name=payload;S.logo='';S.partners=[...S.partners,partner];S.geo={...S.geo,[payload]:[payload]};
-  nav();result.navSafe=!document.querySelector('#sb .sb-brand-name img');
+  S.name=payload;S.logo='';S.partners=[...S.partners,partner];S.geo={...S.geo,[payload]:[payload]};S.emp=[...S.emp,{id:id+1,name:payload,username:'xss-probe',perm:[]}];
+  nav();result.navSafe=!document.querySelector('#sb .sb-brand-name img');result.employeeSafe=!document.querySelector('#who option img');
   partyView(id);result.partySafe=!CUR.el.querySelector('img[src="x"]')&&CUR.el.querySelector('h3')?.textContent===payload;
   closeTab(CUR,1);pForm(1,id);
   result.formSafe=!ACT.querySelector('img[src="x"]')&&ACT.querySelector('#b1')?.value===payload&&ACT.querySelector('#adr')?.value===payload;
@@ -921,11 +921,11 @@ const xssProbe=await ev(()=>{
   closeTab(CUR,1);docForm('sale');
   result.invoiceSafe=!ACT.querySelector('#pt img')&&[...ACT.querySelectorAll('#pt option')].some(o=>o.textContent===payload);
   showInfo({id:1,name:payload,wh:1,model:payload,unit:payload,sku:payload},payload,1);
-  result.infoSafe=!ACT.querySelector('#info img[src="x"]')&&ACT.querySelector('#info')?.textContent.includes(payload);
+  result.infoSafe=!ACT.querySelector('#info img[src="x"]')&&ACT.querySelector('#info')?.textContent.includes(payload);\n  closeTab(CUR,1);vForm('in');V.ac=[{a:1,m:1}];V.ln=[{a:1,d:payload,m:1,x:0}];drawV();result.voucherSafe=!ACT.querySelector('#vs img[src="x"]')&&!ACT.querySelector('#vs').innerHTML.includes('<img');
   result.handler=window.__factoryXss===0;
  }finally{
   if(CUR)closeTab(CUR,1);
-  S.name=saved.name;S.logo=saved.logo;S.partners=saved.partners;S.geo=saved.geo;nav();
+  S.name=saved.name;S.logo=saved.logo;S.partners=saved.partners;S.geo=saved.geo;S.emp=saved.emp;nav();
  }
  return result;
 });
