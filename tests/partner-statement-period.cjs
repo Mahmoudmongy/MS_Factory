@@ -87,13 +87,13 @@ assert.match(pdf.body, /إجمالي المستحق للطرف: 25\.00 ج\.م/);
 assert.match(pdf.body, /الرصيد الختامي/);
 const periodUiSource = extract('function factoryPartnerStatementKey(', '\\nfunction factoryDrillPartner(');
 const stored = new Map();
-const statementCalls = [];
+const statementCalls = [], uiMessages = [];
 const fields = { '#partner-statement-from': { value: '2026-02-01' }, '#partner-statement-to': { value: '2026-03-31' } };
 const periodUi = vm.runInNewContext(periodUiSource + '\\n({ factoryPartnerStatementKey, factoryPartnerStatementSaved, rememberPartnerStatementPeriod, applyPartnerStatementPeriod, clearPartnerStatementPeriod })', {
   sessionStorage: { getItem: key => stored.has(key) ? stored.get(key) : null, setItem: (key, value) => stored.set(key, value), removeItem: key => stored.delete(key) },
   $: selector => fields[selector] || null,
   partnerStatementValidPeriod: valid,
-  toast: message => { throw new Error(message); },
+  toast: message => uiMessages.push(message),
   factoryDrillPartner: (...args) => statementCalls.push(args)
 });
 assert.equal(periodUi.rememberPartnerStatementPeriod(7), true);
