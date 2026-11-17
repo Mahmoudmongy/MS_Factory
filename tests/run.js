@@ -727,7 +727,7 @@ const sale=await ev(()=>S.docs.find(d=>d.t=="sale"));ok('sale: total = 2 x retai
 ok('sale: stock of item decreased by 2 (20 -> 18)',await ev(()=>tq(it_(3)))==18);
 ok('sale: sales revenue account = 500 and sales-discount = 10 (credit/debit sides correct)',await ev(()=>[bal(ak("sales"),"",td()),bal(ak("sdisc"),"",td())]).then(x=>x[0]==500&&x[1]==10),await ev(()=>[bal(ak("sales"),"",td()),bal(ak("sdisc"),"",td())]));
 ok('ledger balanced after sale',await bal());
-const customerReceiptBefore=await ev(()=>({cash:bal(cashId,"",td()),party:pbal(1)}));
+const customerReceiptBefore=await ev(({cash})=>({cash:bal(cash,"",td()),party:pbal(1)}),{cash:cashId});
 await ev(({id,sale,cash})=>{go('rc');vForm('in');$("#vt").value="c";vpt();$("#vp").value=String(id);vlab();$("#lkc").checked=true;lkTog();$("#va").value=String(cash);vcur();$("#vm").value="200";vAc();const input=document.querySelector('#lkw input[data-d="'+sale+'"]');if(input){input.value="200";lkSet(input)}saveV();},{id:1,sale:sale.id,cash:cashId});
 const customerReceiptPartial=await ev(({sale,cash})=>{const d=S.docs.find(x=>String(x.id)===String(sale));return{paid:paidOf(d),remaining:remOf(d),party:pbal(1),cash:bal(cash,"",td()),balanced:bal()}},{sale:sale.id,cash:cashId});
 ok('partial customer receipt allocates 200 once: receivable remains 290 and cash increases by 200',customerReceiptPartial.paid===200&&customerReceiptPartial.remaining===290&&Math.abs(customerReceiptPartial.party-(customerReceiptBefore.party-200))<.01&&customerReceiptPartial.cash===customerReceiptBefore.cash+200&&Math.abs(customerReceiptPartial.balanced)<.01,customerReceiptPartial);
