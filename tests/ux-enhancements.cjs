@@ -106,7 +106,7 @@ console.log('PASS invoice and voucher posting failures fail closed with safe rol
 const sw = fs.readFileSync(path.join(root, 'sw.js'), 'utf8');
 const swPublic = fs.readFileSync(path.join(root, 'public/sw.js'), 'utf8');
 assert(app.includes('landscape=wide||capture.width/capture.height>1.1') && app.includes('windowWidth:captureWidth') && app.includes('W=landscape?297:210') && app.includes('el.style.boxSizing="border-box"'), 'PDF export captures the full table width and selects landscape A4 for wide documents');
-assert(sw.includes('factory-v44') && swPublic.includes('factory-v44'), 'service-worker cache version changes when the application assets change');
+assert(sw.includes('factory-v45') && swPublic.includes('factory-v45'), 'service-worker cache version changes when the application assets change');
 console.log('PASS adaptive A4 PDF layout and service-worker cache refresh');
 assert(previewUi.includes("function renderReferenceGroup") && previewUi.includes("function renderReferenceSidebar") && previewUi.includes("data-preview-screen-tab"), "the live application must map its actual screen renderers into the preview's grouped menu and functional tabs");
 assert(previewCss.includes(".factory-nav-link") && previewCss.includes(".preview-module-tabs") && previewCss.includes(".factory-reference-screen-body"), "the reference sidebar, tabs and page panels must have dedicated responsive styles");
@@ -192,7 +192,7 @@ assert(previewUi.includes('factory-summary-customize-open') && previewUi.include
 assert(previewUi.includes('function applyFinancialPeriod(from,to)') && previewUi.includes("document.getElementById('factory-fs-from')") && !previewUi.includes('factory-settings-fs-from'), 'financial period must be applied from statements screen, not Settings');
 assert(previewCss.includes('.factory-summary-table-scroll>.factory-summary-mini-table') && previewCss.includes('.factory-summary-mini-table th:nth-child(6)') && previewCss.includes('.factory-table-scroll table.l tbody tr:first-child td'), 'summary columns and general table first rows must use their explicit aligned layout');
 assert(app.includes("if(table?.classList?.contains('factory-summary-mini-table'))return;"), 'dashboard summary table must be excluded before the generic column-width fitter');
-assert(previewCss.includes('width:100%!important') && previewCss.includes('min-width:0!important') && previewCss.includes('max-width:100%!important') && previewCss.includes('.factory-summary-mini-table td:nth-child(6)') && previewCss.includes('width:12%') && previewCss.includes('width:19%'), 'dashboard summary table must fit its dashboard card using responsive six-column proportions without a fixed minimum width');
+assert(previewCss.includes('width:100%!important') && previewCss.includes('min-width:0!important') && previewCss.includes('max-width:100%!important') && previewCss.includes('.factory-summary-mini-table td:nth-child(6)') && previewCss.includes('width:16%') && previewCss.includes('width:14%'), 'dashboard summary table must fit its dashboard card using responsive six-column proportions without a fixed minimum width');
 
 assert(previewCss.includes('factory-summary-customize-overlay') && previewCss.includes('factory-fin-period-readonly'), 'settings panel and locked financial period must be styled');
 assert(previewCss.includes('#top #logout-btn{display:none') && previewCss.includes('#top #who{grid-area:who'), 'top logout icon must be removed and username field widened');
@@ -212,7 +212,7 @@ assert(previewCss.includes(':has(.account-tree-toggle)') && previewCss.includes(
 assert(!app.includes('مدير الشركة') && app.includes('name:"MS Factory"') && app.includes('org:S.name||"MS Factory"'), 'default and fallback document branding must use the company name');
 
 assert(app.includes('function factoryPreparePdfTableCells(root)') && app.includes('factory-pdf-number') && app.includes('factoryPreparePdfTableCells(el)'), 'PDF tables must wrap text while keeping numeric values on one line');
-assert(app.includes('maxActions*34+20') && previewCss.includes('factory-row-actions{display:inline-flex'), 'table action column must reserve enough width for action icons');
+assert(app.includes('maxActions*36+24') && previewCss.includes('factory-row-actions{display:inline-flex'), 'table action column must reserve enough width for action icons');
 assert(app.includes('supplierShownBalance(b,!c)-supplierShownBalance(a,!c)'), 'customer and supplier lists must sort by signed balance descending');
 assert(app.includes('function factoryDrillPartner') && !app.slice(app.indexOf('function factoryDrillPartner'),app.indexOf('/* Account hierarchy */')).includes('عليه لنا') && !app.slice(app.indexOf('function factoryDrillPartner'),app.indexOf('/* Account hierarchy */')).includes('له علينا'), 'partner movements must show signed amounts without verbal labels');
 assert(history.includes('function detailValue(value,depth=0)') && !history.includes('JSON.stringify(value,null,2)') && history.includes('mh-detail-fields'), 'Manager history details must be human-readable fields, not JSON');
