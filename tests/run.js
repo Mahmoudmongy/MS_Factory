@@ -539,7 +539,7 @@ ok('transaction-detail migration adds raw JSON, stable IDs and unique per-factor
 ok('invoice sync fix qualifies child-row deletion columns',/DELETE FROM public\.invoice_items AS ii/.test(fs.readFileSync(path.join(ROOT,'supabase/migrations/20261107090923_sync_invoice_delete_alias_fix.sql'),'utf8')));
 /* ---------- B. app in a desktop context ---------- */
 const ctx=await browser.newContext({viewport:{width:1280,height:900},acceptDownloads:true}),p=await ctx.newPage(),errs=[];p.on('pageerror',e=>errs.push(e.message));
-await p.goto(BASE);await p.waitForTimeout(500);
+await p.goto(BASE);await p.waitForTimeout(500);await ctx.setOffline(true); // This suite has no DB adapter; exercise isolated local/offline persistence instead of failing closed online.
 const ev=(f,a)=>p.evaluate(()=>{SAVING=0}).then(()=>p.evaluate(f,a)).catch(e=>{console.error('EVAL_FAILED:',f.toString(),'ARG:',a);throw e}),bal=()=>ev(()=>Math.abs(S.L.reduce((a,l)=>a+l.dr-l.cr,0))<.01);
 const masterEditSaveSafety=await ev(async()=>{const a=S.accts.find(x=>x.t==='A'),w=S.wh[0],oldA={name:a.name,parentId:a.parentId},oldW={name:w.name,parentId:w.parentId},ready=window.__factoryDatabaseFirstReady,failed=window.__factoryDatabaseFirstFailed,persist=window.__factoryPersistState,alertFn=window.alert;window.__factoryDatabaseFirstReady=true;window.__factoryDatabaseFirstFailed=false;window.alert=()=>{};window.__factoryPersistState=async()=>{throw new Error('simulated database write failure')};editAcc(a.id);$('#an2').value=oldA.name+' (فشل اختبار)';await saveAccName(a.id);const accountRollback=a.name===oldA.name&&a.parentId===oldA.parentId;cl();SAVING=0;editWh(w.id);$('#wn2').value=oldW.name+' (فشل اختبار)';await saveWh(w.id);const warehouseRollback=w.name===oldW.name&&w.parentId===oldW.parentId;cl();SAVING=0;window.__factoryPersistState=async()=>true;editAcc(a.id);$('#an2').value=oldA.name+' (حفظ اختبار)';await saveAccName(a.id);const accountSuccess=a.name===oldA.name+' (حفظ اختبار)';a.name=oldA.name;a.parentId=oldA.parentId;window.__factoryDatabaseFirstReady=ready;window.__factoryDatabaseFirstFailed=failed;window.__factoryPersistState=persist;window.alert=alertFn;render();return {accountRollback,warehouseRollback,accountSuccess}});
 ok('account and warehouse edits roll back safely on database failure and close only after successful persistence',masterEditSaveSafety.accountRollback&&masterEditSaveSafety.warehouseRollback&&masterEditSaveSafety.accountSuccess,masterEditSaveSafety);
@@ -853,49 +853,8 @@ ok('import detects new / duplicate-in-file / invalid / already-existing rows',JS
 await ev(()=>importGo());ok('import creates only the valid rows with opening stock; ledger balanced',await ev(()=>!!S.items.find(i=>i.sku=="IMP001")&&!S.items.find(i=>i.sku=="IMP003")&&!S.items.find(i=>i.sku=="IMP004")&&tq(S.items.find(i=>i.sku=="IMP001"))==30)&&await bal());
 /* ---------- templates ---------- */
 await ev(()=>{tplForm();$("#tk").value="sale";tplFill();$("#t_title").value="فاتورة ضريبية";ACT.querySelector('.t_c[value="unit"]').checked=false;tplPrev()});
-const templatePreviewCheck=await ev(()=>{const h=$("#tpv").innerHTML;return {title:h.includes("فاتورة ضريبية"),unitHidden:!h.includes("<th>الوحدة</th>"),excerpt:h.slice(0,900)}});ok('print-template preview reflects title and hidden column',templatePreviewCheck.title&&templatePreviewCheck.unitHidden,templatePreviewCheck);const pdfPaginationCheck=await ev(async()=>{
- const previous=document.getElementById("pr"),parent=previous?.parentNode,next=previous?.nextSibling;
- const oldHtml2Canvas=window.html2canvas,oldJspdf=window.jspdf,addedScripts=[];
- const scriptUrls=["https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js","https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"];
- try{
-  previous?.remove();
-  const doc=document.createElement("div");doc.id="pr";doc.className="factory-print-document";doc.dataset.printKind="sale";doc.dir="rtl";
-  doc.style.cssText="box-sizing:border-box;background:#fff;color:#000;width:277mm;max-width:277mm;min-width:0;margin:0;padding:0;overflow:visible";
-  const header=document.createElement("div");header.textContent="فاتورة اختبار كاملة - رأس الفاتورة";header.style.height="70px";doc.appendChild(header);
-  const table=document.createElement("table");table.style.cssText="width:100%;border-collapse:collapse;table-layout:fixed";
-  const head=document.createElement("thead");head.innerHTML="<tr><th>الصنف</th><th>الكمية</th><th>الإجمالي</th></tr>";table.appendChild(head);
-  const body=document.createElement("tbody");
-  for(let i=1;i<=48;i++){const row=document.createElement("tr");row.style.height="150px";row.innerHTML="<td>صنف اختبار رقم "+i+"</td><td>2</td><td>500.00</td>";body.appendChild(row);}
-  table.appendChild(body);doc.appendChild(table);
-  const footer=document.createElement("div");footer.textContent="نهاية الفاتورة - إجمالي الفاتورة والختم";footer.style.height="80px";doc.appendChild(footer);ACT.appendChild(doc);
-  window.html2canvas=async node=>{
-   const capture=document.createElement("canvas"),r=node.getBoundingClientRect();
-   capture.width=Math.ceil(Math.max(node.scrollWidth,node.clientWidth)*2);
-   capture.height=Math.ceil(Math.max(node.scrollHeight,node.clientHeight)*2);
-   capture.getContext("2d").fillRect(0,0,capture.width,capture.height);
-   window.__pdfPaginationCapture={width:capture.width,height:capture.height,rootWidth:r.width,rootTop:r.top};
-   return capture;
-  };
-  class PdfProbe{constructor(){this.images=[];this.pageCount=1;}addPage(){this.pageCount++;}addImage(_data,_kind,_x,_y,width,height){this.images.push({width,height});}}
-  window.jspdf={jsPDF:PdfProbe};
-  for(const url of scriptUrls){if(!document.querySelector('script[src="'+url+'"]')){const script=document.createElement("script");script.src=url;document.head.appendChild(script);addedScripts.push(script);}}
-  const pdf=await mkPdf(),capture=window.__pdfPaginationCapture,W=297;
-  const root=doc.getBoundingClientRect(),scale=capture.width/root.width,rowTops=[...doc.querySelectorAll("tr")].map(row=>Math.round((row.getBoundingClientRect().top-root.top)*scale)).filter(y=>y>0&&y<capture.height),headerRow=[...doc.querySelectorAll("table tr")].find(row=>row.querySelector("th")),repeatHeader=Math.round((headerRow.getBoundingClientRect().bottom-root.top)*scale);
-  let covered=0;const boundaries=[];
-  pdf.images.forEach((image,index)=>{covered+=image.height*capture.width/W-(index?repeatHeader:0);if(index<pdf.images.length-1)boundaries.push(covered);});
-  const complete=Math.abs(covered-capture.height)<=2;
-  const rowsIntact=boundaries.every(point=>rowTops.some(rowTop=>Math.abs(rowTop-point)<=2));
-  const headerRepeated=pdf.images.slice(1).every(image=>image.height*capture.width/W>repeatHeader);
-  return {pages:pdf.pageCount,complete,rowsIntact,headerRepeated,capturedHeight:capture.height,coveredHeight:Math.round(covered),safeBoundaries:boundaries.length};
- }finally{
-  document.getElementById("pr")?.remove();
-  if(previous&&parent){if(next&&next.parentNode===parent)parent.insertBefore(previous,next);else parent.appendChild(previous);}
-  if(oldHtml2Canvas===undefined)delete window.html2canvas;else window.html2canvas=oldHtml2Canvas;
-  if(oldJspdf===undefined)delete window.jspdf;else window.jspdf=oldJspdf;
-  addedScripts.forEach(script=>script.remove());delete window.__pdfPaginationCapture;
- }
-});
-ok('PDF export paginates a long invoice completely, repeats its company/table header and breaks only between table rows',pdfPaginationCheck.pages>=2&&pdfPaginationCheck.complete&&pdfPaginationCheck.rowsIntact&&pdfPaginationCheck.headerRepeated,pdfPaginationCheck);
+const templatePreviewCheck=await ev(()=>{const h=$("#tpv").innerHTML;return {title:h.includes("فاتورة ضريبية"),unitHidden:!h.includes("<th>الوحدة</th>"),excerpt:h.slice(0,900)}});ok('print-template preview reflects title and hidden column',templatePreviewCheck.title&&templatePreviewCheck.unitHidden,templatePreviewCheck);
+// Real-library PDF regression runs independently in tests/pdf-regression.cjs.
 await ev(()=>closeTab(CUR,1));
 /* ---------- language ---------- */
 await ev(()=>{PRF.lang='en';applyPref()});const left=[];for(const s of ['home','bank','rc','py','cust','supp','sale','sret','pur','pret','stock','prod','coa','je','tl','emp','rep','ai','set','statements']){await ev(x=>go(x),s);await p.waitForTimeout(40);const t=await ev(x=>{const out=[],w=document.createTreeWalker(document.body,NodeFilter.SHOW_TEXT);let n;while(n=w.nextNode()){if(n.parentElement&&n.parentElement.tagName=='SCRIPT')continue;if(/[\u0600-\u06FF]/.test(n.nodeValue)&&n.nodeValue.trim()!='ع')out.push(n.nodeValue.trim())}return out},s);t.forEach(x=>{if(!/محلات|عميل قطاعي|اختبار|استيراد|النسيج|جيرسي|زراير|تيشيرت|جاكيت|بنطلون|قماش|أحمر|أسود|جهة|الخزنة بالدولار|موظف/.test(x))left.push(s+': '+x)})}

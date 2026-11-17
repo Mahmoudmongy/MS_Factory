@@ -101,7 +101,10 @@ for (const [ok,label] of appPatchChecks) assert(ok,label);
 console.log('PASS targeted MS Factory UX and audit-detail regression checks');
 
 assert(app.includes('if(!post(dd,no,TN[t],Ls,"doc",id,ts))') && app.includes('oldMoves.forEach(m=>') && app.includes('oldLedger.forEach(x=>S.L.push(x))'), 'invoice edits must roll back stock and restore the prior invoice if ledger posting fails');
-assert(app.includes('if(!post(d,no,$("#vx").value||$("#vtl").value,Ls,"vch",id,ts))') && app.includes('oldLedger.forEach(x=>S.L.push(x));S.vch.push(old)'), 'voucher edits must not save an orphan voucher if ledger posting fails');
+const voucherSaveStart=app.indexOf('function saveV(){');
+const voucherSaveEnd=app.indexOf('\n/* ---- production orders',voucherSaveStart);
+const voucherSave=voucherSaveStart>=0&&voucherSaveEnd>voucherSaveStart?app.slice(voucherSaveStart,voucherSaveEnd):'';
+assert(voucherSave.includes('if(!post(d,no,$("#vx").value||$("#vtl").value,Ls,"vch",id,ts))') && voucherSave.includes('oldLedger.forEach(x=>S.L.push(x));if(!S.vch.includes(old))S.vch.push(old)') && voucherSave.includes('const saved=await persistFactoryMutation') && voucherSave.includes('rollbackFactoryRows(addedLedger,[])'), 'voucher edits must restore the prior voucher and ledger on posting or persistence failure without duplicating the prior row');
 console.log('PASS invoice and voucher posting failures fail closed with safe rollback');
 const sw = fs.readFileSync(path.join(root, 'sw.js'), 'utf8');
 const swPublic = fs.readFileSync(path.join(root, 'public/sw.js'), 'utf8');

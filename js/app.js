@@ -18,7 +18,15 @@ const SYS_ACCOUNTS=(S.accts||[]).map(x=>({...x}));
 window.__factoryDatabaseFirst=true;
 window.__factoryGetState=()=>S;
 window.__factoryReplaceArrays=(data)=>{if(!data||typeof data!=="object")return;for(const [k,v] of Object.entries(data)){if(Array.isArray(v))S[k]=v;else if(k==="__meta"&&v&&typeof v==="object")Object.assign(S,v);}cachePublicFactoryBranding();try{render()}catch(e){}};
-const sv=()=>{try{S.pend=(S.pend||0)+1;if(window.__factoryDatabaseFirstFailed&&navigator.onLine){alert("تعذر الاتصال بقاعدة البيانات. لم يتم تأكيد حفظ العملية؛ حاول مرة أخرى بعد عودة الاتصال.");return Promise.resolve(false);}if(window.__factoryDatabaseFirstReady&&typeof window.__factoryPersistState==="function"){return Promise.resolve(window.__factoryPersistState(S)).then(()=>true).catch(e=>{console.error("Database save failed:",e);alert(e.message||"تعذر حفظ التغييرات في قاعدة البيانات");return false;});}else if(!navigator.onLine){localStorage.setItem("mgr6",JSON.stringify(S));localStorage.setItem("mgr6-sync-pending",JSON.stringify({at:Date.now(),pend:S.pend}));return Promise.resolve(true);}else{alert("البرنامج لسه بيجهز الاتصال بقاعدة البيانات. انتظر لحظات ثم أعد المحاولة.");return Promise.resolve(false);}}catch(e){console.error("State save failed:",e);return Promise.resolve(false)}};
+const sv=()=>{try{S.pend=(S.pend||0)+1;if(window.__factoryDatabaseFirstFailed&&navigator.onLine){alert("تعذر الاتصال بقاعدة البيانات. لم يتم تأكيد حفظ العملية؛ حاول مرة أخرى بعد عودة الاتصال.");return Promise.resolve(false);}if(window.__factoryDatabaseFirstReady&&typeof window.__factoryPersistState==="function"){return Promise.resolve(window.__factoryPersistState(S)).then(result=>result!==false).catch(e=>{console.error("Database save failed:",e);alert(e.message||"تعذر حفظ التغييرات في قاعدة البيانات");return false;});}else if(!navigator.onLine){localStorage.setItem("mgr6",JSON.stringify(S));localStorage.setItem("mgr6-sync-pending",JSON.stringify({at:Date.now(),pend:S.pend}));return Promise.resolve(true);}else{alert("البرنامج لسه بيجهز الاتصال بقاعدة البيانات. انتظر لحظات ثم أعد المحاولة.");return Promise.resolve(false);}}catch(e){console.error("State save failed:",e);return Promise.resolve(false)}};
+const FACTORY_SAVE_LOCKS=new Set();
+function lockFactorySave(key){if(FACTORY_SAVE_LOCKS.has(key))return false;FACTORY_SAVE_LOCKS.add(key);return true}
+function unlockFactorySave(key){FACTORY_SAVE_LOCKS.delete(key)}
+function captureFactoryFormInputs(root=CUR?.el||document){return [...root.querySelectorAll("input,select,textarea")].map(el=>({el,value:el.value,checked:el.checked,afterValue:el.value,afterChecked:el.checked}))}
+function markFactoryFormInputs(snapshot){snapshot.forEach(x=>{x.afterValue=x.el.value;x.afterChecked=x.el.checked})}
+function restoreFactoryFormInputs(snapshot){snapshot.forEach(x=>{if(!x.el.isConnected)return;if(x.el.value===x.afterValue)x.el.value=x.value;if(x.el.type==="checkbox"&&x.el.checked===x.afterChecked)x.el.checked=x.checked})}
+async function persistFactoryMutation(rollback){try{if(await sv()===true)return true;rollback?.();return false}catch(error){console.error("Factory operation rollback:",error);rollback?.();return false}}
+function rollbackFactoryRows(ledgerRows=[],moveRows=[]){ledgerRows.forEach(row=>{const index=S.L.indexOf(row);if(index>=0)S.L.splice(index,1)});moveRows.forEach(move=>{const index=S.mv.indexOf(move);if(index<0)return;S.mv.splice(index,1);const item=it_(move.iid);if(item){item.st=item.st||{};item.st[move.v]=(Number(item.st[move.v])||0)-Number(move.q||0);item.val=(Number(item.val)||0)-Number(move.val||0)}})}
 const TN={sale:"فاتورة بيع",pur:"فاتورة شراء",sret:"إشعار دائن (مرتجع بيع)",pret:"إشعار مدين (مرتجع شراء)"},PF={sale:"SA",pur:"PU",sret:"SR",pret:"RP"},CT={mfg:"تصنيع",sup:"مشتريات"},TT={A:"الأصول",L:"الالتزامات",Q:"حقوق الملكية",I:"الإيرادات",X:"المصروفات"};
 /* ===== ledger + stock core ===== */
 const ACCOUNT_AR={"Accounts receivable":"العملاء","Accounts payable":"الموردون","Cash & cash equivalents":"النقدية وما في حكمها","Cash and cash equivalents":"النقدية وما في حكمها","Inventory":"المخزون","Inventory - cost":"تكلفة المخزون","Sales":"المبيعات","Cost of sales":"تكلفة المبيعات","Retained earnings":"الأرباح المحتجزة","Owners equity":"حقوق الملكية"},accountLabel=a=>!LANGEN?(ACCOUNT_AR[a?.name]||a?.name||""):(a?.name||"");
@@ -259,6 +267,74 @@ function saveDoc(){if(!CUR||CUR.kind!="page")return;pend();const t=D.t,rt=t=="sr
  if(disc)Ls.push(t==="sale"?{a:ak("sdisc"),dr:disc}:t==="sret"?{a:ak("sdisc"),cr:disc}:t==="pur"?{a:ak("pdisc"),cr:disc}:{a:ak("pdisc"),dr:disc});
  Ls.push(t=="sale"?{a:ak("ar"),dr:net,pid}:t=="sret"?{a:ak("ar"),cr:net,pid}:t=="pur"?{a:ak("ap"),cr:net,pid}:{a:ak("ap"),dr:net,pid});
  if(!post(dd,no,TN[t],Ls,"doc",id,ts)){rev(id,"doc");if(old){oldLedger.forEach(x=>S.L.push(x));oldMoves.forEach(m=>{const item=it_(m.iid);if(item){item.st=item.st||{};item.st[m.v]=(Number(item.st[m.v])||0)+Number(m.q||0);item.val=(Number(item.val)||0)+Number(m.val||0)}S.mv.push(m)});S.docs.push(old)}toast("تعذر حفظ الفاتورة لأن القيد المحاسبي غير متوازن. لم يتم اعتماد التعديل.");return}S.docs.push({id,t,no,date:dd,ts,pid,cat,dest:dest=="wh"||!dest?dest:+dest,warehouseId:warehouseId||0,ref:D.ref||"",originalId:D.originalId||0,lines,gross:gr,disc,total:net,note:$("#dn").value.trim(),img:D.img});sv();toast("تم حفظ "+TN[t]+" "+no);cl();if(t=="pur"&&!old)docLb(id)}
+async function factorySaveDoc(){
+ if(!CUR||CUR.kind!=="page")return;const lockKey="saveDoc:"+String(CUR.id||"form");if(!lockFactorySave(lockKey))return;
+ const formState=captureFactoryFormInputs(),beforeLines=D.lines.slice(),codesBefore=new Set(S.codes),itemsBefore=new Set(S.items),accountsBefore=new Set(S.accts);
+ let pendingLines=[],pendingCodes=[],rollbackOperation=()=>{},rolledBack=false;
+ const restoreDraft=()=>{D.lines=D.lines.filter(line=>!pendingLines.includes(line));pendingCodes.forEach(code=>{const at=S.codes.indexOf(code);if(at>=0)S.codes.splice(at,1)});restoreFactoryFormInputs(formState)};
+ const restoreOld= (old,oldLedger,oldMoves)=>{
+  if(!old)return;
+  oldLedger.forEach(line=>S.L.push(line));
+  oldMoves.forEach(move=>{const item=it_(move.iid);if(item){item.st=item.st||{};item.st[move.v]=(Number(item.st[move.v])||0)+Number(move.q||0);item.val=(Number(item.val)||0)+Number(move.val||0)}S.mv.push(move)});
+  if(!S.docs.includes(old))S.docs.push(old);
+ };
+ const cleanupCreated=(createdItems,createdAccounts)=>{
+  createdItems.forEach(item=>{if(!S.mv.some(move=>String(move.iid)===String(item.id))&&!S.docs.some(doc=>(doc.lines||[]).some(line=>String(line.iid)===String(item.id)))){const at=S.items.indexOf(item);if(at>=0)S.items.splice(at,1)}});
+  createdAccounts.forEach(account=>{if(!S.L.some(line=>String(line.a)===String(account.id))){const at=S.accts.indexOf(account);if(at>=0)S.accts.splice(at,1)}});
+ };
+ try{
+  pend();markFactoryFormInputs(formState);pendingLines=D.lines.filter(line=>!beforeLines.includes(line));pendingCodes=S.codes.filter(code=>!codesBefore.has(code));
+  const t=D.t,rt=t==="sret"||t==="pret",original=rt?returnSourceFor(t,D.originalId):null;
+  if(rt&&!original){restoreDraft();toast("اختر الفاتورة الأصلية للمرتجع");return}
+  const lines=D.lines.filter(l=>l.qty>0&&(!rt||l.iid||l.ni)).map(l=>({...l,ni:l.ni?{...l.ni}:l.ni}));
+  if(!lines.length){restoreDraft();toast("أضف أصنافًا أو بنودًا للفاتورة");return}
+  const pid=+$("#pt").value;
+  if(rt){
+   if(String(original.pid)!==String(pid)){restoreDraft();toast("يجب أن يطابق العميل أو المورد الفاتورة الأصلية");return}
+   const sourceLines=new Map();(original.lines||[]).forEach(line=>{const key=returnLineKey(line);sourceLines.set(key,(sourceLines.get(key)||0)+(Number(line.qty)||0))});
+   const requested=new Map();lines.forEach(line=>{const key=returnLineKey(line);requested.set(key,(requested.get(key)||0)+(Number(line.qty)||0))});
+   for(const[key,qty]of requested){const remaining=(sourceLines.get(key)||0)-returnedQtyFor(original,key,D.edit);if(qty>remaining+.000001){restoreDraft();toast("الكمية المرتجعة تتجاوز المتاح في الفاتورة الأصلية");return}}
+  }
+  if(!guard()){restoreDraft();return}
+  const dd=$("#dd").value||td(),cat=$("#ct").value,dest=t==="pur"?$("#ds").value:t==="pret"?(original?.dest||D.dest||""):"",warehouseId=+$("#ty").value||D.warehouseId||0,wip=dest&&dest!=="wh",old=D.edit?S.docs.find(x=>x.id==D.edit):null,oldLedger=old?S.L.filter(x=>String(x.rid)===String(old.id)&&x.src==="doc").map(x=>({...x})):[],oldMoves=old?S.mv.filter(x=>String(x.rid)===String(old.id)&&x.src==="doc").map(x=>({...x})):[];
+  if(old&&["sale","pur"].includes(t)&&sourceEditWouldBreakReturns(old,lines.filter(line=>!line.ni),Math.min(+D.disc||0,lines.reduce((sum,line)=>sum+(Number(line.qty)||0)*(Number(line.price)||0),0)))){restoreDraft();toast("لا يمكن تعديل الفاتورة بهذه الصورة لأن مرتجعات مرتبطة بها ستتجاوز الكميات أو الخصم الأصلي");return}
+  const ledgerBefore=new Set(S.L),movesBefore=new Set(S.mv);
+  if(old){rev(old.id,"doc");S.docs=S.docs.filter(x=>x!==old)}
+  const id=old?old.id:uid(),no=old?old.no:PF[t]+"-"+pad(S.docs.filter(x=>x.t==t).length+1),ts=old?old.ts:Date.now(),gr=lines.reduce((a,l)=>a+l.qty*l.price,0),disc=rt?returnDiscountFor(original,lines,D.edit):Math.min(+D.disc||0,gr),net=gr-disc,Ls=[];
+  const rollbackPosted=()=>{if(rolledBack)return;rolledBack=true;const addedLedger=S.L.filter(line=>!ledgerBefore.has(line)),addedMoves=S.mv.filter(move=>!movesBefore.has(move));rollbackFactoryRows(addedLedger,addedMoves);restoreOld(old,oldLedger,oldMoves);cleanupCreated(S.items.filter(item=>!itemsBefore.has(item)),S.accts.filter(account=>!accountsBefore.has(account)));restoreDraft()};rollbackOperation=rollbackPosted;
+  lines.forEach(l=>{
+   if(l.ni){const item=ensureItem(l.name,l.ni.wh,l.ni.unit,l.price);l.iid=item.id;l.unit=item.unit;delete l.ni}
+   const amt=l.qty*l.price,item=l.iid?it_(l.iid):null;
+   if(t==="sale"){Ls.push({a:l.a||ak("sales"),cr:amt,desc:l.note});if(item){l.cost=avAt(item,warehouseId||item.wh);const c=l.cost*l.qty;stk(dd,item,l.v,-l.qty,-c,no,pid,id,"doc",warehouseId||item.wh);Ls.push({a:ak("cogs"),dr:c},{a:ak("inv"),cr:c})}}
+   else if(t==="sret"){Ls.push({a:ak("sales"),dr:amt,desc:l.note});if(item){l.cost=l.cost||avAt(item,warehouseId||item.wh);const c=l.cost*l.qty;stk(dd,item,l.v,l.qty,c,no,pid,id,"doc",warehouseId||item.wh);Ls.push({a:ak("inv"),dr:c},{a:ak("cogs"),cr:c})}}
+   else if(t==="pur"){if(item&&!wip)stk(dd,item,l.v,l.qty,amt,no,pid,id,"doc",warehouseId||item.wh);Ls.push({a:wip?ak("wip"):item?ak("inv"):l.a,dr:amt,desc:l.note})}
+   else{if(item&&!wip)stk(dd,item,l.v,-l.qty,-amt,no,pid,id,"doc",warehouseId||item.wh);Ls.push({a:wip?ak("wip"):ak("inv"),cr:amt,desc:l.note})}
+   delete l.max;
+  });
+  if(disc)Ls.push(t==="sale"?{a:ak("sdisc"),dr:disc}:t==="sret"?{a:ak("sdisc"),cr:disc}:t==="pur"?{a:ak("pdisc"),cr:disc}:{a:ak("pdisc"),dr:disc});
+  Ls.push(t==="sale"?{a:ak("ar"),dr:net,pid}:t==="sret"?{a:ak("ar"),cr:net,pid}:t==="pur"?{a:ak("ap"),cr:net,pid}:{a:ak("ap"),dr:net,pid});
+  if(!post(dd,no,TN[t],Ls,"doc",id,ts)){rollbackPosted();toast("تعذر حفظ الفاتورة لأن القيد المحاسبي غير متوازن. لم يتم اعتماد التعديل.");return}
+  const doc={id,t,no,date:dd,ts,pid,cat,dest:dest==="wh"||!dest?dest:+dest,warehouseId:warehouseId||0,ref:D.ref||"",originalId:D.originalId||0,lines,gross:gr,disc,total:net,note:$("#dn").value.trim(),img:D.img};
+  S.docs.push(doc);
+  const createdItems=S.items.filter(item=>!itemsBefore.has(item)),createdAccounts=S.accts.filter(account=>!accountsBefore.has(account));
+  const addedLedger=S.L.filter(line=>!ledgerBefore.has(line)),addedMoves=S.mv.filter(move=>!movesBefore.has(move));
+  const saved=await persistFactoryMutation(()=>{
+   if(rolledBack)return;rolledBack=true;
+   const at=S.docs.indexOf(doc);if(at>=0)S.docs.splice(at,1);
+   rollbackFactoryRows(addedLedger,addedMoves);
+   restoreOld(old,oldLedger,oldMoves);
+   cleanupCreated(createdItems,createdAccounts);
+   restoreDraft();
+  });
+  if(!saved){toast("تعذر حفظ الفاتورة في قاعدة البيانات؛ تم إلغاء القيد والمخزون وإعادة بيانات النموذج");return}
+  toast("تم حفظ "+TN[t]+" "+no);cl();if(t==="pur"&&!old)docLb(id);
+ }catch(error){
+  if(!rolledBack)rollbackOperation();
+  restoreDraft();console.error("saveDoc failed:",error);toast("تعذر إتمام حفظ الفاتورة؛ لم يتم اعتماد العملية");
+ }finally{unlockFactorySave(lockKey)}
+}
+saveDoc=factorySaveDoc;
+
 /* ===== vouchers ===== */
 function voucherAccounts(v){
  const saved=Array.isArray(v?.ac)?v.ac.filter(a=>a&&typeof a==="object"&&a.a!=null):[];
@@ -290,7 +366,24 @@ function saveWh(id){if(!can("edit"))return;const w=S.wh.find(x=>x.id==id),n=$("#
 function addWh(){const n=$("#wn").value.trim();if(!n)return;if(S.wh.some(w=>w.name==n)){toast("المخزن موجود بالفعل");return}if(!guard())return;S.wh.push({id:uid(),name:n});sv();cl()}
 function woForm(){sh(`<h3>هالك مخزون</h3><label>الصنف</label><select id="wi" onchange="wvr();if($("#ww"))$("#ww").value=it_(+this.value)?.wh||S.wh[0]?.id">${U(S.items,i=>`<option value="${i.id}">${i.name}</option>`)}</select><select id="wv"></select><label>المخزن</label><select id="ww">${U(S.wh,w=>`<option value="${w.id}">${whPath(w.id)}</option>`)}</select><input id="wq" type="number" placeholder="الكمية الهالكة: 5"><input id="wd" placeholder="السبب: قص خاطئ"><input id="wdt" type="date" value="${td()}"><label>تحميل الهالك على</label><select id="wp"><option value="0">حساب هالك مخزن (مصروف)</option>${U(S.po.filter(o=>o.st<2),o=>`<option value="${o.id}">أمر إنتاج ${o.no} (يُضاف لتكلفته)</option>`)}</select><div class="row"><button onclick="saveWo()">حفظ</button>${bk}</div>`);wvr()}
 const wvr=()=>$("#wv").innerHTML=U(Object.keys(it_(+$("#wi").value).st),k=>`<option>${k}</option>`);
-function saveWo(){const i=it_(+$("#wi").value),q=+$("#wq").value,d=$("#wdt").value||td(),po=+$("#wp").value,warehouseId=+$("#ww").value||i?.wh;if(!i||!(q>0)){toast("حدد الصنف واكتب كمية هالك صحيحة");return}const c=avAt(i,warehouseId)*q,id=uid(),ref="WO-"+pad(S.wo.length+1),o=po?S.po.find(x=>String(x.id)===String(po)):null;if(po&&!o){toast("أمر الإنتاج المحدد غير موجود");return}if(!post(d,ref,"هالك مخزن "+$("#wd").value,[{a:o?ak("wip"):ak("waste"),dr:c},{a:ak("inv"),cr:c}],"wo",id)){toast("تعذر ترحيل قيد الهالك؛ لم يتم تغيير المخزون");return}stk(d,i,$("#wv").value,-q,-c,"هالك "+ref+(o?" على "+o.no:"")+": "+$("#wd").value,0,id,"wo",warehouseId);if(o)o.wc=(o.wc||0)+c;S.wo.push({id,ts:Date.now(),ref,c,desc:$("#wd").value,po:po||0});sv();cl()}
+async function saveWo(){
+ const lockKey="saveWo:"+String(CUR?.id||"form");if(!lockFactorySave(lockKey))return;
+ try{
+  const i=it_(+$("#wi").value),q=+$("#wq").value,d=$("#wdt").value||td(),po=+$("#wp").value,warehouseId=+$("#ww").value||i?.wh;
+  if(!i||!(q>0)){toast("حدد الصنف واكتب كمية هالك صحيحة");return}
+  const c=avAt(i,warehouseId)*q,id=uid(),ref="WO-"+pad(S.wo.length+1),o=po?S.po.find(x=>String(x.id)===String(po)):null;
+  if(po&&!o){toast("أمر الإنتاج المحدد غير موجود");return}
+  const ledgerBefore=new Set(S.L),movesBefore=new Set(S.mv),oldWc=o?Number(o.wc)||0:0;
+  if(!post(d,ref,"هالك مخزن "+$("#wd").value,[{a:o?ak("wip"):ak("waste"),dr:c},{a:ak("inv"),cr:c}],"wo",id)){toast("تعذر ترحيل قيد الهالك؛ لم يتم تغيير المخزون");return}
+  stk(d,i,$("#wv").value,-q,-c,"هالك "+ref+(o?" على "+o.no:"")+": "+$("#wd").value,0,id,"wo",warehouseId);
+  if(o)o.wc=oldWc+c;
+  const record={id,ts:Date.now(),ref,c,desc:$("#wd").value,po:po||0};S.wo.push(record);
+  const addedLedger=S.L.filter(x=>!ledgerBefore.has(x)),addedMoves=S.mv.filter(x=>!movesBefore.has(x));
+  const saved=await persistFactoryMutation(()=>{const at=S.wo.indexOf(record);if(at>=0)S.wo.splice(at,1);rollbackFactoryRows(addedLedger,addedMoves);if(o)o.wc=Math.max(0,(Number(o.wc)||0)-c)});
+  if(!saved){toast("تعذر حفظ الهالك في قاعدة البيانات؛ تم إلغاء أثر العملية وإبقاء النموذج مفتوحًا");return}
+  cl();
+ }finally{unlockFactorySave(lockKey)}
+}
 
 /* ===== production orders ===== */
 const subsOf=()=>Object.entries(PS.grid).filter(([k,q])=>q>0).map(([v,qty])=>({v,qty}));
@@ -308,9 +401,35 @@ function addM(w){const q=+$("#mq"+w).value;if(!q)return;PS.mats.push({iid:+$("#m
 function addX(){const m=+$("#xm").value;if(!m)return;PS.x.push({a:+$("#xa").value,amt:m,note:$("#xn").value.trim()});clr(["xm","xn"]);drawP()}
 function drawP(){const cs=PS.cs.length?PS.cs:[""],zs=PS.zs.length?PS.zs:[""];$("#pg").innerHTML=`<table><tr><th>اللون \\ المقاس</th>${U(zs,z=>`<th>${z||"الكمية"}</th>`)}</tr>${U(cs,c=>`<tr><th>${c||"—"}</th>${U(zs,z=>`<td><input type="number" data-k="${vk(c,z)}" value="${PS.grid[vk(c,z)]||""}" placeholder="0" style="margin:0;width:70px" onchange="setG(this)"></td>`)}</tr>`)}</table><b>إجمالي القطع: <span id="gt">${subsOf().reduce((a,s)=>a+s.qty,0)}</span></b>`;
  $("#pl").innerHTML=`<div class="card"><b>المواد</b>${U(PS.mats,(m,i)=>`<div class="row sp"><span>${it_(m.iid).name}: ${qf(m.qty)} ${it_(m.iid).unit} ≈ ${f(av(it_(m.iid))*m.qty)}</span><button class="d" onclick="PS.mats.splice(${i},1);drawP()">✕</button></div>`)}<br><b>تكاليف غير مخزونة</b>${U(PS.x,(x,i)=>`<div class="row sp"><span>${an(x.a)} — ${x.note||""}: ${f(x.amt)}</span><button class="d" onclick="PS.x.splice(${i},1);drawP()">✕</button></div>`)}<br><b>الإجمالي التقديري: ${f(PS.mats.reduce((a,m)=>a+av(it_(m.iid))*m.qty,0)+PS.x.reduce((a,x)=>a+x.amt,0))}</b></div>`}
-function adv(id){const o=S.po.find(x=>String(x.id)===String(id));if(!o||Number(o.st)!==0){toast("أمر الإنتاج غير موجود أو تم بدء تنفيذه بالفعل");return}if((o.mats||[]).some(m=>!it_(m.iid)||!Number.isFinite(Number(m.qty))||Number(m.qty)<=0)){toast("توجد مادة خام أو كمية غير صالحة في أمر الإنتاج؛ لم يتم الترحيل");return}const d=td(),materialEffects=[],Ls=[];let matCost=0;(o.mats||[]).forEach(m=>{const i=it_(m.iid);const w=m.wh||i.wh,v=bestV(i),c=avAt(i,w)*Number(m.qty||0);matCost+=c;materialEffects.push({i,w,v,qty:Number(m.qty||0),cost:c});Ls.push({a:ak("inv"),cr:c})});(o.x||[]).forEach(x=>Ls.push({a:x.a,cr:x.amt,desc:x.note}));Ls.push({a:ak("wip"),dr:matCost+(o.x||[]).reduce((a,x)=>a+(Number(x.amt)||0),0)});if(!post(d,o.no,"بدء أمر إنتاج",Ls,"po",o.id,o.ts)){toast("تعذر ترحيل صرف خامات أمر الإنتاج؛ لم تتغير كميات المخزون");return}materialEffects.forEach(m=>stk(d,m.i,m.v,-m.qty,-m.cost,"صرف خامات "+o.no,0,o.id,"po",m.w));o.matCost=matCost;o.st=1;sv();render()}
+async function adv(id){
+ const lockKey="adv:"+String(id);if(!lockFactorySave(lockKey))return;
+ try{
+  const o=S.po.find(x=>String(x.id)===String(id));if(!o||Number(o.st)!==0){toast("أمر الإنتاج غير موجود أو تم بدء تنفيذه بالفعل");return}
+  if((o.mats||[]).some(m=>!it_(m.iid)||!Number.isFinite(Number(m.qty))||Number(m.qty)<=0)){toast("توجد مادة خام أو كمية غير صالحة في أمر الإنتاج؛ لم يتم الترحيل");return}
+  const d=td(),materialEffects=[],Ls=[],ledgerBefore=new Set(S.L),movesBefore=new Set(S.mv),oldMatCost=Number(o.matCost)||0,oldStatus=o.st;let matCost=0;
+  (o.mats||[]).forEach(m=>{const i=it_(m.iid),w=m.wh||i.wh,v=bestV(i),c=avAt(i,w)*Number(m.qty||0);matCost+=c;materialEffects.push({i,w,v,qty:Number(m.qty||0),cost:c});Ls.push({a:ak("inv"),cr:c})});
+  (o.x||[]).forEach(x=>Ls.push({a:x.a,cr:x.amt,desc:x.note}));Ls.push({a:ak("wip"),dr:matCost+(o.x||[]).reduce((a,x)=>a+(Number(x.amt)||0),0)});
+  if(!post(d,o.no,"بدء أمر إنتاج",Ls,"po",o.id,o.ts)){toast("تعذر ترحيل صرف خامات أمر الإنتاج؛ لم تتغير كميات المخزون");return}
+  materialEffects.forEach(m=>stk(d,m.i,m.v,-m.qty,-m.cost,"صرف خامات "+o.no,0,o.id,"po",m.w));o.matCost=matCost;o.st=1;
+  const addedLedger=S.L.filter(x=>!ledgerBefore.has(x)),addedMoves=S.mv.filter(x=>!movesBefore.has(x));
+  const saved=await persistFactoryMutation(()=>{rollbackFactoryRows(addedLedger,addedMoves);if(o.st===1)o.st=oldStatus;if(Number(o.matCost)===matCost)o.matCost=oldMatCost});
+  if(!saved){toast("تعذر حفظ بدء التنفيذ؛ تم إرجاع صرف الخامات وحالة الأمر");return}
+  render();
+ }finally{unlockFactorySave(lockKey)}
+}
 function xForm(id){sh(`<h3>إضافة تكلفة غير مخزونة</h3><select id="xa">${U(S.accts.filter(a=>a.t=="X"),a=>`<option value="${a.id}">${a.name}</option>`)}</select><input id="xn" placeholder="البيان: شحن للمصبغة"><input id="xm" type="number" placeholder="المبلغ: 700"><div class="row"><button onclick="saveX(${id})">حفظ</button>${bk}</div>`)}
-function saveX(id){const o=S.po.find(x=>x.id==id),a=+$("#xa").value,m=+$("#xm").value,note=$("#xn").value.trim();if(!o||!(m>0))return;const extra={a,amt:m,note};if(o.st>=1&&!post(td(),o.no,"تكلفة إضافية",[{a:ak("wip"),dr:m},{a,cr:m,desc:note}],"po",o.id)){toast("تعذر ترحيل التكلفة الإضافية؛ لم يتم حفظها");return}o.x.push(extra);sv();cl()}
+async function saveX(id){
+ const lockKey="saveX:"+String(id);if(!lockFactorySave(lockKey))return;
+ try{
+  const o=S.po.find(x=>x.id==id),a=+$("#xa").value,m=+$("#xm").value,note=$("#xn").value.trim();if(!o||!(m>0))return;
+  const extra={a,amt:m,note},ledgerBefore=new Set(S.L);
+  if(o.st>=1&&!post(td(),o.no,"تكلفة إضافية",[{a:ak("wip"),dr:m},{a,cr:m,desc:note}],"po",o.id)){toast("تعذر ترحيل التكلفة الإضافية؛ لم يتم حفظها");return}
+  o.x=o.x||[];o.x.push(extra);const addedLedger=S.L.filter(x=>!ledgerBefore.has(x));
+  const saved=await persistFactoryMutation(()=>{const at=o.x.indexOf(extra);if(at>=0)o.x.splice(at,1);rollbackFactoryRows(addedLedger,[])});
+  if(!saved){toast("تعذر حفظ التكلفة الإضافية؛ تم إلغاء القيد وإبقاء النموذج مفتوحًا");return}
+  cl();
+ }finally{unlockFactorySave(lockKey)}
+}
 /* ===== employees ===== */
 function vEmp(){return ph(N.emp,`<button class="new" onclick="eForm()">+ موظف جديد</button>`)+`<table class="l"><tr><th>البطاقة</th><th>الاسم</th><th>التليفون</th><th>المحافظة / المدينة</th><th>العنوان</th><th>الصلاحيات</th><th>إجراءات</th></tr>${U(S.emp,e=>`<tr><td>${img(e.img)}</td><td>${e.name}</td><td>${e.p1}<br>${e.p2}</td><td>${e.gov||""} ${e.city||""}</td><td>${e.adr||""}</td><td>${e.perm.map(p=>N[p]||(p=="edit"?"تعديل بعد الحفظ":"حذف الحركات")).join("، ")}</td><td>${can("edit")?`<button class="g" onclick="eForm(${e.id})">تعديل</button>`:""}</td></tr>`)||'<tr><td colspan="7" class="mu">لا يوجد موظفون</td></tr>'}`}
 const EMP_PERMISSION_TEMPLATES={
@@ -773,13 +892,48 @@ function vAc(){const m=+$("#vm").value,a=ac_(+$("#va").value);if(!m)return;let e
 function vLn(){const m=+$("#lm").value;if(!m)return;const p=$("#la").value=="p";V.ln.push({a:$("#la").value,d:$("#ld").value.trim(),m,x:+$("#lx").value||0,lbl:p?$("#la").options[0].text:""});clr(["ld","lm","lx"]);drawV()}
 const vsum=()=>[V.ac.reduce((a,x)=>a+x.m,0),V.ln.reduce((a,l)=>a+l.m-l.x,0)];
 function drawV(){const[a,b]=vsum();$("#vs").innerHTML=`<table>${U(V.ac,(x,i)=>`<tr><td>حساب: ${an(x.a)}</td><td>${x.fc?`${f(x.fc)} ${x.cur} × ${x.rate} = ${f(x.m)} ج.م`:f(x.m)+" ج.م"}</td><td><button class="d" onclick="V.ac.splice(${i},1);drawV()">✕</button></td></tr>`)}${U(V.ln,(l,i)=>`<tr><td>${l.a=="p"?l.lbl:an(+l.a)} ${l.d||""}</td><td>${f(l.m-l.x)} ج.م</td><td><button class="d" onclick="V.ln.splice(${i},1);drawV()">✕</button></td></tr>`)}</table><b>الحسابات ${f(a)} | البنود ${f(b)} ${a&&Math.abs(a-b)<.005?"✅":"⚠️ لازم يتساووا"}</b>`}
-function saveV(){if(!CUR||CUR.kind!="page")return;if(+$("#vm").value)vAc();if(+$("#lm").value)vLn();
- if(V.lk){const s=Object.entries(V.alloc);if(!s.length){toast("حدد المبالغ على الفواتير أو المرتجعات المراد تسويتها");return}for(const[id,m]of s){const d=S.docs.find(x=>String(x.id)===String(id));if(!d||allocationDirection(d)!==V.dir||String(d.pid)!==String($("#vp").value)||m>remOf(d,V.edit)+.005){toast("التسوية لا تطابق نوع السند أو الطرف أو المتبقي من الحركة");return}}const tot=s.reduce((a,[,m])=>a+m,0),docs=s.map(([id])=>S.docs.find(x=>String(x.id)===String(id))),nos=docs.map(d=>d.no).join("، "),refund=docs.some(d=>d.t==="sret"||d.t==="pret");V.ln=V.ln.filter(l=>l.a!="p");V.ln.push({a:"p",d:(refund?"تسوية مرتجعات: ":"سداد فواتير: ")+nos,m:tot,x:0,lbl:"حساب الطرف"})}
- const[a,b]=vsum();if(!a||Math.abs(a-b)>.005){$("#ve").textContent="مجموع الحسابات لازم يساوي مجموع البنود";return}if(!guard())return;
- const dir=V.dir,t=$("#vt").value,pid=t=="o"?0:+$("#vp").value,d=$("#vd").value||td(),old=V.edit?S.vch.find(x=>x.id==V.edit):null,oldLedger=old?S.L.filter(x=>String(x.rid)===String(old.id)&&x.src==="vch").map(x=>({...x})):[];if(old){rev(old.id,"vch");S.vch=S.vch.filter(x=>x!==old)}
- const id=old?old.id:uid(),no=old?old.no:$("#v0").checked?(dir=="in"?"RC-":"PY-")+pad(S.vch.filter(x=>x.dir==dir).length+1):$("#vr").value.trim()||"—",ts=old?old.ts:Date.now(),Ls=[];
- V.ac.forEach(x=>Ls.push(dir=="in"?{a:x.a,dr:x.m,fc:x.fc||0}:{a:x.a,cr:x.m,fc:x.fc?-x.fc:0}));V.ln.forEach(l=>{const n=l.m-l.x,p=l.a=="p",a2=p?(t=="s"?ak("ap"):ak("ar")):+l.a;Ls.push(dir=="in"?{a:a2,cr:n,pid:p?pid:0,desc:l.d}:{a:a2,dr:n,pid:p?pid:0,desc:l.d})});
- if(!post(d,no,$("#vx").value||$("#vtl").value,Ls,"vch",id,ts)){if(old){oldLedger.forEach(x=>S.L.push(x));S.vch.push(old)}toast("تعذر حفظ السند لأن القيد المحاسبي غير متوازن. لم يتم اعتماد التعديل.");return}const l=$("#vl").value;S.vch.push({id,no,date:d,ts,dir,title:$("#vtl").value,pid,who:t=="o"?$("#vo").value:pn(pid),desc:$("#vx").value,ac:V.ac,ln:V.ln,link:l=="sales"?l:+l,img:V.img,total:a,alloc:V.lk?{...V.alloc}:{}});sv();toast("تم حفظ السند "+no);cl()}
+async function saveV(){
+ if(!CUR||CUR.kind!=="page")return;const lockKey="saveV:"+String(CUR.id||"form");if(!lockFactorySave(lockKey))return;
+ const formState=captureFactoryFormInputs(),beforeAc=V.ac.slice(),beforeLn=V.ln.slice();
+ let addedAc=[],addedLn=[],removedLn=[];
+ const rollbackDraft=()=>{
+  V.ac=V.ac.filter(x=>!addedAc.includes(x));
+  V.ln=V.ln.filter(x=>!addedLn.includes(x));
+  beforeLn.forEach((line,index)=>{if(removedLn.includes(line)&&!V.ln.includes(line))V.ln.splice(Math.min(index,V.ln.length),0,line)});
+  restoreFactoryFormInputs(formState);
+ };
+ try{
+  if(+$("#vm").value)vAc();if(+$("#lm").value)vLn();markFactoryFormInputs(formState);addedAc=V.ac.filter(x=>!beforeAc.includes(x));addedLn=V.ln.filter(x=>!beforeLn.includes(x));
+  if(V.lk){
+   const s=Object.entries(V.alloc);
+   if(!s.length){rollbackDraft();toast("حدد المبالغ على الفواتير أو المرتجعات المراد تسويتها");return}
+   for(const[id,m]of s){const d=S.docs.find(x=>String(x.id)===String(id));if(!d||allocationDirection(d)!==V.dir||String(d.pid)!==String($("#vp").value)||m>remOf(d,V.edit)+.005){rollbackDraft();toast("التسوية لا تطابق نوع السند أو الطرف أو المتبقي من الحركة");return}}
+   const tot=s.reduce((a,[,m])=>a+m,0),docs=s.map(([id])=>S.docs.find(x=>String(x.id)===String(id))),nos=docs.map(d=>d.no).join("، "),refund=docs.some(d=>d.t==="sret"||d.t==="pret");
+   V.ln=V.ln.filter(l=>l.a!=="p");V.ln.push({a:"p",d:(refund?"تسوية مرتجعات: ":"سداد فواتير: ")+nos,m:tot,x:0,lbl:"حساب الطرف"});
+  }
+  addedAc=V.ac.filter(x=>!beforeAc.includes(x));addedLn=V.ln.filter(x=>!beforeLn.includes(x));removedLn=beforeLn.filter(x=>!V.ln.includes(x));
+  const[a,b]=vsum();if(!a||Math.abs(a-b)>.005){rollbackDraft();$("#ve").textContent="مجموع الحسابات لازم يساوي مجموع البنود";return}if(!guard()){rollbackDraft();return}
+  const dir=V.dir,t=$("#vt").value,pid=t==="o"?0:+$("#vp").value,d=$("#vd").value||td(),old=V.edit?S.vch.find(x=>x.id==V.edit):null,oldLedger=old?S.L.filter(x=>String(x.rid)===String(old.id)&&x.src==="vch").map(x=>({...x})):[],ledgerBefore=new Set(S.L);
+  if(old){rev(old.id,"vch");S.vch=S.vch.filter(x=>x!==old)}
+  const id=old?old.id:uid(),no=old?old.no:$("#v0").checked?(dir==="in"?"RC-":"PY-")+pad(S.vch.filter(x=>x.dir==dir).length+1):$("#vr").value.trim()||"—",ts=old?old.ts:Date.now(),Ls=[];
+  V.ac.forEach(x=>Ls.push(dir==="in"?{a:x.a,dr:x.m,fc:x.fc||0}:{a:x.a,cr:x.m,fc:x.fc?-x.fc:0}));
+  V.ln.forEach(l=>{const n=l.m-l.x,p=l.a==="p",a2=p?(t==="s"?ak("ap"):ak("ar")):+l.a;Ls.push(dir==="in"?{a:a2,cr:n,pid:p?pid:0,desc:l.d}:{a:a2,dr:n,pid:p?pid:0,desc:l.d})});
+  if(!post(d,no,$("#vx").value||$("#vtl").value,Ls,"vch",id,ts)){
+   if(old){oldLedger.forEach(x=>S.L.push(x));if(!S.vch.includes(old))S.vch.push(old)}
+   rollbackDraft();toast("تعذر حفظ السند لأن القيد المحاسبي غير متوازن. لم يتم اعتماد التعديل.");return
+  }
+  const l=$("#vl").value,voucher={id,no,date:d,ts,dir,title:$("#vtl").value,pid,who:t==="o"?$("#vo").value:pn(pid),desc:$("#vx").value,ac:V.ac,ln:V.ln,link:l==="sales"?l:+l,img:V.img,total:a,alloc:V.lk?{...V.alloc}:{}};
+  S.vch.push(voucher);const addedLedger=S.L.filter(x=>!ledgerBefore.has(x));
+  const saved=await persistFactoryMutation(()=>{
+   const at=S.vch.indexOf(voucher);if(at>=0)S.vch.splice(at,1);
+   rollbackFactoryRows(addedLedger,[]);
+   if(old){oldLedger.forEach(x=>S.L.push(x));if(!S.vch.includes(old))S.vch.push(old)}
+   rollbackDraft();
+  });
+  if(!saved){toast("تعذر حفظ السند في قاعدة البيانات؛ تم إلغاء القيد وإعادة بيانات النموذج");return}
+  toast("تم حفظ السند "+no);cl();
+ }finally{unlockFactorySave(lockKey)}
+}
 /* ---- production orders: planned vs received table, barcode preview anytime ---- */
 function poRows(o){const it=S.items.find(x=>x.name==pnm(o)),rec={};(o.rec||[]).forEach(r=>rec[r.v]=r.qty);return o.subs.map(s=>{const[c,z]=s.v=="-"?["-","-"]:s.v.split(" / "),r=o.st==2?(rec[s.v]||0):0;return {name:pnm(o),type:whn(o.wh),model:it?it.model||"":"",c:c||"-",z:z||"-",v:s.v,p:s.qty,r,diff:r-s.qty,pct:s.qty?Math.round(r/s.qty*100):0}})}
 const poHead=["الصنف","النوع / الموديل","اللون","المقاس","الكمية المخططة","الكمية المستلمة","الفرق","نسبة التنفيذ"];
@@ -790,7 +944,29 @@ function savePO(){if(!CUR||CUR.kind!="page")return;if(+$("#xm").value)addX();con
  const o={id:old?old.id:uid(),no:old?old.no:m?c:"PO-"+pad(S.po.length+1),date:old?old.date:td(),ts:old?old.ts:Date.now(),desc:$("#pdsc").value,iname:nm,wh:+$("#pwh").value,subs,mats:PS.mats,x:PS.x,st:0,matCost:0,rec:[],wc:old?old.wc||0:0};if(old)S.po[S.po.indexOf(old)]=o;else S.po.push(o);sv();toast("تم حفظ أمر الإنتاج "+o.no);cl()}
 function rcvForm(id){const o=S.po.find(x=>x.id==id),rows=poRows(o);sh(`<h3>تأكيد تسليم أمر ${o.no} للمخزن ومطابقة الكميات</h3><div class="row"><input id="rn" value="${pnm(o)}" placeholder="اسم الصنف"><select id="rw">${U(S.wh,w=>`<option value="${w.id}" ${o.wh==w.id?"selected":""}>${whPath(w.id)}</option>`)}</select></div><p class="mu">لو الصنف غير موجود في المخزن الفرعي المختار هيتضاف تلقائيًا بالكميات المستلمة.</p><table><tr>${U(poHead,h=>`<th>${h.replace("المستلمة","المستلمة فعليًا")}</th>`)}</tr>${U(rows,(r,i)=>`<tr><td>${r.name}</td><td>${r.type}${r.model?" / "+r.model:""}</td><td>${r.c}</td><td>${r.z}</td><td>${qf(r.p)}</td><td><input type="number" id="rc${i}" value="${r.p}" style="margin:0;width:90px" oninput="rcvUp(${i},${r.p})"></td><td id="df${i}">0</td><td id="pc${i}">100%</td></tr>`)}</table><p>التكلفة الحالية للأمر: <b>${f(poCost(o))} ج.م</b> (تتوزع على الكمية المستلمة)</p><div class="row"><button onclick="confRcv(${id})">تأكيد الاستلام وطباعة الباركود</button>${bk}</div>`)}
 function rcvUp(i,p){const v=+$("#rc"+i).value||0;$("#df"+i).textContent=qf(v-p);$("#pc"+i).textContent=(p?Math.round(v/p*100):0)+"%"}
-function confRcv(id){if(!CUR||CUR.kind!=="page")return;const o=S.po.find(x=>String(x.id)===String(id));if(!o||Number(o.st)!==1){toast("أمر الإنتاج غير موجود أو تم تسليمه بالفعل");return}const rec=o.subs.map((s,i)=>({v:s.v,qty:+$("#rc"+i).value||0})),rq=rec.reduce((a,r)=>a+r.qty,0);if(rec.some(r=>!Number.isFinite(r.qty)||r.qty<0)||!(rq>0)){toast("اكتب كميات مستلمة صحيحة ولا تستخدم كمية سالبة");return}if(!guard())return;const c=poCost(o),d=td();if(!post(d,o.no,"تسليم أمر إنتاج للمخزن",[{a:ak("inv"),dr:c},{a:ak("wip"),cr:c}],"po",o.id,o.ts)){toast("تعذر ترحيل استلام الإنتاج؛ لم يتم تحديث المخزون");return}const it=ensureItem($("#rn").value.trim()||pnm(o),+$("#rw").value,"قطعة");rec.forEach(r=>{if(r.qty)stk(d,it,r.v,r.qty,c/rq*r.qty,"تسليم "+o.no,0,o.id,"po",+$("#rw").value||it.wh)});o.st=2;o.done=d;o.rec=rec;o.iname=it.name;o.wh=+$("#rw").value||it.wh;sv();toast("تم تسليم الأمر "+o.no+" للمخزن");cl();labels(rec.filter(r=>r.qty).map(r=>({c:codeFor(it.id,r.v),t:it.name,s:`${it.model?it.model+" · ":""}${r.v!="-"?r.v+" · ":""}${qf(r.qty)} قطعة مستلمة`})))}
+async function confRcv(id){
+ if(!CUR||CUR.kind!=="page")return;const lockKey="confRcv:"+String(id);if(!lockFactorySave(lockKey))return;
+ try{
+  const o=S.po.find(x=>String(x.id)===String(id));if(!o||Number(o.st)!==1){toast("أمر الإنتاج غير موجود أو تم تسليمه بالفعل");return}
+  const rec=o.subs.map((s,i)=>({v:s.v,qty:+$("#rc"+i).value||0})),rq=rec.reduce((a,r)=>a+r.qty,0);
+  if(rec.some(r=>!Number.isFinite(r.qty)||r.qty<0)||!(rq>0)){toast("اكتب كميات مستلمة صحيحة ولا تستخدم كمية سالبة");return}
+  if(!guard())return;
+  const c=poCost(o),d=td(),ledgerBefore=new Set(S.L),movesBefore=new Set(S.mv),itemsBefore=new Set(S.items),previous={st:o.st,done:o.done,rec:o.rec,iname:o.iname,wh:o.wh};
+  if(!post(d,o.no,"تسليم أمر إنتاج للمخزن",[{a:ak("inv"),dr:c},{a:ak("wip"),cr:c}],"po",o.id,o.ts)){toast("تعذر ترحيل استلام الإنتاج؛ لم يتم تحديث المخزون");return}
+  const it=ensureItem($("#rn").value.trim()||pnm(o),+$("#rw").value,"قطعة");
+  rec.forEach(r=>{if(r.qty)stk(d,it,r.v,r.qty,c/rq*r.qty,"تسليم "+o.no,0,o.id,"po",+$("#rw").value||it.wh)});
+  o.st=2;o.done=d;o.rec=rec;o.iname=it.name;o.wh=+$("#rw").value||it.wh;
+  const addedLedger=S.L.filter(x=>!ledgerBefore.has(x)),addedMoves=S.mv.filter(x=>!movesBefore.has(x)),createdItems=S.items.filter(x=>!itemsBefore.has(x));
+  const saved=await persistFactoryMutation(()=>{
+   rollbackFactoryRows(addedLedger,addedMoves);
+   if(o.st===2&&o.done===d)Object.assign(o,previous);
+   createdItems.forEach(item=>{if(!S.mv.some(m=>String(m.iid)===String(item.id))&&!S.docs.some(doc=>(doc.lines||[]).some(line=>String(line.iid)===String(item.id)))){const at=S.items.indexOf(item);if(at>=0)S.items.splice(at,1)}});
+  });
+  if(!saved){toast("تعذر حفظ استلام الإنتاج؛ تم إلغاء المخزون والقيد وإبقاء بيانات الاستلام");return}
+  toast("تم تسليم الأمر "+o.no+" للمخزن");cl();
+  labels(rec.filter(r=>r.qty).map(r=>({c:codeFor(it.id,r.v),t:it.name,s:(it.model?it.model+" · ":"")+(r.v!=="-"?r.v+" · ":"")+qf(r.qty)+" قطعة مستلمة"})));
+ }finally{unlockFactorySave(lockKey)}
+}
 function poView(id){const o=S.po.find(x=>x.id==id),ps=S.docs.filter(d=>d.t=="pur"&&d.dest==o.id),q=o.st==2?o.rec.reduce((a,r)=>a+r.qty,0):poQty(o);sh(`<div class="ph"><h3>${o.no} — ${pnm(o)}</h3><div class="row"><button class="g" onclick="poLb(${id})">🏷️ باركود</button><button class="g" onclick="poPrint(${id})">🖨️ طباعة</button>${bk}</div></div><p>${o.desc||""}</p><h4>المخطط والمستلم</h4>${poTbl(o)}<h4>التكلفة</h4><table class="l"><tr><th>البند</th><th>البيان</th><th>الكمية</th><th>التكلفة</th></tr>${U(o.mats,m=>`<tr><td>${whPath(m.wh||it_(m.iid).wh)} · ${it_(m.iid).name}</td><td></td><td>${qf(m.qty)} ${it_(m.iid).unit}</td><td>${f(m.cost||avAt(it_(m.iid),m.wh||it_(m.iid).wh)*m.qty)}</td></tr>`)}${U(o.x,x=>`<tr><td>${an(x.a)}</td><td>${x.note||""}</td><td></td><td>${f(x.amt)}</td></tr>`)}${U(ps,d=>`<tr><td>فاتورة شراء ${d.no}</td><td>${d.note||""}</td><td></td><td>${f(d.total)}</td></tr>`)}${o.wc?`<tr><td>هالك محمّل على الأمر</td><td></td><td></td><td>${f(o.wc)}</td></tr>`:""}<tr><th colspan="3">الإجمالي — تكلفة القطعة ${f(q?poCost(o)/q:0)}</th><th>${f(poCost(o))} ج.م</th></tr></table>`)}
 /* ---- item movement report: grouped by item, details per color/size/barcode ---- */
 function repIm(){const k="im",q=fv(k,"q"),w=fv(k,"wh");const wids=w?[w,...whDescendants(w).map(x=>x.id)]:null;const rows=S.items.filter(i=>(!wids||wids.includes(i.wh))&&(!q||ci(i.name,q)||ci(i.sku,q)||S.codes.some(c=>c.iid==i.id&&ci(c.code,q)))).map(i=>{const m=S.mv.filter(x=>x.iid==i.id),op=m.filter(x=>R.from&&x.d<R.from).reduce((a,x)=>a+x.q,0),r=m.filter(x=>inR(x.d)),ins=r.filter(x=>x.q>0).reduce((a,x)=>a+x.q,0),outs=r.filter(x=>x.q<0).reduce((a,x)=>a-x.q,0);return [lk(i.name,`itemDet(${i.id})`),whn(i.wh),i.model||"",i.unit,qf(op),qf(ins),qf(outs),qf(op+ins-outs)]});
@@ -1196,22 +1372,32 @@ function factoryDelRef(src,id){
 }
 delRef=factoryDelRef;
 
-function undoRef(src,id){
- if(!can("del"))return;
- const collections={doc:S.docs,vch:S.vch,po:S.po,je:S.je,wo:S.wo},list=collections[src],row=list?.find(x=>String(x.id)===String(id));
- if(!row||row.manager_read_only){toast("الحركة غير موجودة أو محمية كسجل تاريخي");return}
- const cp=cloudProfile(),perm=({doc:"invoices",po:"production",vch:"invoices",je:"settings",wo:"inventory"})[src];
- if(cp&&!cp.is_admin&&(cp.permissions?.inventory!==true||cp.permissions?.[perm]!==true)){toast("لا تملك صلاحية التراجع عن هذه الحركة");return}
- if(S.L.some(x=>x.src==="undo"&&x.undoOf&&x.undoOf.src===src&&String(x.undoOf.id)===String(id))){toast("تم التراجع عن هذه الحركة بالفعل");return}
- if(src==="doc"&&S.vch.some(v=>!v.manager_read_only&&Number(v.alloc?.[row.id]||0)>.005)){toast("لا يمكن عكس الفاتورة قبل عكس سندات القبض أو الدفع المرتبطة بها");return}
- if(src==="po"&&(S.docs.some(d=>d.t==="pur"&&String(d.dest)===String(id))||S.wo.some(w=>String(w.po)===String(id)))){toast("لا يمكن عكس أمر الإنتاج قبل عكس فواتير الشراء والهالك المرتبط به");return}
- const oldLedger=S.L.filter(x=>String(x.rid)===String(id)&&x.src===src),oldMoves=S.mv.filter(x=>String(x.rid)===String(id)&&x.src===src),now=Date.now(),undoId=uid(),ref="UNDO-"+pad(undoId%10000);
- if(oldMoves.some(m=>!it_(m.iid))){toast("تعذر عكس المخزون لأن أحد الأصناف المرتبطة غير موجود");return}
- oldLedger.forEach(l=>S.L.push({...l,ts:now,ref,desc:"عكس آمن للحركة "+(l.ref||row.no||""),dr:l.cr||0,cr:l.dr||0,src:"undo",rid:undoId,undoOf:{src,id:String(id)}}));
- oldMoves.forEach(m=>{const i=it_(m.iid);i.st=i.st||{};i.st[m.v]=(Number(i.st[m.v])||0)-Number(m.q||0);i.val=(Number(i.val)||0)-Number(m.val||0);S.mv.push({...m,ts:now,ref,q:-Number(m.q||0),val:-Number(m.val||0),src:"undo",rid:undoId,undoOf:{src,id:String(id)}})});
- if(src==="wo"&&row.po){const po=S.po.find(x=>String(x.id)===String(row.po));if(po)po.wc=Math.max(0,(Number(po.wc)||0)-(Number(row.c)||0))}
- const idx=list.indexOf(row);if(idx>=0)list.splice(idx,1);
- sv();toast("تم إنشاء حركة عكسية "+ref+" والاحتفاظ بالحركة الأصلية في سجل التدقيق");cl();
+async function undoRef(src,id){
+ const lockKey="undo:"+String(src)+":"+String(id);if(!lockFactorySave(lockKey))return;
+ try{
+  if(!can("del"))return;
+  const collections={doc:S.docs,vch:S.vch,po:S.po,je:S.je,wo:S.wo},list=collections[src],row=list?.find(x=>String(x.id)===String(id));
+  if(!row||row.manager_read_only){toast("الحركة غير موجودة أو محمية كسجل تاريخي");return}
+  const cp=cloudProfile(),perm=({doc:"invoices",po:"production",vch:"invoices",je:"settings",wo:"inventory"})[src];
+  if(cp&&!cp.is_admin&&(cp.permissions?.inventory!==true||cp.permissions?.[perm]!==true)){toast("لا تملك صلاحية التراجع عن هذه الحركة");return}
+  if(S.L.some(x=>x.src==="undo"&&x.undoOf&&x.undoOf.src===src&&String(x.undoOf.id)===String(id))){toast("تم التراجع عن هذه الحركة بالفعل");return}
+  if(src==="doc"&&S.vch.some(v=>!v.manager_read_only&&Number(v.alloc?.[row.id]||0)>.005)){toast("لا يمكن عكس الفاتورة قبل عكس سندات القبض أو الدفع المرتبطة بها");return}
+  if(src==="po"&&(S.docs.some(d=>d.t==="pur"&&String(d.dest)===String(id))||S.wo.some(w=>String(w.po)===String(id)))){toast("لا يمكن عكس أمر الإنتاج قبل عكس فواتير الشراء والهالك المرتبط به");return}
+  const oldLedger=S.L.filter(x=>String(x.rid)===String(id)&&x.src===src),oldMoves=S.mv.filter(x=>String(x.rid)===String(id)&&x.src===src),now=Date.now(),undoId=uid(),ref="UNDO-"+pad(undoId%10000),ledgerBefore=new Set(S.L),movesBefore=new Set(S.mv),rowIndex=list.indexOf(row);
+  if(oldMoves.some(m=>!it_(m.iid))){toast("تعذر عكس المخزون لأن أحد الأصناف المرتبطة غير موجود");return}
+  oldLedger.forEach(l=>S.L.push({...l,ts:now,ref,desc:"عكس آمن للحركة "+(l.ref||row.no||""),dr:l.cr||0,cr:l.dr||0,src:"undo",rid:undoId,undoOf:{src,id:String(id)}}));
+  oldMoves.forEach(m=>{const i=it_(m.iid);i.st=i.st||{};i.st[m.v]=(Number(i.st[m.v])||0)-Number(m.q||0);i.val=(Number(i.val)||0)-Number(m.val||0);S.mv.push({...m,ts:now,ref,q:-Number(m.q||0),val:-Number(m.val||0),src:"undo",rid:undoId,undoOf:{src,id:String(id)}})});
+  const po=src==="wo"&&row.po?S.po.find(x=>String(x.id)===String(row.po)):null;if(po)po.wc=Math.max(0,(Number(po.wc)||0)-(Number(row.c)||0));
+  const idx=list.indexOf(row);if(idx>=0)list.splice(idx,1);
+  const addedLedger=S.L.filter(x=>!ledgerBefore.has(x)),addedMoves=S.mv.filter(x=>!movesBefore.has(x));
+  const saved=await persistFactoryMutation(()=>{
+   rollbackFactoryRows(addedLedger,addedMoves);
+   if(!list.includes(row))list.splice(Math.min(rowIndex,list.length),0,row);
+   if(po)po.wc=(Number(po.wc)||0)+(Number(row.c)||0);
+  });
+  if(!saved){toast("تعذر حفظ التراجع؛ تمت إعادة الحركة وأثرها دون فقد التعديلات الأخرى");return}
+  toast("تم إنشاء حركة عكسية "+ref+" والاحتفاظ بالحركة الأصلية في سجل التدقيق");cl();
+ }finally{unlockFactorySave(lockKey)}
 }
 
 
