@@ -1,4 +1,4 @@
-﻿const fs = require('node:fs');
+const fs = require('node:fs');
 const path = require('node:path');
 const assert = require('node:assert/strict');
 const root = path.join(__dirname, '..');
@@ -211,13 +211,13 @@ assert(!app.includes('مدير الشركة') && app.includes('name:"MS Factory"
 assert(app.includes('function factoryPreparePdfTableCells(root)') && app.includes('factory-pdf-number') && app.includes('factoryPreparePdfTableCells(el)'), 'PDF tables must wrap text while keeping numeric values on one line');
 assert(app.includes('maxActions*34+20') && previewCss.includes('factory-row-actions{display:inline-flex'), 'table action column must reserve enough width for action icons');
 assert(app.includes('supplierShownBalance(b,!c)-supplierShownBalance(a,!c)'), 'customer and supplier lists must sort by signed balance descending');
-assert(app.includes('function factoryDrillPartner') && !app.slice(app.indexOf('function factoryDrillPartner'),app.indexOf('/* Account hierarchy */')).includes('ط¹ظ„ظٹظ‡ ظ„ظ†ط§') && !app.slice(app.indexOf('function factoryDrillPartner'),app.indexOf('/* Account hierarchy */')).includes('ظ„ظ‡ ط¹ظ„ظٹظ†ط§'), 'partner movements must show signed amounts without verbal labels');
+assert(app.includes('function factoryDrillPartner') && !app.slice(app.indexOf('function factoryDrillPartner'),app.indexOf('/* Account hierarchy */')).includes('عليه لنا') && !app.slice(app.indexOf('function factoryDrillPartner'),app.indexOf('/* Account hierarchy */')).includes('له علينا'), 'partner movements must show signed amounts without verbal labels');
 assert(history.includes('function detailValue(value,depth=0)') && !history.includes('JSON.stringify(value,null,2)') && history.includes('mh-detail-fields'), 'Manager history details must be human-readable fields, not JSON');
 assert(app.includes('factory-settings-groups') && app.includes('factory-settings-group') && previewCss.includes('factory-settings-group .tile-ico{width:26px'), 'settings icons must be smaller and grouped');
 assert(indexHtml.includes('factory-boot-logo') && indexHtml.includes("localStorage.getItem('mgr6')") && indexHtml.includes('logoValue'), 'loading screen must load the saved company logo');
 assert(auth.includes("loginButton.addEventListener('click'") && auth.includes('اضغط على زر تسجيل الدخول') && !auth.includes("form.addEventListener('submit', async"), 'login must require an explicit button click');
 
-assert(app.includes('supplierShownBalance(b,!isCustomer)-supplierShownBalance(a,!isCustomer)') && !app.slice(app.indexOf('vParty=function'),app.indexOf('vJe=function')).includes('ط¹ظ„ظٹظ‡ ظ„ظ†ط§') && !app.slice(app.indexOf('vParty=function'),app.indexOf('vJe=function')).includes('ظ„ظ‡ ط¹ظ†ط¯ظ†ط§'), 'active customer and supplier tables must sort by signed balance and avoid verbal balance labels');
+assert(app.includes('supplierShownBalance(b,!isCustomer)-supplierShownBalance(a,!isCustomer)') && !app.slice(app.indexOf('vParty=function'),app.indexOf('vJe=function')).includes('عليه لنا') && !app.slice(app.indexOf('vParty=function'),app.indexOf('vJe=function')).includes('له عندنا'), 'active customer and supplier tables must sort by signed balance and avoid verbal balance labels');
 assert(app.includes('.sort((a,b)=>String(b.date||b.d||"").localeCompare(String(a.date||a.d||""))'), 'journal entry history must be newest first');
 
 assert(app.slice(app.indexOf('function factoryDrillPartner'),app.indexOf('/* Account hierarchy */')).includes('btxt(pbal(id)*sg)'), 'negative partner closing balances retain the red signed-number formatter');
