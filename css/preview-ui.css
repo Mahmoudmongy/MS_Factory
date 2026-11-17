@@ -91,10 +91,14 @@
 .factory-fin-check.unbalanced{background:#fff0ed;color:#a12c20}
 .factory-settings-extra{margin-top:12px}
 .factory-settings-extra .factory-summary-settings{grid-template-columns:repeat(2,minmax(0,1fr))}
-.factory-table-scroll{max-width:100%;overflow:auto;overscroll-behavior:contain}
+.factory-table-scroll{width:100%;min-width:0;max-width:100%;overflow:auto;overscroll-behavior:contain;isolation:isolate}
 .factory-table-scroll table.l{width:max-content;min-width:100%;table-layout:fixed}
-.factory-table-scroll thead th{position:sticky;top:0;z-index:3}
+.factory-table-scroll thead th{position:sticky;top:0;z-index:5}
 .factory-table-scroll td,.factory-table-scroll th{white-space:normal;overflow-wrap:anywhere;word-break:normal;line-height:1.35}
+.factory-table-scroll .factory-col-date,.factory-table-scroll .factory-col-time,.factory-table-scroll .factory-col-number,.factory-table-scroll .factory-col-code,.factory-table-scroll .factory-col-phone,.factory-table-scroll .factory-col-quantity,.factory-table-scroll .factory-col-unit,.factory-table-scroll .factory-col-status,.factory-table-scroll .factory-col-actions{white-space:nowrap;overflow-wrap:normal;word-break:keep-all;font-variant-numeric:tabular-nums}
+.factory-table-scroll .factory-col-sticky{position:sticky;inset-inline-start:0;z-index:2;background:var(--card);box-shadow:2px 0 0 var(--bd)}
+.factory-table-scroll thead .factory-col-sticky{z-index:6;background:var(--pr2)}
+.factory-table-scroll .factory-col-name,.factory-table-scroll .factory-col-meta,.factory-table-scroll .factory-col-text{white-space:normal;overflow-wrap:anywhere;word-break:normal}
 .factory-table-scroll .factory-long-cell{font-size:12px}
 .factory-table-scroll .factory-very-long-cell{font-size:10px;line-height:1.25}
 body.factory-preview-viewport{width:390px;max-width:calc(100vw - 20px);min-height:100vh;margin:0 auto;border-inline:1px solid var(--bd);box-shadow:0 0 28px #10202a1c}
