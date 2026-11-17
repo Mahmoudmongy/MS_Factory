@@ -836,7 +836,7 @@ function partnerStatementRows(pid){
 }
 function partnerStatementSign(pid){const p=S.partners.find(x=>String(x.id)===String(pid));return p&&p.s&&(tab==="supp"||!p.c)?-1:1;}
 function partnerStatementValidPeriod(from,to){
- const validDate=value=>!value||(/^\d{4}-\d{2}-\d{2}$/.test(value)&&!Number.isNaN(Date.parse(value+"T00:00:00"))&&new Date(value+"T00:00:00").toISOString().slice(0,10)===value);
+ const validDate=value=>{if(!value)return true;if(!/^\d{4}-\d{2}-\d{2}$/.test(value))return false;const [year,month,day]=value.split("-").map(Number),date=new Date(Date.UTC(year,month-1,day));return date.getUTCFullYear()===year&&date.getUTCMonth()===month-1&&date.getUTCDate()===day;};
  return validDate(from)&&validDate(to)&&(!from||!to||from<=to);
 }
 function partnerStatementPeriod(rows,from,to,sign=1){
