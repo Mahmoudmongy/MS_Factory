@@ -872,6 +872,7 @@ const templatePreviewCheck=await ev(()=>{const h=$("#tpv").innerHTML;return {tit
 // Real-library PDF regression runs independently in tests/pdf-regression.cjs.
 await ev(()=>closeTab(CUR,1));
 /* ---------- language ---------- */
+await ev(()=>{const pop=document.querySelector('#factory-theme-popover');if(pop?.hidden)document.querySelector('#factory-theme-open')?.click();document.querySelector('#factory-theme-popover [data-factory-accent="teal"]')?.click();});
 const responsiveScreens=['home','bank','rc','py','cust','supp','sale','sret','pur','pret','stock','prod','coa','je','tl','emp','rep','ai','set','statements'];
 const responsiveWidths=[320,360,390,520,699,768,1024,1280,1440,1920];
 const left=[],responsiveIssues=[];
