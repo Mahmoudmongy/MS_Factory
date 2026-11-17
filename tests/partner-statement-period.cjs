@@ -16,6 +16,12 @@ const statementApi = vm.runInNewContext(
     '\n({ partnerStatementValidPeriod, partnerStatementPeriod })',
   { Math, Number, String, Date, RangeError }
 );
+const pdfLabel = vm.runInNewContext(
+  extract('function partnerStatementPdfPartyLabel(', '\\nfunction partnerStatementValidPeriod(') + '\\npartnerStatementPdfPartyLabel',
+  { pn: id => id === 7 ? 'عميل الاختبار' : 'مورد الاختبار' }
+);
+assert.equal(pdfLabel(7, '2026-02-01', '2026-03-31'), 'كشف_حساب_عميل الاختبار_2026-02-01_2026-03-31');
+assert.equal(pdfLabel(8, '', ''), 'كشف_حساب_مورد الاختبار_البداية_آخر_حركة');
 const sign = vm.runInNewContext(
   extract('function partnerStatementSign(', '\nfunction partnerStatementValidPeriod(') + '\npartnerStatementSign',
   { S: { partners: [{ id: 1, c: 1, s: 0 }, { id: 2, c: 0, s: 1 }, { id: 3, c: 1, s: 1 }] }, tab: 'cust' }
@@ -77,6 +83,7 @@ assert.equal(pdf.kind, 'stmt');
 assert.equal(pdf.title, 'كشف حساب');
 assert.equal(pdf.no, 'شركة الاختبار');
 assert.match(pdf.body, /الفترة: من 2026-02-01 إلى 2026-03-31/);
+assert.match(pdf.body, /رصيد بداية الفترة/);
 assert.match(pdf.body, /رصيد بداية الفترة/);
 assert.match(pdf.body, /100\.00/);
 assert.match(pdf.body, /A-2/);
