@@ -9,4 +9,4 @@ for(const test of tests){
  if(result.status!==0){failures++;console.error('FAILED '+test+' (exit '+String(result.status)+')');}else console.log('PASSED '+test);
 }
 console.log('\nTest suites: '+(tests.length-failures)+' passed, '+failures+' failed, '+tests.length+' total');
-if(failures)process.exitCode=1;\n
+if(failures)process.exitCode=1;

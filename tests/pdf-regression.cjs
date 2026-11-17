@@ -161,14 +161,3 @@ const server=http.createServer((request,response)=>{
   if(!valid||pageErrors.length)process.exitCode=1;
  }finally{await browser.close();server.close()}
 })().catch(error=>{console.error(error.stack||error);process.exitCode=1;server.close()});
-
-
-
-
-
-
-
-
-
-
-\n
