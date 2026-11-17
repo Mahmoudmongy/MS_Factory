@@ -1004,6 +1004,31 @@ html[dir="ltr"] .factory-universal-table-scroll table.l td.factory-col-sticky{ri
 @media(max-width:700px){.factory-summary-vouchers th.factory-action-column,.factory-summary-vouchers td:last-child{width:204px;min-width:204px;max-width:204px}.factory-summary-vouchers td:last-child .factory-row-actions{min-width:180px}.factory-summary-vouchers td:last-child .factory-row-actions button{flex-basis:34px;width:34px;min-width:34px;height:34px;min-height:34px}.factory-cash-movements .factory-table-scroll{max-height:58vh}}
 
 
+/* Desktop shell sizing: keep the sidebar fixed and let the content take the remaining viewport. */
+@media (min-width: 861px) {
+  body #app {
+    display: flex;
+    width: 100%;
+    min-width: 0;
+    max-width: 100%;
+  }
+  body #app > #sb {
+    flex: 0 0 240px;
+    width: 240px;
+    min-width: 0;
+  }
+  body #app > #sb.icons-only {
+    flex-basis: 64px;
+    width: 64px;
+  }
+  body #app > #cn {
+    flex: 1 1 0;
+    width: 0;
+    min-width: 0;
+    max-width: none;
+  }
+}
+
 /* PR108: match preview.html responsive sidebar: sticky header and two-column navigation. */
 @media (max-width: 860px) {
   body #app {
