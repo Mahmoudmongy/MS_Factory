@@ -4,7 +4,11 @@ const $ = (s, root=document) => root.querySelector(s);
 const esc = value => String(value ?? '').replace(/[&<>"']/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
 const money = value => Number(value || 0).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
 const qty = value => Number(value || 0).toLocaleString('en-US',{maximumFractionDigits:3});
-const date = value => value ? String(value).slice(0,10) : '—';
+const date = value => {
+  if (!value) return '—';
+  const match = String(value).match(/^(\d{4})-(\d{2})-(\d{2})/);
+  return match ? `${match[3]}/${match[2]}/${match[1]}` : String(value);
+};
 const shortId = value => String(value || '').slice(0,8);
 const PAGE = 1000;
 let ownerId = null;
@@ -56,7 +60,10 @@ async function readTable(table) {
   for (let from=0; ; from+=PAGE) {
     let query = supabase.from(table).select('*').eq('user_id',ownerId);
     const order = ORDER[table];
-    if (order) query = query.order(order,{ascending: table==='customers'||table==='suppliers'||table==='products'||table==='manager_accounts'});
+    if (order) {
+      const alphabetical = ['customers','suppliers','products','manager_accounts'].includes(table);
+      query = query.order(order,{ascending:alphabetical});
+    }
     const {data,error} = await query.range(from,from+PAGE-1);
     if (error) throw new Error('تعذر قراءة '+table+': '+error.message);
     all.push(...(data || []));

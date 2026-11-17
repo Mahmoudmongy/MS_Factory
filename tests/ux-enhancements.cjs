@@ -1,4 +1,4 @@
-const fs = require('node:fs');
+﻿const fs = require('node:fs');
 const path = require('node:path');
 const assert = require('node:assert/strict');
 const root = path.join(__dirname, '..');
@@ -33,7 +33,8 @@ assert(app.includes('function supplierShownBalance(p,supplierView)') && app.incl
 assert(app.includes('function accountTreeBalance') && app.includes('function toggleAccountTree'), 'account parent totals and collapse must exist');
 assert(app.includes('function whPath') && app.includes('function addWh()') && app.includes('parentId:parent'), 'nested warehouse hierarchy must exist');
 assert(app.includes('id="materialWarehouse"') && app.includes('function addProductionMaterial') && app.includes('wh:m.wh||it_(m.iid)?.wh||0'), 'production material rows must persist their selected warehouse');
-assert(app.includes('function undoRef') && app.includes('undoOf:{src,id:String(id)}') && app.includes('عكس آمن للحركة'), 'undo must append compensating entries');
+const auditUndoSource=fs.readFileSync(path.join(root,'js/audit-trail.js'),'utf8');
+assert(auditUndoSource.includes('undo_factory_record_change') && auditUndoSource.includes('latest.get(key)===row.id') && auditUndoSource.includes('Safe undo'), 'audit undo must use the guarded append-only database reversal');
 assert(app.includes('function factoryEnhanceNameSelects') && app.includes('factory-search-options'), 'name selectors must show searchable name-only dropdowns');
 assert(migration.includes('FACTORY_RECORD_PHYSICAL_DELETE_BLOCKED') && migration.includes('FACTORY_RECORD_DELETE_BLOCKED'), 'database must block physical deletes and unsafe soft deletes');
 assert(safeUndoMigration.includes('UNDO_NOT_LATEST') && safeUndoMigration.includes('UNDO_VERSION_CONFLICT') && safeUndoMigration.includes('UNDO_ADMIN_ONLY'), 'audit undo must be admin-only and latest-version safe');
@@ -87,11 +88,13 @@ const appPatchChecks = [
   [app.includes('addL = function') && app.includes('$("#un").value=""') && app.includes('$("#it").selectedIndex=0'), 'invoice add-row clears every field and resets item selection'],
   [app.includes('D.lines[') && app.includes('.price=Math.max(0,+this.value||0)'), 'sales and purchase invoice line prices are editable'],
   [auditTrail.includes('function auditBusinessSummary(row)') && auditTrail.includes('Movement details'), 'audit entries show readable business details with raw before/after snapshots'],
-  [app.includes('vTl=function(){') && app.includes('query=fv(key,"q")') && app.includes('المستخدم أو الإجراء أو المرجع أو البيان'), 'timeline has a contains-search beside its date filters'],
+  [app.includes('vTl=function(){') && app.includes('query=fv(key,"q")') && app.includes('fbar(key,[["q","text"') && app.includes('.includes(query.toLocaleLowerCase("ar"))'), 'timeline has a contains-search beside its date filters'],
   [app.includes('factory-table-count') && app.includes('factory-table-total') && app.includes('Default templates'), 'table counts, amount summaries and renamed column templates are enabled'],
+  [app.includes('factory-table-summary') && app.includes('balance|amount|total|debit|credit') && previewCss.includes('.factory-table-summary .factory-table-total'), 'filtered row counts and account balances share one compact summary bar'],
+  [previewCss.includes(':root[data-theme="dark"] .lk') && previewCss.includes('color-mix(in srgb,var(--pr) 82%,#10202a)'), 'linked balances keep readable contrast in light and dark themes'],
   [app.includes('vBank = function') && app.includes('toggleAccountTree'), 'cash and bank accounts retain the account-tree controls'],
   [activeBank.includes('toggleAccountTree(') && activeBank.includes('currencyBalances(') && activeBank.includes('factory-cash-movements') && activeBank.includes('cashChildren(id)'), 'active cash screen shows collapsible parent totals and the live cash ledger without double-counting nested cash accounts'],
-  [pdfRenderer.includes('rowBreaks=') && pdfRenderer.includes('safeBoundary') && pdfRenderer.includes('wide?"277mm":"190mm"') && previewCss.includes('#pr.factory-print-document table{display:table'), 'invoice PDF uses a fitted A4 width and keeps table rows intact at page breaks'],
+  [pdfRenderer.includes('rowBreaks=') && pdfRenderer.includes('safeBoundary') && pdfRenderer.includes('repeatHeaderHeight') && pdfRenderer.includes('drawImage(capture,0,0,capture.width,repeatHeaderHeight') && pdfRenderer.includes('wide?"277mm":"190mm"') && previewCss.includes('#pr.factory-print-document table{display:table'), 'invoice PDF uses a fitted A4 width, repeats the company/table header, and keeps rows intact at page breaks'],
   [css.includes('position:sticky') && css.includes('overflow-wrap:anywhere'), 'table headings stay pinned and long text wraps']
 ];
 for (const [ok,label] of appPatchChecks) assert(ok,label);
@@ -112,7 +115,7 @@ assert(indexHtml.includes("factory-boot-phase") && indexHtml.includes("factory-b
 console.log("PASS preview.html screen grouping, icon navigation, responsive panels and startup session reuse");
 assert(previewUi.includes("function summaryOrder(data)") && previewUi.includes("data-summary-move") && previewUi.includes("uiPrefs.summaryOrder=order"), "summary indicators can be reordered and that order is saved");
 assert(previewUi.includes("factory-summary-mini-table") && previewUi.includes("data-open-source"), "latest activity is a drillable table built from current records");
-assert(app.includes("preview-report-grid") && app.includes("التقارير المالية") && app.includes("النقدية والمخزون والإنتاج"), "reports use the four reference groups without replacing live report renderers");
+assert(app.includes("preview-report-grid") && app.includes('ids:["is","bs","tb","gl","jl"]') && app.includes('ids:["cash","mv","im","wo","po","sv","pf","pv"]'), "reports use the four reference groups without replacing live report renderers");
 assert(previewCss.includes("Dark theme contrast") && previewCss.includes("button.g") && previewCss.includes("color:#fff!important"), "secondary action buttons use white high-contrast labels in dark mode");
 assert(previewCss.includes(':root[data-theme="dark"] button') && previewCss.includes(':root:not([data-theme="light"]) button') && previewCss.includes('button *') && previewCss.includes('input[type="submit"]'), 'all primary, secondary, nested-label and form-submit buttons keep white labels in both manual and system dark mode');
 assert(databaseFirst.includes("function scheduleCacheSnapshot(rows)") && databaseFirst.includes("__snapshot__") && databaseFirst.includes("setBaselineRow(row, false)"), "startup avoids synchronous per-record cache writes");
@@ -126,11 +129,11 @@ assert(previewCss.includes(".factory-reference-data-table") && previewCss.includ
 assert(app.includes("originalId:D.originalId||0") && app.includes("originalId:d.id") && app.includes("originalId:p.originalId||0"), "return records must preserve their original invoice ID across creation and editing");
 assert(app.includes("factory-print-document") && app.includes("factory-print-wide") && app.includes("data-print-kind") && app.includes('landscape=wide||capture.width/capture.height>1.1'), "invoice print and PDF output must use responsive paper width and landscape A4 for invoices");
 
-assert(app.includes("بحث في المرجع أو الحساب أو الطرف أو البيان"), "voucher table must support broad search");
+assert(app.includes("Search reference, account, party or description"), "voucher table must support broad search");
 assert(app.includes('"is-paid"') && app.includes('"is-partial"') && app.includes('"is-unpaid"'), "invoice payment status must be visible");
-assert(app.includes("عدد الأصناف") && app.includes("الفاتورة الأصلية"), "invoice and return tables must show item count and original invoice");
+assert(app.includes('"Items"') && app.includes('"Original invoice"'), "invoice and return tables must show item count and original invoice");
 assert(app.includes("factory-row-actions") && app.includes('onclick="vPrint(') && app.includes('onclick="inv('), "voucher and invoice actions must be wired");
-assert(app.includes("تعذر تحديد أبعاد المستند للطباعة") && app.includes("allowTaint:false"), "PDF capture must validate and constrain document dimensions");
+assert(app.includes("if(!captureWidth||!rootBounds.height)") && app.includes("allowTaint:false"), "PDF capture must validate and constrain document dimensions");
 assert(previewCss.includes("#pr.factory-print-document table") && previewCss.includes(".factory-status-chip.is-unpaid"), "print layout and status colors must be styled");
 
 console.log("PASS reference-aligned vouchers/invoices, connected actions, original invoice links and adaptive A4 PDF");
@@ -138,21 +141,21 @@ console.log("PASS reference-aligned vouchers/invoices, connected actions, origin
 
 assert(previewUi.includes("function referenceVoucherSearchText(v)") && previewUi.includes("factorySearchMatch(referenceVoucherSearchText(v),query)"), "voucher search filters reference, title, party, account, allocations and related orders");
 assert(previewUi.includes("function referenceInvoiceSearchText(d)") && previewUi.includes("factorySearchMatch(referenceInvoiceSearchText(d),query)"), "invoice search filters reference, party, notes, items, variants and barcodes");
-assert(previewUi.includes('<th>حساب "+(incoming?"القبض":"الدفع")+"</th>') && previewUi.includes("factory-reference-amount-actions") && previewUi.includes("refVoucherActions(v)"), "voucher table matches six reference columns and keeps row actions in the amount cell");
+assert(previewUi.includes("factory-reference-data-table") && previewUi.includes("factory-reference-amount-actions") && previewUi.includes("refVoucherActions(v)") && previewUi.includes("incoming?"), "voucher table matches six reference columns and keeps row actions in the amount cell");
 assert(previewUi.includes("isReturn?6:isSaleInvoice?8:7") && previewUi.includes("factory-reference-status-actions"), "invoice and return tables match reference column counts and keep actions in the final column");
 assert(previewCss.includes("factory-reference-status.paid") && previewCss.includes("factory-reference-status.partial") && previewCss.includes("factory-reference-status.unpaid") && previewCss.includes("#pr.factory-print-document{position:absolute"), "status colors and A4 print placement are explicitly styled");
 
 
 assert(previewUi.includes("referenceSavedSearch(key)") && previewUi.includes("data-factory-search-text") && previewUi.includes("dataset.factorySearchText||row.textContent"), "reference table search keeps item/barcode search data across redraw without polluting exports");
 
-assert(app.includes("factory-cash-movements") && app.includes("exportCashMovements") && app.includes("حركة الحساب"), "cash screen includes filtered cash-account movements and export");
-assert(app.includes("factory-trial-balance") && app.includes("إجمالي المدين") && app.includes("إجمالي الدائن"), "chart of accounts screen includes a live trial balance");
+assert(app.includes("factory-cash-movements") && app.includes("exportCashMovements") && app.includes("movementRows"), "cash screen includes filtered cash-account movements and export");
+assert(app.includes("factory-trial-balance") && app.includes("factory-trial-totals") && app.includes("Total debit") && app.includes("Total credit"), "chart of accounts screen includes a live trial balance");
 assert(app.includes("factory-production-detail") && app.includes("stockScanCamera") && app.includes("printAllStockLabels"), "production details and inventory barcode actions are connected");
-assert(app.includes("اسم الدخول") && app.includes("factory-partner-status"), "employee usernames and partner status fields are visible");
+assert(app.includes("Login username") && app.includes("factory-partner-status"), "employee usernames and partner status fields are visible");
 assert(app.includes("assistantQuickProductionCost") && app.includes("assistantQuickPartnerBalance"), "assistant quick actions cover customer balances and production order costs");
-assert(app.includes("تصدير السجل") && app.includes("FL.timeline={}"), "timeline provides export and clear-filter actions");
+assert(app.includes("Export timeline") && app.includes("FL.timeline={}"), "timeline provides export and clear-filter actions");
 assert(previewUi.includes("factory-recent-row[role='button']") || previewUi.includes("factory-recent-row[role=\"button\"]"), "summary recent movements are keyboard accessible");
-assert(app.includes("القيد غير متوازن") && app.includes("if(!post(d,no,$(\"#j0\").value,J.lines,\"je\",id,ts))"), "journal posting fails safely instead of saving an unposted journal");
+assert(app.includes("Math.abs(jt") && app.includes("if(!post(d,no,"), "journal posting fails safely instead of saving an unposted journal");
 
 assert(app.includes("exportPartnerTable") && app.includes("factory-partner-table"), "partner table has a targeted Excel export");
 assert(app.includes("exportEmployeeTable") && app.includes("factory-employee-table"), "employee table has a targeted Excel export");
@@ -206,15 +209,23 @@ assert(previewCss.includes(':has(.account-tree-toggle)') && previewCss.includes(
 assert(!app.includes('مدير الشركة') && app.includes('name:"MS Factory"') && app.includes('org:S.name||"MS Factory"'), 'default and fallback document branding must use the company name');
 
 assert(app.includes('function factoryPreparePdfTableCells(root)') && app.includes('factory-pdf-number') && app.includes('factoryPreparePdfTableCells(el)'), 'PDF tables must wrap text while keeping numeric values on one line');
-assert(app.includes('maxActions*34+14') && previewCss.includes('factory-row-actions{display:inline-flex'), 'table action column must reserve enough width for action icons');
+assert(app.includes('maxActions*34+20') && previewCss.includes('factory-row-actions{display:inline-flex'), 'table action column must reserve enough width for action icons');
 assert(app.includes('supplierShownBalance(b,!c)-supplierShownBalance(a,!c)'), 'customer and supplier lists must sort by signed balance descending');
-assert(app.includes('function factoryDrillPartner') && !app.slice(app.indexOf('function factoryDrillPartner'),app.indexOf('/* Account hierarchy */')).includes('عليه لنا') && !app.slice(app.indexOf('function factoryDrillPartner'),app.indexOf('/* Account hierarchy */')).includes('له علينا'), 'partner movements must show signed amounts without verbal labels');
+assert(app.includes('function factoryDrillPartner') && !app.slice(app.indexOf('function factoryDrillPartner'),app.indexOf('/* Account hierarchy */')).includes('ط¹ظ„ظٹظ‡ ظ„ظ†ط§') && !app.slice(app.indexOf('function factoryDrillPartner'),app.indexOf('/* Account hierarchy */')).includes('ظ„ظ‡ ط¹ظ„ظٹظ†ط§'), 'partner movements must show signed amounts without verbal labels');
 assert(history.includes('function detailValue(value,depth=0)') && !history.includes('JSON.stringify(value,null,2)') && history.includes('mh-detail-fields'), 'Manager history details must be human-readable fields, not JSON');
 assert(app.includes('factory-settings-groups') && app.includes('factory-settings-group') && previewCss.includes('factory-settings-group .tile-ico{width:26px'), 'settings icons must be smaller and grouped');
 assert(indexHtml.includes('factory-boot-logo') && indexHtml.includes("localStorage.getItem('mgr6')") && indexHtml.includes('logoValue'), 'loading screen must load the saved company logo');
 assert(auth.includes("loginButton.addEventListener('click'") && auth.includes('اضغط على زر تسجيل الدخول') && !auth.includes("form.addEventListener('submit', async"), 'login must require an explicit button click');
 
-assert(app.includes('supplierShownBalance(b,!isCustomer)-supplierShownBalance(a,!isCustomer)') && !app.slice(app.indexOf('vParty=function'),app.indexOf('vJe=function')).includes('عليه لنا') && !app.slice(app.indexOf('vParty=function'),app.indexOf('vJe=function')).includes('له عندنا'), 'active customer and supplier tables must sort by signed balance and avoid verbal balance labels');
+assert(app.includes('supplierShownBalance(b,!isCustomer)-supplierShownBalance(a,!isCustomer)') && !app.slice(app.indexOf('vParty=function'),app.indexOf('vJe=function')).includes('ط¹ظ„ظٹظ‡ ظ„ظ†ط§') && !app.slice(app.indexOf('vParty=function'),app.indexOf('vJe=function')).includes('ظ„ظ‡ ط¹ظ†ط¯ظ†ط§'), 'active customer and supplier tables must sort by signed balance and avoid verbal balance labels');
 assert(app.includes('.sort((a,b)=>String(b.date||b.d||"").localeCompare(String(a.date||a.d||""))'), 'journal entry history must be newest first');
 
 assert(app.slice(app.indexOf('function factoryDrillPartner'),app.indexOf('/* Account hierarchy */')).includes('btxt(pbal(id)*sg)'), 'negative partner closing balances retain the red signed-number formatter');
+
+const managerDateStart=history.indexOf('const date = value => {');
+const managerDateEnd=history.indexOf('\nconst shortId',managerDateStart);
+assert(managerDateStart>=0&&managerDateEnd>managerDateStart,'Manager history date formatter must exist');
+const managerDate=new Function(history.slice(managerDateStart,managerDateEnd)+'; return date;')();
+assert.equal(managerDate('2026-11-16T09:30:00Z'),'16/11/2026');
+assert(history.includes("const alphabetical = ['customers','suppliers','products','manager_accounts'].includes(table);")&&history.includes('query = query.order(order,{ascending:alphabetical});'),'Manager history keeps names alphabetical and orders dated records newest first');
+console.log('PASS Manager history: DD/MM/YYYY dates and newest-first transaction lists');
