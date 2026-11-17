@@ -872,8 +872,109 @@ const templatePreviewCheck=await ev(()=>{const h=$("#tpv").innerHTML;return {tit
 // Real-library PDF regression runs independently in tests/pdf-regression.cjs.
 await ev(()=>closeTab(CUR,1));
 /* ---------- language ---------- */
-await ev(()=>{PRF.lang='en';applyPref()});const left=[];for(const s of ['home','bank','rc','py','cust','supp','sale','sret','pur','pret','stock','prod','coa','je','tl','emp','rep','ai','set','statements']){await ev(x=>go(x),s);await p.waitForTimeout(40);const t=await ev(x=>{const out=[],w=document.createTreeWalker(document.body,NodeFilter.SHOW_TEXT);let n;while(n=w.nextNode()){if(n.parentElement&&n.parentElement.tagName=='SCRIPT')continue;if(/[\u0600-\u06FF]/.test(n.nodeValue)&&n.nodeValue.trim()!='ع')out.push(n.nodeValue.trim())}return out},s);t.forEach(x=>{if(!/محلات|عميل قطاعي|اختبار|استيراد|النسيج|جيرسي|زراير|تيشيرت|جاكيت|بنطلون|قماش|أحمر|أسود|جهة|الخزنة بالدولار|موظف/.test(x))left.push(s+': '+x)})}
-ok('English mode: no untranslated UI text on the 20 main screens',left.length==0,left.slice(0,12));await ev(()=>{PRF.lang='ar';applyPref()});
+await ev(()=>{const pop=document.querySelector('#factory-theme-popover');if(pop?.hidden)document.querySelector('#factory-theme-open')?.click();document.querySelector('#factory-theme-popover [data-factory-accent="teal"]')?.click();});
+const responsiveScreens=['home','bank','rc','py','cust','supp','sale','sret','pur','pret','stock','prod','coa','je','tl','emp','rep','ai','set','statements'];
+const responsiveWidths=[320,360,390,520,699,768,1024,1280,1440,1920];
+const left=[],responsiveIssues=[];
+for(const language of ['ar','en']){
+ await ev(lang=>{PRF.lang=lang;applyPref()},language);
+ for(const width of responsiveWidths){
+  await p.setViewportSize({width,height:900});
+  for(const screen of responsiveScreens){
+   await ev(x=>{TB.slice().forEach(tab=>closeTab(tab,1));go(x);document.querySelector('#toast')?.remove();},screen);
+   await p.waitForTimeout(40);
+   const layout=await ev(()=>{const main=document.querySelector('#m'),rect=e=>{const r=e?.getBoundingClientRect();return r?{x:Math.round(r.x),right:Math.round(r.right),width:Math.round(r.width),scroll:e.scrollWidth,client:e.clientWidth}:null},els=[...document.querySelectorAll('body *')].map(e=>({tag:e.tagName,id:e.id,cls:typeof e.className==='string'?e.className.slice(0,90):'',...rect(e)})).filter(x=>x.width&&x.right>innerWidth+1).sort((a,b)=>b.right-a.right).slice(0,8);return{viewport:innerWidth,document:document.documentElement.scrollWidth,body:document.body.scrollWidth,mainClient:main?.clientWidth||0,mainScroll:main?.scrollWidth||0,app:rect(document.querySelector('#app')),sidebar:rect(document.querySelector('#sb')),content:rect(document.querySelector('#cn')),top:rect(document.querySelector('#top')),offenders:els}});
+   if(layout.document>width+1||layout.body>width+1||layout.mainScroll>layout.mainClient+1)responsiveIssues.push({language,width,screen,...layout});
+   if(language==='ar'&&(width===390||width===1280)){
+    const screenshotDir=path.join(ROOT,'test-results','screens',String(width));
+    fs.mkdirSync(screenshotDir,{recursive:true});
+    await p.screenshot({path:path.join(screenshotDir,screen+'.png'),fullPage:true,animations:'disabled'});
+   }
+   if(language==='ar'&&width===390&&screen==='home'){
+    const mobileNav=await p.evaluate(()=>{const sb=document.querySelector('#sb'),controls=sb?.querySelector('.sb-controls'),brand=sb?.querySelector(':scope > .br'),logo=brand?.querySelector('img'),nav=sb?.querySelector('.sb-nav-scroll');return{controls:getComputedStyle(controls).display,brandDisplay:getComputedStyle(brand).display,brandDirection:getComputedStyle(brand).flexDirection,logoWidth:logo?.getBoundingClientRect().width||0,navColumns:getComputedStyle(nav).gridTemplateColumns.split(' ').length,navPosition:getComputedStyle(sb).position};});
+    ok('Mobile sidebar matches preview: no redundant toggle, horizontal brand with 42px logo, two-column navigation and sticky placement',mobileNav.controls==='none'&&mobileNav.brandDisplay==='flex'&&mobileNav.brandDirection==='row'&&Math.abs(mobileNav.logoWidth-42)<=1&&mobileNav.navColumns===2&&mobileNav.navPosition==='sticky',mobileNav);
+   }
+   if(language==='en'){
+    const untranslated=await ev(()=>{const out=[],walker=document.createTreeWalker(document.body,NodeFilter.SHOW_TEXT);let node;while(node=walker.nextNode()){if(node.parentElement&&node.parentElement.tagName==='SCRIPT')continue;if(/[\u0600-\u06FF]/.test(node.nodeValue)&&node.nodeValue.trim()!=='ع')out.push(node.nodeValue.trim())}return out});
+    untranslated.forEach(value=>{if(!/محلات|عميل قطاعي|اختبار|استيراد|النسيج|جيرسي|زراير|تيشيرت|جاكيت|بنطلون|قماش|أحمر|أسود|جهة|الخزنة بالدولار|موظف/.test(value))left.push(screen+' @ '+width+': '+value)});
+   }
+  }
+ }
+}
+await p.setViewportSize({width:1280,height:900});
+ok('Responsive matrix: all 20 main screens render in Arabic and English at 10 widths without page or main-content overflow',responsiveIssues.length===0,responsiveIssues.slice(0,20));
+ok('English mode: no untranslated UI text on the 20 main screens across 10 widths',left.length===0,left.slice(0,12));
+const xssProbe=await ev(()=>{
+ const saved={name:S.name,logo:S.logo,partners:S.partners,geo:S.geo,emp:S.emp};
+ const payload='<img src=x onerror="window.__factoryXss=1">';
+ const id=987654321;
+ const partner={id,name:payload,phone:payload,gov:payload,city:payload,adr:payload,c:1,s:0,type:'r'};
+ let result={navSafe:false,employeeSafe:false,partySafe:false,formSafe:false,geoSafe:false,invoiceSafe:false,infoSafe:false,voucherSafe:false,printDocSafe:false,printVoucherSafe:false,printProductionSafe:false,handler:false};
+ try{
+  window.__factoryXss=0;
+  S.name=payload;S.logo='';S.partners=[...S.partners,partner];S.geo={...S.geo,[payload]:[payload]};S.emp=[...S.emp,{id:id+1,name:payload,username:'xss-probe',perm:[]}];
+  nav();result.navSafe=!document.querySelector('#sb .sb-brand-name img');result.employeeSafe=!document.querySelector('#who option img');
+  partyView(id);result.partySafe=!CUR.el.querySelector('img[src="x"]')&&CUR.el.querySelector('h3')?.textContent===payload;
+  closeTab(CUR,1);pForm(1,id);
+  result.formSafe=!ACT.querySelector('img[src="x"]')&&ACT.querySelector('#b1')?.value===payload&&ACT.querySelector('#adr')?.value===payload;
+  result.geoSafe=[...ACT.querySelectorAll('#gv option')].some(o=>o.textContent===payload)&&[...ACT.querySelectorAll('#ct2 option')].some(o=>o.textContent===payload);
+  closeTab(CUR,1);docForm('sale');
+  result.invoiceSafe=!ACT.querySelector('#pt img')&&[...ACT.querySelectorAll('#pt option')].some(o=>o.textContent===payload);
+  showInfo({id:1,name:payload,wh:1,model:payload,unit:payload,sku:payload},payload,1);
+  result.infoSafe=!ACT.querySelector('#info img[src="x"]')&&ACT.querySelector('#info')?.textContent.includes(payload);
+  closeTab(CUR,1);vForm('in');V.ac=[{a:1,m:1}];V.ln=[{a:1,d:payload,m:1,x:0}];drawV();result.voucherSafe=!ACT.querySelector('#vs img[src="x"]')&&!ACT.querySelector('#vs').innerHTML.includes('<img');
+  const printedDoc=docPrintHtml({id:id+2,t:'sale',no:payload,pid:id,date:td(),lines:[{name:payload,v:payload,unit:payload,qty:1,price:1,note:payload}],disc:0,total:1,note:payload,img:''});
+  result.printDocSafe=!printedDoc.includes(payload)&&printedDoc.includes('&lt;img');
+  const printedVoucher=vchPrintHtml({id:id+3,dir:'in',title:payload,no:payload,who:payload,desc:payload,date:td(),ac:[{a:1,m:1}],ln:[{a:'p',lbl:payload,d:payload,m:1,x:0}],total:1});
+  result.printVoucherSafe=!printedVoucher.includes(payload)&&printedVoucher.includes('&lt;img');
+  const printedProduction=poPrintHtml({id:id+4,no:payload,pid:id,date:td(),desc:payload,iname:payload,wh:1,subs:[{v:payload,qty:1}],mats:[],x:[],st:0,rec:[],matCost:0,wc:0});
+  result.printProductionSafe=!printedProduction.includes(payload)&&printedProduction.includes('&lt;img');
+  result.handler=window.__factoryXss===0;
+ }finally{
+  if(CUR)closeTab(CUR,1);
+  S.name=saved.name;S.logo=saved.logo;S.partners=saved.partners;S.geo=saved.geo;S.emp=saved.emp;nav();
+ }
+ return result;
+});
+ok('User-controlled factory, partner, address, invoice and item text is rendered as text rather than executable HTML',Object.values(xssProbe).every(Boolean),xssProbe);
+const screenXssProbe=await ev(async()=>{
+ const keys=['name','logo','partners','items','emp','wh','accts','docs','vch','po','L','mv','geo','tpl','codes'];
+ const saved={};keys.forEach(k=>saved[k]=S[k]);
+ const payload='<img src="xss-probe" onerror="window.__factoryXss=1">';
+ const id=987654320,whId=id+10,acctId=id+20,itemId=id+30;
+ const partner={...(S.partners[0]||{}),id,name:payload,phone:payload,gov:payload,city:payload,adr:payload,c:1,s:1,type:'r'};
+ const warehouse={...(S.wh[0]||{}),id:whId,name:payload,parentId:0};
+ const account={...(S.accts[0]||{}),id:acctId,name:payload,code:'XSS-1',t:'X',cash:true,cur:'EGP'};
+ const item={...(S.items[0]||{}),id:itemId,cloudId:String(itemId),name:payload,sku:payload,model:payload,unit:payload,wh:whId,buy:1,retail:2,wholesale:1,img:'',st:{[payload]:1},val:1};
+ const employee={...(S.emp[0]||{}),id:id+40,name:payload,username:payload,perm:['items','edit']};
+ const doc={...(S.docs[0]||{}),id:id+50,no:payload,t:'sale',pid:id,date:td(),ts:Date.now(),lines:[{name:payload,v:payload,unit:payload,qty:1,price:1,note:payload}],disc:0,total:1,note:payload,img:''};
+ const voucher={...(S.vch[0]||{}),id:id+60,no:payload,dir:'in',pid:id,who:payload,desc:payload,date:td(),ts:Date.now(),ac:[{a:acctId,m:1}],ln:[{a:'p',lbl:payload,d:payload,m:1,x:0}],total:1,title:payload};
+ const order={...(S.po[0]||{}),id:id+70,no:payload,pid:id,desc:payload,iname:payload,wh:whId,subs:[{v:payload,qty:1}],mats:[{iid:itemId,qty:1,wh:whId,cost:1}],x:[{a:acctId,note:payload,amt:1}],st:0,rec:[],matCost:1,wc:0};
+ const ledger={...(S.L[0]||{}),id:id+80,d:td(),date:td(),ref:payload,desc:payload,dr:1,cr:0,a:acctId,src:'je',rid:id+80,pid:id,ts:Date.now()};
+ const movement={...(S.mv[0]||{}),id:id+90,iid:itemId,d:td(),q:1,v:payload,ref:payload,src:'je',wh:whId,c:1};
+ const originalTpl=S.tpl||{};
+ try{
+  window.__factoryXss=0;
+  S.name=payload;S.logo='';S.partners=[...(saved.partners||[]),partner];S.wh=[...(saved.wh||[]),warehouse];S.accts=[...(saved.accts||[]),account];S.items=[...(saved.items||[]),item];S.emp=[...(saved.emp||[]),employee];S.docs=[...(saved.docs||[]),doc];S.vch=[...(saved.vch||[]),voucher];S.po=[...(saved.po||[]),order];S.L=[...(saved.L||[]),ledger];S.mv=[...(saved.mv||[]),movement];S.geo={...(saved.geo||{}),[payload]:[payload]};S.codes=[...(saved.codes||[]),{iid:itemId,code:payload,v:payload}];S.tpl={...originalTpl,sale:{...(originalTpl.sale||{}),org:payload,title:payload,head:payload,foot:payload}};
+  nav();
+  const failures=[];
+  for(const screen of ['home','bank','rc','py','cust','supp','sale','sret','pur','pret','stock','prod','coa','je','tl','emp','rep','ai','set','statements']){
+   TB.slice().forEach(tab=>closeTab(tab,1));go(screen);
+   await new Promise(resolve=>setTimeout(resolve,0));
+   const injected=document.querySelector('img[src="xss-probe"]');
+   if(injected)failures.push({screen,element:injected.outerHTML});
+  }
+  await new Promise(resolve=>setTimeout(resolve,0));
+  return {failures,handler:window.__factoryXss===0};
+ }finally{
+  TB.slice().forEach(tab=>closeTab(tab,1));
+  keys.forEach(k=>{S[k]=saved[k]});
+  nav();go('home');
+ }
+});
+ok('Stored HTML-injection payload stays inert across all 20 main screens',screenXssProbe.failures.length===0&&screenXssProbe.handler,screenXssProbe);
+
+await ev(()=>{PRF.lang='ar';applyPref()});
 ok('no JavaScript errors during the whole desktop session',errs.length==0,errs.slice(0,3));
 const scopeCtx=await browser.newContext({viewport:{width:800,height:600}}),scopePage=await scopeCtx.newPage();await scopePage.goto(BASE);await scopePage.waitForTimeout(150);
 const accountIsolation=await scopePage.evaluate(async()=>{
@@ -919,15 +1020,12 @@ const mc=await browser.newContext({viewport:{width:390,height:844},isMobile:true
 const mob=await m.evaluate(()=>({pos:getComputedStyle(document.querySelector('#sb')).position,bg:getComputedStyle(document.querySelector('#bg')).display,over:document.documentElement.scrollWidth<=innerWidth+1}));
 const mobileSidebarLogout=await m.evaluate(()=>{const b=document.querySelector('#sb .sb-logout'),r=b?.getBoundingClientRect();return {exists:!!b,width:r?.width||0,height:r?.height||0,visible:!!r&&r.height>0&&r.bottom<=innerHeight+1};});
 ok('mobile sidebar keeps the sign-out action reachable in its footer',mobileSidebarLogout.exists&&mobileSidebarLogout.width>0&&mobileSidebarLogout.height>=40,mobileSidebarLogout);
-const toolbarRects=await m.evaluate(()=>{const sels=['#bg','#ttl','#net','#mobile-preview-btn','#logout-btn','#who','#factory-theme-open','#thb'];const boxes=sels.map(s=>{const e=document.querySelector(s),r=e?.getBoundingClientRect();return {s,visible:!!e&&!!r&&r.width>0&&r.height>0,x:r?.x||0,y:r?.y||0,right:r?.right||0,bottom:r?.bottom||0}}).filter(x=>x.visible);const overlaps=[];for(let i=0;i<boxes.length;i++)for(let j=i+1;j<boxes.length;j++){const a=boxes[i],b=boxes[j];if(Math.min(a.right,b.right)-Math.max(a.x,b.x)>1&&Math.min(a.bottom,b.bottom)-Math.max(a.y,b.y)>1)overlaps.push([a.s,b.s]);}return {boxes,overlaps,scroll:document.documentElement.scrollWidth<=innerWidth+1};});
-ok('mobile toolbar controls have separate visible hit areas without overlap or horizontal overflow, with logout removed and username expanded',toolbarRects.boxes.length===7&&!toolbarRects.boxes.some(x=>x.s==='#logout-btn')&&toolbarRects.overlaps.length===0&&toolbarRects.scroll&&!!toolbarRects.boxes.find(x=>x.s==='#who')&&(toolbarRects.boxes.find(x=>x.s==='#who').right-toolbarRects.boxes.find(x=>x.s==='#who').x)>=100&&(toolbarRects.boxes.find(x=>x.s==='#mobile-preview-btn').right-toolbarRects.boxes.find(x=>x.s==='#mobile-preview-btn').x)>=28,toolbarRects);
+const toolbarRects=await m.evaluate(()=>{const sels=['#ttl','#net','#mobile-preview-btn','#logout-btn','#who','#factory-theme-open','#thb'];const boxes=sels.map(s=>{const e=document.querySelector(s),r=e?.getBoundingClientRect();return {s,visible:!!e&&!!r&&r.width>0&&r.height>0,x:r?.x||0,y:r?.y||0,right:r?.right||0,bottom:r?.bottom||0}}).filter(x=>x.visible);const overlaps=[];for(let i=0;i<boxes.length;i++)for(let j=i+1;j<boxes.length;j++){const a=boxes[i],b=boxes[j];if(Math.min(a.right,b.right)-Math.max(a.x,b.x)>1&&Math.min(a.bottom,b.bottom)-Math.max(a.y,b.y)>1)overlaps.push([a.s,b.s]);}return {boxes,overlaps,scroll:document.documentElement.scrollWidth<=innerWidth+1};});
+ok('mobile toolbar controls have separate visible hit areas without overlap or horizontal overflow, with logout removed and username expanded',toolbarRects.boxes.length===6&&!toolbarRects.boxes.some(x=>x.s==='#logout-btn'||x.s==='#bg')&&toolbarRects.overlaps.length===0&&toolbarRects.scroll&&!!toolbarRects.boxes.find(x=>x.s==='#who')&&(toolbarRects.boxes.find(x=>x.s==='#who').right-toolbarRects.boxes.find(x=>x.s==='#who').x)>=100&&(toolbarRects.boxes.find(x=>x.s==='#mobile-preview-btn').right-toolbarRects.boxes.find(x=>x.s==='#mobile-preview-btn').x)>=28,toolbarRects);
 
-ok('mobile: sidebar is a drawer with burger button and the page does not scroll sideways',mob.pos=='fixed'&&mob.bg=='block'&&mob.over,mob);
-await m.click('#bg');await m.waitForTimeout(250);const open=await m.evaluate(()=>({sb:document.querySelector('#sb').classList.contains('open'),ov:getComputedStyle(document.querySelector('#sb-overlay')).display}));
-const settingsFlow=await m.evaluate(()=>{const a=[...document.querySelectorAll('#sb .sb-nav-scroll a')].find(x=>x.getAttribute('onclick')?.includes("'set'")),list=a?.closest('.sb-nav-scroll');return a?{found:true,position:getComputedStyle(a).position,inList:!!list,overflow:list?getComputedStyle(list).overflowY:'',footer:!!a.closest('.sb-footer')}: {found:false};});
-ok('mobile settings entry stays inside the scrollable sidebar list and is not sticky or floating',settingsFlow.found&&settingsFlow.position==='static'&&settingsFlow.inList&&settingsFlow.overflow==='auto'&&!settingsFlow.footer,settingsFlow);
-ok('mobile: burger opens the drawer and shows the overlay',open.sb&&open.ov!='none',open);
-await m.click('#sb a:nth-child(5)');await m.waitForTimeout(300);const closed=await m.evaluate(()=>({sb:document.querySelector('#sb').classList.contains('open'),ov:getComputedStyle(document.querySelector('#sb-overlay')).display}));ok('mobile: choosing a screen closes the drawer and hides the overlay',!closed.sb&&closed.ov=='none',closed);
+ok('mobile: sidebar follows preview reference with sticky two-column navigation and no horizontal page overflow',mob.pos=='sticky'&&mob.bg=='none'&&mob.over,mob);
+const settingsFlow=await m.evaluate(()=>{const a=[...document.querySelectorAll('#sb .sb-nav-scroll a')].find(x=>x.getAttribute('onclick')?.includes("'set'")),list=a?.closest('.sb-nav-scroll'),cs=list?getComputedStyle(list):null;return a?{found:true,position:getComputedStyle(a).position,inList:!!list,display:cs?.display,columns:cs?.gridTemplateColumns,footer:!!a.closest('.sb-footer')}: {found:false};});
+ok('mobile navigation uses a two-column grid and settings remains a normal navigation item',settingsFlow.found&&settingsFlow.position==='static'&&settingsFlow.inList&&settingsFlow.display==='grid'&&settingsFlow.columns.split(' ').length===2&&!settingsFlow.footer,settingsFlow);
 
 await m.evaluate(()=>go('sale'));
 const datePanelClosed=await m.evaluate(()=>{const card=document.querySelector('#m .filter-card'),panel=card?.querySelector('.filter-date-panel'),btn=card?.querySelector('.filter-date-toggle');return !!panel&&panel.hidden&&!!btn&&btn.textContent.includes('تحديد الفترة')&&card.querySelectorAll('input[type="date"]').length===2;});
