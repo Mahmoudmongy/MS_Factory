@@ -85,7 +85,66 @@ assert.match(pdf.body, /115\.00/);
 assert.match(pdf.body, /إجمالي المستحق من الطرف: 40\.00 ج\.م/);
 assert.match(pdf.body, /إجمالي المستحق للطرف: 25\.00 ج\.م/);
 assert.match(pdf.body, /الرصيد الختامي/);
-console.log('PASS partner statement period arithmetic: opening, inclusive dates, running, movement totals and closing');
-console.log('PASS partner statement date validation: reversed, invalid calendar and ISO local dates');
-console.log('PASS partner statement customer/supplier sign conventions');
-console.log('PASS statement PDF HTML uses the same selected period, opening, movements, totals and closing');
+const periodUiSource = extract('function factoryPartnerStatementKey(', '\\nfunction factoryDrillPartner(');
+const stored = new Map();
+const statementCalls = [];
+const fields = { '#partner-statement-from': { value: '2026-02-01' }, '#partner-statement-to': { value: '2026-03-31' } };
+const periodUi = vm.runInNewContext(periodUiSource + '\\n({ factoryPartnerStatementKey, factoryPartnerStatementSaved, rememberPartnerStatementPeriod, applyPartnerStatementPeriod, clearPartnerStatementPeriod })', {
+  sessionStorage: { getItem: key => stored.has(key) ? stored.get(key) : null, setItem: (key, value) => stored.set(key, value), removeItem: key => stored.delete(key) },
+  $: selector => fields[selector] || null,
+  partnerStatementValidPeriod: valid,
+  toast: message => { throw new Error(message); },
+  factoryDrillPartner: (...args) => statementCalls.push(args)
+});
+assert.equal(periodUi.rememberPartnerStatementPeriod(7), true);
+assert.deepEqual(JSON.parse(stored.get('factory-partner-statement-period:7')), { from: '2026-02-01', to: '2026-03-31' });
+fields['#partner-statement-from'].value = '2026-04-01';
+fields['#partner-statement-to'].value = '2026-03-31';
+assert.equal(periodUi.rememberPartnerStatementPeriod(7), false, 'invalid range must not overwrite the last applied period');
+assert.deepEqual(JSON.parse(stored.get('factory-partner-statement-period:7')), { from: '2026-02-01', to: '2026-03-31' });
+fields['#partner-statement-from'].value = '2026-02-01';
+fields['#partner-statement-to'].value = '2026-03-31';
+periodUi.applyPartnerStatementPeriod(7);
+assert.deepEqual(statementCalls.pop(), [7, '2026-02-01', '2026-03-31']);
+periodUi.clearPartnerStatementPeriod(7);
+assert.equal(stored.has('factory-partner-statement-period:7'), false);
+assert.deepEqual(statementCalls.pop(), [7, '', '']);
+
+(async () => {
+  const shareSource = extract('async function sharePdf(){', '\\n/* ---- Excel / CSV import wizard ---- */');
+  const makeFile = class { constructor(parts, name, options) { this.parts = parts; this.name = name; this.type = options.type; } };
+  const pdfStub = { output: type => ({ type, bytes: 'synthetic-pdf' }) };
+  const shareCalls = [], downloads = [], messages = [];
+  const nativeShare = vm.runInNewContext(shareSource + '\\nsharePdf', {
+    toast: message => messages.push(message),
+    mkPdf: async () => pdfStub,
+    File: makeFile,
+    navigator: { share: async payload => shareCalls.push(payload), canShare: () => true },
+    pdfName: () => 'statement-test.pdf',
+    saveFile: async (...args) => downloads.push(args)
+  });
+  await nativeShare();
+  assert.equal(shareCalls.length, 1);
+  assert.equal(shareCalls[0].files[0].name, 'statement-test.pdf');
+  assert.equal(shareCalls[0].files[0].type, 'application/pdf');
+  assert.equal(Object.prototype.hasOwnProperty.call(shareCalls[0], 'recipients'), false, 'sharing must not select or message a recipient automatically');
+
+  const fallbackShare = vm.runInNewContext(shareSource + '\\nsharePdf', {
+    toast: message => messages.push(message),
+    mkPdf: async () => pdfStub,
+    File: makeFile,
+    navigator: {},
+    pdfName: () => 'statement-test.pdf',
+    saveFile: async (...args) => downloads.push(args)
+  });
+  await fallbackShare();
+  assert.equal(downloads.length, 1, 'unsupported system share must download the PDF as fallback');
+  assert.equal(downloads[0][0], 'statement-test.pdf');
+  assert.equal(downloads[0][1].type, 'blob');
+  console.log('PASS partner statement period arithmetic: opening, inclusive dates, running, movement totals and closing');
+  console.log('PASS partner statement date validation: reversed, invalid calendar and ISO local dates');
+  console.log('PASS partner statement period persists only after apply and clears explicitly');
+  console.log('PASS partner statement customer/supplier sign conventions');
+  console.log('PASS statement PDF HTML uses the same selected period, opening, movements, totals and closing');
+  console.log('PASS statement PDF sharing uses native share when supported and download fallback otherwise');
+})().catch(error => { console.error(error); process.exitCode = 1; });
