@@ -84,7 +84,6 @@ assert.equal(pdf.title, 'كشف حساب');
 assert.equal(pdf.no, 'شركة الاختبار');
 assert.match(pdf.body, /الفترة: من 2026-02-01 إلى 2026-03-31/);
 assert.match(pdf.body, /رصيد بداية الفترة/);
-assert.match(pdf.body, /رصيد بداية الفترة/);
 assert.match(pdf.body, /100\.00/);
 assert.match(pdf.body, /A-2/);
 assert.match(pdf.body, /A-3/);
