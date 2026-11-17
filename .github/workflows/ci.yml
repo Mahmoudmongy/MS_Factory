@@ -22,5 +22,12 @@ jobs:
       - run: npm ci
       - run: npx playwright install --with-deps chromium
       - run: npm test
+      - name: Upload responsive table screenshots for visual review
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pr107-table-layout-screenshots
+          path: test-results/table-layout-*.png
+          if-no-files-found: warn
       - run: npm run build -- --configLoader runner
       - run: test -s dist/js/app.js && test -s dist/js/preview-ui.js

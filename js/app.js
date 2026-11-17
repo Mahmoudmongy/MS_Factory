@@ -278,7 +278,7 @@ function vStock(){
  const l=S.items.filter(i=>(!wids||qty(i)!==0||wids.includes(+i.wh))&&(!x.nm||i.name.toLowerCase().includes(x.nm.toLowerCase())||String(i.sku||"").toLowerCase().includes(x.nm.toLowerCase())||S.codes.some(c=>String(c.iid)===String(i.id)&&String(c.code||"").toLowerCase().includes(x.nm.toLowerCase())))&&(x.b1===""||i.buy>=+x.b1)&&(x.b2===""||i.buy<=+x.b2)&&(x.q1===""||qty(i)>=+x.q1)&&(x.q2===""||qty(i)<=+x.q2));
  const filters='<div class="card row"><select onchange="SF.wh=this.value;render()"><option value="">كل المخازن</option>'+U(S.wh,w=>'<option value="'+w.id+'" '+(SF.wh==w.id?'selected':'')+'>'+whPath(w.id)+'</option>')+'</select><input placeholder="اسم الصنف أو الكود" value="'+(x.nm||'')+'" onchange="SF.nm=this.value;render()"><input type="number" placeholder="سعر الشراء من" value="'+x.b1+'" onchange="SF.b1=this.value;render()"><input type="number" placeholder="سعر الشراء إلى" value="'+x.b2+'" onchange="SF.b2=this.value;render()"><input type="number" placeholder="الكمية من" value="'+x.q1+'" onchange="SF.q1=this.value;render()"><input type="number" placeholder="الكمية إلى" value="'+x.q2+'" onchange="SF.q2=this.value;render()"><button class="g" onclick="resetStockFilters()">مسح الفلاتر</button></div>';
  const rows=U(l,i=>'<tr><td>'+img(i.img)+'</td><td>'+whn(i.wh)+'</td><td>'+(i.sku||'')+'</td><td>'+i.name+'</td><td>'+(i.model||'')+'</td><td>'+i.unit+'</td><td>'+lk(f(i.buy),'drillItem('+i.id+')')+'</td><td>'+lk(qf(qty(i)),'drillItem('+i.id+')')+'</td><td><button class="g" onclick="showWarehouseBalances('+i.id+')">عرض الأرصدة</button></td><td>'+lk(f(i.retail),'drillItem('+i.id+')')+'</td><td>'+lk(f(i.wholesale),'drillItem('+i.id+')')+'</td><td>'+lk(f(sug(i,"r")),'drillItem('+i.id+')')+'</td><td>'+lk(f(sug(i,"w")),'drillItem('+i.id+')')+'</td><td>'+lk(f(x.wh?(qty(i)>0?value(i)/qty(i):i.buy):av(i)),'drillItem('+i.id+')')+'</td><td><b>'+lk(f(value(i)),'drillItem('+i.id+')')+'</b></td><td><button class="g" onclick="itemForm('+i.id+')">تحرير</button> <button class="g" onclick="drillItem('+i.id+')">عرض الحركات</button></td></tr>');
- return ph(N.stock,'<button class="g" onclick="recalc()">إعادة احتساب</button><button class="g" onclick="woForm()">هالك مخزون</button><button class="g" onclick="wForm()">إدارة المخازن</button><button class="new" onclick="itemForm(0)">+ صنف مخزون جديد</button><button type="button" class="g" onclick="printAllStockLabels()">طباعة ملصقات الباركود</button><button type="button" class="g" onclick="stockScanOpen()">مسح باركود</button><button type="button" class="g" onclick="stockMovementChooser()">عرض حركة الصنف</button>')+filters+'<table class="l factory-custom-filtered"><tr><th>صورة</th><th>المخزن الافتراضي</th><th>الرمز</th><th>اسم الصنف</th><th>الموديل</th><th>الوحدة</th><th>سعر الشراء</th><th>الكمية في المخزن المحدد</th><th>توزيع المخزون</th><th>سعر القطاعي</th><th>سعر الجملة</th><th>مقترح قطاعي</th><th>مقترح جملة</th><th>متوسط التكلفة</th><th>إجمالي التكلفة</th><th></th></tr>'+rows+'<tr><th colspan="14">الإجمالي</th><th colspan="2">'+f(l.reduce((a,i)=>a+value(i),0))+'</th></tr></table>';
+ return ph(N.stock,'<button class="g" onclick="recalc()">إعادة احتساب</button><button class="g" onclick="woForm()">هالك مخزون</button><button class="g" onclick="wForm()">إدارة المخازن</button><button class="new" onclick="itemForm(0)">+ صنف مخزون جديد</button><button type="button" class="g" onclick="printAllStockLabels()">طباعة ملصقات الباركود</button><button type="button" class="g" onclick="stockScanOpen()">مسح باركود</button><button type="button" class="g" onclick="stockMovementChooser()">عرض حركة الصنف</button>')+filters+'<table class="l factory-custom-filtered factory-stock-table"><tr><th>صورة</th><th>المخزن الافتراضي</th><th>الرمز</th><th>اسم الصنف</th><th>الموديل</th><th>الوحدة</th><th>سعر الشراء</th><th>الكمية في المخزن المحدد</th><th>توزيع المخزون</th><th>سعر القطاعي</th><th>سعر الجملة</th><th>مقترح قطاعي</th><th>مقترح جملة</th><th>متوسط التكلفة</th><th>إجمالي التكلفة</th><th></th></tr>'+rows+'<tr><th colspan="14">الإجمالي</th><th colspan="2">'+f(l.reduce((a,i)=>a+value(i),0))+'</th></tr></table>';
 }
 function recalc(){S.items.forEach(i=>{i.st={};i.val=0});S.mv.forEach(m=>{const i=it_(m.iid);if(i){i.st[m.v]=(i.st[m.v]||0)+m.q;i.val+=m.val}});sv();toast("تمت إعادة احتساب الأصناف (لا تتأثر الفواتير المنتهية)");render()}
 function itemForm(id){if(id&&!can("edit"))return;const i=id?it_(id):null;IM=i?i.img:"";sh(`<h3>${i?"تحرير صنف":"صنف مخزون جديد"}</h3><input id="a1" placeholder="اسم الصنف: قماش جيرسي" value="${i?i.name:""}"><input id="a8" placeholder="الموديل: Tommy 2026" value="${i?i.model||"":""}"><div class="row"><input id="a2" dir="ltr" placeholder="الرمز: FB001" value="${i?i.sku:""}"><input id="a9" list="units" placeholder="الوحدة: متر" value="${i?i.unit:"قطعة"}"></div><label>النوع (المخزن الفرعي)</label><select id="a0">${U(S.wh,w=>`<option value="${w.id}" ${i&&i.wh==w.id?"selected":""}>${whPath(w.id)}</option>`)}</select><div class="row"><input id="a3" type="number" placeholder="سعر الشراء: 90" value="${i?i.buy:""}"><input id="a4" type="number" placeholder="سعر القطاعي: 250" value="${i?i.retail:""}"><input id="a5" type="number" placeholder="سعر الجملة: 190" value="${i?i.wholesale:""}"></div><div class="row"><button class="g" onclick="$('#a4').value=Math.round(+$('#a3').value*(1+S.pct.r/100)*100)/100;$('#a5').value=Math.round(+$('#a3').value*(1+S.pct.w/100)*100)/100">اقتراح السعر (قطاعي ${S.pct.r}% / جملة ${S.pct.w}%)</button></div>${i?"":`<input id="a6" type="number" placeholder="رصيد افتتاحي بالوحدة: 100">`}<label>صورة الموديل</label><input type="file" accept="image/*" onchange="pick(this,v=>IM=v)">${IM?`<img src="${IM}" width="60">`:""}<datalist id="units"><option>متر</option><option>كيلو</option><option>توب</option><option>قطعة</option></datalist><div class="row"><button onclick="saveItem(${id||0})">حفظ</button>${bk}</div>`)}
@@ -1431,27 +1431,34 @@ applyPref=function(){
 };
 
 /* Compact icon-only actions and fixed-width, wrapping tables. */
-const factoryActionSvg={view:'<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2.5 12s3.4-6 9.5-6 9.5 6 9.5 6-3.4 6-9.5 6-9.5-6-9.5-6Z"/><circle cx="12" cy="12" r="2.6"/></svg>',edit:'<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m4 16.8-.9 4.1 4.1-.9L20 7.2 16.8 4z"/><path d="m14.9 5.9 3.2 3.2"/></svg>',print:'<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 8V3h12v5M6 17H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><path d="M6 14h12v7H6z"/></svg>',save:'<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 3h12l4 4v14H3V3z"/><path d="M7 3v6h10V3M7 21v-8h10v8"/></svg>',delete:'<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3m3 0-1 14H7L6 7m3 4v6m6-6v6"/></svg>',share:'<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 16V3m-5 5 5-5 5 5"/><path d="M5 13v7h14v-7"/></svg>'};
+const factoryActionSvg={undo:'<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 14 4 9l5-5"/><path d="M4 9h9a7 7 0 1 1-6.2 10"/></svg>',view:'<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2.5 12s3.4-6 9.5-6 9.5 6 9.5 6-3.4 6-9.5 6-9.5-6-9.5-6Z"/><circle cx="12" cy="12" r="2.6"/></svg>',edit:'<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m4 16.8-.9 4.1 4.1-.9L20 7.2 16.8 4z"/><path d="m14.9 5.9 3.2 3.2"/></svg>',print:'<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 8V3h12v5M6 17H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><path d="M6 14h12v7H6z"/></svg>',save:'<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 3h12l4 4v14H3V3z"/><path d="M7 3v6h10V3M7 21v-8h10v8"/></svg>',delete:'<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3m3 0-1 14H7L6 7m3 4v6m6-6v6"/></svg>',share:'<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 16V3m-5 5 5-5 5 5"/><path d="M5 13v7h14v-7"/></svg>'};
 function factoryIconizeActions(root){
-  root.querySelectorAll('button').forEach(button=>{
-    if(button.closest('.factory-table-tools,.preview-report-intro')||button.classList.contains('new')||button.querySelector('svg'))return;
-    const textLabel=(button.textContent||'').replace(/\s+/g,' ').trim().replace(/^[^\p{L}\p{N}]+/u,'').trim();
-    const label=textLabel||button.getAttribute('aria-label')||button.title||'';
-    if(!label)return;
-    if(/^(?:حفظ|Save)(?:\s|$)/i.test(label)){button.classList.add('g','factory-save-action');return;}
-    let kind='';
-    if(/^(?:عرض|فتح|تفاصيل|View|Details)(?:\s|$)/i.test(label))kind='view';
-    else if(/^(?:تعديل|تحرير|Edit)(?:\s|$)/i.test(label))kind='edit';
-    else if(/^(?:طباعة|Print)(?:\s|$)/i.test(label))kind='print';
-    else if(/^(?:حذف|Delete)(?:\s|$)/i.test(label))kind='delete';
-    else if(/^(?:مشاركة|Share)(?:\s|$)/i.test(label))kind='share';
-    if(!kind)return;
-    button.dataset.factoryIconized='1';
-    button.title=button.title||label;
-    button.setAttribute('aria-label',button.getAttribute('aria-label')||button.title);
-    button.classList.add('factory-icon-action');
-    button.innerHTML=factoryActionSvg[kind];
-  });
+ root.querySelectorAll('button').forEach(button=>{
+  if(button.closest('.factory-table-tools,.preview-report-intro')||button.classList.contains('new'))return;
+  const textLabel=(button.textContent||'').replace(/\s+/g,' ').trim().replace(/^[^\p{L}\p{N}]+/u,'').trim();
+  const label=textLabel||button.getAttribute('aria-label')||button.title||'';if(!label)return;
+  if(/^(?:حفظ|Save)(?:\s|$)/i.test(label)){button.classList.add('g','factory-save-action');return;}
+  let kind='';
+  if(/^(?:حذف|Delete)(?:\s|$)/i.test(label))kind='delete';
+  else if(/تراجع|undo|إلغاء الترحيل/i.test(label))kind='undo';
+  else if(/^(?:تعديل|تحرير|Edit)(?:\s|$)/i.test(label))kind='edit';
+  else if(/^(?:طباعة|Print)(?:\s|$)/i.test(label))kind='print';
+  else if(/^(?:عرض|فتح|تفاصيل|View|Details)(?:\s|$)/i.test(label))kind='view';
+  else if(/^(?:مشاركة|Share)(?:\s|$)/i.test(label))kind='share';
+  else if(/مرتجع|return/i.test(label))kind='return';
+  if(!kind)return;button.dataset.factoryActionKind=kind;
+  if(button.querySelector('svg')||!factoryActionSvg[kind])return;
+  button.dataset.factoryIconized='1';button.title=button.title||label;button.setAttribute('aria-label',button.getAttribute('aria-label')||button.title);button.classList.add('factory-icon-action');button.innerHTML=factoryActionSvg[kind];
+ });
+ factoryOrderRowActions(root);
+}
+function factoryOrderRowActions(root){
+ const rank={delete:0,undo:0,edit:1,print:2,view:3,share:4,return:5};
+ root.querySelectorAll('.factory-row-actions').forEach(group=>{
+  const actions=[...group.children].filter(node=>node.matches('button,a'));
+  actions.sort((a,b)=>(rank[a.dataset.factoryActionKind||'']??6)-(rank[b.dataset.factoryActionKind||'']??6));
+  actions.forEach(node=>group.appendChild(node));group.style.direction='ltr';
+ });
 }
 function factoryApplyFixedTableLayout(table){
   // The dashboard summary table owns its six-column layout entirely in CSS.
@@ -1464,7 +1471,7 @@ function factoryApplyFixedTableLayout(table){
   if(!headers.length)return;
   const wrapper=table.closest('.factory-table-scroll,.factory-universal-table-scroll')||table.parentElement;
   table.querySelectorAll('th,td').forEach(cell=>{['date','time','number','code','phone','quantity','unit','status','name','meta','text','actions','sticky'].forEach(kind=>cell.classList.remove('factory-col-'+kind));cell.classList.remove('factory-action-column')});
-  const stickyIndex=table.classList.contains('factory-stock-table')||table.classList.contains('factory-party-table')?0:-1;
+  const stickyIndex=table.classList.contains('factory-stock-table')?Math.max(0,headers.findIndex(cell=>/اسم\s*الصنف|^الصنف$|^الاسم$/.test((cell.textContent||'').replace(/\s+/g,' ').trim()))):0;
   const actionIndexes=new Set(),flexIndexes=new Set();
   const widths=headers.map((cell,index)=>{
     const name=(cell.textContent||'').trim(),normalized=name.replace(/\s+/g,' ').toLowerCase();
@@ -1481,7 +1488,7 @@ function factoryApplyFixedTableLayout(table){
     if(/\u0645\u0628\u0644\u063a|\u0625\u062c\u0645\u0627\u0644\u064a|\u0627\u0644\u0627\u062c\u0645\u0627\u0644\u064a|\u0633\u0639\u0631|\u062a\u0643\u0644\u0641\u0629|\u0631\u0635\u064a\u062f|\u0645\u062f\u064a\u0646|\u062f\u0627\u0626\u0646|\u0645\u062a\u0628\u0642\u064a|\u0645\u062f\u0641\u0648\u0639|amount|total|price|cost|balance|debit|credit|paid|remaining/i.test(normalized)){mark('number');return 132;}
     if(/\u0643\u0645\u064a\u0629|\u0639\u062f\u062f|quantity|qty|count/i.test(normalized)){mark('quantity');return 92;}
     if(/\u0648\u062d\u062f\u0629|unit/i.test(normalized)){mark('unit');return 78;}
-    if(/\u062d\u0627\u0644\u0629|status/i.test(normalized)){mark('status');return 104;}
+    if(/\u062d\u0627\u0644\u0629|status/i.test(normalized)){mark('status');return 148;}
     if(/\u0643\u0648\u062f|\u0628\u0627\u0631\u0643\u0648\u062f|\u0645\u0631\u062c\u0639|\u0631\u0642\u0645|\u0645\u0633\u0644\u0633\u0644|\u0641\u0627\u062a\u0648\u0631\u0629|code|barcode|reference|serial|invoice\s*(no|number|#)/i.test(normalized)){mark('code');return 132;}
     if(/\u0627\u0633\u0645|\u062d\u0633\u0627\u0628|\u0635\u0646\u0641|\u0637\u0631\u0641|\u0639\u0645\u064a\u0644|\u0645\u0648\u0631\u062f|\u0645\u062e\u0632\u0646|\u0645\u0648\u0638\u0641|\u0639\u0627\u0645\u0644|name|account|item|party|customer|supplier|warehouse|employee/i.test(normalized)){mark('name');flexIndexes.add(index);return Math.min(210,Math.max(148,74+Math.max(name.length,sample)*2.5));}
     if(/\u0628\u064a\u0627\u0646|\u0648\u0635\u0641|\u062a\u0641\u0627\u0635\u064a\u0644|\u0645\u0644\u0627\u062d\u0638\u0627\u062a|\u0639\u0646\u0648\u0627\u0646|description|details|note|address/i.test(normalized)){mark('meta');flexIndexes.add(index);return Math.min(230,Math.max(164,82+sample*2.2));}
@@ -1493,7 +1500,7 @@ function factoryApplyFixedTableLayout(table){
   table.querySelector('colgroup')?.remove();const group=document.createElement('colgroup');widths.forEach(width=>{const col=document.createElement('col');col.style.width=Math.round(width)+'px';group.appendChild(col)});table.insertBefore(group,table.firstChild);
   const syncColumnVisibility=()=>{const cols=[...table.querySelectorAll('colgroup col')];headers.forEach((cell,index)=>{if(cols[index]&&cols[index].hidden!==!!cell.hidden)cols[index].hidden=!!cell.hidden})};syncColumnVisibility();if(!table.__factoryColumnVisibilityObserver){table.__factoryColumnVisibilityObserver=new MutationObserver(syncColumnVisibility);table.__factoryColumnVisibilityObserver.observe(table,{attributes:true,subtree:true,attributeFilter:['hidden']})}
   table.style.display='table';table.style.tableLayout='fixed';table.style.width=Math.ceil(total)+'px';table.style.minWidth=Math.ceil(total)+'px';table.style.maxWidth='none';
-  if(wrapper){wrapper.style.overflowX='auto';wrapper.style.overflowY='auto';wrapper.style.maxWidth='100%';wrapper.style.minWidth='0';wrapper.style.overscrollBehavior='contain';wrapper.style.maxHeight=rows.length>=8?'min(72vh, 680px)':'';}
+  if(wrapper){wrapper.style.overflowX='auto';wrapper.style.overflowY='auto';wrapper.style.maxWidth='100%';wrapper.style.minWidth='0';wrapper.style.overscrollBehavior='contain';wrapper.style.maxHeight=rows.length>=8?'min(64vh, 680px)':'';const summary=wrapper.querySelector(':scope > .factory-table-summary');const syncSummaryOffset=()=>wrapper.style.setProperty('--factory-table-summary-height',(summary?Math.ceil(summary.getBoundingClientRect().height):0)+'px');syncSummaryOffset();if(summary&&!summary.__factoryStickyResizeObserver&&typeof ResizeObserver!=='undefined'){summary.__factoryStickyResizeObserver=new ResizeObserver(syncSummaryOffset);summary.__factoryStickyResizeObserver.observe(summary);}}
   rows.forEach(row=>row.querySelectorAll('td').forEach(cell=>{const length=(cell.textContent||'').trim().length;cell.classList.toggle('factory-long-cell',length>42);cell.classList.toggle('factory-very-long-cell',length>90)}));
 }
 const factoryEnhBeforeFixedLayout=enh;
@@ -1503,6 +1510,7 @@ enh=function(){
   root.querySelectorAll('table.l').forEach(factoryApplyFixedTableLayout);
   factoryIconizeActions(document);
   factoryIconizeActionLinks(document);
+  factoryOrderRowActions(document);
 };
 window.addEventListener('resize',()=>{
   clearTimeout(window.__factoryTableResizeTimer);
@@ -1517,7 +1525,7 @@ function factoryIconizeActionLinks(root){
     else if(/^(?:تعديل|تحرير|Edit)(?:\s|$)/i.test(label))kind='edit';
     else if(/^مشاركة(?:\s|$)/.test(label))kind='share';
     if(!kind)return;
-    link.dataset.factoryIconized='1';link.title=link.title||label;link.setAttribute('aria-label',link.title);
+    link.dataset.factoryIconized='1';link.dataset.factoryActionKind=kind;link.title=link.title||label;link.setAttribute('aria-label',link.title);
     link.classList.add('factory-icon-action-link');link.innerHTML=factoryActionSvg[kind];
   });
 }
