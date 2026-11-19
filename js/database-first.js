@@ -228,8 +228,28 @@ function ensureSystemAccounts() {
   if (!Array.isArray(defaults) || !defaults.length) return;
   const state = getState();
   if (!Array.isArray(state.accts)) state.accts = [];
-  const existing = new Set(state.accts.map(account => String(account && account.code)));
-  const missing = defaults.filter(account => account && !existing.has(String(account.code))).map(account => clone(account));
+  const existingCodes = new Set(state.accts.map(account => String(account && account.code)));
+  const usedIds = new Set(state.accts.map(account => String(account && account.id)));
+  // Ledger rows also point at accounts by id; reserve those ids too so an injected default can
+  // never adopt an id that an existing (or orphaned) ledger row already references.
+  if (Array.isArray(state.L)) state.L.forEach(row => { if (row && row.a !== undefined && row.a !== null) usedIds.add(String(row.a)); });
+  // Accounts are referenced by id across the whole ledger, and bal() takes its sign from the
+  // resolved account's type. Reusing a seed id that a database account already owns would let two
+  // accounts share one id, so bal() could read the wrong account's type and flip the sign. Give
+  // every injected default a fresh id above the highest existing one.
+  let nextId = state.accts.reduce((max, account) => {
+    const id = Number(account && account.id);
+    return Number.isFinite(id) && id > max ? id : max;
+  }, 0);
+  const freshId = () => {
+    let id;
+    do { id = ++nextId; } while (usedIds.has(String(id)));
+    usedIds.add(String(id));
+    return id;
+  };
+  const missing = defaults
+    .filter(account => account && !existingCodes.has(String(account.code)))
+    .map(account => ({ ...clone(account), id: freshId() }));
   if (!missing.length) return;
   window.__factoryReplaceArrays?.({ accts: [...state.accts, ...missing] });
 }
