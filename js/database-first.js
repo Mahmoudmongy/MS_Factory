@@ -242,6 +242,11 @@ function ensureSystemAccounts() {
   if (!Array.isArray(defaults) || !defaults.length) return;
   const state = getState();
   if (!Array.isArray(state.accts)) state.accts = [];
+  // A chart of accounts already in the database is authoritative. Injecting the flat defaults on
+  // top of it added a second, parentless copy of every account (cash, bank, sales, ...), so an
+  // imported tree with real parent/child links suddenly showed every account as a root. Only fall
+  // back to the defaults when the database has no accounts at all.
+  if (state.accts.length) return;
   const existingCodes = new Set(state.accts.map(account => String(account && account.code)));
   const usedIds = new Set(state.accts.map(account => String(account && account.id)));
   // Ledger rows also point at accounts by id; reserve those ids too so an injected default can

@@ -31,7 +31,18 @@ const normalizeAccountType=value=>{if(value==null)return"";const raw=String(valu
 // Last resort for a row with no usable type: a cash account is an asset, and the well-known system
 // keys map to fixed types. This only fills a gap; an explicit type always wins.
 const ACCOUNT_TYPE_BY_KEY={ar:"A",inv:"A",wip:"A",ap:"L",cap:"Q",sales:"I",pdisc:"I",cogs:"X",waste:"X",sdisc:"X"};
-const normalizeAccount=a=>{if(!a||typeof a!=="object")return a;const code=normalizeAccountType(a.t)||normalizeAccountType(a.type)||normalizeAccountType(a.account_type)||ACCOUNT_TYPE_BY_KEY[String(a.k||"")]||(a.cash?"A":"");if(!code||code===a.t)return a;return{...a,t:code}};
+// An imported chart may omit the type entirely. Every balance sign and every balance-sheet section
+// depends on it: nat() treats A and X as debit-positive and everything else as credit-positive, and
+// rootsOf() groups by type, so an account with no type is neither an asset nor a liability and the
+// whole statement goes blank. Infer it from the account code, which follows the usual
+// 1=assets, 2=liabilities, 3=equity, 4=income, 5=expenses convention.
+const ACCOUNT_TYPE_BY_CODE_PREFIX={"1":"A","2":"L","3":"Q","4":"I","5":"X"};
+const accountTypeFromCode=code=>{
+ const digits=String(code||"").replace(/\D/g,"");
+ if(!digits)return"";
+ return ACCOUNT_TYPE_BY_CODE_PREFIX[digits[0]]||"";
+};
+const normalizeAccount=a=>{if(!a||typeof a!=="object")return a;const code=normalizeAccountType(a.t)||normalizeAccountType(a.type)||normalizeAccountType(a.account_type)||ACCOUNT_TYPE_BY_KEY[String(a.k||"")]||(a.cash?"A":"")||accountTypeFromCode(a.code);if(!code||code===a.t)return a;return{...a,t:code}};
 window.__factoryNormalizeAccount=normalizeAccount;
 // Imported records keep their own shape and omit the arrays the screens iterate over, so a single
 // missing field threw inside rendering ("Cannot read properties of undefined (reading 'map')") and
