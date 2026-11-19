@@ -15,6 +15,10 @@ docs:[],po:[],vch:[],wo:[],codes:[],je:[{no:"JE-0001",date:d0,ts:n0,desc:"رصي
 s.items.forEach(i=>Object.entries(i.st).forEach(([v,q])=>s.mv.push({d:d0,ts:n0,iid:i.id,v,q,val:q*i.buy,ref:"رصيد افتتاحي",pid:0})));return s}
 let S=seed(); // Legacy local snapshots are intentionally ignored; Supabase hydrates the state.
 const SYS_ACCOUNTS=(S.accts||[]).map(x=>({...x}));
+// The default chart of accounts (cash, bank, receivable, payable, sales, cogs, ...) is a system
+// default, not demo data. A device whose database has no such account yet must still get it, or the
+// cash/bank screens and the home cash total stay empty and saved invoices look missing.
+window.__factorySystemAccounts=SYS_ACCOUNTS;
 window.__factoryDatabaseFirst=true;
 window.__factoryGetState=()=>S;
 window.__factoryReplaceArrays=(data)=>{if(!data||typeof data!=="object")return;for(const [k,v] of Object.entries(data)){if(Array.isArray(v))S[k]=v;else if(k==="__meta"&&v&&typeof v==="object")Object.assign(S,v);}cachePublicFactoryBranding();try{render()}catch(e){}};

@@ -136,6 +136,9 @@ function resetLocalBusinessState() {
   const { arrays } = splitState(state);
   const patch = {};
   for (const [type, items] of Object.entries(arrays)) {
+    // The chart of accounts and warehouses are system defaults, not demo data: keep them so the
+    // cash/bank screens and the home cash total are never empty on a device with no database rows.
+    if (type === 'accts' || type === 'wh') { patch[type] = items; continue; }
     // Discard every seeded/demo business collection; only the authenticated production database may populate it.
     patch[type] = type === 'curs' ? ['EGP','USD','EUR'] : [];
   }
@@ -217,6 +220,19 @@ async function fetchChangedRecords(since) {
     .gt('updated_at', since)
     .order('updated_at').order('record_type').order('record_id'));
 }
+function ensureSystemAccounts() {
+  // Default chart-of-accounts rows (cash, bank, receivable, ...) are system defaults. If the
+  // database has no row for one of them, add the local default so cash/bank screens and the home
+  // cash total are never silently empty. Matching is by account code to stay idempotent.
+  const defaults = window.__factorySystemAccounts;
+  if (!Array.isArray(defaults) || !defaults.length) return;
+  const state = getState();
+  if (!Array.isArray(state.accts)) state.accts = [];
+  const existing = new Set(state.accts.map(account => String(account && account.code)));
+  const missing = defaults.filter(account => account && !existing.has(String(account.code))).map(account => clone(account));
+  if (!missing.length) return;
+  window.__factoryReplaceArrays?.({ accts: [...state.accts, ...missing] });
+}
 function hydrateFromRows(rows) {
   const grouped = {};
   const metaRow = rows.find(r => r.record_type === '__meta' && r.record_id === 'main' && !r.deleted_at);
@@ -245,6 +261,7 @@ function hydrateFromRows(rows) {
   }
   if (metaRow?.payload && typeof metaRow.payload === 'object') patch.__meta = metaRow.payload;
   window.__factoryReplaceArrays?.(patch);
+  ensureSystemAccounts();
   const current = getState();
   const { arrays, meta } = splitState(current);
   // Existing local seed/legacy values are a local baseline only, never bulk-uploaded on first launch.
