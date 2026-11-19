@@ -68,6 +68,20 @@ const cleanPayload = item => {
   }
   return out;
 };
+// Normalise an incoming payload the same way the UI does, so the stored baseline and the live state
+// stay identical. Without this the account-type and record-shape normalisation would look like a
+// local edit and the app would try to write it back to read-only Manager.io rows.
+const normalizePayload = (type, payload) => {
+  if (payload && typeof payload === 'object' && !Array.isArray(payload)) {
+    if (type === 'accts' && typeof window.__factoryNormalizeAccount === 'function') {
+      return window.__factoryNormalizeAccount(payload);
+    }
+    if (typeof window.__factoryNormalizeRecord === 'function') {
+      return window.__factoryNormalizeRecord(type, payload);
+    }
+  }
+  return payload;
+};
 const getQueue = () => {
   try { const q = JSON.parse(localStorage.getItem(scopedKey(QUEUE_KEY)) || '[]'); return Array.isArray(q) ? q : []; }
   catch (_) { return []; }
@@ -136,6 +150,9 @@ function resetLocalBusinessState() {
   const { arrays } = splitState(state);
   const patch = {};
   for (const [type, items] of Object.entries(arrays)) {
+    // The chart of accounts and warehouses are system defaults, not demo data: keep them so the
+    // cash/bank screens and the home cash total are never empty on a device with no database rows.
+    if (type === 'accts' || type === 'wh') { patch[type] = items; continue; }
     // Discard every seeded/demo business collection; only the authenticated production database may populate it.
     patch[type] = type === 'curs' ? ['EGP','USD','EUR'] : [];
   }
@@ -179,7 +196,7 @@ function snapshotBaseline(state) {
 }
 function setBaselineRow(row, cache = true) {
   baseline.set(mapKey(row.record_type, row.record_id), {
-    type: row.record_type, id: row.record_id, payload: clone(row.payload),
+    type: row.record_type, id: row.record_id, payload: clone(normalizePayload(row.record_type, row.payload)),
     version: Number(row.version || 1), deleted_at: row.deleted_at || null
   });
   if(cache)cacheRow(row);
@@ -217,6 +234,44 @@ async function fetchChangedRecords(since) {
     .gt('updated_at', since)
     .order('updated_at').order('record_type').order('record_id'));
 }
+function ensureSystemAccounts() {
+  // Default chart-of-accounts rows (cash, bank, receivable, ...) are system defaults. If the
+  // database has no row for one of them, add the local default so cash/bank screens and the home
+  // cash total are never silently empty. Matching is by account code to stay idempotent.
+  const defaults = window.__factorySystemAccounts;
+  if (!Array.isArray(defaults) || !defaults.length) return;
+  const state = getState();
+  if (!Array.isArray(state.accts)) state.accts = [];
+  // A chart of accounts already in the database is authoritative. Injecting the flat defaults on
+  // top of it added a second, parentless copy of every account (cash, bank, sales, ...), so an
+  // imported tree with real parent/child links suddenly showed every account as a root. Only fall
+  // back to the defaults when the database has no accounts at all.
+  if (state.accts.length) return;
+  const existingCodes = new Set(state.accts.map(account => String(account && account.code)));
+  const usedIds = new Set(state.accts.map(account => String(account && account.id)));
+  // Ledger rows also point at accounts by id; reserve those ids too so an injected default can
+  // never adopt an id that an existing (or orphaned) ledger row already references.
+  if (Array.isArray(state.L)) state.L.forEach(row => { if (row && row.a !== undefined && row.a !== null) usedIds.add(String(row.a)); });
+  // Accounts are referenced by id across the whole ledger, and bal() takes its sign from the
+  // resolved account's type. Reusing a seed id that a database account already owns would let two
+  // accounts share one id, so bal() could read the wrong account's type and flip the sign. Give
+  // every injected default a fresh id above the highest existing one.
+  let nextId = state.accts.reduce((max, account) => {
+    const id = Number(account && account.id);
+    return Number.isFinite(id) && id > max ? id : max;
+  }, 0);
+  const freshId = () => {
+    let id;
+    do { id = ++nextId; } while (usedIds.has(String(id)));
+    usedIds.add(String(id));
+    return id;
+  };
+  const missing = defaults
+    .filter(account => account && !existingCodes.has(String(account.code)))
+    .map(account => ({ ...clone(account), id: freshId() }));
+  if (!missing.length) return;
+  window.__factoryReplaceArrays?.({ accts: [...state.accts, ...missing] });
+}
 function hydrateFromRows(rows) {
   const grouped = {};
   const metaRow = rows.find(r => r.record_type === '__meta' && r.record_id === 'main' && !r.deleted_at);
@@ -225,7 +280,7 @@ function hydrateFromRows(rows) {
     if (row.record_type === '__meta') continue;
     const target = (grouped[row.record_type] ||= []);
     if (!row.deleted_at) {
-      const payload = clone(row.payload);
+      const payload = clone(normalizePayload(row.record_type, row.payload));
       if (payload && typeof payload === 'object' && !Array.isArray(payload)) payload._cloudRecordId = row.record_id;
       target.push(payload);
     }
@@ -245,6 +300,7 @@ function hydrateFromRows(rows) {
   }
   if (metaRow?.payload && typeof metaRow.payload === 'object') patch.__meta = metaRow.payload;
   window.__factoryReplaceArrays?.(patch);
+  ensureSystemAccounts();
   const current = getState();
   const { arrays, meta } = splitState(current);
   // Existing local seed/legacy values are a local baseline only, never bulk-uploaded on first launch.
@@ -324,8 +380,8 @@ function applyOperationToState(op) {
   const list = Array.isArray(state[op.type]) ? [...state[op.type]] : [];
   const index = list.findIndex((item,i) => recordKey(op.type,item,i) === op.id);
   if (op.deleted) { if (index >= 0) list.splice(index,1); }
-  else if (index >= 0) { list[index] = clone(op.payload); if (list[index] && typeof list[index] === 'object') list[index]._cloudRecordId = op.id; }
-  else { const item = clone(op.payload); if (item && typeof item === 'object') item._cloudRecordId = op.id; list.push(item); }
+  else if (index >= 0) { list[index] = clone(normalizePayload(op.type, op.payload)); if (list[index] && typeof list[index] === 'object') list[index]._cloudRecordId = op.id; }
+  else { const item = clone(normalizePayload(op.type, op.payload)); if (item && typeof item === 'object') item._cloudRecordId = op.id; list.push(item); }
   window.__factoryReplaceArrays?.({[op.type]:list});
 }
 async function flushQueue() {
@@ -426,8 +482,8 @@ function applyRealtimeRow(row) {
       const list = Array.isArray(current[row.record_type]) ? [...current[row.record_type]] : [];
       const index = list.findIndex((item,i) => recordKey(row.record_type,item,i) === row.record_id);
       if (row.deleted_at) { if (index >= 0) list.splice(index,1); }
-      else if (index >= 0) { list[index] = clone(row.payload); if (list[index] && typeof list[index] === 'object') list[index]._cloudRecordId = row.record_id; }
-      else { const item = clone(row.payload); if (item && typeof item === 'object') item._cloudRecordId = row.record_id; list.push(item); }
+      else if (index >= 0) { list[index] = clone(normalizePayload(row.record_type, row.payload)); if (list[index] && typeof list[index] === 'object') list[index]._cloudRecordId = row.record_id; }
+      else { const item = clone(normalizePayload(row.record_type, row.payload)); if (item && typeof item === 'object') item._cloudRecordId = row.record_id; list.push(item); }
       window.__factoryReplaceArrays?.({[row.record_type]:list});
     }
   } finally { applyingRemote = false; }
