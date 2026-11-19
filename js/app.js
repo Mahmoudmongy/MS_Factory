@@ -21,7 +21,19 @@ const SYS_ACCOUNTS=(S.accts||[]).map(x=>({...x}));
 window.__factorySystemAccounts=SYS_ACCOUNTS;
 window.__factoryDatabaseFirst=true;
 window.__factoryGetState=()=>S;
-window.__factoryReplaceArrays=(data)=>{if(!data||typeof data!=="object")return;for(const [k,v] of Object.entries(data)){if(Array.isArray(v))S[k]=v;else if(k==="__meta"&&v&&typeof v==="object")Object.assign(S,v);}cachePublicFactoryBranding();try{render()}catch(e){}};
+// Accounts carry a one-letter type (A/L/Q/I/X) that decides the sign of every balance: nat() treats
+// A and X as debit-positive and everything else as credit-positive. Data imported from Manager.io
+// stores the type as a word ("Assets", "Equity", ...), so an unnormalised type made every asset and
+// expense read as credit-positive and flipped its sign. Normalise the type on the way in.
+const ACCOUNT_TYPE_CODES=["A","L","Q","I","X"];
+const ACCOUNT_TYPE_WORDS={asset:"A",assets:"A",currentasset:"A",currentassets:"A",fixedasset:"A",fixedassets:"A",noncurrentasset:"A",noncurrentassets:"A",bank:"A",cash:"A","أصول":"A","الأصول":"A",liability:"L",liabilities:"L",currentliability:"L",currentliabilities:"L",noncurrentliability:"L",noncurrentliabilities:"L","التزام":"L","التزامات":"L","الالتزامات":"L",equity:"Q",ownersequity:"Q","حقوقالملكية":"Q","حقوق ملكية":"Q",capital:"Q","رأسالمال":"Q","رأسمال":"Q","رأس المال":"Q",income:"I",revenue:"I",otherincome:"I",sales:"I","إيراد":"I","إيرادات":"I","الإيرادات":"I",expense:"X",expenses:"X",otherexpense:"X",costofsales:"X","مصروف":"X","مصروفات":"X","المصروفات":"X"};
+const normalizeAccountType=value=>{if(value==null)return"";const raw=String(value).trim();if(!raw)return"";const upper=raw.toUpperCase();if(ACCOUNT_TYPE_CODES.includes(upper))return upper;return ACCOUNT_TYPE_WORDS[raw]||ACCOUNT_TYPE_WORDS[raw.toLowerCase().replace(/[\s_\-&.]/g,"")]||""};
+// Last resort for a row with no usable type: a cash account is an asset, and the well-known system
+// keys map to fixed types. This only fills a gap; an explicit type always wins.
+const ACCOUNT_TYPE_BY_KEY={ar:"A",inv:"A",wip:"A",ap:"L",cap:"Q",sales:"I",pdisc:"I",cogs:"X",waste:"X",sdisc:"X"};
+const normalizeAccount=a=>{if(!a||typeof a!=="object")return a;const code=normalizeAccountType(a.t)||normalizeAccountType(a.type)||normalizeAccountType(a.account_type)||ACCOUNT_TYPE_BY_KEY[String(a.k||"")]||(a.cash?"A":"");if(!code||code===a.t)return a;return{...a,t:code}};
+window.__factoryNormalizeAccount=normalizeAccount;
+window.__factoryReplaceArrays=(data)=>{if(!data||typeof data!=="object")return;for(const [k,v] of Object.entries(data)){if(Array.isArray(v))S[k]=k==="accts"?v.map(normalizeAccount):v;else if(k==="__meta"&&v&&typeof v==="object")Object.assign(S,v);}cachePublicFactoryBranding();try{render()}catch(e){}};
 const sv=()=>{try{S.pend=(S.pend||0)+1;if(window.__factoryDatabaseFirstFailed&&navigator.onLine){alert("تعذر الاتصال بقاعدة البيانات. لم يتم تأكيد حفظ العملية؛ حاول مرة أخرى بعد عودة الاتصال.");return Promise.resolve(false);}if(window.__factoryDatabaseFirstReady&&typeof window.__factoryPersistState==="function"){return Promise.resolve(window.__factoryPersistState(S)).then(result=>result!==false).catch(e=>{console.error("Database save failed:",e);alert(e.message||"تعذر حفظ التغييرات في قاعدة البيانات");return false;});}else if(!navigator.onLine){localStorage.setItem("mgr6",JSON.stringify(S));localStorage.setItem("mgr6-sync-pending",JSON.stringify({at:Date.now(),pend:S.pend}));return Promise.resolve(true);}else{alert("البرنامج لسه بيجهز الاتصال بقاعدة البيانات. انتظر لحظات ثم أعد المحاولة.");return Promise.resolve(false);}}catch(e){console.error("State save failed:",e);return Promise.resolve(false)}};
 const FACTORY_SAVE_LOCKS=new Set();
 function lockFactorySave(key){if(FACTORY_SAVE_LOCKS.has(key))return false;FACTORY_SAVE_LOCKS.add(key);return true}

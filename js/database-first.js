@@ -68,6 +68,16 @@ const cleanPayload = item => {
   }
   return out;
 };
+// Normalise an incoming payload the same way the UI does, so the stored baseline and the live state
+// stay identical. Without this the account-type normalisation would look like a local edit and the
+// app would try to write it back to read-only Manager.io rows.
+const normalizePayload = (type, payload) => {
+  if (type === 'accts' && typeof window.__factoryNormalizeAccount === 'function' &&
+      payload && typeof payload === 'object' && !Array.isArray(payload)) {
+    return window.__factoryNormalizeAccount(payload);
+  }
+  return payload;
+};
 const getQueue = () => {
   try { const q = JSON.parse(localStorage.getItem(scopedKey(QUEUE_KEY)) || '[]'); return Array.isArray(q) ? q : []; }
   catch (_) { return []; }
@@ -182,7 +192,7 @@ function snapshotBaseline(state) {
 }
 function setBaselineRow(row, cache = true) {
   baseline.set(mapKey(row.record_type, row.record_id), {
-    type: row.record_type, id: row.record_id, payload: clone(row.payload),
+    type: row.record_type, id: row.record_id, payload: clone(normalizePayload(row.record_type, row.payload)),
     version: Number(row.version || 1), deleted_at: row.deleted_at || null
   });
   if(cache)cacheRow(row);
@@ -261,7 +271,7 @@ function hydrateFromRows(rows) {
     if (row.record_type === '__meta') continue;
     const target = (grouped[row.record_type] ||= []);
     if (!row.deleted_at) {
-      const payload = clone(row.payload);
+      const payload = clone(normalizePayload(row.record_type, row.payload));
       if (payload && typeof payload === 'object' && !Array.isArray(payload)) payload._cloudRecordId = row.record_id;
       target.push(payload);
     }
@@ -361,8 +371,8 @@ function applyOperationToState(op) {
   const list = Array.isArray(state[op.type]) ? [...state[op.type]] : [];
   const index = list.findIndex((item,i) => recordKey(op.type,item,i) === op.id);
   if (op.deleted) { if (index >= 0) list.splice(index,1); }
-  else if (index >= 0) { list[index] = clone(op.payload); if (list[index] && typeof list[index] === 'object') list[index]._cloudRecordId = op.id; }
-  else { const item = clone(op.payload); if (item && typeof item === 'object') item._cloudRecordId = op.id; list.push(item); }
+  else if (index >= 0) { list[index] = clone(normalizePayload(op.type, op.payload)); if (list[index] && typeof list[index] === 'object') list[index]._cloudRecordId = op.id; }
+  else { const item = clone(normalizePayload(op.type, op.payload)); if (item && typeof item === 'object') item._cloudRecordId = op.id; list.push(item); }
   window.__factoryReplaceArrays?.({[op.type]:list});
 }
 async function flushQueue() {
@@ -463,8 +473,8 @@ function applyRealtimeRow(row) {
       const list = Array.isArray(current[row.record_type]) ? [...current[row.record_type]] : [];
       const index = list.findIndex((item,i) => recordKey(row.record_type,item,i) === row.record_id);
       if (row.deleted_at) { if (index >= 0) list.splice(index,1); }
-      else if (index >= 0) { list[index] = clone(row.payload); if (list[index] && typeof list[index] === 'object') list[index]._cloudRecordId = row.record_id; }
-      else { const item = clone(row.payload); if (item && typeof item === 'object') item._cloudRecordId = row.record_id; list.push(item); }
+      else if (index >= 0) { list[index] = clone(normalizePayload(row.record_type, row.payload)); if (list[index] && typeof list[index] === 'object') list[index]._cloudRecordId = row.record_id; }
+      else { const item = clone(normalizePayload(row.record_type, row.payload)); if (item && typeof item === 'object') item._cloudRecordId = row.record_id; list.push(item); }
       window.__factoryReplaceArrays?.({[row.record_type]:list});
     }
   } finally { applyingRemote = false; }
