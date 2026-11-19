@@ -69,12 +69,16 @@ const cleanPayload = item => {
   return out;
 };
 // Normalise an incoming payload the same way the UI does, so the stored baseline and the live state
-// stay identical. Without this the account-type normalisation would look like a local edit and the
-// app would try to write it back to read-only Manager.io rows.
+// stay identical. Without this the account-type and record-shape normalisation would look like a
+// local edit and the app would try to write it back to read-only Manager.io rows.
 const normalizePayload = (type, payload) => {
-  if (type === 'accts' && typeof window.__factoryNormalizeAccount === 'function' &&
-      payload && typeof payload === 'object' && !Array.isArray(payload)) {
-    return window.__factoryNormalizeAccount(payload);
+  if (payload && typeof payload === 'object' && !Array.isArray(payload)) {
+    if (type === 'accts' && typeof window.__factoryNormalizeAccount === 'function') {
+      return window.__factoryNormalizeAccount(payload);
+    }
+    if (typeof window.__factoryNormalizeRecord === 'function') {
+      return window.__factoryNormalizeRecord(type, payload);
+    }
   }
   return payload;
 };
